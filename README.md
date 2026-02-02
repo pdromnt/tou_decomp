@@ -6,7 +6,7 @@ Tunnels of Underworlds (or TOU for short) is an original creation by [hannukp](h
 
 ## What works so far
 
-Nothing. The code I got is essentialy heavily decompiling things with Ghidra and having Gemini help me witht he hardest parts. Consider it like the scaffolding of what should be the game, I didn't even get the menus showing yet.
+Nothing. The code I got is essentialy heavily decompiling things with Ghidra and having Gemini help me with the hardest parts. Consider it like the scaffolding of what should be the game, I didn't even get the menus showing yet.
 
 ## Objective
 
