@@ -11,13 +11,19 @@ Nothing. The code I got is essentialy heavily decompiling things with Ghidra and
 ## Objective
 
 Hopefully pull off a 95% compatible decomp, where we can fire up the game and play through the levels.  
-I plan also on making a level viewer in the style of my other project, [Hotzone](https://github.com/pdromnt/uprising-level-editor) to hopefully better understand how levels work.  
+I also plan on making a level viewer in the style of my other project, [Hotzone](https://github.com/pdromnt/uprising-level-editor), to hopefully better understand how the levels (and maybe GG Packs) work.  
 
-Later on, when we have a working game, update the stack to add more compatibility and maybe some improvements.
+Later on, when we have a working game, I plan to update the stack to add more compatibility and maybe some improvements.
 
 ## Contribs
 
 If you know enough to help with the decomp, feel free to open a PR.
+
+## Tools used
+- MinGW
+- Ghidra
+- Antigravity + BetterGhidraMCP
+- An old Pentium II running Windows 98 to run the original game.
 
 ## License
 
