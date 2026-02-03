@@ -33,23 +33,38 @@ void Intro_Sequence(void) {
   }
 
   // 2. Sequence Handling
-  if (DAT_0048924c < 3) {
-    if (CurrentTime > DAT_004892b8 + Durations[DAT_0048924c]) {
-      LOG("[INFO] Intro Step %d Finished.\n", DAT_0048924c);
-      DAT_0048924c++;
-      LOG("[INFO] Intro: Loading Background %d\n", DAT_0048924c + 1);
-      Load_Background_To_Buffer(DAT_0048924c + 1); // 1->2, 2->3
+  // 2. Sequence Handling based on Timings
+  DWORD Elapsed = CurrentTime - DAT_004892b8;
 
-      if (DAT_0048924c == 1) {
-        // Transition at 3.2s
-        // Stop_All_Sounds(); // Maybe not stop music?
-      }
-    }
+  // Default to Frame 0
+  DAT_004877c8 = 0;
+
+  if (Elapsed < Durations[0]) {
+    // 0 - 3200ms: Frame 0 (Background)
+    DAT_004877c8 = 0;
+    DAT_0048924c = 0;
+  } else if (Elapsed < Durations[1]) {
+    // 3200ms - 8200ms: Frame 1 (Studio Title)
+    DAT_004877c8 = 1;
+    DAT_0048924c = 1;
+
+    // Play sound effect at start of Frame 1?
+    // Decompilation hinted at logic here, but for now we follow visuals.
+  } else if (Elapsed < Durations[2]) {
+    // 8200ms - 10640ms: Frame 2 (Explosion)
+    DAT_004877c8 = 2;
+    DAT_0048924c = 2;
   } else {
     // Intro Done
-    LOG("[INFO] Intro Finished.\n");
-    g_GameState = 0x02; // To Menu
-    DAT_0048924c = 0;
-    DAT_004892b8 = 0;
+    LOG("[INFO] Intro Finished (Time: %d).\n", Elapsed);
+    DAT_0048924c = 3; // Signal done
+
+    Stop_All_Sounds();
+    g_GameState = 0x02; // Transition to Menu
+    DAT_004892b8 = 0;   // Reset Timer
+    return;
   }
+
+  // Render the current frame
+  Render_Frame();
 }

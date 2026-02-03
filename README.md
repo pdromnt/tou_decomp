@@ -11,6 +11,7 @@ Almost nothing. The code I got is essentialy heavily decompiling things with Ghi
 - Music
 - Basic sprite/image rendering
 - Some basic game states
+- A very rough intro (no animations)
 
 ## Objective
 
