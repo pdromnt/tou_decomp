@@ -173,3 +173,11 @@ void Cleanup_Sound(void) {
     g_SoundTable = NULL;
   }
 }
+
+// Init Sound/Graphics for Menu (0040e130)
+// Wrapper to start menu music
+void FUN_0040e130(void) {
+  LOG("[INFO] FUN_0040e130: Initializing Sound for Menu.\n");
+  Stop_All_Sounds();
+  Play_Music(); // Starts music/mainmenu.ogg
+}

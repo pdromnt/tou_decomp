@@ -84,6 +84,22 @@ void Handle_Menu_State(void);
 void Intro_Sequence(void);
 void Init_New_Game(void);
 void Free_Game_Resources(void);
+void FUN_0040e130(void); // Init Sound/Grahpics for Menu
+
+// Font Data
+typedef struct {
+  int pixel_offset;
+  int width;
+  int height;
+  int unknown;
+} FontChar;
+
+extern FontChar Font_Char_Table[1024]; // 4 fonts * 256 chars
+extern unsigned char *Font_Pixel_Data; // Large buffer for font pixels
+extern void Load_Fonts(void);
+extern void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
+                                unsigned short *dest_buf, int stride, int x,
+                                int max_x, int len);
 
 // System / Optimization
 void Init_Game_Config(void); // 004207c0

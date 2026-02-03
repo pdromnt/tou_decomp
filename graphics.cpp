@@ -8,6 +8,54 @@ LPDIRECTDRAWSURFACE lpDDS_Primary = NULL;   // DAT_00489ed8
 LPDIRECTDRAWSURFACE lpDDS_Back = NULL;      // DAT_00489ecc (Attached)
 LPDIRECTDRAWSURFACE lpDDS_Offscreen = NULL; // DAT_00489ed0 (Staging)
 
+// Stub for Draw Text (0040aed0)
+// Stub for Draw Text (0040aed0) -> Now Implemented!
+void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
+                         unsigned short *dest_buf, int stride, int x, int max_x,
+                         int len) {
+  if (!str || !Font_Pixel_Data)
+    return;
+
+  unsigned short *dst = dest_buf;
+  int cur_x = 0;
+
+  while (*str) {
+    unsigned char c = (unsigned char)*str;
+    str++;
+
+    if (c == ' ') {
+      cur_x += Font_Char_Table[font_idx * 256 + 32].width;
+      continue;
+    }
+
+    // Safety
+    int table_idx = font_idx * 256 + c;
+    if (table_idx >= 1024)
+      continue;
+
+    FontChar *fc = &Font_Char_Table[table_idx];
+    if (fc->width == 0)
+      continue; // Invalid char
+
+    // Blit Char
+    for (int y = 0; y < fc->height; y++) {
+      for (int fx = 0; fx < fc->width; fx++) {
+        // Bounds check would be nice, but simple blit first
+        unsigned char p =
+            Font_Pixel_Data[fc->pixel_offset + (y * fc->width) + fx];
+        if (p > 10) {                    // Threshold for transparency
+          unsigned short color = 0xFFFF; // White
+          if (color_idx == 1)
+            color = 0xF800; // Red
+
+          dst[(y * stride) + cur_x + fx] = color;
+        }
+      }
+    }
+    cur_x += fc->width + 1; // 1px spacing
+  }
+}
+
 // Init_DirectDraw (004610e0)
 int Init_DirectDraw(int width, int height) {
   HRESULT hr;

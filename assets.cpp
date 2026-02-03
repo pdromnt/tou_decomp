@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-// STB Image - single header JPEG loader (replaces IJL)
-#define STBI_ONLY_JPEG
+// STB Image - single header Image loader (replaces IJL)
+// #define STBI_ONLY_JPEG // Disabled to allow TGA loading
 #include "stb_image.h"
 
 // Global Variables
@@ -11,6 +11,120 @@ int DAT_00481d08 = 0; // Width
 int DAT_00481cfc = 0; // Height
 int DAT_00481d04 = 0; // Channels
 int DAT_00481d00 = 0; // Buffer Size
+
+// Font Globals
+FontChar Font_Char_Table[1024];
+unsigned char *Font_Pixel_Data = NULL;
+int Font_Pixel_Offset = 0;
+
+void Parse_Font_Data(int font_idx, unsigned char *img_data, int w, int h) {
+  // Scan image for characters (ASCII 33-127 usually, start at 33 '!')
+  // Assumes characters are separated by empty (black) vertical columns.
+
+  int current_char = 33; // Start at '!'
+  bool in_char = false;
+  int start_x = 0;
+
+  // Fill first 33 chars as empty/dummy
+  for (int i = 0; i < 33; i++) {
+    Font_Char_Table[font_idx * 256 + i].pixel_offset = 0;
+    Font_Char_Table[font_idx * 256 + i].width = 0;
+    Font_Char_Table[font_idx * 256 + i].height = h;
+  }
+
+  for (int x = 0; x < w; x++) {
+    // Check if column is empty
+    bool empty = true;
+    for (int y = 0; y < h; y++) {
+      int r = img_data[(y * w + x) * 3 + 0];
+      int g = img_data[(y * w + x) * 3 + 1];
+      int b = img_data[(y * w + x) * 3 + 2];
+      if (r > 0 || g > 0 || b > 0) {
+        empty = false;
+        break;
+      }
+    }
+
+    if (!empty && !in_char) {
+      in_char = true;
+      start_x = x;
+    } else if (empty && in_char) {
+      // End of character
+      in_char = false;
+      int char_w = x - start_x;
+
+      // Store Metadata
+      int table_idx = font_idx * 256 + current_char;
+      if (table_idx >= 1024)
+        break;
+
+      Font_Char_Table[table_idx].width = char_w;
+      Font_Char_Table[table_idx].height = h;
+      Font_Char_Table[table_idx].pixel_offset = Font_Pixel_Offset;
+
+      // Copy Pixels to Global Buffer (Pack them)
+      // Store Luminance (Grayscale).
+      for (int cy = 0; cy < h; cy++) {
+        for (int cx = 0; cx < char_w; cx++) {
+          int src_x = start_x + cx;
+          int idx = (cy * w + src_x) * 3;
+          unsigned char r = img_data[idx];
+          unsigned char g = img_data[idx + 1];
+          unsigned char b = img_data[idx + 2];
+
+          unsigned char lum = (r + g + b) / 3;
+          Font_Pixel_Data[Font_Pixel_Offset + (cy * char_w) + cx] = lum;
+        }
+      }
+
+      Font_Pixel_Offset += (char_w * h);
+      current_char++;
+      if (current_char > 255)
+        break;
+    }
+  }
+
+  // Set Space Width (Approx 5 pixels?)
+  Font_Char_Table[font_idx * 256 + 32].width = 5;
+  Font_Char_Table[font_idx * 256 + 32].height = h;
+
+  LOG("[INFO] Parsed Font %d: Found %d chars.\n", font_idx, current_char - 33);
+}
+
+void Load_Fonts(void) {
+  if (Font_Pixel_Data)
+    return; // Already loaded
+
+  // Allocate Pixel Data (Guestimate size: 1MB)
+  Font_Pixel_Data = (unsigned char *)malloc(1024 * 1024); // 1MB should suffice
+  Font_Pixel_Offset = 0;
+
+  const char *font_files[] = {
+      "data/f_tiny5d.tga", // 0
+      "data/f_mini.tga",   // 1
+      "data/f_med.tga",    // 2
+      "data/f_large.tga"   // 3
+  };
+
+  memset(Font_Char_Table, 0, sizeof(Font_Char_Table));
+
+  for (int f = 0; f < 4; f++) {
+    int w, h, c;
+    unsigned char *data = stbi_load(font_files[f], &w, &h, &c, 3);
+    if (!data) {
+      LOG("[ERROR] Failed to load font: %s (Reason: %s)\n", font_files[f],
+          stbi_failure_reason());
+      continue;
+    }
+
+    LOG("[INFO] Loaded Font %d: %s (%dx%d)\n", f, font_files[f], w, h);
+
+    // Scan and Pack
+    Parse_Font_Data(f, data, w, h);
+
+    stbi_image_free(data);
+  }
+}
 
 // Implementation of 0042d710
 int Load_Background_To_Buffer(char index) {
