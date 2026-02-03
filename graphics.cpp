@@ -76,10 +76,18 @@ int Init_DirectDraw(int width, int height) {
   // 3. Create Offscreen Staging Surface (System Memory)
   memset(&ddsd, 0, sizeof(ddsd));
   ddsd.dwSize = sizeof(ddsd);
-  ddsd.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH;
+  ddsd.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
   ddsd.dwWidth = width;
   ddsd.dwHeight = height;
   ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
+
+  // Force RGB 565 Pixel Format
+  ddsd.ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT);
+  ddsd.ddpfPixelFormat.dwFlags = DDPF_RGB;
+  ddsd.ddpfPixelFormat.dwRGBBitCount = 16;
+  ddsd.ddpfPixelFormat.dwRBitMask = 0xF800;
+  ddsd.ddpfPixelFormat.dwGBitMask = 0x07E0;
+  ddsd.ddpfPixelFormat.dwBBitMask = 0x001F;
 
   LOG("[INFO] Creating Staging Surface...\n");
   hr = lpDD->CreateSurface(&ddsd, &lpDDS_Offscreen, NULL);

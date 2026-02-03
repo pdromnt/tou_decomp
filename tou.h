@@ -8,7 +8,6 @@
 
 #define DIRECTINPUT_VERSION 0x0700
 #include "fmod_mock.h"
-#include "ijl_mock.h"
 #include <dinput.h>
 
 // Structures

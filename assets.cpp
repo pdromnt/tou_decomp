@@ -1,7 +1,10 @@
-#include "ijl_mock.h"
 #include "tou.h"
 #include <stdio.h>
 #include <string.h>
+
+// STB Image - single header JPEG loader (replaces IJL)
+#define STBI_ONLY_JPEG
+#include "stb_image.h"
 
 // Global Variables
 int DAT_00481d08 = 0; // Width
@@ -21,6 +24,11 @@ int Load_Background_To_Buffer(char index) {
   const char *filename;
   if (index >= 0 && index < 3) {
     filename = filenames[(int)index];
+  } else if (index == 11) {
+    // explode.gfx is a custom binary format, not JPEG.
+    // Stb_image cannot load it. We skip it for now to avoid errors.
+    LOG("[WARNING] explode.gfx (Index 11) format not supported yet.\n");
+    return 0;
   } else {
     return 0;
   }
@@ -30,57 +38,62 @@ int Load_Background_To_Buffer(char index) {
 
   LOG("[INFO] Loading Background: %s\n", filename);
 
-  // === BYPASS IJL - Use fake solid color image ===
-  // IJL is crashing due to structure size mismatch with old DLL
-  // TODO: Replace with stb_image or fix IJL structure
+  // Load JPEG using stb_image
+  int width, height, channels;
+  unsigned char *img_data = stbi_load(filename, &width, &height, &channels, 3);
 
-  DAT_00481d08 = 640;
-  DAT_00481cfc = 480;
-  DAT_00481d04 = 3;
-  DAT_00481d00 = 640 * 480 * 3;
-
-  void *buffer = Mem_Alloc(DAT_00481d00);
-  if (!buffer) {
-    LOG("[ERROR] Failed to allocate buffer for image\n");
+  if (!img_data) {
+    LOG("[ERROR] stbi_load failed for %s: %s\n", filename,
+        stbi_failure_reason());
     return 0;
   }
 
-  // Fill with a gradient pattern for visual feedback
-  unsigned char *pixels = (unsigned char *)buffer;
-  for (int y = 0; y < 480; y++) {
-    for (int x = 0; x < 640; x++) {
-      int idx = (y * 640 + x) * 3;
-      pixels[idx + 0] = (unsigned char)(x * 255 / 640); // R
-      pixels[idx + 1] = (unsigned char)(y * 255 / 480); // G
-      pixels[idx + 2] = 128;                            // B
-    }
-  }
-  LOG("[DEBUG] Fake image loaded (gradient pattern)\n");
+  LOG("[DEBUG] Loaded %s: %dx%d, %d channels\n", filename, width, height,
+      channels);
 
-  // Convert to BGR 565 (BBBBB GGGGGG RRRRR)
-  unsigned char *src = (unsigned char *)buffer;
+  DAT_00481d08 = width;
+  DAT_00481cfc = height;
+  DAT_00481d04 = 3;
+  DAT_00481d00 = width * height * 3;
+
+  // Convert RGB to BGR 565 (BBBBB GGGGGG RRRRR)
+  unsigned char *src = img_data;
   unsigned short *dst = DAT_004877c0;
 
   if (dst) {
-    int total_pixels = DAT_00481d08 * DAT_00481cfc;
+    int total_pixels = width * height;
     for (int i = 0; i < total_pixels; i++) {
       unsigned char r = src[i * 3 + 0];
       unsigned char g = src[i * 3 + 1];
       unsigned char b = src[i * 3 + 2];
-      unsigned short res = (r >> 3) | ((g & 0xFC) << 3) | ((b & 0xF8) << 8);
+      // RGB565: RRRRR(11-15) GGGGGG(5-10) BBBBB(0-4)
+      unsigned short res =
+          ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3);
       dst[i] = res;
     }
   }
 
-  Mem_Free(buffer);
+  stbi_image_free(img_data);
   DAT_0048769c = index;
-  LOG("[DEBUG] Background Load Success (fake).\n");
+  LOG("[DEBUG] Background Load Success.\n");
   return 1;
 }
 
 // Load_JPEG_Asset (00420c90) - generic loader
-void *Load_JPEG_Asset(const char *filename, int *width, int *height) {
-  // Similar to above but returns buffer
-  // ...
-  return NULL;
+void *Load_JPEG_Asset(const char *filename, int *out_width, int *out_height) {
+  int width, height, channels;
+  unsigned char *img_data = stbi_load(filename, &width, &height, &channels, 3);
+
+  if (!img_data) {
+    LOG("[ERROR] Load_JPEG_Asset failed for %s: %s\n", filename,
+        stbi_failure_reason());
+    return NULL;
+  }
+
+  if (out_width)
+    *out_width = width;
+  if (out_height)
+    *out_height = height;
+
+  return img_data;
 }
