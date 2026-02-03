@@ -1,119 +1,86 @@
+#include "ijl_mock.h"
 #include "tou.h"
-#include <malloc.h>
 #include <stdio.h>
-
-// IJL Globals or Imports
-// Stubs for IJL (Intel JPEG Library) 1.5
-// Defined in ijl_mock.h usually, but we need implementation for linker
-// Note: JPEG_CORE_PROPERTIES is defined in ijl_mock.h included via tou.h
-
-extern "C" {
-int __stdcall ijlInit(JPEG_CORE_PROPERTIES *jcprops) { return 0; } // 0 = IJL_OK
-int __stdcall ijlFree(JPEG_CORE_PROPERTIES *jcprops) { return 0; }
-int __stdcall ijlRead(JPEG_CORE_PROPERTIES *jcprops, int ioType) { return 0; }
-}
+#include <string.h>
 
 // Global Variables
-// Assuming we link ijl15.lib or ijl10.lib
-
-// Global Data Pointers (set by Load_JPEG_Asset or caller?)
-// In FUN_00421540: DAT_00481cfc (Height), DAT_00481d08 (Width)
-// These seem to be updated by Load_JPEG_Asset via stack pointers or globals?
-// But decompilation suggested Load_JPEG_Asset returns a pointer.
-// And FUN_00421540 updates DAT_00481d08 AFTER the call.
-// So Load_JPEG_Asset might just return the pixel data and size info via other
-// means? Actually, decompilation of Load_JPEG_Asset: DAT_00481d08 =
-// in_stack_0000002c; (Width from struct) DAT_00481cfc = in_stack_00000030;
-// (Height from struct) So it updates global Width/Height variables directly!
-
-// Globals used by Asset Loader
 int DAT_00481d08 = 0; // Width
 int DAT_00481cfc = 0; // Height
-int DAT_00481d04 = 0; // Channels?
-int DAT_00481d00 = 0; // Size?
-// int DAT_004892a0; // Extern in tou.h
+int DAT_00481d04 = 0; // Channels
+int DAT_00481d00 = 0; // Buffer Size
 
-// Implementation
-unsigned char *Load_JPEG_Asset(int data_size, void *data_ptr, int mode) {
-  JPEG_CORE_PROPERTIES jcprops;
-  int res;
-  unsigned char *buffer;
+// Implementation of 0042d710
+int Load_Background_To_Buffer(char index) {
+  // Filenames from 0x47dabc
+  const char *filenames[] = {
+      "data//menu3d.jpg", // index 0
+      "data//sanim2.jpg", // index 1
+      "data//splay.jpg"   // index 2
+  };
 
-  // 1. Init IJL
-  res = ijlInit(&jcprops);
-  if (res != 0) {
-    ijlFree(&jcprops);
-    return NULL;
+  const char *filename;
+  if (index >= 0 && index < 3) {
+    filename = filenames[(int)index];
+  } else {
+    return 0;
   }
 
-  // 2. Setup Read Params
-  jcprops.JPGBytes = (unsigned int)data_ptr;
-  jcprops.JPGSizeBytes = data_size;
-  jcprops.UseExternal = 0; // Or flags?
+  if (index == DAT_0048769c)
+    return 1;
 
-  // 3. Read Header
-  res = ijlRead(&jcprops, IJL_JBUFF_READPARAMS);
-  if (res != 0) {
-    ijlFree(&jcprops);
-    return NULL;
+  LOG("[INFO] Loading Background: %s\n", filename);
+
+  // === BYPASS IJL - Use fake solid color image ===
+  // IJL is crashing due to structure size mismatch with old DLL
+  // TODO: Replace with stb_image or fix IJL structure
+
+  DAT_00481d08 = 640;
+  DAT_00481cfc = 480;
+  DAT_00481d04 = 3;
+  DAT_00481d00 = 640 * 480 * 3;
+
+  void *buffer = Mem_Alloc(DAT_00481d00);
+  if (!buffer) {
+    LOG("[ERROR] Failed to allocate buffer for image\n");
+    return 0;
   }
 
-  // 4. Update Globals
-  DAT_00481d08 = jcprops.JPGWidth;
-  DAT_00481cfc = jcprops.JPGHeight;
-  DAT_00481d04 = 3; // Default to 3 channels?
+  // Fill with a gradient pattern for visual feedback
+  unsigned char *pixels = (unsigned char *)buffer;
+  for (int y = 0; y < 480; y++) {
+    for (int x = 0; x < 640; x++) {
+      int idx = (y * 640 + x) * 3;
+      pixels[idx + 0] = (unsigned char)(x * 255 / 640); // R
+      pixels[idx + 1] = (unsigned char)(y * 255 / 480); // G
+      pixels[idx + 2] = 128;                            // B
+    }
+  }
+  LOG("[DEBUG] Fake image loaded (gradient pattern)\n");
 
-  // 5. Calculate Size and Allocate
-  // Logic from decompilation:
-  // ... FUN_00425820(2, iVar1) ... alignment?
-  // DAT_00481d00 = Width * Height * 3;
+  // Convert to BGR 565 (BBBBB GGGGGG RRRRR)
+  unsigned char *src = (unsigned char *)buffer;
+  unsigned short *dst = DAT_004877c0;
 
-  int channels = 3;
-  if (mode == 1)
-    channels = 4;
-  // mode == 3 -> channels = 3?
-
-  DAT_00481d00 = jcprops.JPGWidth * jcprops.JPGHeight * channels;
-
-  buffer = (unsigned char *)malloc(DAT_00481d00);
-  // DAT_004892a0 += DAT_00481d00; // Track memory
-
-  if (buffer == NULL) {
-    ijlFree(&jcprops);
-    return NULL;
+  if (dst) {
+    int total_pixels = DAT_00481d08 * DAT_00481cfc;
+    for (int i = 0; i < total_pixels; i++) {
+      unsigned char r = src[i * 3 + 0];
+      unsigned char g = src[i * 3 + 1];
+      unsigned char b = src[i * 3 + 2];
+      unsigned short res = (r >> 3) | ((g & 0xFC) << 3) | ((b & 0xF8) << 8);
+      dst[i] = res;
+    }
   }
 
-  // 6. Setup DIB Params
-  jcprops.DIBBytes = buffer;
-  jcprops.DIBWidth = jcprops.JPGWidth;
-  jcprops.DIBHeight = jcprops.JPGHeight;
-  jcprops.DIBChannels = channels;
-  // jcprops.DIBColor = IJL_BGR; // Standard Windows
-
-  // 7. Read Image
-  res = ijlRead(&jcprops, IJL_JBUFF_READWHOLEIMAGE);
-  if (res != 0) {
-    free(buffer);
-    ijlFree(&jcprops);
-    return NULL;
-  }
-
-  // 8. Cleanup
-  ijlFree(&jcprops);
-
-  // Return pointer to RGB data
-  // Decompilation returns: ~-(uint)(iVar1 != 0) & (uint)pvVar2;
-  // Means if success, return pointer.
-  return buffer;
+  Mem_Free(buffer);
+  DAT_0048769c = index;
+  LOG("[DEBUG] Background Load Success (fake).\n");
+  return 1;
 }
 
-// Sprite Tables Definition
-int Sprite_Offsets[20000];           // DAT_00489234
-unsigned char Sprite_Widths[20000];  // DAT_00489e8c
-unsigned char Sprite_Heights[20000]; // DAT_00489e88
-unsigned short
-    Sprite_Data[0x200000]; // DAT_00487ab4 - 4MB Buffer for sprite data
-
-// Font Tables Definition
-int Font_Char_Table[0x2000];             // DAT_00483c84
-unsigned char Font_Pixel_Data[0x100000]; // DAT_00487878
+// Load_JPEG_Asset (00420c90) - generic loader
+void *Load_JPEG_Asset(const char *filename, int *width, int *height) {
+  // Similar to above but returns buffer
+  // ...
+  return NULL;
+}

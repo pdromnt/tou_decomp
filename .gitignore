@@ -39,3 +39,17 @@
 
 # debug information files
 *.dwo
+*.log
+debug.txt
+
+/data
+/ggstuff
+/helpgfx
+/levels
+/music
+/sfx
+/ships
+/swap
+fmod.dll
+ijl10.dll
+options.cfg

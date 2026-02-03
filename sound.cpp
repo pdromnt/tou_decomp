@@ -8,10 +8,9 @@
 // imports But for now we assume we link against fmod.lib
 
 // Global Sound Table
-SoundEntry *g_SoundTable = NULL; // DAT_00487874
-int g_SoundTableSize =
-    0x960; // 2400 bytes? No, size of allocation. 2400 / 8 = 300 entries.
-int DAT_004892a0 = 0; // Memory tracker?
+SoundEntry *g_SoundTable = NULL;     // DAT_00487874
+extern int DAT_004892a0;             // Linked from memory.cpp
+FSOUND_STREAM *lpIntroStream = NULL; // DAT_004806f8
 
 // FMOD Globals/State (Mocking/Using known ones)
 // DAT_00483720 likely holds setup config.
@@ -101,7 +100,7 @@ void Load_Sound_Sample(const char bLoop, int index, int vol_priority,
     mode = FSOUND_2D | FSOUND_LOOP_NORMAL; // 0x2002? Wait loop is 2.
   }
 
-  handle = (unsigned int)FSOUND_Sample_Load(FSOUND_FREE, path, mode, 0, 0);
+  handle = (unsigned int)FSOUND_Sample_Load(-1, path, mode, 0);
 
   // Store in Table
   if (g_SoundTable) {
@@ -134,10 +133,33 @@ void Load_Game_Sounds(void) {
   // ...
 }
 
+// Play_Music
+extern FSOUND_STREAM *lpIntroStream;
+void Play_Music(void) {
+  if (lpIntroStream) {
+    FSOUND_Stream_Stop(lpIntroStream);
+    FSOUND_Stream_Close(lpIntroStream);
+    lpIntroStream = NULL;
+  }
+
+  lpIntroStream =
+      FSOUND_Stream_OpenFile("music/mainmenu.ogg", FSOUND_LOOP | FSOUND_2D, 0);
+  if (lpIntroStream) {
+    FSOUND_Stream_Play(FSOUND_FREE, lpIntroStream);
+    LOG("[INFO] Playing Music: music/mainmenu.ogg\n");
+  } else {
+    LOG("[ERROR] Failed to open music/mainmenu.ogg\n");
+  }
+}
+
 // Stop All Sounds (0040e7c0)
 void Stop_All_Sounds(void) {
-  // int max_channels = FSOUND_GetMaxChannels();
-  // for (int i=0; i<max_channels; i++) FSOUND_StopSound(i);
+  int max_channels = FSOUND_GetMaxChannels();
+  for (int i = 0; i < max_channels; i++)
+    FSOUND_StopSound(i);
+  if (lpIntroStream) {
+    FSOUND_Stream_Stop(lpIntroStream);
+  }
 }
 
 // Cleanup Sound System (0040e880)

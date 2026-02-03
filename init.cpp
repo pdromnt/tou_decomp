@@ -6,22 +6,19 @@
 
 // Globals used in Init
 // Many of these are simple flags or config values
-// DAT_00487ab0 extern in tou.h
-int DAT_0048769c = 0;
+// DAT_0048769c extern in tou.h
 int DAT_00487649 = 0;
 struct {
   char _3_1_;         // Output Type
 } GlobalConfig = {3}; // DAT_00483720, Default 3?
 
-// Large structure pointer
-// int DAT_00487880[100]; // Incorrect, it's a pointer to an allocated block
-int *DAT_00487880 = NULL; // Fixed to pointer
+// Globals
+// DAT_00487880 defined in memory.cpp
+// Game State extern in tou.h
 
 // Pointers at DAT_00489ebc
 int *DAT_00489ebc = NULL;
 
-// Unknowns (referenced in decompilation)
-// Unknowns
 // In memory.cpp: void* DAT_00487ab0;
 // Here we used it as param to Init_Math_Tables(int* buffer).
 // So let's declare it matching the usage or sync.
@@ -39,13 +36,13 @@ struct {
   char _1_1_;
   char _2_1_;
 } DAT_00487640;
+// Authorization Globals
 int DAT_0048764b = 0;
 int DAT_0048764a = 0;
 
 // Initialization Stubs (to be filled later)
-void FUN_004201a0() {}
+// Init_Memory_Pools (004201a0) declared in tou.h
 void FUN_00425780(int p1, int p2) {}
-void FUN_004207c0() {}
 void FUN_0041eae0() {}
 void FUN_0045a060() {}
 void FUN_0045b2a0() {}
@@ -74,9 +71,13 @@ int System_Init_Check(void) {
   dwTime = timeGetTime();
   // FUN_00464409(dwTime); // Random seed?
 
-  FUN_004201a0(); // Init_Memory_Pools
+  LOG("[DEBUG] System_Init_Check: Calling Init_Memory_Pools...\n");
+  Init_Memory_Pools();
+  LOG("[DEBUG] System_Init_Check: Memory Pools Init Success.\n");
   // Casting void* to int* for math table init
+  LOG("[DEBUG] System_Init_Check: Calling Init_Math_Tables...\n");
   Init_Math_Tables((int *)DAT_00487ab0, 0x800);
+  LOG("[DEBUG] System_Init_Check: Math Tables Init Success.\n");
   Init_Game_Config(); // Was FUN_004207c0
 
   DAT_0048769c = 0xff;
@@ -118,17 +119,23 @@ MainInit:
   // Loop to clear DAT_00487ac0 (likely large array)
   // memset(&DAT_00487ac0, 0, ...);
 
+  LOG("[DEBUG] System_Init_Check: Stage 1\n");
   FUN_00422a10();
+  LOG("[DEBUG] System_Init_Check: Stage 2\n");
   FUN_0042d8b0();
 
-  if (FUN_00422740() != 1)
-    return 0; // Fixed return value
+  if (FUN_00422740() != 1) {
+    LOG("[DEBUG] System_Init_Check: FUN_00422740 Failed.\n");
+    return 2; // Fixed return value
+  }
 
   FUN_00420be0();
   FUN_0041e580();
 
-  if (FUN_00414060() == 0)
-    return 2; // Memory error code?
+  if (FUN_00414060() == 0) {
+    LOG("[ERROR] System_Init_Check: FUN_00414060 Failed.\n");
+    return 3;
+  }
 
   FUN_00413f70();
 
@@ -153,7 +160,7 @@ MainInit:
   DAT_0048764b = 0;
   DAT_0048764a = 0;
 
-  return 1;
+  return 0;
 }
 
 // Globals for DInput
@@ -166,50 +173,67 @@ LPDIRECTINPUTDEVICE A_DI_Device_Keyboard = NULL; // DAT_00489ee4
 int Init_DirectInput(void) {
   HRESULT hr;
 
+  LOG("[INFO] Init_DirectInput: Start\n");
+
   // 1. Create DirectInput Interface
   hr = DirectInputCreateA(GetModuleHandle(NULL), DIRECTINPUT_VERSION,
                           &A_DirectInput_Interface, NULL);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] DirectInputCreateA failed: 0x%08X\n", (unsigned int)hr);
     return 0;
+  }
+  LOG("[INFO] DirectInput Interface Created.\n");
 
   // 2. Keyboard Init
   hr = A_DirectInput_Interface->CreateDevice(GUID_SysKeyboard,
                                              &A_DI_Device_Keyboard, NULL);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] CreateDevice Keyboard failed: 0x%08X\n", (unsigned int)hr);
     return 0;
+  }
 
   hr = A_DI_Device_Keyboard->SetDataFormat(&c_dfDIKeyboard);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] SetDataFormat Keyboard failed: 0x%08X\n", (unsigned int)hr);
     return 0;
+  }
 
   hr = A_DI_Device_Keyboard->SetCooperativeLevel(
       hWnd_Main, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] SetCooperativeLevel Keyboard failed: 0x%08X\n",
+        (unsigned int)hr);
     return 0;
+  }
 
   A_DI_Device_Keyboard->Acquire();
+  LOG("[INFO] Keyboard Initialized.\n");
 
   // 3. Mouse Init (DAT_00489ec0)
   // Using global lpDI_Device for this one
   hr = A_DirectInput_Interface->CreateDevice(GUID_SysMouse, &lpDI_Device, NULL);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] CreateDevice Mouse failed: 0x%08X\n", (unsigned int)hr);
     return 0;
+  }
 
   hr = lpDI_Device->SetDataFormat(&c_dfDIMouse);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] SetDataFormat Mouse failed: 0x%08X\n", (unsigned int)hr);
     return 0;
+  }
 
   hr = lpDI_Device->SetCooperativeLevel(hWnd_Main,
                                         DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG("[ERROR] SetCooperativeLevel Mouse failed: 0x%08X\n", (unsigned int)hr);
     return 0;
-
-  // Create Event for Mouse?
-  // HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-  // lpDI_Device->SetEventNotification(hEvent);
+  }
 
   lpDI_Device->Acquire();
+  LOG("[INFO] Mouse Initialized.\n");
 
+  LOG("[INFO] Init_DirectInput: Success\n");
   return 1;
 }
 

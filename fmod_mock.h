@@ -14,19 +14,49 @@
 #define FSOUND_2D 0x2000
 #define FSOUND_LOOP_OFF 1
 #define FSOUND_LOOP_NORMAL 2
+#define FSOUND_LOOP 0x00000002
 
 // Types
 typedef void *FSOUND_SAMPLE;
+typedef void *FSOUND_STREAM;
+typedef void *FMUSIC_MODULE;
 
 // Functions
-float FSOUND_GetVersion(void);
-void FSOUND_SetOutput(int outputtype);
-void FSOUND_SetDriver(int driver);
-void FSOUND_SetMixer(int mixer);
-int FSOUND_Init(int mixrate, int maxsoftwarechannels, unsigned int flags);
-int FSOUND_GetError(void);
-void FSOUND_Close(void);
-FSOUND_SAMPLE *FSOUND_Sample_Load(int index, const char *name_or_data,
-                                  unsigned int mode, int offset, int length);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+__declspec(dllimport) float __stdcall FSOUND_GetVersion(void);
+__declspec(dllimport) void __stdcall FSOUND_SetOutput(int outputtype);
+__declspec(dllimport) void __stdcall FSOUND_SetDriver(int driver);
+__declspec(dllimport) void __stdcall FSOUND_SetMixer(int mixer);
+__declspec(dllimport) int __stdcall
+FSOUND_Init(int mixrate, int maxsoftwarechannels, unsigned int flags);
+__declspec(dllimport) int __stdcall FSOUND_GetError(void);
+__declspec(dllimport) void __stdcall FSOUND_Close(void);
+__declspec(dllimport) FSOUND_SAMPLE __stdcall
+FSOUND_Sample_Load(int index, const char *name_or_data, unsigned int mode,
+                   int length);
+__declspec(dllimport) void __stdcall FSOUND_StopSound(int channel);
+__declspec(dllimport) int __stdcall FSOUND_GetMaxChannels(void);
+
+// Stream Functions
+__declspec(dllimport) FSOUND_STREAM *__stdcall
+FSOUND_Stream_OpenFile(const char *filename, unsigned int mode, int memlength);
+__declspec(dllimport) int __stdcall FSOUND_Stream_Play(int channel,
+                                                       FSOUND_STREAM *stream);
+__declspec(dllimport) void __stdcall FSOUND_Stream_Stop(FSOUND_STREAM *stream);
+__declspec(dllimport) void __stdcall FSOUND_Stream_Close(FSOUND_STREAM *stream);
+
+// Music Functions
+__declspec(dllimport) FMUSIC_MODULE *__stdcall
+FMUSIC_LoadSong(const char *name);
+__declspec(dllimport) int __stdcall FMUSIC_PlaySong(FMUSIC_MODULE *module);
+__declspec(dllimport) int __stdcall FMUSIC_StopSong(FMUSIC_MODULE *module);
+__declspec(dllimport) void __stdcall FMUSIC_FreeSong(FMUSIC_MODULE *module);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // FMOD_MOCK_H
