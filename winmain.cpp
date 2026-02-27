@@ -1,161 +1,266 @@
+/*
+ * winmain.cpp - WinMain, WndProc, Handle_Init_Error
+ * Addresses: WinMain=00462300, WndProc=00461F60, Handle_Init_Error=00462010
+ *
+ * Matched to TOU15b.exe decompilation via Ghidra.
+ */
 #include "tou.h"
-#include <ddraw.h>
-#include <dinput.h>
-#include <stdarg.h>
 #include <stdio.h>
 
-// Globals
-HWND hWnd_Main = NULL;
-BYTE g_GameState = 0;
-BOOL g_bIsActive = FALSE;
-// LPDIRECTDRAWSURFACE and LPDIRECTDRAW should be extern in tou.h and defined in
-// graphics.cpp
+/* ===== Globals defined in this module ===== */
+HWND           hWnd_Main   = NULL;   /* 00489EDC */
+int            g_bIsActive = 0;      /* 00489EC4 */
+unsigned char  g_GameState = 0;      /* 004877A0 */
+DWORD          g_TimerStart = 0;     /* 004892B0 */
+int            g_TimerAux   = 0;     /* 004892B4 */
 
-// External function prototypes
-void Game_State_Manager(void);
-void Game_Update_Render(void);
-void Input_Update(void);
-void Render_Frame(void);
-int Init_DirectDraw(int width, int height);
-
-// Log declaration moved to tou.h. Implementation in utils.cpp.
-
-// Play_Music and Stop_All_Sounds moved to sound.cpp.
-
-// WndProc (00461f60)
-extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                    LPARAM lParam) {
-  switch (uMsg) {
-  case WM_DESTROY:
-    Release_DirectDraw_Surfaces();
-    if (lpDD) {
-      lpDD->Release();
-      lpDD = NULL;
+/* ===== WndProc (00461F60) ===== */
+extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    if (uMsg == WM_DESTROY) {                       /* 0x02 */
+        if (lpDD != NULL) {
+            if (lpDDS_Primary != NULL) {
+                lpDDS_Primary->Release();
+                lpDDS_Primary = NULL;
+            }
+            if (lpDDS_Offscreen != NULL) {
+                lpDDS_Offscreen->Release();
+                lpDDS_Offscreen = NULL;
+            }
+            lpDD->Release();
+            lpDD = NULL;
+        }
+        PostQuitMessage(0);
     }
-    FSOUND_Close();
-    PostQuitMessage(0);
-    return 0;
+    else if (uMsg == WM_ACTIVATEAPP) {              /* 0x1C */
+        g_bIsActive = (int)wParam;
+    }
+    else if (uMsg == WM_SETCURSOR) {                /* 0x20 */
+        /* Original hid cursor for DDraw fullscreen.
+         * COMPAT: Let Windows show the default cursor in windowed mode. */
+    }
 
-  case WM_ACTIVATEAPP:
-    g_bIsActive = (BOOL)wParam;
-    break;
-
-  case WM_SETCURSOR:
-    SetCursor(NULL);
-    return TRUE;
-  }
-
-  return DefWindowProcA(hWnd, uMsg, wParam, lParam);
+    return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }
 
-// WinMain
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                   LPSTR lpCmdLine, int nCmdShow) {
-  FILE *f = fopen("debug.txt", "w");
-  if (f) {
-    fprintf(f, "--- Tunnels of Underworld Debug Log ---\n");
-    fprintf(f, "[DEBUG] WinMain Entered.\n");
-    fflush(f);
-    fclose(f);
-  }
+/* ===== Handle_Init_Error (00462010) ===== */
+int Handle_Init_Error(HWND hWnd, unsigned char errorCode)
+{
+    const char *lpText;
 
-  // AllocConsole();
-  // freopen("CONOUT$", "w", stdout);
-
-  // Use Log helper later
-
-  WNDCLASSA wc;
-  memset(&wc, 0, sizeof(wc));
-  wc.lpfnWndProc = WndProc;
-  wc.hInstance = hInstance;
-  wc.lpszClassName = "TOU_CLASS";
-  wc.hIcon = LoadIconA(NULL, (LPCSTR)IDI_APPLICATION);
-  wc.hCursor = LoadCursorA(NULL, (LPCSTR)IDC_ARROW);
-
-  if (!RegisterClassA(&wc))
-    return 0;
-
-  hWnd_Main = CreateWindowExA(0, "TOU_CLASS", "Tunnels of Underworld",
-                              WS_POPUP | WS_VISIBLE, 0, 0, 640, 480, NULL, NULL,
-                              hInstance, NULL);
-
-  if (!hWnd_Main)
-    return 0;
-
-  ShowWindow(hWnd_Main, nCmdShow);
-  UpdateWindow(hWnd_Main);
-  g_bIsActive = TRUE; // Start active
-
-  // 1. Sound Init
-  if (!FSOUND_Init(44100, 32, 0)) {
-    LOG("[ERROR] FSOUND_Init FAILED\n");
-  } else {
-    LOG("[INFO] Sound System Initialized.\n");
-  }
-
-  // 2. Memory Init
-  Init_Memory_Pools();
-
-  // 3. DirectDraw Init
-  HRESULT hr;
-  hr = DirectDrawCreate(NULL, &lpDD, NULL);
-  if (FAILED(hr)) {
-    LOG("[ERROR] DirectDrawCreate failed: 0x%08X\n", (unsigned int)hr);
-    return 0;
-  }
-
-  // Try Fullscreen first
-  hr = lpDD->SetCooperativeLevel(hWnd_Main, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
-  if (FAILED(hr)) {
-    LOG("[WARNING] SetCooperativeLevel Fullscreen failed: 0x%08X. Trying "
-        "Normal...\n",
-        (unsigned int)hr);
-    lpDD->SetCooperativeLevel(hWnd_Main, DDSCL_NORMAL);
-  }
-
-  if (!Init_DirectDraw(640, 480)) {
-    LOG("[WARNING] Init_DirectDraw (Fullscreen) failed. Retrying "
-        "windowed...\n");
-    lpDD->SetCooperativeLevel(hWnd_Main, DDSCL_NORMAL);
-    if (!Init_DirectDraw(640, 480)) {
-      LOG("[ERROR] Init_DirectDraw FAILED completely.\n");
-      return 0;
+    /* Release DirectDraw objects if they exist */
+    if (lpDD != NULL) {
+        if (lpDDS_Primary != NULL) {
+            lpDDS_Primary->Release();
+            lpDDS_Primary = NULL;
+        }
+        if (lpDDS_Offscreen != NULL) {
+            lpDDS_Offscreen->Release();
+            lpDDS_Offscreen = NULL;
+        }
+        lpDD->Release();
+        lpDD = NULL;
     }
-  }
 
-  // 4. Input Init
-  LOG("[DEBUG] WinMain: Calling Init_DirectInput...\n");
-  Init_DirectInput();
-  LOG("[DEBUG] WinMain: Calling Early_Init_Vars...\n");
-  Early_Init_Vars();
-  if (System_Init_Check() != 0)
-    return 0;
-  // Set initial state to Init (3)
-  g_GameState = 3;
-  // Start in Intro Sequence state
-
-  // 5. Message Loop
-  MSG msg;
-  while (TRUE) {
-    if (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
-      if (msg.message == WM_QUIT)
+    switch (errorCode) {
+    case 0:
+        lpText = STR_ERR_DDRAW_INSTALL;
         break;
-      TranslateMessage(&msg);
-      DispatchMessageA(&msg);
-    } else {
-      if (!g_bIsActive) {
-        WaitMessage();
-      } else {
-        if (g_GameState == 0)
-          Game_Update_Render();
-        else
-          Game_State_Manager();
-
-        Input_Update();
-        Render_Frame();
-      }
+    case 1:
+        lpText = STR_ERR_DDRAW_MODE;
+        break;
+    case 2:
+        lpText = STR_ERR_DDRAW_MEMORY;
+        break;
+    case 3:
+        lpText = STR_ERR_DINPUT;
+        break;
+    default:
+        lpText = STR_ERR_UNKNOWN;
+        break;
     }
-  }
 
-  return msg.wParam;
+    MessageBoxA(hWnd, lpText, STR_TITLE, MB_ICONERROR);
+    DestroyWindow(hWnd);
+    return 0;
+}
+
+/* ===== WinMain (00462300) ===== */
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                   LPSTR lpCmdLine, int nCmdShow)
+{
+    HWND hWnd;
+    int iVar1;
+    BOOL bVar;
+    unsigned char uVar3;
+    WNDCLASSA wc;
+    MSG msg;
+
+    /* 1. Early init - before anything else */
+    Early_Init_Vars();
+
+    /* COMPAT: Request 1ms timer resolution for accurate Sleep() and timeGetTime().
+     * Original used DDraw exclusive fullscreen with vsync-locked flip chain (60Hz).
+     * In windowed mode we use Sleep()-based frame limiting, which requires 1ms
+     * resolution to hit 60fps targets. Without this, Windows default ~15.6ms
+     * granularity causes Sleep(16) to actually sleep ~31ms → ~30fps. */
+    timeBeginPeriod(1);
+
+    /* 2. Register window class */
+    wc.style         = CS_HREDRAW | CS_VREDRAW;             /* 3 */
+    wc.lpfnWndProc   = WndProc;
+    wc.cbClsExtra    = 0;
+    wc.cbWndExtra    = 0;
+    wc.hInstance     = hInstance;
+    wc.hIcon         = LoadIconA(hInstance, (LPCSTR)0x7F00); /* IDI_APPLICATION from resources */
+    wc.hCursor       = LoadCursorA(NULL, (LPCSTR)0x7F00);   /* IDC_ARROW */
+    wc.hbrBackground = (HBRUSH)GetStockObject(HOLLOW_BRUSH); /* 4 */
+    wc.lpszMenuName  = STR_CLASSNAME;                        /* "TOU" */
+    wc.lpszClassName = STR_CLASSNAME;                        /* "TOU" */
+    RegisterClassA(&wc);
+
+    /* 3. Create window
+     * Original: WS_POPUP 0,0,0,0 (DDraw exclusive fullscreen takes over)
+     * COMPAT:   Windowed with title bar, 640x480 client area */
+    {
+        DWORD dwStyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+        RECT rc = { 0, 0, 640, 480 };
+        AdjustWindowRect(&rc, dwStyle, FALSE);
+        int winW = rc.right - rc.left;
+        int winH = rc.bottom - rc.top;
+        int posX = (GetSystemMetrics(SM_CXSCREEN) - winW) / 2;
+        int posY = (GetSystemMetrics(SM_CYSCREEN) - winH) / 2;
+        hWnd = CreateWindowExA(
+            0,                      /* dwExStyle */
+            STR_CLASSNAME,          /* "TOU" */
+            STR_TITLE,              /* "TOU v0.1" */
+            dwStyle,
+            posX, posY, winW, winH, /* Centered, client area = 640x480 */
+            NULL,                   /* parent */
+            NULL,                   /* menu */
+            hInstance,
+            NULL                    /* lpParam */
+        );
+    }
+    hWnd_Main = hWnd;
+
+    if (hWnd == NULL) {
+        timeEndPeriod(1);
+        return 0;
+    }
+
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
+    /* 4. System Init Check (returns 1 on success) */
+    LOG("[INIT] System_Init_Check...\n");
+    iVar1 = System_Init_Check();
+    LOG("[INIT] System_Init_Check returned %d\n", iVar1);
+    if (iVar1 != 1) {
+        if (iVar1 == 0) {
+            /* File not found / general init failure */
+            MessageBoxA(hWnd_Main, STR_ERR_INIT_FILENOTFOUND, STR_TITLE, MB_ICONERROR);
+        } else {
+            /* No levels or GG themes */
+            MessageBoxA(hWnd_Main, STR_ERR_INIT_NOLEVELS, STR_TITLE, MB_ICONERROR);
+        }
+        timeEndPeriod(1);
+        return 0;
+    }
+
+    /* 5. DirectDraw Create */
+    LOG("[INIT] DirectDrawCreate...\n");
+    iVar1 = DirectDrawCreate(NULL, &lpDD, NULL);
+    LOG("[INIT] DirectDrawCreate returned 0x%08X\n", iVar1);
+    if (iVar1 != 0) {
+        /* DDraw create failed - cleanup if partially created */
+        if (lpDD != NULL) {
+            Release_DirectDraw_Surfaces();
+            lpDD->Release();
+            lpDD = NULL;
+        }
+        MessageBoxA(hWnd, STR_ERR_DDRAW_INSTALL, STR_TITLE, MB_ICONERROR);
+        DestroyWindow(hWnd);
+        timeEndPeriod(1);
+        return 0;
+    }
+
+    /* 6. Set Cooperative Level
+     * Original: DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN
+     * COMPAT:   DDSCL_NORMAL for windowed mode on modern Windows */
+    iVar1 = lpDD->SetCooperativeLevel(hWnd, DDSCL_NORMAL);
+    LOG("[INIT] SetCooperativeLevel returned 0x%08X\n", iVar1);
+    if (iVar1 == 0) {
+        /* 7. Init DirectInput */
+        LOG("[INIT] Init_DirectInput...\n");
+        iVar1 = Init_DirectInput();
+        LOG("[INIT] Init_DirectInput returned %d\n", iVar1);
+        if (iVar1 != 0) {
+            /* Success - zero surface pointers, enter main loop */
+            lpDDS_Primary   = NULL;
+            lpDDS_Offscreen = NULL;
+            lpDDS_Back      = NULL;
+            goto MAIN_LOOP;
+        }
+        uVar3 = 3;  /* DirectInput error */
+    } else {
+        uVar3 = 0;  /* SetCooperativeLevel error */
+    }
+
+    /* Error path - Handle_Init_Error always returns 0, so we exit */
+    iVar1 = Handle_Init_Error(hWnd, uVar3);
+    if (iVar1 != 0) {
+        /* Dead code in original binary - Handle_Init_Error always returns 0 */
+MAIN_LOOP:
+        LOG("[INIT] Entering MAIN_LOOP\n");
+        g_MouseButtons = 0;
+
+        /* Game_Update_Render (state 0) is the full gameplay loop (Phase 6).
+         * Until it's decompiled, start at intro init instead. */
+        g_GameState = 0x96;
+
+        while (1) {
+            /* Inner loop: check for messages with PeekMessage (PM_NOREMOVE) */
+            while (1) {
+                bVar = PeekMessageA(&msg, NULL, 0, 0, 0); /* PM_NOREMOVE */
+                if (bVar != 0)
+                    break;
+
+                /* No messages pending - run game logic */
+                if (g_bIsActive == 0) {
+                    /* App is inactive - wait for messages */
+                    WaitMessage();
+                    g_SubState     = 1;
+                    g_NeedsRedraw  = 1;
+                    g_SurfaceReady = 2;
+                    g_TimerStart   = timeGetTime();
+                    g_TimerAux     = 0;
+                } else {
+                    /* App is active - run game */
+                    if (g_GameState == 0x01) {
+                        Input_Update();
+                    }
+                    g_ProcessInput = 1;
+                    if (g_GameState == 0x00) {
+                        Game_Update_Render();
+                    } else {
+                        Game_State_Manager();
+                    }
+                }
+            }
+
+            /* Message available - retrieve and dispatch */
+            bVar = GetMessageA(&msg, NULL, 0, 0);
+            if (bVar == 0)
+                break; /* WM_QUIT */
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
+        }
+
+        timeEndPeriod(1);
+        return (int)msg.wParam;
+    }
+
+    timeEndPeriod(1);
+    return 0;
 }

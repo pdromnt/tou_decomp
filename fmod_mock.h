@@ -48,6 +48,12 @@ __declspec(dllimport) int __stdcall FSOUND_Stream_Play(int channel,
 __declspec(dllimport) void __stdcall FSOUND_Stream_Stop(FSOUND_STREAM *stream);
 __declspec(dllimport) void __stdcall FSOUND_Stream_Close(FSOUND_STREAM *stream);
 
+// Channel control
+__declspec(dllimport) int __stdcall FSOUND_SetPaused(int channel, int paused);
+__declspec(dllimport) int __stdcall FSOUND_SetPan(int channel, int pan);
+__declspec(dllimport) int __stdcall FSOUND_SetVolumeAbsolute(int channel, int vol);
+__declspec(dllimport) void __stdcall FSOUND_SetSFXMasterVolume(int vol);
+
 // Music Functions
 __declspec(dllimport) FMUSIC_MODULE *__stdcall
 FMUSIC_LoadSong(const char *name);

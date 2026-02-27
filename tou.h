@@ -2,113 +2,241 @@
 #define TOU_H
 
 #define DIRECTDRAW_VERSION 0x0100
-#include <ddraw.h>
-#include <mmsystem.h>
-#include <windows.h>
-
 #define DIRECTINPUT_VERSION 0x0700
-#include "fmod_mock.h"
+
+#include <windows.h>
+#include <ddraw.h>
 #include <dinput.h>
+#include <mmsystem.h>
 
-// Structures
+#include "fmod_mock.h"
+
+/* ===== Error Strings (matching binary string table) ===== */
+/* 0047F0EC */ #define STR_ERR_DDRAW_INSTALL  "DirectDraw Init FAILED.\nInstall DirectX 7.0 to play TOU.\n\nRead readme.txt for more\ninformation."
+/* 0047EF74 */ #define STR_ERR_DDRAW_MODE     "DirectDraw Init FAILED.\nCouldn't set video mode to 640x480 16-bit.\nYour video card must support this\nresolution to play TOU.\nRead readme.txt for more information"
+/* 0047F098 */ #define STR_ERR_DDRAW_MEMORY   "DirectDraw Init FAILED.\nNot enough memory.\n\nRead readme.txt for more\ninformation."
+/* 0047F058 */ #define STR_ERR_DINPUT         "DirectInput Init FAILED.\n\nRead readme.txt for more\ninformation."
+/* 0047F048 */ #define STR_ERR_UNKNOWN        "Unknown error."
+/* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."
+/* 0047F14C */ #define STR_ERR_INIT_NOLEVELS  "Tou init failed!\nYou don't have any levels or GG themes!\n\nYou can't run the game without levels.\n\nRead readme.txt for more information."
+/* 0047F018 */ #define STR_TITLE              "TOU v0.1"
+/* 0047EB10 */ #define STR_CLASSNAME          "TOU"
+
+/* ===== Structures ===== */
+
 typedef struct {
-  unsigned int handle; // FSOUND_SAMPLE* handle cast to int
-  unsigned char volume;
-  unsigned char padding[3];
+    unsigned int handle;    /* FSOUND_SAMPLE* cast to uint */
+    unsigned char volume;
+    unsigned char padding[3];
 } SoundEntry;
-extern SoundEntry *g_SoundTable; // DAT_00487874
 
-// Global Variables
-extern HWND hWnd_Main;                    // DAT_00489edc
-extern LPDIRECTDRAW lpDD;                 // DAT_00489ec8
-extern LPDIRECTDRAWSURFACE lpDDS_Primary; // DAT_00489ed8
-extern LPDIRECTDRAWSURFACE lpDDS_Back;    // DAT_00489ecc
-extern FSOUND_STREAM *lpIntroStream;      // DAT_004806f8
-extern BOOL g_bIsActive;                  // DAT_00489ec4
-extern BYTE g_GameState;                  // DAT_004877a0
-extern LPDIRECTINPUTDEVICE lpDI_Device;   // DAT_00489ec0
+typedef struct {
+    int pixel_offset;
+    int width;
+    int height;
+    int unknown;
+} FontChar;
 
-// Logic Globals
-extern int DAT_0048924c;           // Intro Splash Index
-extern unsigned char DAT_004877c8; // Software Buffer Frame Index
-extern char DAT_0048769c;          // Loaded Background Index
-extern char DAT_004877be;          // Input button flag
-extern int DAT_004892a0;           // Memory Tracker / Debug
-extern int *DAT_00487880;          // Math Tables / Config
-extern void *DAT_00487ab0;         // Math Buffer
+/* ===== DirectDraw Globals (graphics.cpp) ===== */
+extern LPDIRECTDRAW          lpDD;              /* 00489EC8 */
+extern LPDIRECTDRAWSURFACE   lpDDS_Primary;     /* 00489ED8 */
+extern LPDIRECTDRAWSURFACE   lpDDS_Back;        /* 00489ECC */
+extern LPDIRECTDRAWSURFACE   lpDDS_Offscreen;   /* 00489ED0 */
 
-// Unknown Globals
-extern int DAT_00489296;
-extern int DAT_00489297;
-extern int DAT_00489298;
+/* ===== DirectInput Globals (init.cpp) ===== */
+extern LPDIRECTINPUT         lpDI;              /* 00489ED4 */
+extern LPDIRECTINPUTDEVICE   lpDI_Keyboard;     /* 00489EE4 */
+extern LPDIRECTINPUTDEVICE   lpDI_Mouse;        /* 00489EC0 */
+extern HANDLE                hMouseEvent;       /* 00489EE0 */
 
-// Debug Logging
+/* ===== Window / App Globals (winmain.cpp) ===== */
+extern HWND                  hWnd_Main;         /* 00489EDC */
+extern int                   g_bIsActive;       /* 00489EC4 */
+
+/* ===== Game State (winmain.cpp) ===== */
+extern unsigned char         g_GameState;       /* 004877A0 - main state machine */
+
+/* ===== Sub-State Globals (gameloop.cpp) ===== */
+extern char                  g_MouseButtons;    /* 004877BE */
+extern unsigned char         g_ProcessInput;    /* 00489295 */
+extern unsigned char         g_SubState;        /* 00489296 */
+extern unsigned char         g_NeedsRedraw;     /* 00489297 */
+extern unsigned char         g_SurfaceReady;    /* 00489298 */
+extern unsigned char         g_SubState2;       /* 00489299 */
+
+/* ===== Timing (winmain.cpp) ===== */
+extern DWORD                 g_TimerStart;      /* 004892B0 */
+extern int                   g_TimerAux;        /* 004892B4 */
+
+/* ===== Frame / Render (memory.cpp) ===== */
+extern unsigned short       *Software_Buffer;   /* 004877C0 */
+extern unsigned char         g_FrameIndex;      /* 004877C8 */
+extern char                  g_LoadedBgIndex;   /* 0048769C */
+extern int                   g_IntroSplashIndex;/* 0048924C */
+
+/* ===== Sound (sound.cpp) ===== */
+extern SoundEntry           *g_SoundTable;      /* 00487874 */
+extern FSOUND_STREAM        *g_MusicStream;     /* 004806F8 */
+extern int                   g_MusicChannel;    /* 004806FC */
+extern int                   g_SoundEnabled;    /* 00487649 */
+
+/* ===== Memory (memory.cpp) ===== */
+extern int                   g_MemoryTracker;   /* 004892A0 */
+extern int                  *g_PhysicsParams;   /* 00487880 */
+extern int                  *g_EntityConfig;    /* 00489EBC */
+extern void                 *DAT_00487ab0;      /* Math table buffer */
+
+/* ===== Image Loader (assets.cpp) ===== */
+extern int                   g_ImageWidth;      /* 00481D08 */
+extern int                   g_ImageHeight;     /* 00481CFC */
+extern int                   g_ImageBPP;        /* 00481D04 */
+extern int                   g_ImageSize;       /* 00481D00 */
+
+/* ===== Font (assets.cpp) ===== */
+extern FontChar              Font_Char_Table[1024];
+extern unsigned char        *Font_Pixel_Data;
+
+/* ===== Mouse Input (gameloop.cpp) ===== */
+extern int                   g_MouseDeltaX;     /* 004877B4 */
+extern int                   g_MouseDeltaY;     /* 004877B8 */
+extern char                  g_InputMode;       /* 004877E4 */
+extern int                   DAT_004877e8;
+
+/* ===== Display Mode (init.cpp) ===== */
+extern int                   g_DisplayWidth;    /* 00489238 */
+extern int                   g_DisplayHeight;   /* 0048923C */
+extern int                   g_NumDisplayModes; /* 00483C00 */
+
+/* ===== Config (init.cpp) ===== */
+extern unsigned char         DAT_00483720[8];   /* Sound config */
+extern unsigned char         DAT_00487640[4];   /* Display mode */
+extern unsigned short        DAT_00483838[4];   /* Team color palette (RGB555) */
+extern DWORD                 g_FrameTimer;      /* 004877F4 */
+extern unsigned char         DAT_004877b1;
+extern unsigned char         DAT_004877a4;
+extern DWORD                 DAT_004892b8;
+
+/* ===== Intro particle system (memory.cpp) ===== */
+extern int                   DAT_00489248;      /* Entity count */
+extern int                   DAT_00489250;      /* Particle count */
+extern int                   DAT_0048925c;      /* Misc counter */
+extern DWORD                 DAT_004877f0;      /* Frame delta time */
+
+/* ===== Viewport (effects.cpp) ===== */
+extern int                   DAT_004806dc;      /* viewport left */
+extern int                   DAT_004806d0;      /* viewport right */
+extern int                   DAT_004806e0;      /* viewport top */
+extern int                   DAT_004806d4;      /* viewport bottom */
+extern int                   DAT_004806d8;      /* viewport width */
+extern int                   DAT_004806e4;      /* viewport height */
+extern int                   DAT_004806e8;      /* camera/scroll Y */
+extern int                   DAT_004806ec;      /* camera/scroll X */
+
+/* ===== Sprite data tables (memory.cpp) ===== */
+extern void                 *DAT_00487ab4;      /* Sprite pixel data RGB555 (2.8MB) */
+extern void                 *DAT_00489e94;      /* Sprite grayscale data (40KB) */
+extern void                 *DAT_00489234;      /* Sprite frame offsets (80KB, 20000 ints) */
+extern void                 *DAT_00489e8c;      /* Sprite widths (20KB, bytes) */
+extern void                 *DAT_00489e88;      /* Sprite heights (20KB, bytes) */
+extern void                 *DAT_00481cf8;      /* Temp buffer (3.6MB) */
+extern int                   DAT_00481d28;      /* Sprite RGB pixel write cursor */
+extern int                   DAT_00481d24;      /* Sprite grayscale pixel write cursor */
+
+/* ===== Entity type definitions (memory.cpp) ===== */
+extern void                 *DAT_00487abc;      /* Entity type table (0x11030 bytes, 128 types * 0x218 each) */
+
+/* ===== Explosion/Particle data buffers (memory.cpp) ===== */
+extern void                 *DAT_00481f20;      /* Explode descriptor table (160 bytes) */
+extern void                 *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
+extern void                 *DAT_0048787c;      /* Explode pixel data (430KB) */
+extern void                 *DAT_004892e8;      /* Entity array (128 bytes * 2500) */
+extern void                 *DAT_00489230;      /* Brightness remap LUT (128KB) */
+extern void                 *DAT_004876a4[100]; /* Color palette tables */
+extern void                 *DAT_0048792c[48];  /* Blend LUT tables */
+
+/* ===== Misc ===== */
+extern int                   DAT_00481f48;
+
+/* ===== Debug Logging ===== */
 void Log(const char *format, ...);
 #define LOG Log
 
-// Function Prototypes
-extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                    LPARAM lParam);
+/* ===== Function Prototypes: winmain.cpp ===== */
+extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+int Handle_Init_Error(HWND hWnd, unsigned char errorCode);
 
-// Sound Manager
-int Init_Sound_System(void);
+/* ===== Function Prototypes: init.cpp ===== */
+void Early_Init_Vars(void);
+int  System_Init_Check(void);
+int  Init_DirectInput(void);
+void Init_Game_Config(void);
+void Init_Math_Tables(int *buffer, unsigned int count);
+
+/* ===== Function Prototypes: memory.cpp ===== */
+void  Init_Memory_Pools(void);
+void *Mem_Alloc(size_t size);
+void  Mem_Free(void *ptr);
+
+/* ===== Function Prototypes: graphics.cpp ===== */
+int  Init_DirectDraw(int width, int height);
+void Render_Frame(void);
+void Render_Game_View(void);
+void Release_DirectDraw_Surfaces(void);
+void Restore_Surfaces(void);
+
+/* ===== Function Prototypes: sound.cpp ===== */
+int  Init_Sound_Hardware(void);
+void FUN_0040e130(void);
 void Load_Game_Sounds(void);
 void Play_Music(void);
 void Stop_All_Sounds(void);
+void Pause_Audio_Streams(void);
 void Cleanup_Sound(void);
 
-// Asset Loader
-int Load_Background_To_Buffer(char index); // 0042d710
+/* ===== Function Prototypes: assets.cpp ===== */
+int   Load_Background_To_Buffer(char index);
 void *Load_JPEG_Asset(const char *filename, int *width, int *height);
+void  Load_Fonts(void);
+void  Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
+                          unsigned short *dest_buf, int stride, int x,
+                          int max_x, int len);
 
-extern int DAT_00481d08; // Width
-extern int DAT_00481cfc; // Height
-extern int DAT_00481d04; // Channels
-extern int DAT_00481d00; // Buffer Size
-
-// Render
-void Render_Frame(void);     // 0045d800
-void Render_Game_View(void); // 0042f3a0
-void Release_DirectDraw_Surfaces(void);
-int Init_DirectDraw(int width, int height);
-
-// Memory
-void Init_Memory_Pools(void);
-void *Mem_Alloc(size_t size);
-void Mem_Free(void *ptr);
-
-// State functions
+/* ===== Function Prototypes: gameloop.cpp ===== */
 void Game_State_Manager(void);
 void Game_Update_Render(void);
+void Input_Update(void);
 void Handle_Menu_State(void);
 void Intro_Sequence(void);
-void Init_New_Game(void);
+int  Init_New_Game(void);
 void Free_Game_Resources(void);
-void FUN_0040e130(void); // Init Sound/Grahpics for Menu
 
-// Font Data
-typedef struct {
-  int pixel_offset;
-  int width;
-  int height;
-  int unknown;
-} FontChar;
+/* ===== Function Prototypes: effects.cpp ===== */
+void FUN_0045a060(void);
+void FUN_0045b2a0(void);
+int  FUN_00422fc0(void);
+void FUN_0040d100(int buffer, int stride);
+void FUN_004076d0(int buffer, int stride);
+int  FUN_004257e0(int cx, int cy, int px, int py);
 
-extern FontChar Font_Char_Table[1024]; // 4 fonts * 256 chars
-extern unsigned char *Font_Pixel_Data; // Large buffer for font pixels
-extern void Load_Fonts(void);
-extern void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
-                                unsigned short *dest_buf, int stride, int x,
-                                int max_x, int len);
+/* ===== Stub Prototypes (undecompiled functions) ===== */
+void FUN_0041eae0(void);
+/* FUN_0045a060 and FUN_0045b2a0 moved to effects.cpp prototypes above */
+void FUN_0041fc10(void);
+void FUN_0041fe70(void);
+void FUN_0041f900(void);
+void FUN_00422a10(void);
+void FUN_0042d8b0(void);
+int  FUN_00422740(void);
+void FUN_00420be0(void);
+void FUN_0041e580(void);
+int  FUN_00414060(void);
+void FUN_00413f70(void);
+void FUN_0041e4a0(void);
+void FUN_0045d7d0(void);
+void FUN_00425fe0(void);
+int  FUN_0042fc40(void);
+void FUN_0042fc10(void);
+void FUN_0041a8c0(void);
+void FUN_0041d740(void);
 
-// System / Optimization
-void Init_Game_Config(void); // 004207c0
-void Early_Init_Vars(void);  // 0041ead0
-int System_Init_Check(void); // 0041d480
-void Input_Update(void);
-int Init_DirectInput(void);
-void Init_Math_Tables(int *buffer, unsigned int count); // 00425780
-
-extern unsigned short *DAT_004877c0; // Software_Buffer (640x480x16b)
-
-#endif // TOU_H
+#endif /* TOU_H */

@@ -4,7 +4,7 @@ CXXFLAGS = -c -I. -D_WIN32 -m32
 CFLAGS = -c -I. -D_WIN32 -m32
 LDFLAGS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32 -L. -lfmod
 
-SRCS = winmain.cpp sound.cpp assets.cpp gameloop.cpp memory.cpp init.cpp graphics.cpp intro.cpp menu.cpp level.cpp math.cpp stubs.cpp utils.cpp
+SRCS = winmain.cpp sound.cpp assets.cpp gameloop.cpp memory.cpp init.cpp graphics.cpp intro.cpp menu.cpp level.cpp math.cpp stubs.cpp utils.cpp effects.cpp
 LIBS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32
 OBJS = $(SRCS:.cpp=.o) stb_image_impl.o
 TARGET = tou_decomp.exe
