@@ -19,13 +19,4 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo Installing...
-rem copy /Y %TARGET% ..\ >nul
-
-echo Start game? (y/n)
-set /p CHOICE=
-if /I "%CHOICE%"=="y" (
-    start %TARGET%
-)
-
 pause
