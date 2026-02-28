@@ -4,11 +4,11 @@ DISCLAIMER: This is project is heavily incomplete and doesn't function at all. T
 
 Tunnels of Underworld (or TOU for short) is an original creation by [hannukp](https://github.com/hannukp) and I don't claim any ownership over it. I'm simply a fan who wants to preserve his game.
 
-Also please note, no assets are uploaded yet. This is just the source for to build the executable that you can place on your ToU install. After we progress further into the decomp and start cleaning up things, I'll upload the assets to allow a full build from source.
+Also please note, no assets are uploaded yet. This is just the source to do a build of the reverse engineered executable that you can place on your ToU install to test. After we progress further into the decomp and start cleaning up things, I'll upload the assets to allow a full build from source.
 
 ## What works so far
 
-Almost nothing. The code I got is essentialy heavily decompiling things with Ghidra and having Gemini help me with the hardest parts. Consider it like the scaffolding of what should be the game, I didn't even get the menus showing yet.
+Almost nothing. The code I got is essentialy heavily decompiling things with Ghidra and having a clanker help me with the hardest parts. Consider it like the scaffolding of what should be the game.
 
 - Music
 - Basic sprite/image rendering
