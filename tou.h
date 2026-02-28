@@ -233,6 +233,7 @@ void  Mem_Free(void *ptr);
 int  Init_DirectDraw(int width, int height);
 void Render_Frame(void);
 int  Render_Game_View(void);
+void Render_Game_View_To(unsigned short *frame);
 void Release_DirectDraw_Surfaces(void);
 void Restore_Surfaces(void);
 
@@ -250,8 +251,8 @@ int   Load_Background_To_Buffer(char index);
 void *Load_JPEG_Asset(const char *filename, int *width, int *height);
 void  Load_Fonts(void);
 void  Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
-                          unsigned short *dest_buf, int stride, int x,
-                          int max_x, int len);
+                          unsigned short *dest_buf, int stride, int hover,
+                          int max_width, int len);
 
 /* ===== Function Prototypes: gameloop.cpp ===== */
 void Game_State_Manager(void);

@@ -1112,6 +1112,19 @@ void FUN_00425fe0(void)
         DAT_004877a4 = 0xFE;
     }
 
+    /* COMPAT: Sync game cursor from Windows cursor position.
+     * Original used exclusive fullscreen with hidden system cursor;
+     * the game rendered its own cursor sprite at (g_MouseDeltaX>>18, g_MouseDeltaY>>18).
+     * In windowed mode, DirectInput reports relative deltas which desync from the
+     * visible Windows cursor. Override with absolute position so hover/click works. */
+    {
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(hWnd_Main, &pt);
+        g_MouseDeltaX = pt.x << 18;
+        g_MouseDeltaY = pt.y << 18;
+    }
+
     /* ---- Input processing (normal mode, g_InputMode == 0) ---- */
     if (g_InputMode == 0) {
         /* Primary click: Right Ctrl (0x9D) OR Left Mouse Button */
@@ -1852,6 +1865,10 @@ int Init_DirectInput(void)
 
     hr = lpDI_Mouse->SetProperty(DIPROP_BUFFERSIZE, &dipdw.diph);
     if (FAILED(hr)) goto cleanup;
+
+    /* Acquire mouse (original relies on Input_Update re-acquire path,
+     * but acquiring here avoids losing the first frame of input) */
+    lpDI_Mouse->Acquire();
 
     return 1;
 

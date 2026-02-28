@@ -18,6 +18,29 @@ int            g_TimerAux   = 0;     /* 004892B4 */
 extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     if (uMsg == WM_DESTROY) {                       /* 0x02 */
+        /* COMPAT: Release DirectInput devices before DDraw.
+         * Original relied on OS cleanup at process exit, but modern
+         * Windows can leave COM objects alive between rapid relaunches. */
+        if (lpDI_Mouse != NULL) {
+            lpDI_Mouse->Unacquire();
+            lpDI_Mouse->Release();
+            lpDI_Mouse = NULL;
+        }
+        if (lpDI_Keyboard != NULL) {
+            lpDI_Keyboard->Unacquire();
+            lpDI_Keyboard->Release();
+            lpDI_Keyboard = NULL;
+        }
+        if (lpDI != NULL) {
+            lpDI->Release();
+            lpDI = NULL;
+        }
+        if (hMouseEvent != NULL) {
+            CloseHandle(hMouseEvent);
+            hMouseEvent = NULL;
+        }
+
+        /* Release DirectDraw (matches original WndProc) */
         if (lpDD != NULL) {
             if (lpDDS_Primary != NULL) {
                 lpDDS_Primary->Release();
@@ -30,6 +53,10 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
             lpDD->Release();
             lpDD = NULL;
         }
+
+        /* Clean up FMOD */
+        Cleanup_Sound();
+
         PostQuitMessage(0);
     }
     else if (uMsg == WM_ACTIVATEAPP) {              /* 0x1C */

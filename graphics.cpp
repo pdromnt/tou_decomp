@@ -138,12 +138,17 @@ void Render_Frame(void)
         if (!g_ScratchBuffer) return;
     }
 
-    /* 1. Copy current frame from Software_Buffer to scratch buffer */
+    /* 1. Copy current frame from Software_Buffer to scratch buffer.
+     *    Software_Buffer holds the CLEAN background (JPEG).
+     *    All overlays (menu items, particles) are drawn onto scratch each frame. */
     int frameOffset = (g_FrameIndex & 0xFF) * (640 * 480);
     unsigned short *src = Software_Buffer + frameOffset;
     memcpy(g_ScratchBuffer, src, 640 * 480 * 2);
 
-    /* 2. Draw particles/entities onto scratch buffer (RGB565) */
+    /* 2. Draw menu items onto scratch buffer (fresh each frame for hover updates) */
+    Render_Game_View_To(g_ScratchBuffer);
+
+    /* 3. Draw particles/entities onto scratch buffer (RGB565) */
     FUN_004076d0((int)g_ScratchBuffer, 640);
 
     /* 3. Lock the offscreen surface */
@@ -197,24 +202,18 @@ void Render_Frame(void)
     } while (hr == DDERR_WASSTILLDRAWING);
 }
 
-/* ===== Render_Game_View (0042F3A0) ===== */
-/* Renders menu items (text and sprites) onto the current Software_Buffer frame.
- *
- * Original pipeline: Lock offscreen DDraw surface → copy Software_Buffer frame →
- *   draw scrollbar/sprites → iterate items → draw text/sprites → unlock.
- * COMPAT pipeline: Draw directly onto Software_Buffer frame. Render_Frame()
- *   handles the DDraw blit (RGB565 → ARGB8888 windowed mode).
- *
- * Returns 1 on success, 0 on failure. */
-int Render_Game_View(void)
+/* ===== Render_Game_View_To - Draw menu items onto a target buffer ===== */
+/* Called every frame by Render_Frame on the scratch buffer.
+ * Original pipeline: Lock DDraw surface → copy Software_Buffer (clean bg) →
+ *   draw menu items fresh onto surface → unlock → Blt.
+ * COMPAT: Scratch buffer replaces the DDraw surface. */
+void Render_Game_View_To(unsigned short *frame)
 {
-    if (!Software_Buffer || !g_GameViewData)
-        return 0;
+    if (!frame || !g_GameViewData)
+        return;
 
-    unsigned short *frame = Software_Buffer + (g_FrameIndex & 0xFF) * (640 * 480);
     MenuItem *items = (MenuItem *)g_GameViewData;
 
-    /* Iterate all menu items and render them */
     for (int i = 0; i < DAT_004877a8; i++) {
         MenuItem *item = &items[i];
 
@@ -226,21 +225,17 @@ int Render_Game_View(void)
             case 0x00: case 0x0C: case 0x20: case 0x21: case 0x22:
             case 0x23: case 0x24: case 0x25: case 0x2B: case 0x2C:
             case 0x2D: case 0x2E: case 0x2F: case 0x29:
-                /* Normal text from g_MenuStrings */
                 if (g_MenuStrings && g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
                 break;
 
             default:
-                /* Other render modes (6=entity name, 0x28=special, 0x31/0x32=formatted)
-                 * TODO: Implement in Phase 6 */
                 if (g_MenuStrings && g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
                 break;
             }
 
             if (str && str[0] != '\0') {
-                /* Bounds check: item must be within screen */
                 if (item->x >= 0 && item->x < 640 &&
                     item->y >= 0 && item->y < 480) {
                     unsigned short *dest = frame + item->y * 640 + item->x;
@@ -253,24 +248,148 @@ int Render_Game_View(void)
                 }
             }
         }
-        /* Type 1 (sprite items) - skip for now, no Draw_Sprite_To_Buffer yet.
-         * The title bar sprite won't render, but all text items will. */
-    }
+        else if (item->type == 1) {
+            /* ---- Sprite item ---- */
+            /* item->color_style holds sprite index (field is overloaded) */
+            int sprite_idx = item->color_style;
 
+            if (!DAT_00487ab4 || !DAT_00489234 || !DAT_00489e8c || !DAT_00489e88)
+                continue;
+
+            int pixel_base = ((int *)DAT_00489234)[sprite_idx];
+            int spr_w = (int)((unsigned char *)DAT_00489e8c)[sprite_idx];
+            int spr_h = (int)((unsigned char *)DAT_00489e88)[sprite_idx];
+
+            if (spr_w <= 0 || spr_h <= 0)
+                continue;
+            if (item->x < 0 || item->y < 0 ||
+                item->x + spr_w > 640 || item->y + spr_h > 480)
+                continue;
+
+            unsigned short *dst = frame + item->y * 640 + item->x;
+            unsigned short *src_pixels = (unsigned short *)DAT_00487ab4;
+
+            if (sprite_idx == 0x13) {
+                /* TOU logo: unconditional blit (no transparency) */
+                for (int row = 0; row < spr_h; row++) {
+                    for (int col = 0; col < spr_w; col++) {
+                        dst[col] = src_pixels[pixel_base++];
+                    }
+                    dst += 640;
+                }
+            } else if (sprite_idx < 400) {
+                /* Normal sprite: pixel 0 = transparent */
+                for (int row = 0; row < spr_h; row++) {
+                    for (int col = 0; col < spr_w; col++) {
+                        unsigned short pixel = src_pixels[pixel_base++];
+                        if (pixel != 0) {
+                            dst[col] = pixel;
+                        }
+                    }
+                    dst += 640;
+                }
+            }
+        }
+    }
+}
+
+/* ===== Render_Game_View (0042F3A0) - Init-time check ===== */
+/* Called once during one-shot init to verify buffers are valid.
+ * Actual rendering now happens in Render_Game_View_To via Render_Frame. */
+int Render_Game_View(void)
+{
+    if (!Software_Buffer || !g_GameViewData)
+        return 0;
     return 1;
 }
 
+/* ===== Font color palettes (DAT_004878f0) ===== */
+/* Each palette is a 256-entry RGB565 ramp from black to the target color.
+ * Font pixel luminosity (0-255) indexes into the ramp for smooth anti-aliased text.
+ * 14 palettes allocated at runtime in original (0x004878f0).
+ * Built here at first use for simplicity. */
+static unsigned short Font_Palettes[6][256];
+static int Font_Palettes_Built = 0;
+
+static void Build_Font_Palettes(void)
+{
+    /* Target colors (R8, G8, B8) for each color_idx.
+     * These are the brightest color at luma=255; font pixel luma indexes the ramp. */
+    static const unsigned char targets[][3] = {
+        { 255, 255, 140 },  /* 0: golden yellow (headings, copyright) */
+        { 255, 255, 255 },  /* 1: white         (info text) */
+        {   0, 220, 235 },  /* 2: cyan          (clickable items) */
+        { 200, 200, 200 },  /* 3: light gray    */
+        { 255, 255,   0 },  /* 4: yellow        */
+        { 255, 128,   0 },  /* 5: orange        */
+    };
+
+    for (int c = 0; c < 6; c++) {
+        Font_Palettes[c][0] = 0;
+        for (int i = 1; i < 256; i++) {
+            int r = (targets[c][0] * i) / 255;
+            int g = (targets[c][1] * i) / 255;
+            int b = (targets[c][2] * i) / 255;
+            Font_Palettes[c][i] = (unsigned short)(((r & 0xF8) << 8) |
+                                                    ((g & 0xFC) << 3) |
+                                                    ((b & 0xF8) >> 3));
+        }
+    }
+    Font_Palettes_Built = 1;
+}
+
 /* ===== Draw_Text_To_Buffer (0040AED0) ===== */
+/* Params: str, font_idx, color_idx, dest_buf, stride, hover_brightness, max_width, len
+ * hover_brightness (0-255): lerps palette towards white for hover highlight.
+ * max_width: 0=no word-wrap, >0=wrap at that pixel width.
+ * len: 0=auto strlen, >0=exact char count. */
 void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
-                         unsigned short *dest_buf, int stride, int x,
-                         int max_x, int len)
+                         unsigned short *dest_buf, int stride, int hover,
+                         int max_width, int len)
 {
     if (!str || !Font_Pixel_Data)
         return;
 
+    if (!Font_Palettes_Built)
+        Build_Font_Palettes();
+
+    /* Select base palette (clamp to valid range) */
+    if (color_idx < 0 || color_idx >= 6)
+        color_idx = 0;
+    unsigned short *palette = Font_Palettes[color_idx];
+
+    /* If hovering, build a brightened palette (lerp towards white) */
+    unsigned short hover_palette[256];
+    if (hover > 0) {
+        if (hover > 255) hover = 255;
+        for (int i = 0; i < 256; i++) {
+            unsigned short c = palette[i];
+            int r = ((c >> 11) & 0x1F) << 3;
+            int g = ((c >> 5) & 0x3F) << 2;
+            int b = (c & 0x1F) << 3;
+            r = r + (((255 - r) * hover) >> 8);
+            g = g + (((255 - g) * hover) >> 8);
+            b = b + (((255 - b) * hover) >> 8);
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
+            hover_palette[i] = (unsigned short)(((r & 0xF8) << 8) |
+                                                 ((g & 0xFC) << 3) |
+                                                 ((b & 0xF8) >> 3));
+        }
+        palette = hover_palette;
+    }
+
+    /* Calculate string length if not provided */
+    int slen = len;
+    if (slen == 0) {
+        const char *p = str;
+        while (*p++) slen++;
+    }
+
     int cur_x = 0;
-    while (*str) {
-        unsigned char c = (unsigned char)*str++;
+    for (int si = 0; si < slen; si++) {
+        unsigned char c = (unsigned char)str[si];
 
         if (c == ' ') {
             cur_x += Font_Char_Table[font_idx * 256 + 32].width;
@@ -285,19 +404,9 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
 
         for (int fy = 0; fy < fc->height; fy++) {
             for (int fx = 0; fx < fc->width; fx++) {
-                unsigned char p = Font_Pixel_Data[fc->pixel_offset + (fy * fc->width) + fx];
-                if (p > 10) {
-                    unsigned short color;
-                    switch (color_idx) {
-                    case 0:  color = 0xFFFF; break; /* white */
-                    case 1:  color = 0xFFFF; break; /* heading - white */
-                    case 2:  color = 0x07E0; break; /* clickable - green */
-                    case 3:  color = 0xC618; break; /* light gray */
-                    case 4:  color = 0xFFE0; break; /* yellow */
-                    case 6:  color = 0x07FF; break; /* cyan */
-                    default: color = 0xFFFF; break;
-                    }
-                    dest_buf[(fy * stride) + cur_x + fx] = color;
+                unsigned char luma = Font_Pixel_Data[fc->pixel_offset + fy * fc->width + fx];
+                if (luma != 0) {
+                    dest_buf[fy * stride + cur_x + fx] = palette[luma];
                 }
             }
         }
