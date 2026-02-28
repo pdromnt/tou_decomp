@@ -37,6 +37,27 @@ typedef struct {
     int unknown;
 } FontChar;
 
+typedef struct {
+    int x;              /* 0x00 */
+    int y;              /* 0x04 */
+    int width;          /* 0x08 */
+    int height;         /* 0x0C */
+    int type;           /* 0x10: 0=text, 1=sprite */
+    int color_style;    /* 0x14: color/style for rendering */
+    char font_idx;      /* 0x18 */
+    char _pad1[3];
+    int string_idx;     /* 0x1C: index into g_MenuStrings */
+    int hover_state;    /* 0x20: hover/scroll animation */
+    unsigned char flag1;       /* 0x24 */
+    unsigned char clickable;   /* 0x25 */
+    unsigned char nav_target;  /* 0x26: target page (0xFF=none) */
+    unsigned char _pad2;
+    int linked_item;    /* 0x28 */
+    unsigned char render_mode; /* 0x2C */
+    unsigned char _pad3[3];
+    int extra_data;     /* 0x30 */
+} MenuItem; /* 0x34 = 52 bytes, max 350 items in g_GameViewData */
+
 /* ===== DirectDraw Globals (graphics.cpp) ===== */
 extern LPDIRECTDRAW          lpDD;              /* 00489EC8 */
 extern LPDIRECTDRAWSURFACE   lpDDS_Primary;     /* 00489ED8 */
@@ -178,6 +199,13 @@ extern unsigned char         DAT_00483834;      /* turret flag */
 extern unsigned char         DAT_00483835;      /* trooper flag */
 extern int                   DAT_00489e9c;      /* menu/game counter */
 
+/* ===== Menu Scrollbar (init.cpp) ===== */
+extern int                   DAT_004877d8;      /* scrollbar area width */
+extern int                   DAT_004877dc;      /* scrollbar area top */
+extern int                   DAT_004877e0;      /* scrollbar area height */
+extern int                   DAT_004877ac;      /* scroll item start index */
+extern int                   DAT_004877b0;      /* scroll mode */
+
 /* ===== Misc ===== */
 extern int                   DAT_00481f48;
 
@@ -270,6 +298,18 @@ void FUN_0045d7d0(void);
 void FUN_00425fe0(void);  /* Main game/menu render loop - implemented in init.cpp */
 void FUN_0042a470(void);  /* Menu page builder */
 void FUN_00426650(void);  /* Game/menu logic tick */
+void FUN_00427df0(int item_idx, char click_type); /* Menu item click handler */
+void FUN_00427a70(int item_idx); /* Input mode key assignment handler (stub) */
+int  FUN_00430200(int x, int y, int string_idx, int color_style, int font_idx,
+                  unsigned char clickable, unsigned char render_mode,
+                  unsigned char alignment, unsigned char nav_target);
+void FUN_0042ff80(int x, int y, int sprite_idx, unsigned char clickable,
+                  unsigned char render_mode, unsigned char alignment,
+                  unsigned char nav_target);
+void FUN_0042fc90(int value);
+void FUN_0042fcf0(void);
+int  FUN_0042fdf0(int y);
+void FUN_0042fcb0(void);
 int  FUN_0042fc40(void);
 void FUN_0042fc10(void);
 void FUN_0041a8c0(void);

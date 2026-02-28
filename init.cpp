@@ -71,6 +71,11 @@ unsigned char DAT_00483835   = 0;
 int           DAT_00489e9c   = 0;
 unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - DirectInput keyboard state */
 unsigned char DAT_004877e5   = 0;  /* input event trigger */
+int           DAT_004877d8   = 0;  /* scrollbar area width */
+int           DAT_004877dc   = 0;  /* scrollbar area top */
+int           DAT_004877e0   = 0;  /* scrollbar area height */
+int           DAT_004877ac   = 0;  /* scroll item start index */
+int           DAT_004877b0   = 0;  /* scroll mode */
 
 /* ===== Stub functions (to be decompiled later) ===== */
 void FUN_0041eae0(void) {}
@@ -109,6 +114,9 @@ void FUN_0042d8b0(void)
 
     /* --- Allocate game view data (0x4718 = 18200 bytes) --- */
     g_GameViewData = Mem_Alloc(0x4718);
+
+    /* --- Load font data (needed before any menu page build) --- */
+    Load_Fonts();
 
     /* --- Key sort/priority table (DAT_00481d48..00481d76) --- */
     /* Maps an ordering index to DirectInput scan codes */
@@ -1176,53 +1184,244 @@ void FUN_00425fe0(void)
     }
 }
 
+/* ===== FUN_00430200 - Create text menu item (00430200) ===== */
+/* Adds a text-based menu item to g_GameViewData.
+ * Returns text_height - 4 (spacing for next item). */
+int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
+                 int font_idx, unsigned char clickable, unsigned char render_mode,
+                 unsigned char alignment, unsigned char nav_target)
+{
+    if (DAT_004877a8 > 0x15D)
+        return 0;
+
+    MenuItem *items = (MenuItem *)g_GameViewData;
+    MenuItem *item = &items[DAT_004877a8];
+
+    item->x = param_x;
+    item->y = param_y;
+    item->type = 0;            /* text item */
+    item->color_style = color_style;
+    item->font_idx = (char)font_idx;
+    item->flag1 = 0;
+    item->string_idx = string_idx;
+
+    /* Calculate text width from font metrics */
+    int text_width = 0;
+    if (g_MenuStrings && g_MenuStrings[string_idx]) {
+        const char *str = g_MenuStrings[string_idx];
+        while (*str) {
+            unsigned char c = (unsigned char)*str++;
+            if (c == ' ') {
+                text_width += Font_Char_Table[font_idx * 256 + 32].width;
+            } else {
+                int idx = font_idx * 256 + c;
+                if (idx < 1024)
+                    text_width += Font_Char_Table[idx].width;
+            }
+        }
+    }
+
+    int text_height = Font_Char_Table[font_idx * 256].height;
+
+    item->width = text_width;
+    item->height = text_height;
+    item->hover_state = 0;
+    item->clickable = clickable;
+    item->nav_target = nav_target;
+    item->linked_item = 20000;
+    item->render_mode = render_mode;
+    item->extra_data = 0;
+
+    /* Apply alignment */
+    switch (alignment) {
+    case 1: item->x = 320 - text_width / 2; break;   /* center */
+    case 2: item->x = 30; break;                       /* left margin */
+    case 3: item->x = 610 - text_width; break;         /* right align */
+    case 4: item->x = 100; break;                      /* left at 100 */
+    case 5: item->x = 540 - text_width; break;         /* right at 540 */
+    }
+
+    DAT_004877a8++;
+    return text_height - 4;
+}
+
+/* ===== FUN_0042ff80 - Create sprite menu item (0042FF80) ===== */
+void FUN_0042ff80(int param_x, int param_y, int sprite_idx,
+                  unsigned char clickable, unsigned char render_mode,
+                  unsigned char alignment, unsigned char nav_target)
+{
+    if (DAT_004877a8 >= 0x15E)
+        return;
+
+    MenuItem *items = (MenuItem *)g_GameViewData;
+    MenuItem *item = &items[DAT_004877a8];
+
+    item->x = param_x;
+    item->y = param_y;
+    item->type = 1;            /* sprite item */
+    item->color_style = sprite_idx;
+    item->font_idx = 0;
+    item->flag1 = 0;
+    item->string_idx = 0;
+
+    /* Get sprite dimensions from sprite tables */
+    int spr_w = 0, spr_h = 0;
+    if (DAT_00489e8c) spr_w = ((unsigned char *)DAT_00489e8c)[sprite_idx];
+    if (DAT_00489e88) spr_h = ((unsigned char *)DAT_00489e88)[sprite_idx];
+
+    item->width = spr_w;
+    item->height = spr_h;
+    item->hover_state = 0;
+    item->clickable = clickable;
+    item->nav_target = nav_target;
+    item->linked_item = 20000;
+    item->render_mode = render_mode;
+    item->extra_data = 0;
+
+    /* Apply alignment */
+    switch (alignment) {
+    case 1: item->x = 320 - spr_w / 2; break;
+    case 2: item->x = 30; break;
+    case 3: item->x = 610 - spr_w; break;
+    case 4: item->x = 100; break;
+    case 5: item->x = 540 - spr_w; break;
+    }
+
+    DAT_004877a8++;
+}
+
+/* ===== FUN_0042fc90 - Set extra data on last item (0042FC90) ===== */
+void FUN_0042fc90(int value)
+{
+    if (DAT_004877a8 > 0) {
+        MenuItem *items = (MenuItem *)g_GameViewData;
+        items[DAT_004877a8 - 1].extra_data = value;
+    }
+}
+
+/* ===== FUN_0042fcf0 - Link last two items for value cycling (0042FCF0) ===== */
+/* Used for label+value pairs (e.g., "Sound: [On]").
+ * Links the label item (count-2) and value item (count-1) together. */
+void FUN_0042fcf0(void)
+{
+    if (DAT_004877a8 < 2) return;
+
+    MenuItem *items = (MenuItem *)g_GameViewData;
+    int n = DAT_004877a8;
+
+    items[n - 1].linked_item = n - 2;  /* value → label */
+    items[n - 2].linked_item = n - 1;  /* label → value */
+    items[n - 2].width = 0x1B8;        /* combined width = 440 */
+    items[n - 1].width = 0;            /* value item: no independent width */
+    items[n - 2].color_style = 0x0B;   /* special action: combo control */
+}
+
+/* ===== FUN_0042fdf0 - Add separator/divider item (0042FDF0) ===== */
+/* Creates a centered sprite separator at the given Y position.
+ * Returns 8 (height of separator). */
+int FUN_0042fdf0(int param_y)
+{
+    if (DAT_004877a8 < 0x15E) {
+        MenuItem *items = (MenuItem *)g_GameViewData;
+        MenuItem *item = &items[DAT_004877a8];
+
+        /* Center separator sprite 0x19C */
+        int spr_w = 0;
+        if (DAT_00489e8c) spr_w = ((unsigned char *)DAT_00489e8c)[0x19C];
+        item->x = 320 - spr_w / 2;
+        item->y = param_y + 4;
+        item->type = 1;
+        item->color_style = 0x19C;
+        item->font_idx = 0;
+        item->flag1 = 0;
+        item->string_idx = 0;
+        item->width = 0;
+        item->height = 0;
+        item->hover_state = 0;
+        item->clickable = 0;
+        item->nav_target = 0xFF;
+        item->linked_item = 20000;
+        item->render_mode = 0;
+        item->extra_data = 0;
+
+        DAT_004877a8++;
+    }
+    return 8;
+}
+
+/* ===== FUN_0042fcb0 - Stub (0042FCB0) ===== */
+void FUN_0042fcb0(void) {}
+
 /* ===== FUN_0042a470 - Menu page builder (0042A470) ===== */
 /* Builds the menu item layout for the current page (DAT_004877a4).
- * Each page creates menu items in g_GameViewData via FUN_00430200.
- * TODO: Full menu item creation requires FUN_00430200, FUN_0042fc90,
- *       FUN_0042fcf0, FUN_0042ff80 (Phase 5b). Currently only handles
- *       state transitions and navigation. */
+ * Each page creates menu items in g_GameViewData via FUN_00430200. */
 void FUN_0042a470(void)
 {
     /* Clear state (runs before switch, matches original) */
     DAT_004877a8 = 0;     /* Menu item count */
     g_FrameIndex = 0;     /* Frame index for Software_Buffer display */
-    /* DAT_004877d8 = 0; */  /* Scrollbar area (TODO) */
-    /* DAT_004877cc = 0; */  /* Scroll decay (TODO) */
+    DAT_004877d8 = 0;     /* Scrollbar area width = 0 (no scrollbar) */
+    DAT_004877cc = 0;     /* Scroll decay */
 
     switch (DAT_004877a4) {
     case 0x00: /* Main menu page */
-        /* TODO: Create menu items:
-         *   FUN_0042ff80(0xe6,0x20,0x13,...) - title bar
-         *   FUN_00430200(0,0x7d,7,...)       - "TOU" title
-         *   FUN_00430200(0,0xaa,1,...)       - "Team deathmatch"
-         *   FUN_00430200(0,200,2,...)        - "Practice"
-         *   FUN_00430200(0,0xe6,3,...)       - "Options"
-         *   FUN_00430200(0,0x104,4,...)      - "Rules"
-         *   FUN_00430200(0,0x122,0xff,...)   - "Network play"
-         *   FUN_00430200(0,0x140,5,...)      - "Credits"
-         *   FUN_00430200(0,0x15e,6,...)      - "Quit"
-         *   + copyright, version strings */
-        LOG("[MENU] Page 0: Main menu (items stubbed)\n");
+        FUN_0042ff80(0xe6, 0x20, 0x13, 0, 0, 0, 0xff);          /* title bar sprite */
+        FUN_00430200(0, 0x7d, 7, 0, 0, 0, 0, 1, 0xff);          /* "Tunnels Of the Underworld" */
+        FUN_00430200(0, 0xaa, 1, 2, 0, 1, 0, 1, 3);             /* "Team deathmatch" → page 3 */
+        FUN_00430200(0, 200, 2, 2, 0, 1, 0, 1, 0x11);           /* "Levels" → page 0x11 */
+        FUN_00430200(0, 0xe6, 3, 2, 0, 1, 0, 1, 0x12);          /* "Players" → page 0x12 */
+        FUN_00430200(0, 0x104, 4, 2, 0, 1, 0, 1, 1);            /* "Options" → page 1 */
+        FUN_00430200(0, 0x122, 0xff, 2, 0, 1, 0, 1, 0x1c);      /* string 0xFF → page 0x1C */
+        FUN_00430200(0, 0x140, 5, 2, 0, 1, 0, 1, 2);            /* "Credits" → page 2 */
+        FUN_00430200(0, 0x15e, 6, 2, 0, 1, 0, 1, 0xfe);         /* "Exit game" → exit */
+        FUN_00430200(0, 0x19f, 0x98, 1, 3, 0, 0, 2, 0xff);      /* copyright line 1 */
+        FUN_00430200(0, 0x1ae, 0x10f, 1, 3, 0, 0, 2, 0xff);     /* copyright line 2 */
+        FUN_00430200(0, 0x1c2, 0x141, 0, 3, 0, 0, 2, 0xff);     /* version string */
+        LOG("[MENU] Page 0: Main menu (%d items)\n", DAT_004877a8);
         DAT_004877c9 = 0xFE;  /* Back page = exit */
         DAT_004877b1 = 0;
         return;
 
-    case 0x01: /* Game modes submenu */
-        LOG("[MENU] Page 1: Game modes\n");
+    case 0x01: /* Options submenu */
+        FUN_00430200(0, 0x28, 8, 1, 0, 0, 0, 1, 0xff);          /* "Options" heading */
+        FUN_00430200(0, 0x50, 9, 2, 0, 1, 0, 1, 9);             /* "Sound" → page 9 */
+        FUN_00430200(0, 0x72, 10, 2, 0, 1, 0, 1, 4);            /* "Video" → page 4 */
+        FUN_00430200(0, 0x94, 0xc, 0, 0, 1, 0, 1, 6);           /* "Game modes" → page 6 */
+        FUN_00430200(0, 0xb6, 0x3d, 2, 0, 1, 0, 1, 0x1f);       /* "Game" → page 0x1F */
+        FUN_00430200(0, 0xd8, 0xb, 2, 0, 1, 0, 1, 5);           /* "Controls" → page 5 */
+        FUN_00430200(0, 0xfa, 0xd, 2, 0, 1, 0, 1, 7);           /* "Keyboard" → page 7 */
+        FUN_00430200(0, 0x11c, 0xfe, 2, 0, 1, 0, 1, 0x1b);      /* "Network" → page 0x1B */
+        FUN_00430200(0, 0x13e, 0xe, 2, 0, 1, 0, 1, 8);          /* "Keys" → page 8 */
+        FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);       /* "Name" → page 0xC */
+        FUN_00430200(0, 0x194, 0xf, 2, 0, 1, 0, 1, 0);          /* "Back" → page 0 */
+        LOG("[MENU] Page 1: Options (%d items)\n", DAT_004877a8);
         g_FrameIndex = 1;
-        DAT_004877c9 = 0;  /* Back → main menu */
+        DAT_004877c9 = 0;  /* ESC → main menu */
         DAT_004877b1 = 0;
         return;
 
     case 0x02: /* Credits */
-        LOG("[MENU] Page 2: Credits\n");
-        DAT_004877c9 = 0;  /* Back → main menu */
+        FUN_00430200(0, 0x28, 5, 1, 0, 0, 0, 1, 0xff);          /* "Credits" heading */
+        FUN_00430200(0, 0x50, 0x10, 2, 2, 0, 0, 2, 0xff);       /* credit line */
+        FUN_00430200(0, 0x69, 0x16, 2, 2, 0, 0, 2, 0xff);       /* credit line */
+        FUN_00430200(0, 0x69, 0x11, 0, 2, 0, 0, 3, 0xff);       /* credit line right */
+        FUN_00430200(0, 0x82, 0x17, 2, 2, 0, 0, 2, 0xff);       /* credit line */
+        FUN_00430200(0, 0xb4, 0x14, 2, 2, 0, 0, 2, 0xff);       /* credit line */
+        FUN_00430200(0, 0xb4, 0x15, 0, 2, 0, 0, 3, 0xff);       /* credit line right */
+        FUN_00430200(0, 0xe6, 0x13, 0, 2, 0, 0, 3, 0xff);       /* credit line */
+        FUN_00430200(0, 0xff, 0x18, 2, 2, 0, 0, 2, 0xff);       /* credit line */
+        FUN_00430200(0, 0xff, 0x1b, 0, 2, 0, 0, 3, 0xff);       /* credit line right */
+        FUN_00430200(0, 0x118, 0x1a, 0, 2, 0, 0, 3, 0xff);      /* credit line */
+        FUN_00430200(0, 0x131, 0x19, 0, 2, 0, 0, 3, 0xff);      /* credit line */
+        FUN_00430200(0, 400, 0xf, 2, 0, 1, 0, 1, 0);            /* "Back" → main menu */
+        LOG("[MENU] Page 2: Credits (%d items)\n", DAT_004877a8);
+        DAT_004877c9 = 0;  /* ESC → main menu */
         DAT_004877b1 = 0;
         return;
 
     case 0x03: /* Start game - transition to gameplay */
         LOG("[MENU] Page 3: Start game\n");
+        DAT_0048764a = 0;
         g_GameState = 0x04;
         DAT_004877b1 = 0;
         return;
@@ -1255,10 +1454,52 @@ void FUN_0042a470(void)
     }
 }
 
+/* ===== FUN_00427df0 - Menu item click handler (00427DF0) ===== */
+/* Handles click on a menu item. For items with a nav_target,
+ * navigates to that page. For value items, cycles the value.
+ * param_1: item index, param_2: 1=primary click, 0=secondary */
+void FUN_00427df0(int param_1, char param_2)
+{
+    if (!g_GameViewData) return;
+
+    MenuItem *items = (MenuItem *)g_GameViewData;
+    MenuItem *item = &items[param_1];
+
+    /* Navigation: if nav_target != 0xFF, switch to that page */
+    if (item->nav_target != 0xFF) {
+        DAT_004877a4 = item->nav_target;
+        DAT_004877b1 = 1;
+        return;
+    }
+
+    /* Sprite items: scroll arrows (render_mode 0x0A=up, 0x0B=down) */
+    if (item->type == 1) {
+        /* TODO: Scrollbar scroll up/down */
+        return;
+    }
+
+    /* Text items: value cycling based on render_mode */
+    /* TODO: Phase 3 - implement value cycling for options page
+     * render_mode cases: 1=toggle, 2=multi-state, 3=inc/dec(0-4),
+     * 4=inc/dec(0-2), 5/9/0xE/0x13-0x16/0x18/0x1B/0x34=input mode,
+     * 7=text entry, 8=level select, 0x0C=randomize, 0x0D=display mode,
+     * 0x20-0x25=game setup randomization, 0x26=key binding toggle,
+     * 0x2B-0x2F=game mode config */
+}
+
+/* ===== FUN_00427a70 - Input mode key assignment (00427A70) ===== */
+/* Processes mouse wheel/scroll input on value items while hovering.
+ * TODO: implement in Phase 3 (options page). */
+void FUN_00427a70(int param_1)
+{
+    (void)param_1;
+    /* Stub - input mode processing not yet implemented */
+}
+
 /* ===== FUN_00426650 - Game/menu logic tick (00426650) ===== */
 /* Handles frame timing, menu item hover/click processing,
- * viewport updates, and page-specific rendering.
- * TODO: Full implementation in Phase 5b (menu item interaction). */
+ * page-specific dynamic content, and hover animation decay.
+ * Original: ~500 lines covering all menu interaction. */
 void FUN_00426650(void)
 {
     /* Update frame delta time */
@@ -1269,10 +1510,106 @@ void FUN_00426650(void)
         DAT_004877f0 = 1000;
     }
 
-    /* TODO: Menu item hover detection (cursor vs item bounding boxes)
-     * TODO: Click processing (dispatch to item action handlers)
-     * TODO: Page-specific rendering (player stats tables, etc.)
-     * TODO: Sound effects for hover/click feedback */
+    /* Scrollbar drag interaction (only when scrollbar is active) */
+    /* TODO: Phase 3 - scrollbar for pages with many items
+     * Requires DAT_004877d8 != 0 which we don't set yet. */
+
+    /* Page-specific dynamic content rendering */
+    /* TODO: Phase 3 - pages 0x14 (scores), 0x12 (players),
+     * 0x1a (key bindings), 0x11 (levels) populate items dynamically
+     * based on scroll position and data tables. */
+
+    /* Click sound effect */
+    /* Original: plays FMOD sound when any mouse button pressed,
+     * if not in input mode, sound enabled, and sound config allows. */
+    if (DAT_004877bc != 0 && g_InputMode == 0 && DAT_004877ec == 0
+        && g_SoundEnabled != 0 && g_SoundTable != NULL) {
+        /* TODO: FMOD click sound
+         * FSOUND_PlaySoundEx(-1, g_SoundTable[0x155].handle, 0, 1);
+         * FSOUND_SetVolume(ch, 0x80);
+         * FSOUND_SetPan(ch, 0x80);
+         * FSOUND_SetPaused(ch, 0); */
+    }
+    DAT_004877ec = 0;
+
+    /* --- Hover detection and click processing --- */
+    if (g_GameViewData == NULL) goto hover_decay;
+
+    {
+        MenuItem *items = (MenuItem *)g_GameViewData;
+        int cursor_x = g_MouseDeltaX >> 18;
+        int cursor_y = g_MouseDeltaY >> 18;
+
+        for (int i = 0; i < DAT_004877a8; i++) {
+            MenuItem *item = &items[i];
+
+            /* Only process clickable items */
+            if (item->clickable == 0) continue;
+
+            /* Padding: 4px for text items (type==0), 0 for sprites */
+            int pad = (item->type != 0) ? 0 : 4;
+
+            /* Check cursor within item bounding box */
+            if (item->x < cursor_x &&
+                cursor_x < item->x + item->width &&
+                item->y + pad < cursor_y &&
+                cursor_y < item->y + item->height - pad)
+            {
+                /* Hover: set hover glow */
+                item->hover_state = 0x2580000;
+
+                /* Propagate hover to linked item */
+                int linked = item->linked_item;
+                if (linked != 20000) {
+                    items[linked].hover_state = 0x2580000;
+                }
+
+                /* Click dispatch (left or right mouse button) */
+                if ((DAT_004877bc & 1) || (DAT_004877bc & 2)) {
+                    FUN_00427df0(i, DAT_004877bc & 1);
+
+                    /* Also dispatch click to linked item */
+                    if (linked != 20000) {
+                        FUN_00427df0(linked, DAT_004877bc & 1);
+                    }
+                }
+
+                /* Input mode: mouse wheel/key processing */
+                if (DAT_004877e5 == 1) {
+                    if (g_InputMode == 1) {
+                        FUN_00427a70(i);
+                        if (linked != 20000) {
+                            FUN_00427a70(linked);
+                        }
+                    }
+                    /* TODO: g_InputMode == 2 (keyboard char entry) */
+                    /* TODO: g_InputMode == 3 (game setup randomization) */
+
+                    /* Clear input flags after processing */
+                    DAT_004877e8 = 0;
+                    g_InputMode = 0;
+                    DAT_004877e5 = 0;
+                }
+            }
+        }
+    }
+
+hover_decay:
+    /* --- Hover animation decay --- */
+    /* Decrement hover_state for all items based on frame time.
+     * hover_state uses fixed-point: >> 18 gives the visible intensity. */
+    if (g_GameViewData != NULL) {
+        MenuItem *items = (MenuItem *)g_GameViewData;
+        for (int i = 0; i < DAT_004877a8; i++) {
+            int decay = DAT_004877f0 << 18;
+            if (decay == 0) decay = 1;
+
+            items[i].hover_state -= decay;
+            if (items[i].hover_state < 0) {
+                items[i].hover_state = 0;
+            }
+        }
+    }
 }
 
 int  FUN_0042fc40(void) { return 1; }

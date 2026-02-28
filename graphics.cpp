@@ -198,14 +198,65 @@ void Render_Frame(void)
 }
 
 /* ===== Render_Game_View (0042F3A0) ===== */
-/* Renders menu items / game view to Software_Buffer.
- * TODO: Full implementation in Phase 5b/6.
+/* Renders menu items (text and sprites) onto the current Software_Buffer frame.
+ *
+ * Original pipeline: Lock offscreen DDraw surface → copy Software_Buffer frame →
+ *   draw scrollbar/sprites → iterate items → draw text/sprites → unlock.
+ * COMPAT pipeline: Draw directly onto Software_Buffer frame. Render_Frame()
+ *   handles the DDraw blit (RGB565 → ARGB8888 windowed mode).
+ *
  * Returns 1 on success, 0 on failure. */
 int Render_Game_View(void)
 {
-    /* Stub: background already loaded by Load_Background_To_Buffer.
-     * Full implementation would draw menu items, text, scrollbars
-     * over the background in Software_Buffer. */
+    if (!Software_Buffer || !g_GameViewData)
+        return 0;
+
+    unsigned short *frame = Software_Buffer + (g_FrameIndex & 0xFF) * (640 * 480);
+    MenuItem *items = (MenuItem *)g_GameViewData;
+
+    /* Iterate all menu items and render them */
+    for (int i = 0; i < DAT_004877a8; i++) {
+        MenuItem *item = &items[i];
+
+        if (item->type == 0) {
+            /* ---- Text item ---- */
+            const char *str = NULL;
+
+            switch (item->render_mode) {
+            case 0x00: case 0x0C: case 0x20: case 0x21: case 0x22:
+            case 0x23: case 0x24: case 0x25: case 0x2B: case 0x2C:
+            case 0x2D: case 0x2E: case 0x2F: case 0x29:
+                /* Normal text from g_MenuStrings */
+                if (g_MenuStrings && g_MenuStrings[item->string_idx])
+                    str = g_MenuStrings[item->string_idx];
+                break;
+
+            default:
+                /* Other render modes (6=entity name, 0x28=special, 0x31/0x32=formatted)
+                 * TODO: Implement in Phase 6 */
+                if (g_MenuStrings && g_MenuStrings[item->string_idx])
+                    str = g_MenuStrings[item->string_idx];
+                break;
+            }
+
+            if (str && str[0] != '\0') {
+                /* Bounds check: item must be within screen */
+                if (item->x >= 0 && item->x < 640 &&
+                    item->y >= 0 && item->y < 480) {
+                    unsigned short *dest = frame + item->y * 640 + item->x;
+                    Draw_Text_To_Buffer(str,
+                                        item->font_idx & 0xFF,
+                                        item->color_style & 0xFF,
+                                        dest, 640,
+                                        item->hover_state >> 18,
+                                        0, 0);
+                }
+            }
+        }
+        /* Type 1 (sprite items) - skip for now, no Draw_Sprite_To_Buffer yet.
+         * The title bar sprite won't render, but all text items will. */
+    }
+
     return 1;
 }
 
@@ -236,8 +287,16 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
             for (int fx = 0; fx < fc->width; fx++) {
                 unsigned char p = Font_Pixel_Data[fc->pixel_offset + (fy * fc->width) + fx];
                 if (p > 10) {
-                    unsigned short color = 0xFFFF;
-                    if (color_idx == 1) color = 0xF800;
+                    unsigned short color;
+                    switch (color_idx) {
+                    case 0:  color = 0xFFFF; break; /* white */
+                    case 1:  color = 0xFFFF; break; /* heading - white */
+                    case 2:  color = 0x07E0; break; /* clickable - green */
+                    case 3:  color = 0xC618; break; /* light gray */
+                    case 4:  color = 0xFFE0; break; /* yellow */
+                    case 6:  color = 0x07FF; break; /* cyan */
+                    default: color = 0xFFFF; break;
+                    }
                     dest_buf[(fy * stride) + cur_x + fx] = color;
                 }
             }

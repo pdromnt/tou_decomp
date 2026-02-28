@@ -17,14 +17,30 @@ FontChar Font_Char_Table[1024];
 unsigned char *Font_Pixel_Data = NULL;
 static int Font_Pixel_Offset = 0;
 
-/* ===== Parse_Font_Data ===== */
+/* Character ordering in font TGA files (from binary at 0047BE18).
+ * The TGA glyphs are laid out left-to-right in this order (95 chars): */
+static const unsigned char Font_Char_Map[95] = {
+    'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
+    'Q','R','S','T','U','V','W','X','Y','Z', 0xC5, 0xC4, 0xD6,
+    'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
+    'q','r','s','t','u','v','w','x','y','z', 0xE5, 0xE4, 0xF6,
+    '0','1','2','3','4','5','6','7','8','9',
+    '.','!','?','+','-',':',';','(',')','/','\\','$',
+    '%','&','\'','<','>', 0xBD, '"','#','[',']','_',',','=','*','@'
+};
+
+/* Default space widths per font index (from binary FUN_00422a10) */
+static const int Font_Space_Width[4] = { 16, 12, 14, 5 };
+
+/* ===== Parse_Font_Data (from FUN_00422a10) ===== */
 static void Parse_Font_Data(int font_idx, unsigned char *img_data, int w, int h)
 {
-    int current_char = 33;
+    int glyph_index = 0;
     bool in_char = false;
     int start_x = 0;
 
-    for (int i = 0; i < 33; i++) {
+    /* Initialize all 256 entries with zero width (unmapped) */
+    for (int i = 0; i < 256; i++) {
         Font_Char_Table[font_idx * 256 + i].pixel_offset = 0;
         Font_Char_Table[font_idx * 256 + i].width = 0;
         Font_Char_Table[font_idx * 256 + i].height = h;
@@ -47,9 +63,13 @@ static void Parse_Font_Data(int font_idx, unsigned char *img_data, int w, int h)
             start_x = x;
         } else if (empty && in_char) {
             in_char = false;
+            if (glyph_index >= 95) break;
+
             int char_w = x - start_x;
-            int table_idx = font_idx * 256 + current_char;
-            if (table_idx >= 1024) break;
+
+            /* Map glyph position to ASCII code using the character table */
+            unsigned char ascii_char = Font_Char_Map[glyph_index];
+            int table_idx = font_idx * 256 + ascii_char;
 
             Font_Char_Table[table_idx].width = char_w;
             Font_Char_Table[table_idx].height = h;
@@ -68,16 +88,16 @@ static void Parse_Font_Data(int font_idx, unsigned char *img_data, int w, int h)
             }
 
             Font_Pixel_Offset += (char_w * h);
-            current_char++;
-            if (current_char > 255) break;
+            glyph_index++;
         }
     }
 
-    Font_Char_Table[font_idx * 256 + 32].width = 5;
+    /* Set space character width from per-font defaults */
+    Font_Char_Table[font_idx * 256 + 32].width = Font_Space_Width[font_idx];
     Font_Char_Table[font_idx * 256 + 32].height = h;
 }
 
-/* ===== Load_Fonts ===== */
+/* ===== Load_Fonts (FUN_00422a10) ===== */
 void Load_Fonts(void)
 {
     if (Font_Pixel_Data) return;
@@ -85,22 +105,30 @@ void Load_Fonts(void)
     Font_Pixel_Data = (unsigned char *)Mem_Alloc(1024 * 1024);
     Font_Pixel_Offset = 0;
 
+    /* Original font order: 0=large, 1=mini, 2=med, 3=tiny */
     const char *font_files[] = {
-        "data/f_tiny5d.tga",
-        "data/f_mini.tga",
-        "data/f_med.tga",
-        "data/f_large.tga"
+        "data/f_large.tga",     /* font 0: large (default w=16, h=20) */
+        "data/f_mini.tga",      /* font 1: mini  (default w=12, h=12) */
+        "data/f_med.tga",       /* font 2: med   (default w=14, h=16) */
+        "data/f_tiny5d.tga"     /* font 3: tiny  (default w=5,  h=11) */
     };
 
     memset(Font_Char_Table, 0, sizeof(Font_Char_Table));
 
+    int loaded = 0;
     for (int f = 0; f < 4; f++) {
         int w, h, c;
         unsigned char *data = stbi_load(font_files[f], &w, &h, &c, 3);
-        if (!data) continue;
+        if (!data) {
+            LOG("[FONT] Failed to load %s\n", font_files[f]);
+            continue;
+        }
+        LOG("[FONT] Font %d: Loaded %s (%dx%d)\n", f, font_files[f], w, h);
         Parse_Font_Data(f, data, w, h);
         stbi_image_free(data);
+        loaded++;
     }
+    LOG("[FONT] %d fonts loaded, %d bytes of pixel data\n", loaded, Font_Pixel_Offset);
 }
 
 /* ===== Load_Background_To_Buffer (0042D710) ===== */
