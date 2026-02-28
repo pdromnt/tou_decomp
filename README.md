@@ -1,8 +1,10 @@
 # Decompilation of Tunnels of Underworld
 
-DISCLAIMER: This is project is heavily incomplete and doesn't function at all yet. The original source code I'm assuming was lost, so I'm attempting an effort to bring this game back to life, first by decompiling it and then by updating it so it works properly in current day Windows versions.
+DISCLAIMER: This is project is heavily incomplete and doesn't function at all. The original source code I'm assuming was lost, so I'm attempting an effort to bring this game back to life, first by decompiling it and then by updating it so it works properly in current day Windows versions.
 
 Tunnels of Underworld (or TOU for short) is an original creation by [hannukp](https://github.com/hannukp) and I don't claim any ownership over it. I'm simply a fan who wants to preserve his game.
+
+Also please note, no assets are uploaded yet. This is just the source for to build the executable that you can place on your ToU install. After we progress further into the decomp and start cleaning up things, I'll upload the assets to allow a full build from source.
 
 ## What works so far
 
@@ -10,8 +12,10 @@ Almost nothing. The code I got is essentialy heavily decompiling things with Ghi
 
 - Music
 - Basic sprite/image rendering
-- Some basic game states
-- A very rough intro (no animations)
+- Particle systems
+- Basic game states
+- Intro
+- Basic menu implementation
 
 ## Objective
 
@@ -27,9 +31,9 @@ If you know enough to help with the decomp, feel free to open a PR.
 ## Tools used
 - MinGW
 - Ghidra
-- Antigravity + BetterGhidraMCP
+- Claude + BetterGhidraMCP
 - An old Pentium II running Windows 98 to run the original game.
 
 ## License
 
-I'm not gonna put any kind of licenses on this project due to it not being a clean room decomp and also in respect to the original creator. I'm not sure if he would be mad at me if I even did this decomp! (Sorry Hannu!)
+I'm not gonna put any kind of licenses on this project due to it not being a clean room decomp and also in respect to the original creator. I'm not sure if he would be mad at me if I did this decomp! (Sorry Hannu!)

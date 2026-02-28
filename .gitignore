@@ -40,8 +40,9 @@
 # debug information files
 *.dwo
 *.log
-debug.txt
+*.txt
 
+NUL
 /data
 /ggstuff
 /helpgfx
