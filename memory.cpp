@@ -73,7 +73,7 @@ void *DAT_00481f44 = NULL;
 /* ===== Mem_Alloc (0046F4BD) ===== */
 void *Mem_Alloc(size_t size)
 {
-    void *ptr = malloc(size);
+    void *ptr = calloc(1, size);
     return ptr;
 }
 

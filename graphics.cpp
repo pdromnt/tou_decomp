@@ -198,8 +198,16 @@ void Render_Frame(void)
 }
 
 /* ===== Render_Game_View (0042F3A0) ===== */
-/* TODO: Phase 6 */
-void Render_Game_View(void) {}
+/* Renders menu items / game view to Software_Buffer.
+ * TODO: Full implementation in Phase 5b/6.
+ * Returns 1 on success, 0 on failure. */
+int Render_Game_View(void)
+{
+    /* Stub: background already loaded by Load_Background_To_Buffer.
+     * Full implementation would draw menu items, text, scrollbars
+     * over the background in Software_Buffer. */
+    return 1;
+}
 
 /* ===== Draw_Text_To_Buffer (0040AED0) ===== */
 void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,

@@ -154,6 +154,30 @@ extern void                 *DAT_00489230;      /* Brightness remap LUT (128KB) 
 extern void                 *DAT_004876a4[100]; /* Color palette tables */
 extern void                 *DAT_0048792c[48];  /* Blend LUT tables */
 
+/* ===== Menu / Session (init.cpp / FUN_0042d8b0) ===== */
+extern char                **g_MenuStrings;     /* 00481D3C - 350-entry menu text table */
+extern void                 *g_GameViewData;    /* 00481D40 - game view item array */
+extern char                **g_KeyNameTable;    /* 00481D88 - 256-entry scan code name table */
+extern unsigned char         g_KeyOrderTable[47]; /* 00481D48 - key sort/priority order */
+extern unsigned char         DAT_00481d84;      /* extra key order byte */
+extern unsigned char         g_KeyboardState[256]; /* 00481D8C - DirectInput keyboard state */
+
+/* ===== Additional State Globals ===== */
+extern unsigned char         DAT_004877a8;      /* game sub-flag */
+extern unsigned char         DAT_004877bc;      /* input flag */
+extern unsigned char         DAT_004877bd;      /* input flag */
+extern unsigned char         DAT_004877c4;      /* render flag */
+extern unsigned char         DAT_004877c9;      /* frame sub-index */
+extern unsigned char         DAT_004877cc;      /* render flag */
+extern unsigned char         DAT_004877e5;      /* input event trigger */
+extern unsigned char         DAT_004877ec;      /* input accumulator */
+extern int                   DAT_00487824;      /* menu display state */
+extern unsigned char         DAT_00483724[4];   /* display config */
+extern int                   DAT_00487784;      /* turret count */
+extern unsigned char         DAT_00483834;      /* turret flag */
+extern unsigned char         DAT_00483835;      /* trooper flag */
+extern int                   DAT_00489e9c;      /* menu/game counter */
+
 /* ===== Misc ===== */
 extern int                   DAT_00481f48;
 
@@ -180,7 +204,7 @@ void  Mem_Free(void *ptr);
 /* ===== Function Prototypes: graphics.cpp ===== */
 int  Init_DirectDraw(int width, int height);
 void Render_Frame(void);
-void Render_Game_View(void);
+int  Render_Game_View(void);
 void Release_DirectDraw_Surfaces(void);
 void Restore_Surfaces(void);
 
@@ -218,6 +242,16 @@ void FUN_0040d100(int buffer, int stride);
 void FUN_004076d0(int buffer, int stride);
 int  FUN_004257e0(int cx, int cy, int px, int py);
 
+/* ===== Function Prototypes: menu.cpp ===== */
+int  Menu_Init_And_Loop(void);
+int  Load_Level_Resources(void);
+void FUN_004102b0(void);
+void FUN_0041bc50(void);
+
+/* ===== Function Prototypes: init.cpp (config) ===== */
+void Load_Options_Config(void);
+void Save_Options_Config(void);
+
 /* ===== Stub Prototypes (undecompiled functions) ===== */
 void FUN_0041eae0(void);
 /* FUN_0045a060 and FUN_0045b2a0 moved to effects.cpp prototypes above */
@@ -225,7 +259,7 @@ void FUN_0041fc10(void);
 void FUN_0041fe70(void);
 void FUN_0041f900(void);
 void FUN_00422a10(void);
-void FUN_0042d8b0(void);
+void FUN_0042d8b0(void);  /* Full implementation in init.cpp */
 int  FUN_00422740(void);
 void FUN_00420be0(void);
 void FUN_0041e580(void);
@@ -233,7 +267,9 @@ int  FUN_00414060(void);
 void FUN_00413f70(void);
 void FUN_0041e4a0(void);
 void FUN_0045d7d0(void);
-void FUN_00425fe0(void);
+void FUN_00425fe0(void);  /* Main game/menu render loop - implemented in init.cpp */
+void FUN_0042a470(void);  /* Menu page builder */
+void FUN_00426650(void);  /* Game/menu logic tick */
 int  FUN_0042fc40(void);
 void FUN_0042fc10(void);
 void FUN_0041a8c0(void);

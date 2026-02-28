@@ -262,18 +262,15 @@ void Game_Update_Render(void)
 }
 
 /* ===== Handle_Menu_State (004611D0) ===== */
-/* Thin wrapper with SEH around Menu_Init_And_Loop */
+/* SEH wrapper around Menu_Init_And_Loop.
+ * Original wraps in __try/__except with handler at 00474000.
+ * On success (return 1): g_GameState = 0 (GAMEPLAY)
+ * On failure (return 0): g_GameState = 6 (ERROR_RESTART) */
 void Handle_Menu_State(void)
 {
-    /* TODO: Implement Menu_Init_And_Loop (0045D950) */
-    /* For now, stub that transitions to intro */
-    LOG("[STUB] Handle_Menu_State called\n");
-
-    /* In the real binary:
-     * iVar1 = Menu_Init_And_Loop();
-     * g_GameState = (iVar1 != 1) ? 6 : 0;
-     */
-    g_GameState = 0x96; /* Go to intro for now */
+    int result = Menu_Init_And_Loop();
+    /* -(result != 1) & 6 → if result==1: 0, else: 6 */
+    g_GameState = (result != 1) ? 6 : 0;
 }
 
 /* ===== Init_New_Game (004228A0) ===== */
