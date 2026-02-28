@@ -63,8 +63,11 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
         g_bIsActive = (int)wParam;
     }
     else if (uMsg == WM_SETCURSOR) {                /* 0x20 */
-        /* Original hid cursor for DDraw fullscreen.
-         * COMPAT: Let Windows show the default cursor in windowed mode. */
+        /* Hide Windows cursor over client area - game renders its own. */
+        if (LOWORD(lParam) == HTCLIENT) {
+            SetCursor(NULL);
+            return TRUE;
+        }
     }
 
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);

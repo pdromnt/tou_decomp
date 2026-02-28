@@ -121,21 +121,27 @@ extern unsigned char        *Font_Pixel_Data;
 extern int                   g_MouseDeltaX;     /* 004877B4 */
 extern int                   g_MouseDeltaY;     /* 004877B8 */
 extern char                  g_InputMode;       /* 004877E4 */
+extern unsigned char         DAT_004877e6;      /* 004877E6 - input mode item index */
 extern int                   DAT_004877e8;
 
 /* ===== Display Mode (init.cpp) ===== */
 extern int                   g_DisplayWidth;    /* 00489238 */
 extern int                   g_DisplayHeight;   /* 0048923C */
 extern int                   g_NumDisplayModes; /* 00483C00 */
+extern int                   g_ModeWidths[10];  /* 00483C04 */
+extern int                   g_ModeHeights[10]; /* 00483C44 */
 
 /* ===== Config (init.cpp) ===== */
+extern unsigned char         g_ConfigBlob[];    /* 00481F58 - raw 6408-byte config data */
 extern unsigned char         DAT_00483720[8];   /* Sound config */
+extern unsigned short        DAT_00483820;      /* Fade target color (RGB565) */
 extern unsigned char         DAT_00487640[4];   /* Display mode */
 extern unsigned short        DAT_00483838[4];   /* Team color palette (RGB555) */
 extern DWORD                 g_FrameTimer;      /* 004877F4 */
 extern unsigned char         DAT_004877b1;
 extern unsigned char         DAT_004877a4;
 extern DWORD                 DAT_004892b8;
+extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 
 /* ===== Intro particle system (memory.cpp) ===== */
 extern int                   DAT_00489248;      /* Entity count */
@@ -206,6 +212,10 @@ extern int                   DAT_004877e0;      /* scrollbar area height */
 extern int                   DAT_004877ac;      /* scroll item start index */
 extern int                   DAT_004877b0;      /* scroll mode */
 
+/* ===== Level/Map counts ===== */
+extern int                   DAT_00485088;      /* total map/level count */
+extern int                   DAT_0048508c;      /* GG theme/official level count */
+
 /* ===== Misc ===== */
 extern int                   DAT_00481f48;
 
@@ -265,6 +275,7 @@ void Free_Game_Resources(void);
 
 /* ===== Function Prototypes: effects.cpp ===== */
 void FUN_0045a060(void);
+void FUN_0045adc0(void);
 void FUN_0045b2a0(void);
 int  FUN_00422fc0(void);
 void FUN_0040d100(int buffer, int stride);
@@ -280,6 +291,11 @@ void FUN_0041bc50(void);
 /* ===== Function Prototypes: init.cpp (config) ===== */
 void Load_Options_Config(void);
 void Save_Options_Config(void);
+
+/* ===== Utility functions (init.cpp) ===== */
+void FUN_004644af(char *dest, const unsigned char *format, ...);
+void FUN_00425840(void);
+void FUN_004265e0(int index);
 
 /* ===== Stub Prototypes (undecompiled functions) ===== */
 void FUN_0041eae0(void);

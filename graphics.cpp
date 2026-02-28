@@ -10,6 +10,7 @@
 #include "tou.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ===== Globals defined in this module ===== */
 LPDIRECTDRAW        lpDD            = NULL;  /* 00489EC8 */
@@ -219,18 +220,131 @@ void Render_Game_View_To(unsigned short *frame)
 
         if (item->type == 0) {
             /* ---- Text item ---- */
+            /* Original: FUN_00428650 renders text based on render_mode.
+             * Static labels use string_idx directly.
+             * Enum values use string_idx + config_byte.
+             * Numeric values use sprintf of config_byte.
+             * Special modes: resolution, key binding, level name. */
             const char *str = NULL;
+            char valBuf[128];
+            unsigned char *cfgPtr = (unsigned char *)(uintptr_t)item->extra_data;
 
             switch (item->render_mode) {
+            /* Static labels: use string_idx directly */
             case 0x00: case 0x0C: case 0x20: case 0x21: case 0x22:
             case 0x23: case 0x24: case 0x25: case 0x2B: case 0x2C:
-            case 0x2D: case 0x2E: case 0x2F: case 0x29:
-                if (g_MenuStrings && g_MenuStrings[item->string_idx])
+            case 0x2D: case 0x2E: case 0x2F:
+                if (g_MenuStrings && item->string_idx < 350 &&
+                    g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
                 break;
 
+            /* Enum: string_idx + config_value */
+            case 0x01: case 0x04: case 0x0F: case 0x10: case 0x11:
+            case 0x12: case 0x17: case 0x1E: case 0x1F: case 0x27:
+            case 0x30: case 0x33: case 0x26: case 0x1C: case 0x1D: {
+                int val = cfgPtr ? (int)*cfgPtr : 0;
+                int idx = item->string_idx + val;
+                if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
+                    str = g_MenuStrings[idx];
+                break;
+            }
+
+            /* Non-linear enum: 1→+0, 4→+1, 10→+2, 30→+3, else→+4 */
+            case 0x02: {
+                int val = cfgPtr ? (int)*cfgPtr : 0;
+                int offset;
+                if (val == 1) offset = 0;
+                else if (val == 4) offset = 1;
+                else if (val == 10) offset = 2;
+                else if (val == 30) offset = 3;
+                else offset = 4;
+                int idx = item->string_idx + offset;
+                if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
+                    str = g_MenuStrings[idx];
+                break;
+            }
+
+            /* One-based enum: string_idx + config_value - 1 */
+            case 0x03: {
+                int val = cfgPtr ? (int)*cfgPtr : 1;
+                int idx = item->string_idx + val - 1;
+                if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
+                    str = g_MenuStrings[idx];
+                break;
+            }
+
+            /* Numeric: sprintf the config value (with scaling) */
+            case 0x05: case 0x09: case 0x0E: case 0x13: case 0x14:
+            case 0x15: case 0x16: case 0x18: case 0x34: {
+                int val = cfgPtr ? (int)*cfgPtr : 0;
+                switch (item->render_mode) {
+                case 0x09: val = (val > 0) ? val - 1 : 0; break;
+                case 0x13: val *= 5; break;
+                case 0x14: val *= 25; break;
+                case 0x15: val *= 5; break;
+                case 0x16: val *= 5; break;
+                case 0x34: val *= 5; break;
+                default: break;
+                }
+                if (item->render_mode == 0x34 && val > 1200) {
+                    str = "INFINITE";
+                } else if (item->render_mode == 0x0E || item->render_mode == 0x13 ||
+                           item->render_mode == 0x14 || item->render_mode == 0x15 ||
+                           item->render_mode == 0x16 || item->render_mode == 0x34) {
+                    sprintf(valBuf, "%d %%", val);
+                    str = valBuf;
+                } else {
+                    sprintf(valBuf, "%d", val);
+                    str = valBuf;
+                }
+                break;
+            }
+
+            /* Resolution: format as "WxH" from mode tables */
+            case 0x0D: {
+                int modeIdx = cfgPtr ? (int)*cfgPtr : 0;
+                if (modeIdx >= 0 && modeIdx < g_NumDisplayModes &&
+                    g_ModeWidths[modeIdx] > 0) {
+                    sprintf(valBuf, "%d x %d",
+                            g_ModeWidths[modeIdx], g_ModeHeights[modeIdx]);
+                } else {
+                    sprintf(valBuf, "%d x %d", 640, 480);
+                }
+                str = valBuf;
+                break;
+            }
+
+            /* Key binding: show key name from scan code */
+            case 0x07: {
+                int scanCode = cfgPtr ? (int)*cfgPtr : 0;
+                if (g_InputMode == 2 && DAT_004877e6 == (unsigned char)i) {
+                    /* Waiting for key press - show ESC hint */
+                    if (g_KeyNameTable && g_KeyNameTable[1])
+                        str = g_KeyNameTable[1];
+                } else {
+                    if (g_KeyNameTable && scanCode < 256 && g_KeyNameTable[scanCode])
+                        str = g_KeyNameTable[scanCode];
+                }
+                break;
+            }
+
+            /* Level/map name */
+            case 0x08: {
+                int levelIdx = cfgPtr ? (int)*cfgPtr : 0;
+                sprintf(valBuf, "Level %d", levelIdx);
+                str = valBuf;
+                break;
+            }
+
+            /* Color swatch: no text, draw colored rect */
+            case 0x1B:
+                /* TODO: draw color swatch rectangle */
+                break;
+
             default:
-                if (g_MenuStrings && g_MenuStrings[item->string_idx])
+                if (g_MenuStrings && item->string_idx < 350 &&
+                    g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
                 break;
             }
@@ -287,6 +401,35 @@ void Render_Game_View_To(unsigned short *frame)
                         }
                     }
                     dst += 640;
+                }
+            }
+        }
+    }
+
+    /* ---- Draw mouse cursor sprite (0x22) on top of everything ---- */
+    /* Original: FUN_00428650 draws sprite 0x22 at cursor position with
+     * hotspot offset. The cursor is drawn LAST so it's always on top. */
+    if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+        int cur_sprite = 0x22;  /* cursor sprite index (decimal 34) */
+        int cur_w = (int)((unsigned char *)DAT_00489e8c)[cur_sprite];
+        int cur_h = (int)((unsigned char *)DAT_00489e88)[cur_sprite];
+
+        if (cur_w > 0 && cur_h > 0) {
+            int cx = (g_MouseDeltaX >> 18);
+            int cy = (g_MouseDeltaY >> 18) - 9;  /* hotspot offset ~9px up */
+
+            int pixel_base = ((int *)DAT_00489234)[cur_sprite];
+            unsigned short *src_pixels = (unsigned short *)DAT_00487ab4;
+
+            /* Draw with clipping and transparency */
+            for (int row = 0; row < cur_h; row++) {
+                int dy = cy + row;
+                for (int col = 0; col < cur_w; col++) {
+                    unsigned short pixel = src_pixels[pixel_base + row * cur_w + col];
+                    int dx = cx + col;
+                    if (pixel != 0 && dx >= 0 && dx < 640 && dy >= 0 && dy < 480) {
+                        frame[dy * 640 + dx] = pixel;
+                    }
                 }
             }
         }

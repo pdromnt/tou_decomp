@@ -33,45 +33,256 @@ int FUN_004257e0(int cx, int cy, int px, int py)
     return idx & 0x7FF;
 }
 
+/* ===== Helper: clamp int to [0, 255] ===== */
+static inline int clamp255(int v)
+{
+    if (v < 0) return 0;
+    if (v > 255) return 255;
+    return v;
+}
+
+/* ===== Helper: pack 8-bit RGB to RGB565 ===== */
+static inline unsigned short pack_rgb565(int r, int g, int b)
+{
+    return (unsigned short)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+}
+
+/* ===== Helper: fill one 4096-entry LUT from a per-pixel transform ===== */
+typedef void (*lut_transform_fn)(int src_r, int src_g, int src_b,
+                                  int *out_r, int *out_g, int *out_b, int param);
+
+static void fill_lut(unsigned short *lut, lut_transform_fn fn, int param)
+{
+    for (int r4 = 0; r4 < 16; r4++) {
+        int r8 = (r4 * 255) / 15;
+        for (int g4 = 0; g4 < 16; g4++) {
+            int g8 = (g4 * 255) / 15;
+            for (int b4 = 0; b4 < 16; b4++) {
+                int b8 = (b4 * 255) / 15;
+                int or8, og8, ob8;
+                fn(r8, g8, b8, &or8, &og8, &ob8, param);
+                int idx = b4 + (g4 + r4 * 16) * 16;
+                lut[idx] = pack_rgb565(clamp255(or8), clamp255(og8), clamp255(ob8));
+            }
+        }
+    }
+}
+
+/* ---- Per-table transform functions ---- */
+
+/* [0..3] Fog-to-white: (ch*4+255)/5 applied N times */
+static void xform_fog_white(int r, int g, int b, int *or_, int *og, int *ob, int n)
+{
+    for (int i = 0; i < n; i++) {
+        r = (r * 4 + 255) / 5;
+        g = (g * 4 + 255) / 5;
+        b = (b * 4 + 255) / 5;
+    }
+    *or_ = r; *og = g; *ob = b;
+}
+
+/* [4..11] Brightness dimming: ch = ch * level / 11 */
+static void xform_brightness(int r, int g, int b, int *or_, int *og, int *ob, int level)
+{
+    *or_ = (r * level) / 11;
+    *og = (g * level) / 11;
+    *ob = (b * level) / 11;
+}
+
+/* [12..13] Cold/green shift: R-=0x30*n, G+=0x30*n, B-=0x30*n */
+static void xform_cold(int r, int g, int b, int *or_, int *og, int *ob, int n)
+{
+    *or_ = r - 0x30 * n;
+    *og = g + 0x30 * n;
+    *ob = b - 0x30 * n;
+}
+
+/* [14..15] Warm/yellow shift: R+=0x30*n, G+=0x30*n, B-=0x30*n */
+static void xform_warm(int r, int g, int b, int *or_, int *og, int *ob, int n)
+{
+    *or_ = r + 0x30 * n;
+    *og = g + 0x30 * n;
+    *ob = b - 0x30 * n;
+}
+
+/* [16..17] Red shift: R+=0x30*n, G-=0x30*n, B-=0x30*n */
+static void xform_red(int r, int g, int b, int *or_, int *og, int *ob, int n)
+{
+    *or_ = r + 0x30 * n;
+    *og = g - 0x30 * n;
+    *ob = b - 0x30 * n;
+}
+
+/* [18..21] Fog-to-gray: ch + ((0x50 - ch) * level) / 7 */
+static void xform_fog_gray(int r, int g, int b, int *or_, int *og, int *ob, int level)
+{
+    *or_ = r + ((0x50 - r) * level) / 7;
+    *og = g + ((0x50 - g) * level) / 7;
+    *ob = b + ((0x50 - b) * level) / 7;
+}
+
+/* [22] Shadow: subtractive darkening */
+static void xform_shadow(int r, int g, int b, int *or_, int *og, int *ob, int /*unused*/)
+{
+    *or_ = 0x19 - r;
+    *og = 0x1E - g;
+    *ob = 0x23 - b;
+}
+
+/* [23] Contrast pinch: pull R toward 0x8C, G/B toward 0xDC with +-0x28 */
+static void xform_contrast(int r, int g, int b, int *or_, int *og, int *ob, int /*unused*/)
+{
+    /* R: pull toward 0x8C */
+    if (r > 0x8C) { r -= 0x28; if (r < 0x8C) r = 0x8C; }
+    else          { r += 0x28; if (r > 0x8C) r = 0x8C; }
+    /* G: pull toward 0xDC */
+    if (g > 0xDC) { g -= 0x28; if (g < 0xDC) g = 0xDC; }
+    else          { g += 0x28; if (g > 0xDC) g = 0xDC; }
+    /* B: pull toward 0xDC */
+    if (b > 0xDC) { b -= 0x28; if (b < 0xDC) b = 0xDC; }
+    else          { b += 0x28; if (b > 0xDC) b = 0xDC; }
+    *or_ = r; *og = g; *ob = b;
+}
+
+/* [24..27] Highlight: R pulled to 0xA0 by +-0xC, G/B reduced by 0x10*n */
+static void xform_highlight(int r, int g, int b, int *or_, int *og, int *ob, int n)
+{
+    int og_v = g - 0x10 * n;
+    int ob_v = b - 0x10 * n;
+    for (int i = 0; i < n; i++) {
+        if (r < 0xA0) r += 0x0C;
+        else          r -= 0x0C;
+    }
+    *or_ = r; *og = og_v; *ob = ob_v;
+}
+
 /* ===== FUN_0045a060 - Color LUT generation (0045A060) ===== */
 /*
- * Generates DAT_00489230: brightness remap table
- * Maps all 65536 RGB565 pixel values to a 12-bit index (R4:G4:B4)
- * Also fills DAT_004876a4 color palette tables (simplified)
+ * Generates the master color remap table (DAT_00489230) and all color
+ * transformation LUTs (DAT_004876a4[0..47+]). Each LUT is 4096 entries
+ * of RGB565 pixels, indexed by a 12-bit R4:G4:B4 value.
+ *
+ * Table layout in DAT_004876a4[]:
+ *   [0..3]   Fog-to-white (4 tables)
+ *   [4..11]  Brightness dimming (8 tables, level 10 down to 3)
+ *   [12..13] Cold/green shift (2 tables)
+ *   [14..15] Warm/yellow shift (2 tables)
+ *   [16..17] Red shift (2 tables)
+ *   [18..21] Fog-to-gray (4 tables)
+ *   [22]     Shadow (subtractive)
+ *   [23]     Contrast pinch
+ *   [24..27] Highlight (4 tables)
+ *   [32..47] Blend-to-background (16 tables, via FUN_0045adc0)
  */
 void FUN_0045a060(void)
 {
+    /* ---- Section 1: RGB565 -> 12-bit remap table (DAT_00489230) ---- */
+    /* Maps every possible 16-bit pixel to a 12-bit index (R4:G4:B4).
+     * Original iterates 32x32x32 (5-bit per channel); we fill all 64K. */
     unsigned short *remap = (unsigned short *)DAT_00489230;
-
-    /* Fill brightness remap: RGB565 -> 12-bit index
-     * Original uses 32x32x32 loop (treating RGB565 as RGB555).
-     * We fill all 65536 entries for completeness. */
     for (int pixel = 0; pixel < 65536; pixel++) {
-        int r5 = (pixel >> 11) & 0x1F;  /* 0-31 */
-        int g6 = (pixel >> 5)  & 0x3F;  /* 0-63 */
-        int b5 = pixel & 0x1F;          /* 0-31 */
-
-        int r4 = (r5 * 15) / 31;        /* 0-15 */
-        int g4 = (g6 * 15) / 63;        /* 0-15 */
-        int b4 = (b5 * 15) / 31;        /* 0-15 */
-
+        int r5 = (pixel >> 11) & 0x1F;
+        int g6 = (pixel >> 5)  & 0x3F;
+        int b5 = pixel & 0x1F;
+        int r4 = (r5 * 15) / 31;
+        int g4 = (g6 * 15) / 63;
+        int b4 = (b5 * 15) / 31;
         remap[pixel] = (unsigned short)(b4 + (g4 + r4 * 16) * 16);
     }
 
-    /* Fill DAT_004876a4 color palette tables with identity-ish mapping
-     * (used by gameplay rendering, not critical for intro particles) */
-    for (int i = 0; i < 100; i++) {
-        unsigned short *pal = (unsigned short *)DAT_004876a4[i];
-        if (!pal) continue;
-        for (int j = 0; j < 4096; j++) {
-            /* Reconstruct RGB565 from 12-bit index */
-            int b4 = j & 0xF;
-            int g4 = (j >> 4) & 0xF;
-            int r4 = (j >> 8) & 0xF;
-            int r5 = (r4 * 31) / 15;
-            int g6 = (g4 * 63) / 15;
-            int b5 = (b4 * 31) / 15;
-            pal[j] = (unsigned short)((r5 << 11) | (g6 << 5) | b5);
+    /* ---- Section 2: Fog-to-white [0..3] ---- */
+    for (int i = 0; i < 4; i++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[i];
+        if (lut) fill_lut(lut, xform_fog_white, i + 1);
+    }
+
+    /* ---- Section 3: Brightness dimming [4..11] ---- */
+    /* 8 tables: level counts down from 10 to 3 */
+    {
+        int level = 10;
+        for (int i = 4; i < 12; i++, level--) {
+            unsigned short *lut = (unsigned short *)DAT_004876a4[i];
+            if (lut) fill_lut(lut, xform_brightness, level);
+        }
+    }
+
+    /* ---- Section 4: Cold/green shift [12..13] ---- */
+    for (int i = 0; i < 2; i++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[12 + i];
+        if (lut) fill_lut(lut, xform_cold, i + 1);
+    }
+
+    /* ---- Section 5: Warm/yellow shift [14..15] ---- */
+    for (int i = 0; i < 2; i++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[14 + i];
+        if (lut) fill_lut(lut, xform_warm, i + 1);
+    }
+
+    /* ---- Section 6: Red shift [16..17] ---- */
+    for (int i = 0; i < 2; i++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[16 + i];
+        if (lut) fill_lut(lut, xform_red, i + 1);
+    }
+
+    /* ---- Section 7: Fog-to-gray [18..21] ---- */
+    for (int i = 0; i < 4; i++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[18 + i];
+        if (lut) fill_lut(lut, xform_fog_gray, i + 1);
+    }
+
+    /* ---- Section 8: Shadow [22] ---- */
+    {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[22];
+        if (lut) fill_lut(lut, xform_shadow, 0);
+    }
+
+    /* ---- Section 9: Contrast pinch [23] ---- */
+    {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[23];
+        if (lut) fill_lut(lut, xform_contrast, 0);
+    }
+
+    /* ---- Section 10: Highlight [24..27] ---- */
+    for (int i = 0; i < 4; i++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[24 + i];
+        if (lut) fill_lut(lut, xform_highlight, i + 1);
+    }
+
+    /* ---- Section 11: Blend-to-background [32..47] via FUN_0045adc0 ---- */
+    FUN_0045adc0();
+}
+
+/* ===== FUN_0045adc0 - Blend-to-background LUT generation (0045ADC0) ===== */
+/*
+ * Generates 16 tables at DAT_004876a4[32..47] that linearly blend
+ * each source pixel toward a target background color (DAT_00483820).
+ * Step 1/17 through 16/17.
+ */
+void FUN_0045adc0(void)
+{
+    /* Decode target color from DAT_00483820 (RGB565) */
+    unsigned short bg = DAT_00483820;
+    int tgt_r = ((bg >> 11) & 0x1F) << 3;
+    int tgt_g = ((bg >> 5)  & 0x3F) << 2;
+    int tgt_b = (bg & 0x1F) << 3;
+
+    for (int step = 1; step <= 16; step++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[32 + step - 1];
+        if (!lut) continue;
+
+        for (int r4 = 0; r4 < 16; r4++) {
+            int r8 = (r4 * 255) / 15;
+            for (int g4 = 0; g4 < 16; g4++) {
+                int g8 = (g4 * 255) / 15;
+                for (int b4 = 0; b4 < 16; b4++) {
+                    int b8 = (b4 * 255) / 15;
+                    int or8 = r8 + ((tgt_r - r8) * step) / 17;
+                    int og8 = g8 + ((tgt_g - g8) * step) / 17;
+                    int ob8 = b8 + ((tgt_b - b8) * step) / 17;
+                    int idx = b4 + (g4 + r4 * 16) * 16;
+                    lut[idx] = pack_rgb565(clamp255(or8), clamp255(og8), clamp255(ob8));
+                }
+            }
         }
     }
 }
@@ -105,12 +316,12 @@ void FUN_0045b2a0(void)
             {0xFF,0xBE,0x00}, {0xFF,0xDC,0x28}, {0xFF,0xFF,0x32}, {0xFF,0xFF,0x64},
             {0xFF,0xFF,0x96}, {0xFF,0xFF,0xC8}, {0xFF,0xFF,0xFF},
         },
-        /* Group 2: Cooler pinkish tones */
+        /* Group 2: Blue/ice (R,G low, B=0xFF dominant) */
         {
-            {0xFF,0x28,0x28}, {0xFF,0x28,0x28}, {0xFF,0x28,0x28}, {0xFF,0x28,0x28},
-            {0xFF,0x3C,0x3C}, {0xFF,0x50,0x50}, {0xFF,0x64,0x64}, {0xFF,0x64,0x64},
-            {0xFF,0x78,0x78}, {0xFF,0x8C,0x8C}, {0xFF,0xA0,0xA0}, {0xFF,0xB4,0xB4},
-            {0xFF,0xC8,0xC8}, {0xFF,0xDC,0xDC}, {0xFF,0xFF,0xFF},
+            {0x28,0x28,0xFF}, {0x28,0x28,0xFF}, {0x28,0x28,0xFF}, {0x28,0x28,0xFF},
+            {0x3C,0x3C,0xFF}, {0x50,0x50,0xFF}, {0x64,0x64,0xFF}, {0x64,0x64,0xFF},
+            {0x78,0x78,0xFF}, {0x8C,0x8C,0xFF}, {0xA0,0xA0,0xFF}, {0xB4,0xB4,0xFF},
+            {0xC8,0xC8,0xFF}, {0xDC,0xDC,0xFF}, {0xFF,0xFF,0xFF},
         },
     };
 

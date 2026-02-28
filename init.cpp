@@ -7,6 +7,7 @@
 #define INITGUID
 #include <dinput.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
@@ -30,8 +31,8 @@ int g_DisplayHeight = 0;    /* 0048923C */
 int g_NumDisplayModes = 10; /* 00483C00 */
 
 /* Resolution tables (filled in System_Init_Check) */
-static int g_ModeWidths[10];    /* 00483C04 */
-static int g_ModeHeights[10];   /* 00483C44 */
+int g_ModeWidths[10];    /* 00483C04 */
+int g_ModeHeights[10];   /* 00483C44 */
 
 /* Misc init globals */
 int          g_SoundEnabled = 0;     /* 00487649 */
@@ -41,10 +42,14 @@ unsigned char DAT_004877a4  = 0;
 DWORD        DAT_004892b8   = 0;
 
 /* Config globals (004207c0 area) */
-static unsigned char g_ConfigBlob[6408]; /* 00481F58 - raw config data */
+unsigned char g_ConfigBlob[6408]; /* 00481F58 - raw config data */
+
+/* Helper: map original binary address to config blob pointer (32-bit only) */
+#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
 
 /* Team color palette (RGB555 values, 4 entries) - init'd in Init_Game_Config */
 unsigned short DAT_00483838[4] = {0};
+unsigned short DAT_00483820 = 0;  /* Fade target color (RGB565) for blend-to-background LUTs */
 
 /* Stub globals referenced in init */
 int DAT_0048764b = 0;
@@ -71,14 +76,21 @@ unsigned char DAT_00483835   = 0;
 int           DAT_00489e9c   = 0;
 unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - DirectInput keyboard state */
 unsigned char DAT_004877e5   = 0;  /* input event trigger */
+unsigned char DAT_004877e6   = 0;  /* input mode item index */
+float         DAT_004877d4   = 0.0f;  /* scroll position (0.0 - 1.0) */
 int           DAT_004877d8   = 0;  /* scrollbar area width */
 int           DAT_004877dc   = 0;  /* scrollbar area top */
 int           DAT_004877e0   = 0;  /* scrollbar area height */
 int           DAT_004877ac   = 0;  /* scroll item start index */
 int           DAT_004877b0   = 0;  /* scroll mode */
 
+/* Level/map counts */
+int DAT_00485088 = 0;   /* total map/level count */
+int DAT_0048508c = 0;   /* GG theme/official level count */
+
 /* ===== Stub functions (to be decompiled later) ===== */
 void FUN_0041eae0(void) {}
+void FUN_004265e0(int index) { (void)index; } /* Key binding auto-assign - stub */
 /* FUN_0045a060 moved to effects.cpp */
 /* FUN_0045b2a0 moved to effects.cpp */
 void FUN_0041fc10(void) {}
@@ -1197,6 +1209,23 @@ void FUN_00425fe0(void)
     }
 }
 
+/* ===== FUN_004644af - sprintf-like string formatter (004644AF) ===== */
+#include <stdarg.h>
+void FUN_004644af(char *dest, const unsigned char *format, ...)
+{
+    if (!dest || !format) return;
+    va_list args;
+    va_start(args, format);
+    vsprintf(dest, (const char *)format, args);
+    va_end(args);
+}
+
+/* ===== FUN_00425840 - Reset/load defaults (00425840) ===== */
+void FUN_00425840(void)
+{
+    /* TODO: decompile - resets config to defaults */
+}
+
 /* ===== FUN_00430200 - Create text menu item (00430200) ===== */
 /* Adds a text-based menu item to g_GameViewData.
  * Returns text_height - 4 (spacing for next item). */
@@ -1370,6 +1399,11 @@ void FUN_0042fcb0(void) {}
  * Each page creates menu items in g_GameViewData via FUN_00430200. */
 void FUN_0042a470(void)
 {
+    int iVar3, iVar4, iVar7 = 0;
+    unsigned char uVar12 = 0, uVar13 = 0;
+    int uVar11 = 0;
+    MenuItem *items;
+
     /* Clear state (runs before switch, matches original) */
     DAT_004877a8 = 0;     /* Menu item count */
     g_FrameIndex = 0;     /* Frame index for Software_Buffer display */
@@ -1433,9 +1467,661 @@ void FUN_0042a470(void)
         return;
 
     case 0x03: /* Start game - transition to gameplay */
-        LOG("[MENU] Page 3: Start game\n");
         DAT_0048764a = 0;
         g_GameState = 0x04;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x04: /* Video settings */
+        FUN_00430200(0, 0x28, 10, 1, 0, 0, 0, 1, 0xff);           /* "Video" heading */
+        FUN_00430200(0, 0x50, 100, 0, 2, 2, 0, 4, 0xff);          /* "Resolution" label */
+        iVar7 = FUN_00430200(0, 0x50, 0, 0, 2, 1, 0xd, 5, 0xff);  /* resolution value */
+        iVar7 = iVar7 + 0x50;
+        FUN_0042fc90(CFG_ADDR(0x483725));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0x40, 2, 2, 2, 0, 4, 0xff);        /* "Detail" label */
+        iVar3 = FUN_00430200(0, iVar7, 0x41, 2, 2, 1, 4, 5, 0xff); /* detail value */
+        FUN_0042fc90(CFG_ADDR(0x483726));
+        FUN_0042fcf0();
+        iVar4 = iVar7 + iVar3 + 0x14;
+        FUN_00430200(0, iVar4, 0x1e, 2, 2, 2, 0, 4, 0xff);        /* "Particles" label */
+        iVar7 = FUN_00430200(0, iVar4, 0x22, 2, 2, 1, 1, 5, 0xff); /* particles value */
+        FUN_0042fc90(CFG_ADDR(0x483727));
+        FUN_0042fcf0();
+        iVar3 = FUN_00430200(0, iVar4 + iVar7, 0x1f, 4, 2, 0, 0, 1, 0xff); /* info text */
+        iVar3 = iVar4 + iVar7 + iVar3;
+        iVar7 = FUN_0042fdf0(iVar3);                               /* separator */
+        iVar3 = iVar3 + iVar7;
+        FUN_00430200(0, iVar3, 0x20, 2, 2, 2, 0, 4, 0xff);        /* "Shadows" label */
+        iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x483729));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0x140, 2, 2, 2, 0, 4, 0xff);       /* "Lighting" label */
+        iVar7 = FUN_00430200(0, iVar3, 0x13d, 2, 2, 1, 4, 5, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x48372b));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0x21, 2, 2, 2, 0, 4, 0xff);        /* "Smoothing" label */
+        iVar7 = FUN_00430200(0, iVar3, 0x137, 2, 2, 1, 0x11, 5, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x48372a));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0x44, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0x45, 2, 2, 1, 4, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48372c));
+        FUN_0042fcf0();
+        iVar4 = FUN_00430200(0, iVar3 + iVar7, 0x27, 4, 2, 0, 0, 1, 0xff); /* info */
+        iVar4 = iVar3 + iVar7 + iVar4;
+        iVar7 = FUN_0042fdf0(iVar4);                               /* separator */
+        iVar4 = iVar4 + iVar7;
+        FUN_00430200(0, iVar4, 0x28, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar4, 0x129, 2, 2, 1, 0x27, 5, 0xff);
+        iVar4 = iVar4 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x48372d));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar4, 0x29, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar4, 0x36, 2, 2, 1, 2, 5, 0xff);
+        iVar4 = iVar4 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x48372e));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar4, 0x2a, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar4, 0x32, 2, 2, 1, 3, 5, 0xff);
+        iVar4 = iVar4 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x48372f));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar4, 0x2c, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar4, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483730));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar4 + iVar7, 0x2b, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar4 + iVar7, 0x109, 2, 2, 1, 0x27, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483731));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x1b8, 0xf, 2, 0, 1, 0, 1, 1);            /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x05: /* Controls */
+        FUN_00430200(0, 0x28, 0xb, 1, 0, 0, 0, 1, 0xff);           /* "Controls" heading */
+        FUN_00430200(0, 0x50, 0x26, 2, 2, 2, 0, 4, 0xff);          /* "Mouse sens" label */
+        iVar3 = FUN_00430200(0, 0x50, 0x113, 2, 2, 1, 0x27, 5, 0xff);
+        iVar3 = iVar3 + 0x50;
+        FUN_0042fc90(CFG_ADDR(0x483734));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0x30, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar4 = FUN_00430200(0, iVar3, 0x110, 2, 2, 1, 4, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483735));
+        FUN_0042fcf0();
+        iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
+        iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
+        FUN_00430200(0, iVar7, 0x96, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar3 = FUN_00430200(0, iVar7, 0xcb, 2, 2, 1, 0x27, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x483736));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0x97, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar4 = FUN_00430200(0, iVar7, 0xcb, 2, 2, 1, 0x27, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483737));
+        FUN_0042fcf0();
+        iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 8);
+        iVar3 = iVar7 + iVar4 + 0x10 + iVar3;
+        FUN_00430200(0, iVar3, 0xb9, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x483756));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0xba, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar4 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483757));
+        FUN_0042fcf0();
+        iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
+        iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
+        FUN_00430200(0, iVar7, 0xca, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7, 0xcf, 2, 2, 1, 0x27, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48375a));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x06: /* Game modes */
+        FUN_00430200(0, 0x28, 0xc, 1, 0, 0, 0, 1, 0xff);           /* heading */
+        /* Copy game mode names into dynamic menu strings */
+        if (g_MenuStrings) {
+            strcpy(g_MenuStrings[0x71], "Custom");
+            strcpy(g_MenuStrings[0x72], "Quite normal");
+            strcpy(g_MenuStrings[0x73], "Turret wars");
+            strcpy(g_MenuStrings[0x74], "Cyberdeath");
+            strcpy(g_MenuStrings[0x75], "Quick rounds");
+            strcpy(g_MenuStrings[0x76], "Subspace trench");
+            strcpy(g_MenuStrings[0x77], "Base defending");
+        }
+        FUN_00430200(0, 100, 0x95, 0, 2, 2, 0, 4, 0xff);           /* "Game type" label */
+        iVar7 = FUN_00430200(0, 100, 0x71, 0, 2, 1, 0x30, 5, 0xff); /* game mode value */
+        FUN_0042fc90(CFG_ADDR(0x483739));
+        FUN_0042fcf0();
+        iVar7 = iVar7 + 0x6e;
+        FUN_00430200(0, iVar7, 0x91, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar3 = FUN_00430200(0, iVar7, 0x92, 2, 2, 1, 4, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483738));
+        FUN_0042fcf0();
+        iVar3 = iVar7 + iVar3 + 10;
+        FUN_00430200(0, iVar3, 0x99, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0, 2, 2, 1, 9, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48373a));
+        FUN_0042fcf0();
+        iVar3 = iVar3 + iVar7 + 10;
+        FUN_00430200(0, iVar3, 0x134, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48373d));
+        FUN_0042fcf0();
+        iVar3 = iVar3 + iVar7 + 10;
+        FUN_00430200(0, iVar3, 0x3b, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48373b));
+        FUN_0042fcf0();
+        iVar3 = iVar3 + iVar7 + 10;
+        FUN_00430200(0, iVar3, 0x8f, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48373c));
+        FUN_0042fcf0();
+        iVar7 = iVar3 + iVar7 + 10;
+        FUN_00430200(0, iVar7, 0x142, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7, 0, 2, 2, 1, 9, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483746));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x154, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x07: /* Keyboard settings */
+        FUN_00430200(0, 0x28, 0xd, 1, 0, 0, 0, 1, 0xff);           /* "Keyboard" heading */
+        FUN_00430200(0, 0x50, 0x2d, 2, 2, 2, 0, 4, 0xff);          /* label */
+        iVar7 = FUN_00430200(0, 0x50, 0x22, 2, 2, 1, 1, 5, 0xff);
+        iVar7 = iVar7 + 0x50;
+        FUN_0042fc90(CFG_ADDR(0x483747));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xb4, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x13, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x483748));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xb5, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x14, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x483749));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xb6, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x15, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x48374a));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xdd, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x15, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x48374b));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xde, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x15, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x48374c));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xfc, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x13, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x48374d));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0xfd, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x13, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x48374e));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0x3c, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x16, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x483752));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0x135, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x34, 5, 0xff);
+        iVar7 = iVar7 + iVar3;
+        FUN_0042fc90(CFG_ADDR(0x48374f));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0x136, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x16, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483750));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar7 + iVar3, 0xb7, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7 + iVar3, 0x22, 2, 2, 1, 0x16, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483751));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x08: /* Keys page 1 */
+        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);           /* "Keys" heading */
+        FUN_00430200(0, 0x3c, 0x4b, 4, 0, 0, 0, 1, 0xff);          /* "Page 1" */
+        items = (MenuItem *)g_GameViewData;
+        iVar7 = 0;
+        iVar3 = 0x5a;
+        do {
+            FUN_00430200(0, iVar3, (int)g_KeyOrderTable[iVar7], 2, 2, 2, 6, 4, 0xff);
+            FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x48375c) + (int)g_KeyOrderTable[iVar7]);
+            items = (MenuItem *)g_GameViewData;
+            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFA;
+            items[DAT_004877a8 - 1].height = (int)g_KeyOrderTable[iVar7];
+            FUN_0042fcf0();
+            iVar3 = iVar3 + 0x12;
+            iVar7 = iVar7 + 1;
+        } while (iVar3 < 0x17a);
+        FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
+        FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 5, 0xff);         /* nav indicator */
+        uVar13 = 10; uVar12 = 5; iVar7 = 0x48;
+        break; /* → post-switch: add "Prev Page" button */
+
+    case 0x09: /* Sound settings */
+        FUN_00430200(0, 0x28, 9, 1, 0, 0, 0, 1, 0xff);             /* "Sound" heading */
+        FUN_00430200(0, 0x50, 0x3e, 2, 2, 2, 0, 4, 0xff);          /* label */
+        iVar3 = FUN_00430200(0, 0x50, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48371e));
+        FUN_0042fcf0();
+        iVar3 = iVar3 + 0x5a;
+        FUN_00430200(0, iVar3, 0x8c, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar4 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48371f));
+        FUN_0042fcf0();
+        iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 10);
+        iVar7 = iVar3 + iVar4 + 0x14 + iVar7;
+        FUN_00430200(0, iVar7, 0x8d, 2, 2, 2, 0, 4, 0xff);         /* "Music vol" label */
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0xe, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483720));
+        FUN_0042fcf0();
+        iVar4 = iVar7 + iVar3 + 10;
+        FUN_00430200(0, iVar4, 0x8e, 2, 2, 2, 0, 4, 0xff);         /* "SFX vol" label */
+        iVar3 = FUN_00430200(0, iVar4, 0x22, 2, 2, 1, 0xe, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483721));
+        FUN_0042fcf0();
+        iVar7 = FUN_0042fdf0(iVar4 + iVar3 + 10);
+        iVar7 = iVar4 + iVar3 + 0x14 + iVar7;
+        FUN_00430200(0, iVar7, 0x90, 2, 2, 2, 0, 4, 0xff);         /* label */
+        iVar4 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483722));
+        FUN_0042fcf0();
+        iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 10);
+        iVar3 = iVar7 + iVar4 + 0x14 + iVar3;
+        FUN_00430200(0, iVar3, 0x100, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0x101, 2, 2, 1, 0x27, 5, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x483723));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0x117, 2, 2, 2, 0, 4, 0xff);        /* label */
+        iVar7 = FUN_00430200(0, iVar3, 0, 2, 2, 1, 5, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483724));
+        FUN_0042fcf0();
+        iVar3 = iVar3 + iVar7 + 10;
+        iVar7 = FUN_00430200(0, iVar3, 0x12d, 0, 1, 0, 0, 4, 0xff); /* info line 1 */
+        FUN_00430200(0, iVar3 + iVar7, 0x12e, 0, 1, 0, 0, 4, 0xff); /* info line 2 */
+        FUN_00430200(0, 0x1a4, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x0A: /* Keys page 2 */
+        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x3c, 0x4c, 4, 0, 0, 0, 1, 0xff);          /* "Page 2" */
+        items = (MenuItem *)g_GameViewData;
+        iVar7 = 0x10;
+        iVar3 = 0x5a;
+        do {
+            FUN_00430200(0, iVar3, (int)g_KeyOrderTable[iVar7], 2, 2, 2, 6, 4, 0xff);
+            FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x48375c) + (int)g_KeyOrderTable[iVar7]);
+            items = (MenuItem *)g_GameViewData;
+            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFA;
+            items[DAT_004877a8 - 1].height = (int)g_KeyOrderTable[iVar7];
+            FUN_0042fcf0();
+            iVar3 = iVar3 + 0x12;
+            iVar7 = iVar7 + 1;
+        } while (iVar3 < 0x17a);
+        FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);
+        FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 5, 0xff);
+        FUN_00430200(0, 0x196, 0x48, 2, 0, 1, 0, 5, 0xb);          /* "Prev" → page 0x0B */
+        FUN_0042fcb0();
+        FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 4, 0xff);
+        uVar13 = 8; uVar12 = 4; iVar7 = 0x49;
+        break;
+
+    case 0x0B: /* Keys page 3 */
+        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x3c, 0x4d, 4, 0, 0, 0, 1, 0xff);          /* "Page 3" */
+        items = (MenuItem *)g_GameViewData;
+        iVar7 = 0x20;
+        iVar3 = 0x5a;
+        do {
+            FUN_00430200(0, iVar3, (int)g_KeyOrderTable[iVar7], 2, 2, 2, 6, 4, 0xff);
+            FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x48375c) + (int)g_KeyOrderTable[iVar7]);
+            items = (MenuItem *)g_GameViewData;
+            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFA;
+            items[DAT_004877a8 - 1].height = (int)g_KeyOrderTable[iVar7];
+            FUN_0042fcf0();
+            iVar3 = iVar3 + 0x12;
+            iVar7 = iVar7 + 1;
+        } while (iVar3 < 0x168);
+        FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);
+        FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 4, 0xff);
+        uVar13 = 10; uVar12 = 4; iVar7 = 0x49;
+        break;
+
+    case 0x0C: /* Name entry */
+        FUN_00430200(0, 0x28, 0x3f, 1, 0, 0, 0, 1, 0xff);          /* "Name" heading */
+        FUN_00430200(0, 0x50, 0x4e, 2, 0, 1, 0, 1, 0xf);           /* "Enter name" → page 0xF */
+        FUN_0042fdf0(0xa0);
+        FUN_00430200(0, 0xb4, 0xc3, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0xb4, 0, 2, 2, 1, 7, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x4837ba));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0xd2, 0x106, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0xd2, 0, 2, 2, 1, 7, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x4837bb));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0xf0, 0x107, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0xf0, 0, 2, 2, 1, 7, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x4837bc));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x10e, 0x108, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0x10e, 0, 2, 2, 1, 7, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x4837bd));
+        FUN_0042fcf0();
+        uVar11 = 0x168;
+        goto back_to_options;
+
+    case 0x0F: /* Name entry page 1 (character grid) */
+        FUN_00430200(0, 10, 0x3f, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x32, 0x4b, 4, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x55, 0x50, 4, 2, 0, 0, 1, 0xff);
+        FUN_0042fdf0(0x68);
+        FUN_00430200(0, 0x104, 0x51, 4, 2, 0, 0, 1, 0xff);
+        FUN_0042fdf0(0x117);
+        iVar4 = 0x54;
+        iVar3 = 0x120;
+        iVar7 = 0;
+        do {
+            FUN_00430200(0, iVar3 - 0xaf, iVar4, 2, 2, 2, 0, 4, 0xff);
+            FUN_00430200(0, iVar3 - 0xaf, 0, 2, 2, 1, 7, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x48376e) + iVar4);
+            FUN_0042fcf0();
+            FUN_00430200(0, iVar3, iVar4, 2, 2, 2, 0, 4, 0xff);
+            FUN_00430200(0, iVar3, 0, 2, 2, 1, 7, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x4837ca) + iVar7);
+            FUN_0042fcf0();
+            iVar7 = iVar7 + 1;
+            iVar3 = iVar3 + 0x12;
+            iVar4 = iVar4 + 1;
+        } while (iVar3 < 0x19e);
+        FUN_00430200(0, 0x1c2, 0xf, 2, 0, 1, 0, 1, 0xc);          /* "Back" → Name */
+        FUN_00430200(0, 0x1c2, 0x4a, 2, 0, 1, 0, 5, 0xff);
+        FUN_00430200(0, 0x1af, 0x48, 2, 0, 1, 0, 5, 0x10);         /* → page 0x10 */
+        FUN_0042fcb0();
+        DAT_004877c9 = 0xc;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x10: /* Name entry page 2 */
+        FUN_00430200(0, 10, 0x3f, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x32, 0x4c, 4, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x55, 0x52, 4, 2, 0, 0, 1, 0xff);
+        FUN_0042fdf0(0x68);
+        FUN_00430200(0, 0x104, 0x53, 4, 2, 0, 0, 1, 0xff);
+        FUN_0042fdf0(0x117);
+        iVar4 = 0x54;
+        iVar3 = 0x120;
+        iVar7 = 0;
+        do {
+            FUN_00430200(0, iVar3 - 0xaf, iVar4, 2, 2, 2, 0, 4, 0xff);
+            FUN_00430200(0, iVar3 - 0xaf, 0, 2, 2, 1, 7, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x48377e) + iVar4);
+            FUN_0042fcf0();
+            FUN_00430200(0, iVar3, iVar4, 2, 2, 2, 0, 4, 0xff);
+            FUN_00430200(0, iVar3, 0, 2, 2, 1, 7, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x4837da) + iVar7);
+            FUN_0042fcf0();
+            iVar7 = iVar7 + 1;
+            iVar3 = iVar3 + 0x12;
+            iVar4 = iVar4 + 1;
+        } while (iVar3 < 0x19e);
+        FUN_00430200(0, 0x1c2, 0xf, 2, 0, 1, 0, 1, 0xc);
+        FUN_00430200(0, 0x1c2, 0x4a, 2, 0, 1, 0, 4, 0xff);
+        FUN_00430200(0, 0x1af, 0x49, 2, 0, 1, 0, 4, 0xf);          /* → page 0x0F */
+        FUN_0042fcb0();
+        DAT_004877c9 = 0xc;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x11: /* Levels (scrollable list) */
+        FUN_00430200(0, 0x28, 2, 1, 0, 0, 0, 1, 0xff);             /* "Levels" heading */
+        FUN_00430200(0, 0x1ae, 0xf, 2, 0, 1, 0, 1, 0);             /* "Back" → main menu */
+        FUN_00430200(0, 400, 0xea, 2, 0, 1, 0, 1, 0x19);           /* → page 0x19 */
+        FUN_00430200(0, 0x50, 0x5c, 2, 2, 2, 0, 4, 0xff);          /* level name label */
+        FUN_00430200(0, 0x50, 0, 2, 2, 1, 9, 5, 0xff);             /* level name value */
+        FUN_0042fc90(CFG_ADDR(0x481f58));
+        FUN_0042fcf0();
+        if (g_MenuStrings && g_MenuStrings[0x71])
+            FUN_004644af(g_MenuStrings[0x71],
+                (const unsigned char *)"You have %d levels and %d GG themes");
+        FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
+        FUN_00430200(0, 100, 0x5d, 2, 2, 1, 0xc, 1, 0xff);         /* randomize */
+        FUN_0042fdf0(0x7e);
+        FUN_0042fdf0(0x182);
+        DAT_004877d4 = 0;
+        DAT_004877d8 = 0x212;
+        DAT_004877dc = 0x90;
+        DAT_004877e0 = 0xcc;
+        FUN_0042ff80(0x212, 0x90, 0x19d, 1, 10, 0, 0xff);          /* scroll up arrow */
+        iVar7 = DAT_004877e0 + 0x14 + DAT_004877dc;
+        goto scrollbar_common;
+
+    case 0x12: /* Players (scrollable list) */
+        FUN_00430200(0, 0x14, 3, 1, 0, 0, 0, 1, 0xff);             /* "Players" heading */
+        FUN_00430200(0, 0x1b8, 0xf, 2, 0, 1, 0, 1, 0);             /* "Back" → main menu */
+        FUN_00430200(0, 0x19a, 0xef, 2, 0, 1, 0, 1, 0x1a);         /* → page 0x1A */
+        DAT_004877ac = DAT_004877a8;
+        FUN_00430200(0, 0x2d, 0xed, 2, 2, 2, 0, 4, 0xff);          /* label */
+        FUN_00430200(0, 0x2d, 0, 2, 2, 1, 0x18, 5, 0xff);          /* value */
+        FUN_0042fc90(CFG_ADDR(0x48227c));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x41, 0xee, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0x41, 0x12f, 2, 2, 1, 0x33, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48227d));
+        FUN_0042fcf0();
+        FUN_00430200(0x32, 0x5a, 0x5e, 2, 1, 0, 0, 0, 0xff);      /* column headers */
+        FUN_00430200(0x6f, 0x5a, 0x60, 4, 1, 1, 0x20, 0, 0xff);
+        FUN_00430200(0xbe, 0x5a, 0x61, 2, 1, 1, 0x21, 0, 0xff);
+        FUN_00430200(0x104, 0x5a, 0x62, 4, 1, 1, 0x22, 0, 0xff);
+        FUN_00430200(0x142, 0x5a, 99, 2, 1, 1, 0x23, 0, 0xff);
+        FUN_00430200(0x19e, 0x5a, 0x5f, 4, 1, 1, 0x24, 0, 0xff);
+        DAT_004877d4 = 0;
+        DAT_004877d8 = 0x212;
+        DAT_004877dc = 0x6e;
+        DAT_004877e0 = 0x10e;
+        FUN_0042ff80(0x212, 0x6e, 0x19d, 1, 10, 0, 0xff);          /* scroll up arrow */
+        iVar7 = DAT_004877e0 + 0x14 + DAT_004877dc;
+    scrollbar_common:
+        FUN_0042ff80(DAT_004877d8, iVar7, 0x19e, 1, 0xb, 0, 0xff); /* scroll down arrow */
+        DAT_004877ac = DAT_004877a8;
+        DAT_004877b0 = 2;
+        DAT_004877c9 = 0;
+        g_FrameIndex = 0;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x13: /* Results screen (requires game state) */
+    case 0x14: /* Detailed statistics */
+    case 0x15: /* Game log */
+        /* These pages display post-game results. They need game state data
+         * that isn't available until Phase 6 gameplay is implemented.
+         * For now, redirect to main menu. */
+        DAT_004877a4 = 0;
+        DAT_004877b1 = 1;
+        return;
+
+    case 0x16: /* Color customization - team 1 */
+        FUN_00430200(0x78, 0x7d, 0xe2, 0, 0, 0, 0, 1, 0xff);
+        FUN_00430200(10, 10, 0xe6, 2, 0, 1, 0, 0, 0x17);
+        FUN_00430200(0x78, 0xe1, 0xe5, 1, 2, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
+        { /* Enforce minimum color values */
+            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
+            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            while (p < end) {
+                for (int j = 0; j < 3; j++) {
+                    if (*p < 4) *p = 4;
+                    p++;
+                }
+            }
+        }
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x17: /* Color customization - team 2 */
+        FUN_00430200(0x78, 200, 0xe3, 0, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0x140, 0xe1, 0xe6, 2, 0, 1, 0, 0, 0x18);
+        FUN_00430200(0x78, 0xe1, 0x5b, 1, 2, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
+        {
+            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
+            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            while (p < end) {
+                for (int j = 0; j < 3; j++) {
+                    if (*p < 8) *p = 8;
+                    p++;
+                }
+            }
+        }
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x18: /* Color customization - confirm */
+        FUN_00430200(0x78, 0x7d, 0xe4, 0, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0x78, 0x96, 0xe7, 2, 2, 0, 0, 1, 0xff);
+        FUN_00430200(0x78, 200, 0xe8, 1, 2, 0, 0, 1, 0xff);
+        FUN_00430200(0x78, 0xdc, 0xe9, 1, 2, 0, 0, 1, 0xff);
+        {
+            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
+            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            while (p < end) {
+                for (int j = 0; j < 3; j++) {
+                    if (*p < 0xe) *p = 0xe;
+                    p++;
+                }
+            }
+        }
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x19: /* Level settings */
+        FUN_00430200(0, 0x28, 0xea, 1, 0, 0, 0, 1, 0xff);          /* heading */
+        FUN_00430200(0, 0x50, 0xeb, 2, 2, 2, 0, 4, 0xff);
+        iVar7 = FUN_00430200(0, 0x50, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x481f59));
+        FUN_0042fcf0();
+        iVar7 = iVar7 + 0x5a;
+        FUN_00430200(0, iVar7, 0x1c, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x143, 2, 2, 1, 0x27, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x481f5a));
+        FUN_0042fcf0();
+        iVar7 = iVar7 + iVar3 + 10;
+        FUN_00430200(0, iVar7, 0xec, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0xe, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x481f5b));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0x11);          /* "Back" → Levels */
+        DAT_004877c9 = 0x11;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x1A: /* Player list (alternate view) */
+        FUN_00430200(0, 0x14, 3, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x1b8, 0xf, 2, 0, 1, 0, 1, 0);
+        DAT_004877ac = DAT_004877a8;
+        FUN_00430200(0, 0x2d, 0xed, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0x2d, 0, 2, 2, 1, 0x18, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48227c));
+        FUN_0042fcf0();
+        FUN_00430200(0, 0x41, 0xee, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 0x41, 0x12f, 2, 2, 1, 0x33, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48227d));
+        FUN_0042fcf0();
+        FUN_00430200(10, 0x5a, 0x5e, 2, 1, 0, 0, 0, 0xff);
+        FUN_00430200(0x6f, 0x5a, 0xf0, 4, 1, 1, 0x25, 0, 0xff);
+        DAT_004877d4 = 0;
+        DAT_004877d8 = 0x262;
+        DAT_004877dc = 0x6e;
+        DAT_004877e0 = 0x10e;
+        FUN_0042ff80(0x262, 0x6e, 0x19d, 1, 10, 0, 0xff);
+        FUN_0042ff80(DAT_004877d8, DAT_004877e0 + 0x14 + DAT_004877dc, 0x19e, 1, 0xb, 0, 0xff);
+        DAT_004877ac = DAT_004877a8;
+        DAT_004877b0 = 2;
+        DAT_004877c9 = 0x12;
+        g_FrameIndex = 0;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0x1B: /* Network settings */
+        FUN_00430200(0, 0x28, 0xfe, 1, 0, 0, 0, 1, 0xff);          /* "Network" heading */
+        FUN_00430200(0, 0x50, 0xb3, 2, 2, 2, 0, 4, 0xff);
+        iVar7 = FUN_00430200(0, 0x50, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483753));
+        FUN_0042fcf0();
+        iVar3 = FUN_00430200(0, iVar7 + 0x50, 0xb8, 0xb, 1, 0, 0, 4, 0xff);
+        iVar3 = iVar7 + 0x50 + iVar3;
+        iVar7 = FUN_00430200(0, iVar3, 0xd9, 2, 2, 1, 0x17, 4, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x483754));
+        items = (MenuItem *)g_GameViewData;
+        items[DAT_004877a8 - 1].width = 0x1B8;
+        iVar7 = FUN_0042fdf0(iVar3 + 8);
+        iVar7 = iVar3 + 0x10 + iVar7;
+        FUN_00430200(0, iVar7, 0x4f, 2, 2, 2, 0, 4, 0xff);
+        iVar4 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 0x16, 4, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483755));
+        FUN_0042fcf0();
+        iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 8);
+        iVar3 = iVar7 + iVar4 + 0x10 + iVar3;
+        FUN_00430200(0, iVar3, 0xbb, 2, 2, 2, 0, 4, 0xff);
+        iVar7 = FUN_00430200(0, iVar3, 0xbd, 2, 2, 1, 0x11, 5, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x483758));
+        FUN_0042fcf0();
+        FUN_00430200(0, iVar3, 0xbc, 2, 2, 2, 0, 4, 0xff);
+        iVar4 = FUN_00430200(0, iVar3, 0xbd, 2, 2, 1, 0x11, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483759));
+        FUN_0042fcf0();
+        iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
+        iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
+        iVar3 = FUN_00430200(0, iVar7, 0xc4, 0xb, 1, 0, 0, 4, 0xff);
+        FUN_00430200(0, iVar7 + iVar3, 0xc5, 2, 2, 1, 0xf, 4, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48375b));
+        items = (MenuItem *)g_GameViewData;
+        items[DAT_004877a8 - 1].width = 0x1B8;
+        FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
         DAT_004877b1 = 0;
         return;
 
@@ -1445,38 +2131,114 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
+    case 0x1D: /* Reset defaults */
+        FUN_00425840();
+        DAT_004877b1 = 0;
+        return;
+
     case 0x1E: /* Start match */
+        DAT_0048764a = 1;
         g_GameState = 0x04;
         DAT_004877b1 = 0;
         return;
 
+    case 0x1F: /* Game settings */
+        FUN_00430200(0, 0x28, 0x3d, 1, 0, 0, 0, 1, 0xff);          /* "Game" heading */
+        FUN_00430200(0, 0x50, 0x9a, 2, 2, 2, 0, 4, 0xff);
+        iVar7 = FUN_00430200(0, 0x50, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48373e));
+        FUN_0042fcf0();
+        iVar3 = FUN_00430200(0, iVar7 + 0x5a, 0x9b, 0xb, 1, 0, 0, 4, 0xff);
+        iVar3 = iVar7 + 0x5a + iVar3;
+        FUN_00430200(0, iVar3, 0x9c, 2, 2, 2, 0, 4, 0xff);
+        iVar4 = FUN_00430200(0, iVar3, 0xf2, 2, 2, 1, 0x12, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x48373f));
+        FUN_0042fcf0();
+        iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
+        iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
+        FUN_00430200(0, iVar7, 0x9d, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0xa4, 2, 2, 1, 0x10, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483740));
+        FUN_0042fcf0();
+        iVar3 = iVar7 + iVar3 + 10;
+        iVar7 = FUN_00430200(0, iVar3, 0x9e, 0xb, 1, 0, 0, 4, 0xff);
+        iVar3 = iVar3 + iVar7;
+        iVar7 = FUN_00430200(0, iVar3, 0x9f, 2, 2, 1, 0xf, 4, 0xff);
+        iVar3 = iVar3 + iVar7;
+        FUN_0042fc90(CFG_ADDR(0x483741));
+        items = (MenuItem *)g_GameViewData;
+        items[DAT_004877a8 - 1].width = 0x1B8;
+        iVar7 = FUN_0042fdf0(iVar3 + 8);
+        iVar7 = iVar3 + 0x10 + iVar7;
+        FUN_00430200(0, iVar7, 0xb2, 2, 2, 2, 0, 4, 0xff);
+        iVar3 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483742));
+        FUN_0042fcf0();
+        iVar3 = iVar7 + iVar3 + 10;
+        FUN_00430200(0, iVar3, 0xfb, 2, 2, 2, 0, 4, 0xff);
+        iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483743));
+        FUN_0042fcf0();
+        iVar3 = iVar3 + iVar7 + 10;
+        iVar7 = FUN_00430200(0, iVar3, 0xd3, 0xb, 1, 0, 0, 4, 0xff);
+        iVar3 = iVar3 + iVar7;
+        iVar7 = FUN_00430200(0, iVar3, 0xd4, 2, 2, 1, 0xf, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483744));
+        iVar7 = iVar3 + iVar7 + 10;
+        items = (MenuItem *)g_GameViewData;
+        items[DAT_004877a8 - 1].width = 0x1B8;
+        FUN_00430200(0, iVar7, 0xfa, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 1, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483745));
+        FUN_0042fcf0();
+        uVar11 = 0x1a4;
+    back_to_options:
+        FUN_00430200(0, uVar11, 0xf, 2, 0, 1, 0, 1, 1);            /* "Back" → Options */
+        DAT_004877c9 = 1;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+
     case 0xFE: /* Exit - save options and shutdown */
-        LOG("[MENU] Page 0xFE: Saving options, shutting down\n");
         Save_Options_Config();
         g_GameState = 0xFE;
         DAT_004877b1 = 0;
         return;
 
     default:
-        /* Unknown/unimplemented page - log and stay on current page */
-        LOG("[MENU] Page 0x%02X: not yet implemented\n", DAT_004877a4);
-        DAT_004877a8 = 0;
+        DAT_004877d8 = 0;
+        DAT_004877cc = 0;
         g_FrameIndex = 0;
+        DAT_004877a8 = 0;
         DAT_004877b1 = 0;
         return;
     }
+
+    /* Post-switch: shared code for key binding pages (cases 8, 0x0A, 0x0B) */
+    FUN_00430200(0, 0x196, iVar7, 2, 0, 1, 0, uVar12, uVar13);
+    FUN_0042fcb0();
+    DAT_004877c9 = 1;
+    g_FrameIndex = 1;
+    DAT_004877b1 = 0;
 }
 
 /* ===== FUN_00427df0 - Menu item click handler (00427DF0) ===== */
 /* Handles click on a menu item. For items with a nav_target,
  * navigates to that page. For value items, cycles the value.
  * param_1: item index, param_2: 1=primary click, 0=secondary */
+
+/* Scroll speed constant (original: DAT_004756c8 = 0x3AC9A634 as IEEE754 float) */
+static const float SCROLL_SPEED_K = 0.001539f;
+
 void FUN_00427df0(int param_1, char param_2)
 {
     if (!g_GameViewData) return;
 
     MenuItem *items = (MenuItem *)g_GameViewData;
     MenuItem *item = &items[param_1];
+
+    /* Click direction: +1 for primary (left), -1 for secondary (right) */
+    char cVar9 = (char)((-(param_2 != 1) & 0xFE) + 1);
 
     /* Navigation: if nav_target != 0xFF, switch to that page */
     if (item->nav_target != 0xFF) {
@@ -1485,19 +2247,389 @@ void FUN_00427df0(int param_1, char param_2)
         return;
     }
 
-    /* Sprite items: scroll arrows (render_mode 0x0A=up, 0x0B=down) */
+    /* Sprite items: scroll arrows for scrollable pages */
     if (item->type == 1) {
-        /* TODO: Scrollbar scroll up/down */
+        float fVar3;
+        if (DAT_004877a4 == 0x11) {
+            int iVar4 = (int)(g_ConfigBlob[0] & 0xFF) - 0x0F;
+            fVar3 = (float)((iVar4 + ((unsigned)(iVar4 >> 31) >> 29)) >> 3);
+        } else if (DAT_004877a4 == 0x12) {
+            fVar3 = (float)(((int)(g_ConfigBlob[0x324] & 0xFF) - 10) / 6);
+        } else if (DAT_004877a4 == 0x1A) {
+            fVar3 = (float)(((int)(g_ConfigBlob[0x324] & 0xFF) - 3) / 2);
+        } else if (DAT_004877a4 == 0x14) {
+            fVar3 = (float)(((int)(g_ConfigBlob[0x324] & 0xFF) - 7) / 5);
+        } else {
+            fVar3 = 1.0f;
+        }
+        if (fVar3 <= 0.0f) fVar3 = 1.0f;
+
+        unsigned char rm = item->render_mode;
+        if (rm == 0x0A) { /* Scroll up */
+            DAT_004877ec = 1;
+            DAT_004877bd ^= 1;
+            DAT_004877d4 -= ((float)DAT_004877f0 * SCROLL_SPEED_K) / fVar3;
+            if (DAT_004877d4 < 0.0f) DAT_004877d4 = 0.0f;
+            DAT_004877b0 = 2;
+        } else if (rm == 0x0B) { /* Scroll down */
+            DAT_004877ec = 1;
+            DAT_004877bd ^= 1;
+            DAT_004877d4 += ((float)DAT_004877f0 * SCROLL_SPEED_K) / fVar3;
+            if (DAT_004877d4 > 1.0f) DAT_004877d4 = 1.0f;
+            DAT_004877b0 = 2;
+        }
+    }
+
+    /* Non-text items: bail out (catches type==1 after scroll, and any other) */
+    if (item->type != 0) return;
+
+    /* Text items: value cycling based on render_mode */
+    unsigned char *data = (unsigned char *)(uintptr_t)item->extra_data;
+    unsigned char bVar11 = item->render_mode;
+
+    switch (bVar11) {
+    case 1: { /* Toggle (0↔1) */
+        *data = (*data == 0) ? 1 : 0;
+        /* Key binding pages: flag1==0xFA means this toggles a key enable/disable */
+        if (item->flag1 == 0xFA) {
+            unsigned char *keyBindings = &g_ConfigBlob[0x1776]; /* DAT_004836ce */
+            unsigned char *keyEnabled  = &g_ConfigBlob[0x1804]; /* DAT_0048375c */
+            unsigned int scanCode = (unsigned int)item->height;
+            for (int i = 0; i < 0x40; i++) {
+                if (keyEnabled[scanCode] == 0) {
+                    if ((unsigned char)keyBindings[i] == (unsigned char)scanCode) {
+                        FUN_004265e0(i);
+                    }
+                } else {
+                    if (keyBindings[i] == 0x2F) { /* '/' = unbound marker */
+                        FUN_004265e0(i);
+                    }
+                }
+            }
+            /* If key was disabled, clear its entries in action map */
+            if (keyEnabled[scanCode] == 0) {
+                unsigned char *actionMap = &g_ConfigBlob[0x47A]; /* DAT_004823d2 */
+                for (int off = 0x3C; off < 0xF00; off += 0x3C) {
+                    actionMap[scanCode + off] = 0;
+                }
+                return;
+            }
+        }
+        break;
+    }
+
+    case 2: { /* Multi-state cycle: 1 ↔ 0x28 ↔ 0x1E ↔ 0x0A ↔ 4 */
+        unsigned char val = *data;
+        if (cVar9 != -1) { /* Forward (primary click) */
+            if (val == 1) *data = 0x28;
+            else if (val == 0x28) *data = 0x1E;
+            else if (val == 0x1E) *data = 0x0A;
+            else if (val == 0x0A) *data = 4;
+            else *data = 1; /* default/wrap: 4 → 1, unknown → 1 */
+        } else { /* Backward (secondary click) */
+            if (val == 1) *data = 4;
+            else if (val == 4) *data = 0x0A;
+            else if (val == 0x0A) *data = 0x1E;
+            else if (val == 0x1E) *data = 0x28;
+            else *data = 1; /* default/wrap: 0x28 → 1, unknown → 1 */
+        }
         return;
     }
 
-    /* Text items: value cycling based on render_mode */
-    /* TODO: Phase 3 - implement value cycling for options page
-     * render_mode cases: 1=toggle, 2=multi-state, 3=inc/dec(0-4),
-     * 4=inc/dec(0-2), 5/9/0xE/0x13-0x16/0x18/0x1B/0x34=input mode,
-     * 7=text entry, 8=level select, 0x0C=randomize, 0x0D=display mode,
-     * 0x20-0x25=game setup randomization, 0x26=key binding toggle,
-     * 0x2B-0x2F=game mode config */
+    case 3: { /* Decrement with wrap 1-4 */
+        unsigned char val = *data - cVar9;
+        *data = val;
+        if (val == 0) { *data = 4; return; }
+        if (val > 4) { *data = 1; return; }
+        break;
+    }
+
+    case 4: { /* Increment with wrap 0-2 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 2; return; }
+        if (val >= 3) { *data = 0; return; }
+        break;
+    }
+
+    case 5: case 9: case 0x0E:
+    case 0x13: case 0x14: case 0x15: case 0x16:
+    case 0x18: case 0x1B: case 0x34:
+    { /* Enter slider/drag input mode */
+        if ((DAT_004877bd & 1) != 0) {
+            DAT_004877bd ^= 1;
+        }
+        if (g_InputMode == 0) {
+            DAT_004877e6 = (unsigned char)param_1;
+            g_InputMode = 1;
+            DAT_004877e8 = 0;
+            return;
+        }
+        break;
+    }
+
+    case 7: /* Key-bind capture mode */
+        g_InputMode = 2;
+        DAT_004877e6 = (unsigned char)param_1;
+        DAT_004877e8 = (int)*data;
+        return;
+
+    case 8: { /* Level/map cycle */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) {
+            *data = (unsigned char)(DAT_00485088 - 1);
+            return;
+        }
+        if ((int)(unsigned int)val >= DAT_00485088) {
+            *data = 0;
+            return;
+        }
+        break;
+    }
+
+    case 0x0C: { /* Randomize level order */
+        int *levelOrder = (int *)&g_ConfigBlob[4]; /* DAT_00481f5c */
+        int totalMaps = DAT_00485088;
+        int ggThemes = DAT_0048508c;
+        unsigned char threshold = g_ConfigBlob[3]; /* high byte of first config dword */
+        int numEntries = (0x48227c - 0x481f5c) / 4; /* 200 level slots */
+        for (int i = 0; i < numEntries; i++) {
+            if (totalMaps <= ggThemes ||
+                ((int)threshold <= rand() % 100 && ggThemes != 0)) {
+                if (ggThemes > 0) levelOrder[i] = rand() % ggThemes;
+            } else {
+                int custom = totalMaps - ggThemes;
+                if (custom > 0) levelOrder[i] = rand() % custom + ggThemes;
+            }
+        }
+        return;
+    }
+
+    case 0x0D: { /* Resolution cycle */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) {
+            *data = (unsigned char)(g_NumDisplayModes - 1);
+            return;
+        }
+        if ((int)(unsigned int)val >= g_NumDisplayModes) {
+            *data = 0;
+            return;
+        }
+        break;
+    }
+
+    case 0x0F: { /* Cycle 0-4 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 4; return; }
+        if (val >= 5) { *data = 0; return; }
+        break;
+    }
+
+    case 0x10: { /* Cycle 0-13 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 0x0D; return; }
+        if (val >= 0x0E) { *data = 0; return; }
+        break;
+    }
+
+    case 0x11: { /* Cycle 0-5 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 5; return; }
+        if (val > 5) { *data = 0; return; }
+        break;
+    }
+
+    case 0x12: { /* Cycle 0-7 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 7; return; }
+        if (val > 7) { *data = 0; return; }
+        break;
+    }
+
+    case 0x17: { /* Cycle 0-3 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 3; return; }
+        if (val >= 4) { *data = 0; return; }
+        break;
+    }
+
+    case 0x1C: { /* Cycle 0-2 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 2; return; }
+        if (val >= 3) { *data = 0; return; }
+        break;
+    }
+
+    case 0x1D: { /* Cycle 0-8 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 8; return; }
+        if (val >= 9) { *data = 0; return; }
+        break;
+    }
+
+    case 0x1E: { /* Simple toggle 0↔1 */
+        *data = (*data == 0) ? 1 : 0;
+        return;
+    }
+
+    case 0x1F: { /* Cycle 0-4 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 4; return; }
+        if (val >= 5) { *data = 0; return; }
+        break;
+    }
+
+    case 0x20: case 0x21: case 0x22:
+    case 0x23: case 0x24: case 0x25:
+    { /* Game setup - enter input mode 3 */
+        DAT_004877e8 = 0;
+        g_InputMode = 3;
+        DAT_004877e6 = (unsigned char)param_1;
+        break;
+    }
+
+    case 0x26: { /* Key binding toggle with auto-assignment */
+        unsigned char wasZero = (*data == 0) ? 1 : 0;
+        *data = wasZero;
+        unsigned char *keyBindings = &g_ConfigBlob[0x1776]; /* DAT_004836ce */
+        unsigned char actionIdx = item->flag1;
+        if (wasZero) {
+            /* Toggled on: if binding is unbound, auto-assign */
+            if (keyBindings[actionIdx] == 0x2F) {
+                FUN_004265e0((int)actionIdx);
+                return;
+            }
+        } else {
+            /* Toggled off: if scan code matches binding, reassign */
+            unsigned int scanCode = (unsigned int)item->height;
+            if (scanCode == (unsigned int)keyBindings[actionIdx]) {
+                FUN_004265e0((int)actionIdx);
+                return;
+            }
+        }
+        break;
+    }
+
+    case 0x27: { /* Cycle 0-3 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 3; return; }
+        if (val >= 4) { *data = 0; return; }
+        break;
+    }
+
+    case 0x2B: { /* Increment game counter */
+        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        (*counter)++;
+        DAT_004877b1 = 1;
+        return;
+    }
+
+    case 0x2C: { /* Decrement game counter */
+        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        (*counter)--;
+        DAT_004877b1 = 1;
+        return;
+    }
+
+    case 0x2D: { /* Cycle game mode (DAT_004837e8: 0-2) */
+        int *mode    = (int *)&g_ConfigBlob[0x1890]; /* DAT_004837e8 */
+        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        if (cVar9 == -1) {
+            (*mode)--;
+            *counter = 0;
+            if (*mode < 0) {
+                *mode = 2;
+                DAT_004877b1 = 1;
+                return;
+            }
+        } else {
+            (*mode)++;
+            if (*mode > 2) {
+                *mode = 0;
+            }
+        }
+        *counter = 0;
+        DAT_004877b1 = 1;
+        return;
+    }
+
+    case 0x2E: { /* Modify game config array value */
+        int *mode      = (int *)&g_ConfigBlob[0x1890]; /* DAT_004837e8 */
+        int *toggle    = (int *)&g_ConfigBlob[0x188C]; /* DAT_004837e4 */
+        int *configArr = (int *)&g_ConfigBlob[0x1898]; /* DAT_004837f0 */
+        int *limitArr  = (int *)&g_ConfigBlob[0x18B0]; /* DAT_00483808 */
+        int *counter   = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        int idx = *mode + *toggle * 3;
+        if (cVar9 == -1) {
+            if (configArr[idx] > 0) {
+                configArr[idx]--;
+                *counter = 0;
+                DAT_004877b1 = 1;
+                return;
+            }
+        } else {
+            if (configArr[idx] < limitArr[idx]) {
+                configArr[idx]++;
+                *counter = 0;
+                DAT_004877b1 = 1;
+                return;
+            }
+        }
+        break;
+    }
+
+    case 0x2F: { /* Toggle team selection (DAT_004837e4) */
+        int *toggle  = (int *)&g_ConfigBlob[0x188C]; /* DAT_004837e4 */
+        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        *toggle = (*toggle == 0) ? 1 : 0;
+        *counter = 0;
+        DAT_004877b1 = 1;
+        return;
+    }
+
+    case 0x30: { /* Cycle 0-6 */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) { *data = 6; return; }
+        if (val > 6) { *data = 0; return; }
+        break;
+    }
+
+    case 0x33: { /* Cycle 0-4 with player config update */
+        unsigned char val = *data + cVar9;
+        *data = val;
+        if (val == 0xFF) *data = 4;
+        else if (val > 4) *data = 0;
+        /* Update player enable flags based on player count */
+        unsigned char playerCount = g_ConfigBlob[0x325]; /* byte at DAT_0048227c+1 */
+        unsigned char *playerEnable = &g_ConfigBlob[0x376]; /* DAT_004822ce */
+        int i = 0;
+        if (playerCount != 0) {
+            do {
+                playerEnable[i] = 1;
+                i++;
+            } while (i < (int)(unsigned int)playerCount);
+        }
+        if ((unsigned int)playerCount < 0x40) {
+            memset(&playerEnable[playerCount], 0, 0x40 - playerCount);
+        }
+        return;
+    }
+
+    default:
+        break;
+    }
 }
 
 /* ===== FUN_00427a70 - Input mode key assignment (00427A70) ===== */
