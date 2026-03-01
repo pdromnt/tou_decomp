@@ -176,6 +176,7 @@ extern void                 *DAT_00487ab8;      /* tile edge sprite table */
 extern void                 *DAT_004876a0;      /* spawn point array (0xc00, stride 0xc) */
 extern void                 *DAT_00487aa0;      /* decoration array (0x800, stride 0x10) */
 extern void                 *DAT_00489e80;      /* wall segment array (16 * 0x20) */
+extern void                 *DAT_00489e7c;      /* fluid source array (5000 * 0x20) */
 extern unsigned short        DAT_0048384e;      /* laser pixel color A */
 extern unsigned short        DAT_00483850;      /* laser pixel color B */
 
@@ -292,6 +293,7 @@ extern void                 *DAT_00487820;      /* edge/boundary navigation data
 extern int                   DAT_00487a0c;      /* swap width */
 extern int                   DAT_00487a10;      /* swap height */
 extern unsigned short        DAT_0048384c;      /* tile fill color */
+extern unsigned short        DAT_00480700;      /* turret tile color temp */
 extern char                  DAT_0048396d;      /* generated-map flag */
 extern char                  DAT_00483960;      /* swap-file enabled flag */
 extern char                 *DAT_00486938;      /* current level name pointer */
@@ -333,6 +335,7 @@ extern char                  DAT_004892a4;       /* team victory flag */
 extern char                  DAT_004892a5;       /* activation flag */
 extern int                   DAT_00487834[12];   /* entity tracking counters */
 extern float                 DAT_004892d0;       /* water level / weather effect */
+extern float                 DAT_0048385c;       /* weather/temperature threshold */
 
 /* ===== Entity Behavior (entity.cpp) ===== */
 extern int  DAT_00486fa8[16];       /* per-player distance traveled */

@@ -264,7 +264,7 @@ static void FUN_0044bf20(int base, int player_idx)
 
 /* ===== FUN_0044bfa0 — Thrust_Application ===== */
 /* Applies thrust acceleration in the heading direction using sin/cos LUT.
- * Also spawns engine exhaust particles (simplified: skip particles for now). */
+ * Spawns engine exhaust particles behind the ship at regular intervals. */
 static void FUN_0044bfa0(int *ent, int player_idx)
 {
     int heading = ent[6];  /* +0x18: heading angle 0-0x7FF */
@@ -287,7 +287,46 @@ static void FUN_0044bfa0(int *ent, int player_idx)
     unsigned char fire_interval = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x2E);
     if (counter == (char)fire_interval) {
         *(char *)(ent + 7) = 0;
-        /* Exhaust particle spawning — skip for now (visual only) */
+
+        /* Check collision bitmap: only spawn if in viewport area (bit 0x08) */
+        if (DAT_00487814 != NULL) {
+            int gx = ent[0] >> 0x16;
+            int gy = ent[1] >> 0x16;
+            if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
+                if ((((unsigned char *)DAT_00487814)[gy * DAT_004879f8 + gx] & 0x08) != 0) {
+                    /* COMPAT: Original creates complex entity particles (DAT_004892e8) for
+                     * type 0 ships, requiring entity type definitions and Entity_Debris_Animation.
+                     * We create simple fire particles (DAT_00481f34) for all exhaust types,
+                     * which use the existing particle update/render pipeline. */
+                    if (DAT_00489250 < 2000) {
+                        unsigned int rev = (heading - 0x400) & 0x7FF;    /* reverse heading */
+                        int r = rand();
+                        unsigned int spread = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
+
+                        int *part = (int *)((int)DAT_00481f34 + DAT_00489250 * 0x20);
+
+                        /* Position: behind the ship (reverse heading * 8) */
+                        part[0] = ent[0] + lut[rev] * 8;
+                        part[1] = ent[1] + lut[(rev + 0x200) & 0x7FF] * 8;
+
+                        /* Velocity: ship velocity + random backwards spread */
+                        part[2] = (lut[spread] * 0x14 >> 5) + ent[4];
+                        part[3] = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+
+                        /* Particle properties */
+                        int r2 = rand();
+                        int spr_type = (r2 & 1) + 5;  /* sprite 5 or 6 (fire) */
+                        *(unsigned char *)((int)part + 0x10) = (unsigned char)spr_type;
+                        *(unsigned char *)((int)part + 0x11) = 4;     /* start frame */
+                        *(unsigned char *)((int)part + 0x12) = 0;     /* sub-frame */
+                        *(unsigned char *)((int)part + 0x13) = 0xC5;  /* fire behavior */
+                        *(unsigned char *)((int)part + 0x14) = 0xFF;  /* no owner */
+                        *(unsigned char *)((int)part + 0x15) = 0;     /* color palette 0 */
+                        DAT_00489250++;
+                    }
+                }
+            }
+        }
     }
 }
 
