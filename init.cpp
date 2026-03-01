@@ -515,7 +515,45 @@ void FUN_0041eae0(void)
 void FUN_004265e0(int index) { (void)index; } /* Key binding auto-assign - stub */
 /* FUN_0045a060 moved to effects.cpp */
 /* FUN_0045b2a0 moved to effects.cpp */
-void FUN_0041fc10(void) {}
+/* ===== FUN_0041fc10 - Init fire/smoke particle sprite table (0041FC10) ===== */
+/* Fills DAT_00487ab8 with hardcoded sprite animation configs.
+ * Each entry is 8 bytes: int base_sprite_idx at +0, ushort frame_limit at +4.
+ * Sprite types 0x00-0x1A map to grayscale sprite indices (base + 500 in renderer). */
+void FUN_0041fc10(void) {
+    int *t = (int *)DAT_00487ab8;
+    if (!t) return;
+    /* Entry format: t[N*2] = base_sprite, *(ushort*)(t + N*2 + 1) = frame_limit */
+    /* Entries 0-8: small fire/smoke particles */
+    t[0]  = 2; *(unsigned short *)(t + 1)  = 4;   /* type 0 */
+    t[2]  = 3; *(unsigned short *)(t + 3)  = 4;   /* type 1 */
+    t[4]  = 4; *(unsigned short *)(t + 5)  = 5;   /* type 2 */
+    t[6]  = 5; *(unsigned short *)(t + 7)  = 5;   /* type 3 */
+    t[8]  = 6; *(unsigned short *)(t + 9)  = 6;   /* type 4 */
+    t[10] = 7; *(unsigned short *)(t + 11) = 6;   /* type 5 */
+    t[12] = 8; *(unsigned short *)(t + 13) = 6;   /* type 6 */
+    t[14] = 0; *(unsigned short *)(t + 15) = 6;   /* type 7 */
+    t[16] = 1; *(unsigned short *)(t + 17) = 6;   /* type 8 */
+    /* Entries 9-11: unused (zero from calloc) */
+    /* Entries 12-17: fire damage particles (0x0C-0x11), frame_limit=180 */
+    t[24] = 6; *(unsigned short *)(t + 25) = 0xb4; /* type 0x0C */
+    t[26] = 7; *(unsigned short *)(t + 27) = 0xb4; /* type 0x0D */
+    t[28] = 8; *(unsigned short *)(t + 29) = 0xb4; /* type 0x0E */
+    t[30] = 6; *(unsigned short *)(t + 31) = 0xb4; /* type 0x0F */
+    t[32] = 7; *(unsigned short *)(t + 33) = 0xb4; /* type 0x10 */
+    t[34] = 8; *(unsigned short *)(t + 35) = 0xb4; /* type 0x11 */
+    /* Entries 18-21: emitter smoke particles (0x12-0x15), frame_limit=9 */
+    t[36] = 0; *(unsigned short *)(t + 37) = 9;   /* type 0x12 */
+    t[38] = 1; *(unsigned short *)(t + 39) = 9;   /* type 0x13 */
+    t[40] = 2; *(unsigned short *)(t + 41) = 9;   /* type 0x14 */
+    t[42] = 3; *(unsigned short *)(t + 43) = 9;   /* type 0x15 */
+    /* Entries 22-23: medium smoke (0x16-0x17), frame_limit=13 */
+    t[44] = 4; *(unsigned short *)(t + 45) = 0x0d; /* type 0x16 */
+    t[46] = 5; *(unsigned short *)(t + 47) = 0x0d; /* type 0x17 */
+    /* Entries 24-26: large smoke (0x18-0x1A), frame_limit=17 */
+    t[48] = 6; *(unsigned short *)(t + 49) = 0x11; /* type 0x18 */
+    t[50] = 7; *(unsigned short *)(t + 51) = 0x11; /* type 0x19 */
+    t[52] = 8; *(unsigned short *)(t + 53) = 0x11; /* type 0x1A */
+}
 void FUN_0041fe70(void) {}  /* Entity AI function pointers - not needed for intro rendering */
 void FUN_0041f900(void) {}
 void FUN_00422a10(void) {}

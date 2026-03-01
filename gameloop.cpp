@@ -341,18 +341,18 @@ static void Gameplay_Tick(void)
             DAT_004892a5 = 1;
         }
 
-        /* ---- Subsystem calls (stubbed, decompiled individually later) ---- */
-        FUN_00460d50();                          /* input/control */
-        FUN_004609e0();                          /* physics step 1 */
+        /* ---- Subsystem calls ---- */
+        FUN_00460d50();                          /* 1-RoundTimer */
+        FUN_004609e0();                          /* 2-SpatialGrid */
         if ((DAT_00489288 & 1) == 0) {
-            FUN_00460660();                      /* half-rate: physics step 2 / AI */
+            FUN_00460660();                      /* 3-CollisionBitmap (half-rate) */
         }
-        FUN_00460ac0();                          /* collision */
-        FUN_00413720();                          /* entity logic */
-        FUN_00454340();                          /* projectile update */
-        FUN_0044b0b0();                          /* AI behavior */
-        FUN_00434310();                          /* weapon/terrain */
-        FUN_004527e0();                          /* sound update */
+        FUN_00460ac0();                          /* 4-RelocateEdge */
+        FUN_00413720();                          /* 5-Spawner */
+        FUN_00454340();                          /* 6-Emitters */
+        FUN_0044b0b0();                          /* 7-EntityBehavior */
+        FUN_00434310();                          /* 8-DebrisAnim */
+        FUN_004527e0();                          /* 9-Projectiles */
 
         /* Inline: effect/particle rotation and timer decrement */
         {
@@ -365,33 +365,32 @@ static void Gameplay_Tick(void)
             }
         }
 
-        FUN_00454b00();                          /* animation */
-        FUN_00458010();                          /* AI targeting */
-        FUN_00453cd0();                          /* map logic */
-        FUN_00455d50();                          /* bullet update */
-        FUN_004571f0();                          /* explosion/damage */
-        FUN_00453a80();                          /* item/pickup */
-        FUN_004573e0();                          /* particle system */
+        FUN_00454b00();                          /* 11-Turrets */
+        FUN_00458010();                          /* 12-TurretLOS */
+        FUN_00453cd0();                          /* 13-ParticlePhys */
+        FUN_00455d50();                          /* 14-BulletCollide */
+        FUN_004571f0();                          /* 15-Explosion */
+        FUN_00453a80();                          /* 16-ItemAI */
+        FUN_004573e0();                          /* 17-TrapDoor */
 
         /* Conditional: turret sound */
         if (DAT_00483834 != 0) {
-            FUN_004133d0('\0');
+            FUN_004133d0('\0');                   /* 18-TurretBehavior */
         }
 
         /* Conditional: trooper-related + round-end check */
         if (DAT_00483835 != 0) {
             if ((DAT_00489288 & 1) == 0) {
-                FUN_004533d0();
+                FUN_004533d0();                  /* 19-Elevators */
             }
             if (DAT_00489288 == 0) {
                 /* Every 8th tick: round-end check causes early return */
-                FUN_00453230();
+                FUN_00453230();                  /* 20-WaypointCheck */
                 return;
             }
         }
-
-        FUN_0045fc00();                          /* score/stat update */
-        FUN_0045e2c0();                          /* network sync */
+        FUN_0045fc00();                          /* 21-FluidSpread */
+        FUN_0045e2c0();                          /* 22-Deaths */
 
         /* Inline: health clamping for specific game modes */
         if (DAT_004892a8 == 1) {
@@ -518,9 +517,11 @@ void Game_Update_Render(void)
     }
 
     /* ---- Game logic update ---- */
+    LOG("[FRAME] pre-tick\n");
     switch (g_SubState) {
     case 0:   /* Active gameplay */
         Gameplay_Tick();
+        LOG("[FRAME] post-tick\n");
         break;
 
     case 4:   /* Level preview / waiting for Enter */
@@ -543,12 +544,9 @@ void Game_Update_Render(void)
     }
 
     /* ---- Rendering ---- */
-    /* Original: locks DDraw surface, calls FUN_00407720() (game world renderer),
-     * blits to back buffer, flips.
-     * COMPAT: Render_Frame() copies Software_Buffer to DDraw surface.
-     * Since FUN_00407720 (game world renderer) is not yet implemented,
-     * Software_Buffer still contains the last menu background/content. */
+    LOG("[FRAME] pre-render\n");
     Render_Frame();
+    LOG("[FRAME] post-render\n");
 
     /* ---- Frame rate limiter (~60fps) ---- */
     {

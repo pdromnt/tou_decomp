@@ -119,6 +119,7 @@ void Init_Memory_Pools(void)
     ALLOC_POOL(DAT_00481f28, 0x3200);
     ALLOC_POOL(DAT_00489e98, 0x40);
     ALLOC_POOL(DAT_00487780, 800);
+    ALLOC_POOL(DAT_00487830, 0xc80);   /* Debris/item pickup array (100 x 0x20) */
     ALLOC_POOL(DAT_00487818, 0x140);
 
     /* Physics params - 80 bytes */
@@ -128,6 +129,9 @@ void Init_Memory_Pools(void)
     /* Entity config - 40 bytes */
     g_EntityConfig = (int *)Mem_Alloc(0x100);
     g_MemoryTracker += 0x100;
+
+    /* Fire/smoke particle sprite animation config - 30 entries x 8 bytes */
+    ALLOC_POOL(DAT_00487ab8, 0xf0);
 
     /* Software_Buffer: 640x480x16bit x 3 frames */
     Software_Buffer = (unsigned short *)Mem_Alloc(0x1c2000);

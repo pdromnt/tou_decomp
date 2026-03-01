@@ -125,6 +125,8 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     if (!DAT_00481f50 || DAT_004879f0 == 0 || DAT_004879f4 == 0)
         return;
 
+    LOG("[RGW] enter\n");
+
     unsigned short *src = (unsigned short *)DAT_00481f50;
     int shift = DAT_00487a18 & 0x1F;
 
@@ -256,6 +258,8 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         }
     }
 
+    LOG("[RGW] sky-fill done\n");
+
     /* Blit level background from stride-aligned source to screen buffer.
      * Zero pixels (0x0000) in the level background represent empty/sky areas.
      *
@@ -296,17 +300,30 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         }
     }
 
+    LOG("[RGW] viewport-blit done\n");
+
     /* Entity rendering subsystems (original order from FUN_00407720) */
+    LOG("[RENDER] R1-turrets\n");
     FUN_0040dbd0((int)buffer, stride);       /* Static entities (turrets) */
+    LOG("[RENDER] R2-troopers\n");
     FUN_0040dce0((int)buffer, stride);       /* Dynamic entities (troopers) */
+    LOG("[RENDER] R3-entities\n");
     FUN_0040bb60((unsigned int)buffer, stride); /* Main entities (items/ships) */
+    LOG("[RENDER] R4-projectiles\n");
     FUN_0040a870((int)buffer, stride);       /* Projectiles */
+    LOG("[RENDER] R5-explosions\n");
     FUN_0040d6c0((int)buffer, stride);       /* Explosions */
+    LOG("[RENDER] R6-debris\n");
     FUN_0040d810((int)buffer, stride);       /* Debris/particles */
+    LOG("[RENDER] R7-player\n");
     FUN_0040caf0((int)buffer, stride);       /* Player/ship */
+    LOG("[RENDER] R8-misc\n");
     FUN_0040d930((int)buffer, stride);       /* Misc effects (glow/smoke) */
+    LOG("[RENDER] R9-fire\n");
     FUN_0040d360((int)buffer, stride);       /* Edge tiles/detail */
+    LOG("[RENDER] R10-fog\n");
     FUN_0040d100((int)buffer, stride);       /* Darkness/fog overlay */
+    LOG("[RENDER] done\n");
 }
 
 /* ===== Render_Frame (0045D800) ===== */

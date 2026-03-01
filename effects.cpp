@@ -1615,8 +1615,14 @@ void FUN_0040d360(int param_1, int param_2)
                     src_idx -= spr_w * screen_y;
                     dst += -(screen_y * param_2);
                     spr_h = spr_h + screen_y;
+                    if ((int)spr_h <= 0) goto next_fire_particle;
+                    /* Also clip bottom if sprite still extends past viewport */
+                    if (DAT_004806e4 < (int)spr_h) {
+                        spr_h = (unsigned int)DAT_004806e4;
+                    }
                 } else if (DAT_004806e4 < (int)(spr_h + screen_y)) {
                     spr_h = DAT_004806e4 - screen_y;
+                    if ((int)spr_h <= 0) goto next_fire_particle;
                 }
 
                 /* Clip left */
@@ -1627,11 +1633,13 @@ void FUN_0040d360(int param_1, int param_2)
                     left_clip = -screen_x;
                     dst_skip = (param_2 - spr_w) - screen_x;
                     spr_w = screen_x + spr_w;
+                    if ((int)spr_w <= 0) goto next_fire_particle;
                 } else {
                     if (DAT_004806d8 < (int)(spr_w + screen_x)) {
                         left_clip = (spr_w - DAT_004806d8) + screen_x;
                         dst_skip = left_clip - spr_w;
                         spr_w = spr_w - left_clip;
+                        if ((int)spr_w <= 0) goto next_fire_particle;
                     } else {
                         dst_skip = -(int)spr_w;
                         left_clip = 0;
@@ -1696,6 +1704,7 @@ void FUN_0040d360(int param_1, int param_2)
                 }
             }
         }
+    next_fire_particle:
         entry_off = saved_off + 0x20;
     }
 }
