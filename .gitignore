@@ -43,14 +43,3 @@
 *.txt
 
 NUL
-/data
-/ggstuff
-/helpgfx
-/levels
-/music
-/sfx
-/ships
-/swap
-fmod.dll
-ijl10.dll
-options.cfg
