@@ -42,4 +42,8 @@
 *.log
 *.txt
 
+# system junk
 NUL
+
+# random files
+*.md
