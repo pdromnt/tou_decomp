@@ -10,12 +10,13 @@ Also please note, no assets are uploaded yet. This is just the source to do a bu
 
 Almost nothing. The code I got is essentialy heavily decompiling things with Ghidra and having a clanker help me with the hardest parts. Consider it like the scaffolding of what should be the game.
 
-- Music
-- Basic sprite/image rendering
-- Particle systems
-- Basic game states
+- Sprite/Image Rendering
+- Particle/Entity Systems
+- Game States
 - Intro
-- Basic menu implementation
+- Menus (95%)
+- Music
+- Mouse and Keyboard Interactions
 
 ## Objective
 
