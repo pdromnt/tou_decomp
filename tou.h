@@ -410,6 +410,7 @@ int  FUN_004257e0(int cx, int cy, int px, int py);
 
 /* ===== Function Prototypes: level.cpp ===== */
 int  Load_Level_File(const char *level_name);
+int  Load_SWP_Sky(const char *level_name);
 int  Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                      unsigned char *file_buf);
 

@@ -2799,11 +2799,21 @@ void Init_Game_Config(void)
     DAT_00483838[2] = 0x6508;  /* Red */
     DAT_00483838[3] = 0x6739;  /* Gray (overwritten to 0x7FF0 gold before sprite load) */
 
+    /* Sky pattern type: 0=sprite 0x40, 1=sprite 0x45, 2=sprite 0x46, 3=solid 0x446 */
+    g_ConfigBlob[0x1803] = 2;   /* DAT_0048375b - default sky type (cloudy texture) */
+
+    /* Sky config byte 0 (DAT_00483758): used by FUN_0041a8c0 as float LUT index */
+    g_ConfigBlob[0x1800] = 3;   /* DAT_00483758 */
+
     /* TODO: Full config initialization (entity defaults, key bindings, etc.)
      * See DECOMP_PLAN.md Phase 2 for details.
      * For now, enough to pass System_Init_Check. */
 
     Load_Options_Config();
+
+    /* DIAG: Log sky type after options.cfg load (may have overwritten our default) */
+    LOG("[DIAG] Post-options sky_type = %d (g_ConfigBlob[0x1803])\n",
+        (int)(unsigned char)g_ConfigBlob[0x1803]);
 }
 
 /* ===== Load_Options_Config (0042F360) ===== */

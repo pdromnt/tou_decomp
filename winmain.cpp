@@ -63,11 +63,11 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
         g_bIsActive = (int)wParam;
     }
     else if (uMsg == WM_SETCURSOR) {                /* 0x20 */
-        /* Hide Windows cursor over client area - game renders its own. */
-        if (LOWORD(lParam) == HTCLIENT) {
-            SetCursor(NULL);
-            return TRUE;
-        }
+        /* Hide cursor unconditionally — matches original binary exactly.
+         * Original relied on DDraw exclusive fullscreen; we add ShowCursor(FALSE)
+         * in WinMain for windowed-mode compat. */
+        SetCursor(NULL);
+        return TRUE;
     }
 
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
@@ -143,7 +143,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     wc.cbWndExtra    = 0;
     wc.hInstance     = hInstance;
     wc.hIcon         = LoadIconA(hInstance, (LPCSTR)0x7F00); /* IDI_APPLICATION from resources */
-    wc.hCursor       = LoadCursorA(NULL, (LPCSTR)0x7F00);   /* IDC_ARROW */
+    wc.hCursor       = NULL;   /* COMPAT: NULL prevents Windows from restoring IDC_ARROW
+                                * in windowed mode. Original used IDC_ARROW but ran
+                                * DDSCL_EXCLUSIVE which auto-hid the system cursor. */
     wc.hbrBackground = (HBRUSH)GetStockObject(HOLLOW_BRUSH); /* 4 */
     wc.lpszMenuName  = STR_CLASSNAME;                        /* "TOU" */
     wc.lpszClassName = STR_CLASSNAME;                        /* "TOU" */
@@ -181,6 +183,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
+
+    /* COMPAT: Hide system cursor for windowed mode.
+     * Original ran exclusive fullscreen where DDraw auto-hid the cursor.
+     * WndProc also sets SetCursor(NULL) on WM_SETCURSOR. */
+    ShowCursor(FALSE);
 
     /* 4. System Init Check (returns 1 on success) */
     LOG("[INIT] System_Init_Check...\n");

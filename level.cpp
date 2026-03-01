@@ -61,6 +61,55 @@ int           DAT_0048227c = 0;       /* player config packed */
 static const char LEV_MAGIC[] = "TOU level file v1.4";
 #define LEV_MAGIC_LEN 19
 
+/* ===== Load_SWP_Sky (based on FUN_004213f0 partial) ===== */
+/* Loads a pre-computed sky image from swap\<name>.SWP.
+ * Format: 4-byte width, 4-byte height, then width*height*2 RGB565 pixels.
+ * The original generates these on first load and caches them. */
+int Load_SWP_Sky(const char *level_name)
+{
+    char path[256];
+    FILE *f;
+    int w, h;
+
+    sprintf(path, "swap\\%s.SWP", level_name);
+    f = fopen(path, "rb");
+    if (!f) {
+        sprintf(path, "swap/%s.SWP", level_name);
+        f = fopen(path, "rb");
+    }
+    if (!f) {
+        LOG("[LEVEL] No SWP sky file: %s\n", path);
+        return 0;
+    }
+
+    fread(&w, 4, 1, f);
+    fread(&h, 4, 1, f);
+
+    if (w <= 0 || h <= 0 || w > 4096 || h > 4096) {
+        LOG("[LEVEL] SWP sky invalid dimensions: %dx%d\n", w, h);
+        fclose(f);
+        return 0;
+    }
+
+    DAT_00487a0c = w;
+    DAT_00487a10 = h;
+
+    int size = w * h * 2;
+    DAT_00489ea0 = Mem_Alloc(size);
+    if (!DAT_00489ea0) {
+        LOG("[LEVEL] SWP sky alloc failed: %d bytes\n", size);
+        fclose(f);
+        return 0;
+    }
+
+    fread(DAT_00489ea0, 1, size, f);
+    fclose(f);
+
+    g_MemoryTracker += size;
+    LOG("[LEVEL] Loaded SWP sky: %dx%d (%d bytes)\n", w, h, size);
+    return 1;
+}
+
 /* Tile remap table: maps RLE index (b0>>2) to actual tile value.
  * Entry 0x21 (0xFF) = terminator. From Ghidra Load_Image_Wrapper. */
 static const unsigned char tile_remap[34] = {
@@ -143,8 +192,16 @@ int Load_Level_File(const char *level_name)
         return 0;
     }
 
-    /* Copy tile type table (924 bytes at offset 0x22) */
+    /* Copy level config blob (924 bytes at offset 0x22).
+     * In the original binary, several globals overlap this blob:
+     *   DAT_00483960 = DAT_00483860[0x100] — sky/swap enabled flag
+     *   DAT_0048396d = DAT_00483860[0x10d] — generated-map flag
+     * Since our decomp has them as separate variables, extract after copy. */
     memcpy(DAT_00483860, file_buf + 0x22, 0x39c);
+    DAT_00483960 = (char)DAT_00483860[0x100];
+    DAT_0048396d = (char)DAT_00483860[0x10d];
+    LOG("[LEVEL] Config blob: sky_enabled=%d, gen_map=%d\n",
+        (int)(unsigned char)DAT_00483960, (int)(unsigned char)DAT_0048396d);
 
     /* Load JPEG background, entities, and tilemap */
     result = Load_Image_Data(jpeg_offset, extra_offset, entity_offset, file_buf);

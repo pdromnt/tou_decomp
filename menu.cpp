@@ -112,6 +112,14 @@ int Load_Level_Resources(void)
         return 0;
     }
 
+    /* Load per-level sky image (.SWP) if sky rendering is enabled.
+     * The level config blob sets DAT_00483960=1 for levels with sky. */
+    if (DAT_00483960 == '\x01') {
+        if (!Load_SWP_Sky("minibase")) {
+            LOG("[LEVEL] WARNING: Sky enabled but no SWP file, falling back to tiled sprite\n");
+        }
+    }
+
     /* Set up player count for single-player testing */
     if (DAT_00489240 == 0) {
         DAT_00489240 = 1;   /* 1 player */
