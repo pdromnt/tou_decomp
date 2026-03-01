@@ -17,6 +17,9 @@ Almost nothing. The code I got is essentialy heavily decompiling things with Ghi
 - Menus (95%)
 - Music
 - Mouse and Keyboard Interactions
+- Physics
+- Levels (Partial)
+- Memory Allocation (Partial)
 
 ## Objective
 
