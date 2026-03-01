@@ -167,6 +167,11 @@ extern void                 *DAT_00487830;      /* debris/particle array (32 byt
 extern void                 *DAT_00481f2c;      /* edge record array (32 bytes each) */
 extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
+extern void                 *DAT_00487aa8;      /* ammo/sound data table */
+extern int                   DAT_0048784c;      /* entity-to-entity link count */
+extern void                 *DAT_0048781c;      /* entity link table base */
+extern int                   DAT_00487228[16];   /* per-player pickup counter */
+extern char                  DAT_0048373d;       /* friendly fire enabled flag */
 extern void                 *DAT_00487ab8;      /* tile edge sprite table */
 extern void                 *DAT_004876a0;      /* spawn point array (0xc00, stride 0xc) */
 extern void                 *DAT_00487aa0;      /* decoration array (0x800, stride 0x10) */
@@ -489,6 +494,10 @@ void FUN_00454340(void);        /* projectile update */
 void FUN_0044b0b0(void);        /* Entity_Behavior_Loop (entity.cpp) */
 void FUN_0044e510(int *ent);    /* Boundary_Clamp (entity.cpp) */
 void FUN_0040f9b0(int snd, int x, int y); /* positional sound (stub in entity.cpp) */
+void FUN_004357b0(int x, int y, int size, int p3, int p4, int p5, int p6, int p7, int p8,
+                  int p9, char p10, unsigned char p11); /* spawn explosion (stub) */
+void FUN_00451e70(int particle_idx, int damage); /* building damage (stub) */
+void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner); /* explosion knockback */
 void FUN_00434310(void);        /* weapon/terrain */
 void FUN_004527e0(void);        /* sound update */
 void FUN_00454b00(void);        /* animation */

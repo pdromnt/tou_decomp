@@ -22,7 +22,99 @@ static void FUN_0044ad30(int *ent, int idx)   { (void)ent; (void)idx; }
 static void FUN_0044bd50(int *ent)            { (void)ent; }
 static void FUN_0044be20(int *ent)            { (void)ent; }
 static void FUN_0044c9a0(int *ent)            { (void)ent; }
-static void FUN_0044ca40_impl(int *ent, int idx) { (void)ent; (void)idx; }
+/* ===== FUN_0044ca40 — Fire_Primary (0044CA40) ===== */
+/* Creates a projectile entity in DAT_004892e8 at player's heading.
+ * Sets fire cooldown, subtracts energy, spawns 1-3 projectile entities
+ * depending on weapon type. Plays fire sound. */
+static void FUN_0044ca40_impl(int *ent, int idx)
+{
+    unsigned int *uent = (unsigned int *)ent;
+    int heading = ent[6];  /* +0x18 */
+    unsigned char weapon_type = *(unsigned char *)(ent + 0x23);  /* +0x8C: weapon type byte */
+    int *lut = (int *)DAT_00487ab0;
+
+    /* Set "has fired" flag */
+    *(unsigned char *)((int)ent + 0x1D) = 1;
+
+    /* Set fire cooldown */
+    if (DAT_004892e5 == '\x01') {
+        ent[0x24] = 0xA0;  /* +0x90: long cooldown in difficulty mode */
+    } else {
+        ent[0x24] = 5;     /* +0x90: normal cooldown */
+    }
+
+    /* Subtract energy cost */
+    int new_energy = ent[0x26] - 0x70;  /* +0x98: energy */
+    int min_energy = (int)((unsigned int)DAT_00483830 + ((unsigned int)DAT_00483830 >> 31 & 0x7F)) >> 7;
+    if (new_energy < min_energy) {
+        /* Low energy: increase fire cooldowns */
+        if ((unsigned int)ent[0x25] < 0x20) ent[0x25] = 0x20;
+        if ((unsigned int)ent[0x24] < 0x20) ent[0x24] = 0x20;
+        if (new_energy < 0) new_energy = 0;
+    }
+    ent[0x26] = new_energy;
+
+    /* Determine projectile speed from entity type table */
+    int speed = *(int *)((int)DAT_00487abc + 0xAC);
+    if (weapon_type > 8) speed = 800;
+    if (DAT_004892e5 != '\0') speed = 0xFA;
+
+    /* Spawn primary projectile (straight ahead) */
+    if ((*(char *)((int)ent + 0x8D) == '\0' || *(char *)((int)ent + 0x8D) == '\x02') &&
+        DAT_00489248 < 0xA28) {
+        int eoff = DAT_00489248 * 0x80;
+        int ebase = (int)DAT_004892e8 + eoff;
+
+        /* Position: player + 1 unit in heading direction */
+        *(int *)(ebase + 0x00) = lut[heading] + ent[0];
+        *(int *)(ebase + 0x08) = lut[(heading + 0x200) & 0x7FF] + ent[1];
+
+        /* Velocity: heading * speed + player velocity */
+        *(int *)(ebase + 0x18) = (lut[heading] * speed >> 6) + ent[4];
+        *(int *)(ebase + 0x1C) = (lut[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
+
+        /* Copy position to prev_position */
+        *(int *)(ebase + 0x04) = *(int *)(ebase + 0x00);
+        *(int *)(ebase + 0x0C) = *(int *)(ebase + 0x08);
+
+        /* Entity metadata */
+        *(unsigned short *)(ebase + 0x24) = 0;      /* state */
+        *(unsigned char *)(ebase + 0x20) = 0;        /* flags */
+        *(unsigned char *)(ebase + 0x26) = 6;        /* lifetime/color */
+        *(unsigned char *)(ebase + 0x22) = (unsigned char)idx;  /* owner */
+        *(int *)(ebase + 0x28) = 0;                  /* health */
+
+        /* Sprite/type data from entity type table */
+        if (weapon_type < 6) {
+            *(unsigned char *)(ebase + 0x21) = 0;
+            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+            *(char *)(ebase + 0x40) = (char)weapon_type;
+        } else {
+            *(unsigned char *)(ebase + 0x21) = 0x69;
+            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+            *(char *)(ebase + 0x40) = (char)weapon_type - 6;
+        }
+        *(int *)(ebase + 0x34) = 0;  /* behavior callback (not implemented) */
+        *(int *)(ebase + 0x48) = 0;
+        *(unsigned char *)(ebase + 0x54) = 0;
+        *(int *)(ebase + 0x3C) = 0;
+
+        DAT_00489248++;
+
+        /* Set origin position in next entity slot header */
+        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
+        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+    }
+
+    /* Play fire sound */
+    unsigned int snd_type = (unsigned int)weapon_type;
+    if (weapon_type > 7) snd_type = 7;
+    FUN_0040f9b0(snd_type + 0xD2, ent[0], ent[1]);
+}
 static void FUN_0044d650_impl(int *ent, int idx) { (void)ent; (void)idx; }
 static void FUN_0044d860_impl(int *ent, int idx) { (void)ent; (void)idx; }
 static void FUN_0044e950_impl(int *ent, int idx) { (void)ent; (void)idx; }
