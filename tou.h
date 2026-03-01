@@ -144,10 +144,32 @@ extern DWORD                 DAT_004892b8;
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 
 /* ===== Intro particle system (memory.cpp) ===== */
-extern int                   DAT_00489248;      /* Entity count */
+extern int                   DAT_00489248;      /* Entity count (also main entity count in gameplay) */
 extern int                   DAT_00489250;      /* Particle count */
-extern int                   DAT_0048925c;      /* Misc counter */
+extern int                   DAT_0048925c;      /* Misc counter / edge record count */
 extern DWORD                 DAT_004877f0;      /* Frame delta time */
+
+/* ===== Entity Rendering Counts (effects.cpp) ===== */
+extern int                   DAT_00489274;      /* static entity count (turrets) */
+extern int                   DAT_0048924c;      /* dynamic entity count (troopers) */
+extern int                   DAT_00489260;      /* projectile count */
+extern int                   DAT_0048926c;      /* explosion count */
+extern int                   DAT_00489264;      /* misc effect count */
+extern int                   DAT_00489268;      /* debris/particle count */
+extern int                   DAT_00487808;      /* active player viewport count */
+
+/* ===== Entity Rendering Arrays (allocated in memory.cpp) ===== */
+extern void                 *DAT_00489e98;      /* static entity array (16 bytes each) */
+extern void                 *DAT_00487884;      /* trooper array (64 bytes each) */
+extern void                 *DAT_00481f28;      /* projectile array (64 bytes each) */
+extern void                 *DAT_00487a9c;      /* explosion array (32 bytes each) */
+extern void                 *DAT_00487830;      /* debris/particle array (32 bytes each) */
+extern void                 *DAT_00481f2c;      /* edge record array (32 bytes each) */
+extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
+extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
+extern void                 *DAT_00487ab8;      /* tile edge sprite table */
+extern unsigned short        DAT_0048384e;      /* laser pixel color A */
+extern unsigned short        DAT_00483850;      /* laser pixel color B */
 
 /* ===== Viewport (effects.cpp) ===== */
 extern int                   DAT_004806dc;      /* viewport left */
@@ -176,6 +198,7 @@ extern void                 *DAT_00487abc;      /* Entity type table (0x11030 by
 extern void                 *DAT_00481f20;      /* Explode descriptor table (160 bytes) */
 extern void                 *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
 extern void                 *DAT_0048787c;      /* Explode pixel data (430KB) */
+extern void                 *DAT_00487aac;      /* Explosion rotation frames (~6.4MB) */
 extern void                 *DAT_004892e8;      /* Entity array (128 bytes * 2500) */
 extern void                 *DAT_00489230;      /* Brightness remap LUT (128KB) */
 extern void                 *DAT_004876a4[100]; /* Color palette tables */
@@ -317,6 +340,21 @@ void FUN_0045a060(void);
 void FUN_0045adc0(void);
 void FUN_0045b2a0(void);
 int  FUN_00422fc0(void);
+void FUN_0040c280(int param_1, int param_2, int param_3, unsigned char param_4,
+                  int param_5, int param_6, unsigned char param_7);
+void FUN_0040c590(int frame, int player, int x, int y, unsigned char palette,
+                  int buffer, int stride, unsigned char blend);
+void FUN_0040c940(unsigned int px, unsigned int py, unsigned int buffer,
+                  int stride, int intensity);
+void FUN_0040dbd0(int buffer, unsigned int stride);
+void FUN_0040dce0(int buffer, unsigned int stride);
+void FUN_0040bb60(unsigned int buffer, unsigned int stride);
+void FUN_0040a870(int buffer, unsigned int stride);
+void FUN_0040d6c0(int buffer, int stride);
+void FUN_0040d810(int buffer, unsigned int stride);
+void FUN_0040caf0(int buffer, unsigned int stride);
+void FUN_0040d930(int buffer, unsigned int stride);
+void FUN_0040d360(int buffer, int stride);
 void FUN_0040d100(int buffer, int stride);
 void FUN_004076d0(int buffer, int stride);
 int  FUN_004257e0(int cx, int cy, int px, int py);

@@ -172,18 +172,17 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         memcpy(d, s, vp_w * 2);
     }
 
-    /* Original calls ~10 rendering subsystems here:
-     * FUN_0040dbd0 - entity sprites
-     * FUN_0040dce0 - entity sprites (layer 2)
-     * FUN_0040bb60 - shadow/lighting
-     * FUN_0040a870 - projectiles
-     * FUN_0040d6c0 - particles (layer 1)
-     * FUN_0040d810 - particles (layer 2)
-     * FUN_0040caf0 - explosions
-     * FUN_0040d930 - effects
-     * FUN_0040d360 - edge tiles/detail
-     * FUN_0040d100 - darkness/fog overlay
-     * All stubbed pending entity/particle system decompilation. */
+    /* Entity rendering subsystems (original order from FUN_00407720) */
+    FUN_0040dbd0((int)buffer, stride);       /* Static entities (turrets) */
+    FUN_0040dce0((int)buffer, stride);       /* Dynamic entities (troopers) */
+    FUN_0040bb60((unsigned int)buffer, stride); /* Main entities (items/ships) */
+    FUN_0040a870((int)buffer, stride);       /* Projectiles */
+    FUN_0040d6c0((int)buffer, stride);       /* Explosions */
+    FUN_0040d810((int)buffer, stride);       /* Debris/particles */
+    FUN_0040caf0((int)buffer, stride);       /* Player/ship */
+    FUN_0040d930((int)buffer, stride);       /* Misc effects (glow/smoke) */
+    FUN_0040d360((int)buffer, stride);       /* Edge tiles/detail */
+    FUN_0040d100((int)buffer, stride);       /* Darkness/fog overlay */
 }
 
 /* ===== Render_Frame (0045D800) ===== */

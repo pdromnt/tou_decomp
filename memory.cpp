@@ -47,6 +47,7 @@ void *DAT_00489e98 = NULL;
 void *DAT_00487780 = NULL;
 void *DAT_00487818 = NULL;
 void *DAT_00487ab8 = NULL;
+void *DAT_00487830 = NULL;  /* debris/particle array (32 bytes each) */
 void *DAT_00487928 = NULL;
 
 /* Pointer arrays */
