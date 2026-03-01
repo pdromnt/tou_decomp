@@ -311,9 +311,11 @@ static void Gameplay_Tick(void)
     /* Pre-tick setup: reset per-tick entity flags */
     FUN_0045e1f0();
 
-    /* Busy-wait until at least one tick interval has elapsed */
+    /* Wait until at least one tick interval has elapsed.
+     * Original used a pure busy-wait; we yield CPU to avoid 100% usage. */
     now = timeGetTime();
     while ((now - g_TimerAux * tick_interval) - g_TimerStart < tick_interval) {
+        Sleep(1);
         now = timeGetTime();
     }
 
@@ -517,11 +519,9 @@ void Game_Update_Render(void)
     }
 
     /* ---- Game logic update ---- */
-    LOG("[FRAME] pre-tick\n");
     switch (g_SubState) {
     case 0:   /* Active gameplay */
         Gameplay_Tick();
-        LOG("[FRAME] post-tick\n");
         break;
 
     case 4:   /* Level preview / waiting for Enter */
@@ -544,9 +544,7 @@ void Game_Update_Render(void)
     }
 
     /* ---- Rendering ---- */
-    LOG("[FRAME] pre-render\n");
     Render_Frame();
-    LOG("[FRAME] post-render\n");
 
     /* ---- Frame rate limiter (~60fps) ---- */
     {
