@@ -184,6 +184,7 @@ static void xform_highlight(int r, int g, int b, int *or_, int *og, int *ob, int
  *   [23]     Contrast pinch
  *   [24..27] Highlight (4 tables)
  *   [32..47] Blend-to-background (16 tables, via FUN_0045adc0)
+ *   [48..51] Underwater tint (4 tables, COMPAT - original never fills these)
  */
 void FUN_0045a060(void)
 {
@@ -261,6 +262,40 @@ void FUN_0045a060(void)
 
     /* ---- Section 11: Blend-to-background [32..47] via FUN_0045adc0 ---- */
     FUN_0045adc0();
+
+    /* ---- Section 12: Underwater tint [48..51] ---- */
+    /* COMPAT: Original binary allocates these LUT slots but never fills them,
+     * causing the ship to render fully black when entering fluid tiles (types 65-71).
+     * The underwater exposure counter (entity +0x49F) produces blend indices 48-51
+     * via formula (damage*4/64)+0x30. We generate blue/dark tint tables so the
+     * ship progressively darkens with a blue cast instead of going instantly black. */
+    {
+        /* Underwater target: deep dark blue */
+        int uw_r = 10, uw_g = 30, uw_b = 90;
+
+        for (int step = 0; step < 4; step++) {
+            unsigned short *lut = (unsigned short *)DAT_004876a4[48 + step];
+            if (!lut) continue;
+
+            /* Blend strength: 15%, 30%, 50%, 70% toward underwater color */
+            int blend_pct = 15 + step * 18;
+
+            for (int r4 = 0; r4 < 16; r4++) {
+                int r8 = (r4 * 255) / 15;
+                for (int g4 = 0; g4 < 16; g4++) {
+                    int g8 = (g4 * 255) / 15;
+                    for (int b4 = 0; b4 < 16; b4++) {
+                        int b8 = (b4 * 255) / 15;
+                        int or8 = r8 + ((uw_r - r8) * blend_pct) / 100;
+                        int og8 = g8 + ((uw_g - g8) * blend_pct) / 100;
+                        int ob8 = b8 + ((uw_b - b8) * blend_pct) / 100;
+                        int idx = b4 + (g4 + r4 * 16) * 16;
+                        lut[idx] = pack_rgb565(clamp255(or8), clamp255(og8), clamp255(ob8));
+                    }
+                }
+            }
+        }
+    }
 }
 
 /* ===== FUN_0045adc0 - Blend-to-background LUT generation (0045ADC0) ===== */

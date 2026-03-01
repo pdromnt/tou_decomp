@@ -1611,49 +1611,54 @@ void FUN_00424240(int ship_type, int ship_index, int team_index)
                 unsigned short pixel = *(unsigned short *)((char *)DAT_00487aac + byte_off);
 
                 if (pixel != 0) {
-                    /* Extract RGB565 channels */
-                    unsigned int pb = (unsigned char)((pixel & 0x1F) << 3);
-                    unsigned int pg = (unsigned char)(((pixel >> 5) & 0x3F) << 2);
-                    unsigned int pr = (unsigned char)(((pixel >> 11) & 0x1F) << 3);
+                    /* Extract from X1B5G5R5 format (5 bits each, all <<3 to 8-bit).
+                     * Ship pixels: R in bits 0-4, G in bits 5-9, B in bits 10-14.
+                     * Matches original disasm: SHL AL,3 / SHL DL,3 / SHL CL,3 */
+                    unsigned int ch_lo  = (unsigned char)((pixel << 3) & 0xFF);        /* bits 0-4 (R) */
+                    unsigned int ch_mid = (unsigned char)(((pixel >> 5) << 3) & 0xFF); /* bits 5-9 (G) */
+                    unsigned int ch_hi  = (unsigned char)(((pixel >> 10) << 3) & 0xFF);/* bits 10-14 (B) */
 
-                    /* Apply 3x3 LUT: sqrt(sum of squares) per output channel */
-                    int sum_r = lut[0 * 768 + 0 * 256 + (pr & 0xFF)] *
-                                lut[0 * 768 + 0 * 256 + (pr & 0xFF)] +
-                                lut[0 * 768 + 1 * 256 + (pg & 0xFF)] *
-                                lut[0 * 768 + 1 * 256 + (pg & 0xFF)] +
-                                lut[0 * 768 + 2 * 256 + (pb & 0xFF)] *
-                                lut[0 * 768 + 2 * 256 + (pb & 0xFF)];
-                    int out_r = (int)sqrt((double)sum_r);
+                    /* Apply 3x3 LUT: sqrt(sum of squares) per output channel.
+                     * Original uses ch_hi (B) with LUT columns 0, ch_mid (G) with 1, ch_lo (R) with 2.
+                     * Output ch0 goes to bits 10-14, ch1 to bits 5-9, ch2 to bits 0-4 (X1R5G5B5). */
+                    int sum0 = lut[0 * 768 + 0 * 256 + (ch_hi & 0xFF)] *
+                               lut[0 * 768 + 0 * 256 + (ch_hi & 0xFF)] +
+                               lut[0 * 768 + 1 * 256 + (ch_mid & 0xFF)] *
+                               lut[0 * 768 + 1 * 256 + (ch_mid & 0xFF)] +
+                               lut[0 * 768 + 2 * 256 + (ch_lo & 0xFF)] *
+                               lut[0 * 768 + 2 * 256 + (ch_lo & 0xFF)];
+                    int out0 = (int)sqrt((double)sum0);
 
-                    int sum_g = lut[1 * 768 + 0 * 256 + (pr & 0xFF)] *
-                                lut[1 * 768 + 0 * 256 + (pr & 0xFF)] +
-                                lut[1 * 768 + 1 * 256 + (pg & 0xFF)] *
-                                lut[1 * 768 + 1 * 256 + (pg & 0xFF)] +
-                                lut[1 * 768 + 2 * 256 + (pb & 0xFF)] *
-                                lut[1 * 768 + 2 * 256 + (pb & 0xFF)];
-                    int out_g = (int)sqrt((double)sum_g);
+                    int sum1 = lut[1 * 768 + 0 * 256 + (ch_hi & 0xFF)] *
+                               lut[1 * 768 + 0 * 256 + (ch_hi & 0xFF)] +
+                               lut[1 * 768 + 1 * 256 + (ch_mid & 0xFF)] *
+                               lut[1 * 768 + 1 * 256 + (ch_mid & 0xFF)] +
+                               lut[1 * 768 + 2 * 256 + (ch_lo & 0xFF)] *
+                               lut[1 * 768 + 2 * 256 + (ch_lo & 0xFF)];
+                    int out1 = (int)sqrt((double)sum1);
 
-                    int sum_b = lut[2 * 768 + 0 * 256 + (pr & 0xFF)] *
-                                lut[2 * 768 + 0 * 256 + (pr & 0xFF)] +
-                                lut[2 * 768 + 1 * 256 + (pg & 0xFF)] *
-                                lut[2 * 768 + 1 * 256 + (pg & 0xFF)] +
-                                lut[2 * 768 + 2 * 256 + (pb & 0xFF)] *
-                                lut[2 * 768 + 2 * 256 + (pb & 0xFF)];
-                    int out_b = (int)sqrt((double)sum_b);
+                    int sum2 = lut[2 * 768 + 0 * 256 + (ch_hi & 0xFF)] *
+                               lut[2 * 768 + 0 * 256 + (ch_hi & 0xFF)] +
+                               lut[2 * 768 + 1 * 256 + (ch_mid & 0xFF)] *
+                               lut[2 * 768 + 1 * 256 + (ch_mid & 0xFF)] +
+                               lut[2 * 768 + 2 * 256 + (ch_lo & 0xFF)] *
+                               lut[2 * 768 + 2 * 256 + (ch_lo & 0xFF)];
+                    int out2 = (int)sqrt((double)sum2);
 
                     /* Clamp to 255 */
-                    if (out_r > 255) out_r = 255;
-                    if (out_g > 255) out_g = 255;
-                    if (out_b > 255) out_b = 255;
+                    if (out0 > 255) out0 = 255;
+                    if (out1 > 255) out1 = 255;
+                    if (out2 > 255) out2 = 255;
 
-                    /* Near-black → transparent */
-                    if (out_r < 8 && out_g < 4 && out_b < 8) {
+                    /* Near-black → transparent (original thresholds) */
+                    if (out0 < 8 && out1 < 4 && out2 < 8) {
                         pixel = 0;
                     } else {
-                        /* Pack as RGB565 */
+                        /* Pack as X1R5G5B5: out2 → bits 0-4, out1 → bits 5-9, out0 → bits 10-14.
+                         * Matches original: LEA EDX,[EAX+EBP*4] with ch2 at low, ch0 at high. */
                         pixel = (unsigned short)(
-                            (out_b >> 3) +
-                            (((out_r & 0x1F8) * 0x20 + (out_g & 0x3FF8)) * 4));
+                            (out2 >> 3) +
+                            (((out0 & 0x1F8) * 0x20 + (out1 & 0x3FF8)) * 4));
                     }
                 }
 
@@ -1820,7 +1825,8 @@ int FUN_004249c0(void)
                     unsigned char g_val = rgb_buf[src_idx + 1];
                     unsigned char b_val = rgb_buf[src_idx + 2];
 
-                    /* RGB565 packing: matching original's bit layout */
+                    /* X1B5G5R5 packing: R in bits 0-4, G in bits 5-9, B in bits 10-14.
+                     * Matches original disasm exactly. Converted to RGB565 after color transform. */
                     unsigned short rgb565 = (unsigned short)(
                         (r_val >> 3) +
                         (((b_val & 0x1F8) * 0x20 + (g_val & 0x3FF8)) * 4));
@@ -1832,8 +1838,24 @@ int FUN_004249c0(void)
             }
         }
 
-        /* Apply team color transform */
+        /* Apply team color transform (produces X1R5G5B5 output) */
         FUN_00424240(ship_type, ship_idx, ship_idx % 4);
+
+        /* COMPAT: Convert ship pixels from X1R5G5B5 → RGB565 for display.
+         * Original ran fullscreen DDraw which handled this in hardware.
+         * Our compat renderer uses RGB565 throughout. */
+        {
+            int px_count = total_pixels;
+            unsigned short *px = (unsigned short *)((char *)DAT_00487aac + pixel_base * 2);
+            for (int p = 0; p < px_count; p++) {
+                unsigned short c = px[p];
+                if (c != 0) {
+                    /* X1R5G5B5: R=bits14-10, G=bits9-5, B=bits4-0
+                     * → RGB565: R=bits15-11, G=bits10-5, B=bits4-0 */
+                    px[p] = ((c & 0x7C00) << 1) | ((c & 0x03E0) << 1) | (c & 0x001F);
+                }
+            }
+        }
 
         /* Store computed value at +0x38 (approximate: original uses __ftol) */
         if (DAT_0048780c) {
