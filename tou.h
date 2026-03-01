@@ -168,6 +168,9 @@ extern void                 *DAT_00481f2c;      /* edge record array (32 bytes e
 extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
 extern void                 *DAT_00487ab8;      /* tile edge sprite table */
+extern void                 *DAT_004876a0;      /* spawn point array (0xc00, stride 0xc) */
+extern void                 *DAT_00487aa0;      /* decoration array (0x800, stride 0x10) */
+extern void                 *DAT_00489e80;      /* wall segment array (16 * 0x20) */
 extern unsigned short        DAT_0048384e;      /* laser pixel color A */
 extern unsigned short        DAT_00483850;      /* laser pixel color B */
 
@@ -280,6 +283,7 @@ extern void                 *DAT_00487814;      /* coarse grid buffer */
 extern void                 *DAT_00489ea4;      /* shadow grid buffer 1 */
 extern void                 *DAT_00489ea8;      /* shadow grid buffer 2 */
 extern void                 *DAT_00489ea0;      /* swap/heightmap data */
+extern void                 *DAT_00487820;      /* edge/boundary navigation data */
 extern int                   DAT_00487a0c;      /* swap width */
 extern int                   DAT_00487a10;      /* swap height */
 extern unsigned short        DAT_0048384c;      /* tile fill color */
@@ -299,6 +303,28 @@ extern int                   DAT_00489244;      /* active (human) player count *
 extern int                   DAT_0048764a;      /* network/multiplayer flag */
 extern int                   DAT_0048227c;      /* player config packed value */
 extern void                 *DAT_00487928;      /* entity type table (0x10000 bytes) */
+
+/* ===== Entity Spawning Config ===== */
+extern char                  DAT_00483737;       /* trooper difficulty (0=none, 1-3=density) */
+extern char                  DAT_00483736;       /* debris difficulty */
+extern char                  DAT_00483735;       /* team base placement mode */
+extern char                  DAT_0048373c;       /* team mode flag */
+extern unsigned char         DAT_00483962;       /* team base probability % */
+extern unsigned char         DAT_00483754[4];    /* entity enable flags [2]=walls, [3]=projectiles */
+
+/* ===== Entity Spawning Counts ===== */
+extern int                   DAT_00489270;       /* wall segment count */
+extern int                   DAT_004892d4;       /* spawn point count */
+extern int                   DAT_004892d8;       /* decoration count */
+extern int                   DAT_004892dc;       /* misc counter */
+extern int                   DAT_004892e0;       /* misc counter */
+extern int                   DAT_0048929c;       /* misc counter */
+extern int                   DAT_004892c0;       /* misc counter */
+extern int                   DAT_00489258;       /* misc counter */
+extern char                  DAT_004892a4;       /* misc flag */
+extern char                  DAT_004892a5;       /* misc flag */
+extern int                   DAT_00487834[12];   /* entity tracking counters */
+extern float                 DAT_004892d0;       /* water level / weather effect */
 
 /* ===== Misc ===== */
 extern int                   DAT_00481f48;
@@ -394,9 +420,18 @@ void FUN_004102b0(void);
 void FUN_0041bc50(void);
 void FUN_0041b010(void);
 void FUN_0041b5d0(void);
+void FUN_0041bad0(void);
 void FUN_0041bb00(void);
 int  FUN_004249c0(void);
 void FUN_00424240(int ship_type, int ship_index, int team_index);
+void FUN_0041bfe0(void);
+void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned char type, char subtype);
+void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsigned char orientation);
+void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, unsigned char team);
+void FUN_00407080(int x, int y, unsigned char index, unsigned char type);
+void FUN_00407140(int x, int y, unsigned char type);
+void FUN_00440ba0(int x, int y, int team, char param);
+void FUN_00457c70(int index);
 
 /* ===== Function Prototypes: init.cpp (config) ===== */
 void Load_Options_Config(void);

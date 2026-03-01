@@ -39,6 +39,7 @@ void         *DAT_00487814 = NULL;    /* coarse grid buffer */
 void         *DAT_00489ea4 = NULL;    /* shadow grid 1 */
 void         *DAT_00489ea8 = NULL;    /* shadow grid 2 */
 void         *DAT_00489ea0 = NULL;    /* swap/heightmap */
+void         *DAT_00487820 = NULL;    /* edge/boundary navigation data */
 int           DAT_00487a0c = 0;       /* swap width */
 int           DAT_00487a10 = 0;       /* swap height */
 unsigned short DAT_0048384c = 0;      /* tile fill color */

@@ -463,13 +463,24 @@ int Init_New_Game(void)
 }
 
 /* ===== Free_Game_Resources (0040FFC0) ===== */
+/* Frees per-level resources allocated during Load_Level_Resources / Load_Level_File.
+ * Called from Game_State_Manager on return-to-menu, game-over, and error-restart.
+ * The original binary tail-calls FUN_0041bad0 via JMP; here we call normally. */
 void Free_Game_Resources(void)
 {
-    /* TODO: Free per-level resources
-     * Mem_Free(DAT_00481f50);
-     * Mem_Free(DAT_00487814);
-     * Mem_Free(DAT_00489ea4);
-     * Mem_Free(DAT_00489ea8);
-     * etc.
-     */
+    Mem_Free(DAT_00481f50);    /* background RGB565 pixels */
+    Mem_Free(DAT_00487814);    /* coarse grid buffer */
+    Mem_Free(DAT_00489ea4);    /* shadow grid 1 */
+    Mem_Free(DAT_00489ea8);    /* shadow grid 2 */
+
+    if (DAT_00483960 == '\x01') {
+        Mem_Free(DAT_00489ea0);    /* swap/heightmap (only if swap-file enabled) */
+    }
+
+    if (DAT_00487820 != NULL) {
+        Mem_Free(DAT_00487820);    /* edge/boundary navigation data */
+    }
+    DAT_00487820 = NULL;
+
+    FUN_0041bad0();    /* free per-player visibility buffers */
 }

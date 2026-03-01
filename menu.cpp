@@ -165,7 +165,20 @@ int Load_Level_Resources(void)
     }
 
     /* FUN_0041a370() - Player stat scaling: STUB */
-    /* FUN_0041bfe0() - Particle/object spawning: STUB (huge ~3000 line fn) */
+
+    /* Allocate wall segment array (not in Init_Memory_Pools) */
+    if (!DAT_00489e80) {
+        DAT_00489e80 = Mem_Alloc(16 * 0x20);
+        if (DAT_00489e80) {
+            g_MemoryTracker += 16 * 0x20;
+        }
+    }
+
+    /* Entity spawning - populates all entity arrays from level data */
+    FUN_0041bfe0();
+    LOG("[LEVEL] Entity spawning: %d entities, %d troopers, %d projectiles, %d debris, %d decor, %d spawns\n",
+        DAT_00489248, DAT_0048924c, DAT_00489260, DAT_00489268, DAT_004892d8, DAT_004892d4);
+
     /* FUN_0041d2e0() - Edge detection: STUB */
     /* FUN_0041aea0() - Player pathfinding: STUB */
     /* FUN_0041bed0() - Difficulty constants: STUB */
@@ -230,6 +243,36 @@ int DAT_00481d20 = 0xFF;
 int DAT_00481d2c = 0xA0;
 int DAT_00481d30 = 0xA0;
 int DAT_00481d34 = 0xA0;
+
+/* ===== Entity spawning globals ===== */
+char          DAT_00483737 = 0;       /* trooper difficulty (0=none,1-3=density) */
+char          DAT_00483736 = 0;       /* debris difficulty */
+char          DAT_00483735 = 0;       /* team base placement mode */
+char          DAT_0048373c = 0;       /* team mode flag */
+unsigned char DAT_00483962 = 0;       /* team base probability % */
+unsigned char DAT_00483754[4] = {0, 0, 1, 1}; /* entity enable flags [2]=walls, [3]=projectiles */
+
+int           DAT_00489270 = 0;       /* wall segment count */
+int           DAT_004892d4 = 0;       /* spawn point count */
+int           DAT_004892d8 = 0;       /* decoration count */
+int           DAT_004892dc = 0;       /* misc counter */
+int           DAT_004892e0 = 0;       /* misc counter */
+int           DAT_0048929c = 0;       /* misc counter */
+int           DAT_004892c0 = 0;       /* misc counter */
+int           DAT_00489258 = 0;       /* misc counter */
+char          DAT_004892a4 = 0;       /* misc flag */
+char          DAT_004892a5 = 0;       /* misc flag */
+void         *DAT_00489e80 = NULL;    /* wall segment array */
+int           DAT_00487834[12] = {0}; /* entity tracking counters */
+float         DAT_004892d0 = 0.0f;    /* water level / weather */
+
+/* Float constants from .rdata (0x475620-0x47562B) for water level calculation */
+static const union { unsigned int u; float f; } _water_scale_0 = { 0x3651b717u };
+static const union { unsigned int u; float f; } _water_scale_1 = { 0x370bcf65u };
+static const union { unsigned int u; float f; } _water_scale_2 = { 0x37d1b717u };
+#define WATER_SCALE_0 (_water_scale_0.f)
+#define WATER_SCALE_1 (_water_scale_1.f)
+#define WATER_SCALE_2 (_water_scale_2.f)
 
 /* Ship filenames (from binary at 0x0047BE90..0x0047BEFC) */
 static const char *ship_dir = "ships\\";
@@ -619,6 +662,21 @@ void FUN_0041b5d0(void)
     }
 
     FUN_0041bb00();
+}
+
+
+/* ===== FUN_0041bad0 - Free Player Visibility Buffers (0041BAD0) ===== */
+/* Counterpart to FUN_0041bb00: frees the per-player visibility buffers.
+ * Called from Free_Game_Resources (tail call in original binary). */
+void FUN_0041bad0(void)
+{
+    int i;
+    for (i = 0; i < 4; i++) {
+        if (DAT_00489eac[i] != NULL) {
+            Mem_Free(DAT_00489eac[i]);
+            DAT_00489eac[i] = NULL;
+        }
+    }
 }
 
 
@@ -1058,3 +1116,841 @@ int FUN_004249c0(void)
 
     return 1;
 }
+
+
+/* ===== FUN_00440ba0 - Tilemap Paint (STUB) (00440BA0) ===== */
+/* Called by FUN_00406d20 for type-7 (team base) projectiles.
+ * Paints a circular area on the tilemap. Non-critical for visual rendering. */
+void FUN_00440ba0(int x, int y, int team, char param)
+{
+    /* stub */
+}
+
+/* ===== FUN_00457c70 - Wall Render Setup (STUB) (00457C70) ===== */
+/* Called by FUN_00407400 after adding a wall segment. */
+void FUN_00457c70(int index)
+{
+    /* stub */
+}
+
+
+/* ===== FUN_00407080 - Add Effect/Boss (00407080) ===== */
+/* Adds an effect/boss entity to DAT_00487780 (stride 0x20, max 25). */
+void FUN_00407080(int x, int y, unsigned char index, unsigned char type)
+{
+    unsigned int angle;
+
+    if (DAT_00489264 < 0x19) {
+        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20) = x;
+        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 4) = y;
+        *(unsigned char *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0x14) = index;
+        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0xc) = 0;
+        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 8) = 0;
+
+        angle = rand();
+        angle = angle & 0x800007FF;
+        if ((int)angle < 0) {
+            angle = (angle - 1 | 0xFFFFF800) + 1;
+        }
+        *(unsigned int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0x10) = angle;
+        *(unsigned char *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0x15) = type;
+        DAT_00489264 = DAT_00489264 + 1;
+    }
+}
+
+
+/* ===== FUN_00407140 - Add Debris (00407140) ===== */
+/* Adds a debris entity to DAT_00487830 (stride 0x20, max 100). */
+void FUN_00407140(int x, int y, unsigned char type)
+{
+    int iVar1;
+
+    if (DAT_00489268 < 100) {
+        *(int *)((int)DAT_00487830 + DAT_00489268 * 0x20) = x;
+        *(int *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 4) = y;
+        *(unsigned char *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 10) = type;
+        *(int *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 0xc) = 2000;
+
+        iVar1 = rand();
+        *(char *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 9) =
+            (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 5 + (int)g_EntityConfig) - 1));
+
+        iVar1 = rand();
+        *(char *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 8) =
+            (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 4 + (int)g_EntityConfig) - 1));
+
+        DAT_00489268 = DAT_00489268 + 1;
+    }
+}
+
+
+/* ===== FUN_00407210 - Add Trooper (00407210) ===== */
+/* Adds a trooper entity to DAT_00487884 (stride 0x40, max 400). */
+void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned char type, char subtype)
+{
+    unsigned int *puVar1;
+
+    if (DAT_0048924c < 400) {
+        int base = (int)DAT_00487884 + DAT_0048924c * 0x40;
+
+        *(int *)(base + 0x00) = x;
+        *(int *)(base + 0x08) = y;
+        *(int *)(base + 0x04) = x;
+        *(int *)(base + 0x0c) = y;
+        *(int *)(base + 0x10) = vx;
+        *(int *)(base + 0x14) = vy;
+
+        puVar1 = (unsigned int *)(base + 0x18);
+        *puVar1 = *puVar1 & 0xFFFFFFFE;
+
+        *(unsigned char *)(base + 0x1c) = type;
+        *(char *)(base + 0x1d) = dir;
+        *(int *)(base + 0x20) = speed;
+        *(unsigned char *)(base + 0x24) = 0;
+        *(char *)(base + 0x25) = subtype;
+
+        if (subtype == 0) {
+            *(int *)(base + 0x28) = 0xBB800;
+        } else if (subtype == 2) {
+            *(int *)(base + 0x28) = 0xFA000;
+        } else {
+            *(int *)(base + 0x28) = 0x271000;
+        }
+
+        *(unsigned char *)(base + 0x2c) = 0;
+        *(unsigned char *)(base + 0x38) = 200;
+        *(unsigned char *)(base + 0x39) = 0;
+
+        if (dir == 1) {
+            *(int *)(base + 0x30) = 0x200;
+        } else {
+            *(int *)(base + 0x30) = 0x600;
+        }
+
+        *(unsigned char *)(base + 0x2d) = 0;
+        *(int *)(base + 0x34) = 0;
+        DAT_0048924c = DAT_0048924c + 1;
+    }
+}
+
+
+/* ===== FUN_00406d20 - Add Projectile (00406D20) ===== */
+/* Adds a projectile/object to DAT_00481f28 (stride 0x40, max 200).
+ * Also stamps the sprite footprint onto the tilemap. */
+void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsigned char orientation)
+{
+    int iVar1;
+    int *piVar2;
+    int iVar3;
+    unsigned short uVar4;
+    int iVar5;
+    unsigned char bVar6;
+    unsigned short uVar7;
+    int iVar8;
+    int iVar9;
+
+    if (DAT_00489260 < 200) {
+        int base = (int)DAT_00481f28 + DAT_00489260 * 0x40;
+
+        *(int *)(base + 0x00) = x;
+        *(int *)(base + 0x04) = y;
+
+        if (type == 7) {
+            *(int *)(base + 0x08) = 0;
+        } else if (orientation == 0) {
+            iVar1 = rand();
+            *(int *)(base + 0x08) = iVar1 % 0x7FF;
+        } else {
+            iVar1 = (unsigned int)orientation * 0x800 - 0x800;
+            *(int *)(base + 0x08) = (int)(iVar1 + (iVar1 >> 0x1F & 0x1F)) >> 5;
+        }
+
+        *(char *)(base + 0x1c) = type;
+        *(unsigned char *)(base + 0x1d) = team;
+        *(int *)(base + 0x10) = health;
+        *(int *)(base + 0x14) = 0;
+        *(unsigned char *)(base + 0x1e) = 0;
+        *(unsigned char *)(base + 0x20) = 0;
+
+        if (type == 6) {
+            *(unsigned char *)(base + 0x1f) = 0xFF;
+        } else {
+            *(unsigned char *)(base + 0x1f) = 10;
+        }
+
+        *(unsigned char *)(base + 0x21) = 0;
+        *(int *)(base + 0x0c) = *(int *)(base + 0x08);
+        *(unsigned char *)(base + 0x22) = 0;
+        *(unsigned char *)(base + 0x23) = 0;
+        *(int *)(base + 0x18) = 0;
+
+        if (type == 7) {
+            *(int *)(base + 0x14) = health;
+            piVar2 = (int *)(base);
+            FUN_00440ba0(*piVar2 >> 0x12, (piVar2[1] >> 0x12) - 10, (unsigned int)team, 0);
+        }
+
+        /* Stamp sprite footprint onto tilemap */
+        uVar4 = 0;
+        piVar2 = (int *)(base);
+        iVar1 = *(int *)((unsigned int)*(unsigned char *)(base + 0x1c) * 0x20 + (int)DAT_00487818);
+        int frame_off = *(int *)((int)DAT_00489234 + iVar1 * 4);
+        bVar6 = *(unsigned char *)((int)DAT_00489e8c + iVar1);
+        iVar9 = (*piVar2 >> 0x12) - (unsigned int)(bVar6 >> 1);
+        iVar8 = (piVar2[1] >> 0x12) - (unsigned int)(*(unsigned char *)((int)DAT_00489e88 + iVar1) >> 1);
+        iVar3 = (iVar8 << ((unsigned char)DAT_00487a18 & 0x1F)) + iVar9;
+
+        if (*(unsigned char *)((int)DAT_00489e88 + iVar1) != 0) {
+            do {
+                uVar7 = 0;
+                if (bVar6 != 0) {
+                    do {
+                        if ((*(char *)((int)DAT_00489e94 + frame_off) != 0) &&
+                            ((int)((unsigned int)uVar7 + iVar9) > 0) &&
+                            ((unsigned int)uVar7 + iVar9 < (unsigned int)DAT_004879f0) &&
+                            ((int)((unsigned int)uVar4 + iVar8) > 0) &&
+                            ((unsigned int)uVar4 + iVar8 < (unsigned int)DAT_004879f4)) {
+                            iVar5 = (int)DAT_00487928 +
+                                (unsigned int)*(unsigned char *)((int)DAT_0048782c + iVar3) * 0x20;
+                            if (*(char *)(iVar5 + 0xb) == 0 && *(char *)(iVar5 + 0xa) == 0) {
+                                *(unsigned char *)((int)DAT_0048782c + iVar3) =
+                                    *(unsigned char *)(iVar5 + 8);
+                            }
+                        }
+                        frame_off = frame_off + 1;
+                        iVar3 = iVar3 + 1;
+                        uVar7 = uVar7 + 1;
+                    } while (uVar7 < *(unsigned char *)((int)DAT_00489e8c + iVar1));
+                }
+                bVar6 = *(unsigned char *)((int)DAT_00489e8c + iVar1);
+                iVar3 = iVar3 + (DAT_00487a00 - (unsigned int)bVar6);
+                uVar4 = uVar4 + 1;
+            } while (uVar4 < *(unsigned char *)((int)DAT_00489e88 + iVar1));
+        }
+        DAT_00489260 = DAT_00489260 + 1;
+    }
+}
+
+
+/* ===== FUN_00407400 - Add Wall Segment (00407400) ===== */
+/* Adds a wall segment to DAT_00489e80 (stride 0x20, max 16). */
+void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, unsigned char team)
+{
+    int iVar2;
+    unsigned int uVar4;
+
+    if ((int)DAT_00489270 < 0x10) {
+        int base = (int)DAT_00489e80 + DAT_00489270 * 0x20;
+
+        *(int *)(base + 0x00) = x;
+        *(int *)(base + 0x04) = y;
+        *(unsigned char *)(base + 0x14) = 1;
+        *(char *)(base + 0x15) = facing;
+        *(int *)(base + 0x08) = 0;
+        *(unsigned char *)(base + 0x16) = 0;
+        *(unsigned char *)(base + 0x17) = sprite;
+        *(int *)(base + 0x0c) = *(int *)((unsigned int)sprite * 0x10 + 0x0c + (int)g_PhysicsParams);
+        *(int *)(base + 0x10) = 0;
+
+        uVar4 = DAT_00489270 & 0x80000003;
+        if ((int)uVar4 < 0) {
+            uVar4 = (uVar4 - 1 | 0xFFFFFFFC) + 1;
+        }
+        *(char *)(base + 0x18) = (char)uVar4;
+        *(unsigned char *)(base + 0x1b) = 0xFF;
+
+        if (mirror == 0) {
+            *(unsigned char *)(base + 0x1a) = 0x3A;
+        } else {
+            *(unsigned char *)(base + 0x1a) = 0x3B;
+        }
+
+        /* Boundary checking for horizontal walls */
+        if (facing == 0 || facing == 2) {
+            int *piVar1 = (int *)(base);
+            iVar2 = *piVar1;
+            uVar4 = (unsigned int)(*(unsigned char *)((int)DAT_00489e8c +
+                (unsigned int)*(unsigned char *)(base + 0x1a)) >> 1);
+            if ((int)(iVar2 - uVar4) < 2) return;
+            if (DAT_00487a00 - 2 <= (int)(iVar2 + uVar4)) return;
+        }
+
+        /* Boundary checking for vertical walls */
+        if (facing == 1 || facing == 3) {
+            iVar2 = *(int *)(base + 4);
+            uVar4 = (unsigned int)(*(unsigned char *)(
+                (unsigned int)*(unsigned char *)(base + 0x1a) + (int)DAT_00489e8c) >> 1);
+            if ((int)(iVar2 - uVar4) < 2) return;
+            if ((int)DAT_004879f4 - 2 <= (int)(iVar2 + uVar4)) return;
+        }
+
+        *(unsigned char *)(base + 0x19) = team;
+        FUN_00457c70(DAT_00489270);
+        DAT_00489270 = DAT_00489270 + 1;
+    }
+}
+
+
+/* ===== FUN_0041bfe0 - Main Entity Spawner (0041BFE0) ===== */
+/* Reads entity placements from level data and populates all entity arrays.
+ * Also spawns random troopers and debris based on difficulty settings.
+ * This is the function that makes entities visible in the game world. */
+void FUN_0041bfe0(void)
+{
+    int iVar3, iVar4, iVar9, iVar10, iVar11, iVar15;
+    unsigned int uVar5, uVar6;
+    unsigned char bVar7;
+    char cVar8, cVar14;
+    unsigned char uVar13;
+
+    /* Large local arrays for team base optimization */
+    int local_690[128];     /* base X positions per team */
+    int local_490[128];     /* base Y positions per team */
+    unsigned int local_290[128]; /* base team indices */
+    int local_90;           /* base count */
+
+    /* Team base optimization arrays (4 teams x 0x181 stride) */
+    unsigned int local_18a0[4 * 0x181]; /* per-team base lists: [team*0x181] = count, then data */
+    int aiStackY_1ea0[4 * 0x181];       /* X coordinates */
+    int aiStackY_1ca0[4 * 0x181];       /* Y coordinates */
+
+    /* Best spawn positions */
+    int aiStackY_8c[4];     /* best X */
+    int aiStackY_7c[4];     /* best Y */
+    int aiStackY_6c[4];     /* best active flags */
+    int local_5c;           /* best minimum distance */
+    int aiStackY_58[4];     /* candidate X */
+    int aiStackY_48[4];     /* candidate Y */
+    int stack_c8[4];        /* candidate active flags */
+
+    /* ===== Phase 1: Zero all entity counts ===== */
+    local_90 = 0;
+    DAT_00489260 = 0;
+    DAT_00489264 = 0;
+    DAT_00489274 = 0;
+    DAT_00489268 = 0;
+    DAT_00489270 = 0;
+    DAT_0048924c = 0;
+    DAT_00489248 = 0;
+    DAT_00489258 = 0;
+    DAT_0048925c = 0;
+    DAT_0048926c = 0;
+    DAT_00489250 = 0;
+    DAT_0048929c = 0;
+    DAT_004892a4 = 0;
+    DAT_004892a5 = 0;
+    DAT_004892c0 = 0;
+    DAT_004892d4 = 0;
+    DAT_004892d8 = 0;
+    DAT_004892dc = 0;
+    DAT_004892e0 = 0;
+
+    /* ===== Phase 2: Random trooper spawning ===== */
+    if (DAT_00483737 != 0) {
+        if (DAT_00483737 == 1) {
+            iVar11 = ((int)(DAT_004879f4 + (DAT_004879f4 >> 0x1F & 0xFFU)) >> 8) *
+                     ((int)(DAT_004879f0 + (DAT_004879f0 >> 0x1F & 0xFFU)) >> 8);
+        } else {
+            if (DAT_00483737 == 2) {
+                iVar11 = DAT_004879f4 / 0xa0;
+                iVar15 = DAT_004879f0 / 0xa0;
+            } else {
+                iVar11 = DAT_004879f4 / 100;
+                iVar15 = DAT_004879f0 / 100;
+            }
+            iVar15 = iVar15 + ((int)DAT_004879f0 >> 0x1F);
+            iVar11 = iVar11 * (iVar15 - (iVar15 >> 0x1F));
+        }
+
+        for (iVar15 = 0; iVar15 < iVar11; iVar15++) {
+            do {
+                iVar3 = rand();
+                iVar9 = iVar3 % ((int)DAT_004879f0 - 0xe) + 7;
+                iVar3 = rand();
+                iVar3 = iVar3 % ((int)DAT_004879f4 - 0xe) + 7;
+            } while (*(char *)((unsigned int)*(unsigned char *)(
+                (iVar3 << ((unsigned char)DAT_00487a18 & 0x1F)) + (int)DAT_0048782c + iVar9) *
+                0x20 + (int)DAT_00487928) == 0);
+
+            cVar14 = 0;
+            uVar13 = 3;
+            iVar4 = rand();
+            iVar4 = (iVar4 % 0x3c + 0x5a) * 0x200;
+            uVar5 = rand();
+            uVar5 = uVar5 & 0x80000001;
+            if ((int)uVar5 < 0) {
+                uVar5 = (uVar5 - 1 | 0xFFFFFFFE) + 1;
+            }
+            FUN_00407210(iVar9 * 0x40000, iVar3 * 0x40000, 0, 0,
+                         (char)uVar5 * 2 - 1, iVar4, uVar13, cVar14);
+        }
+    }
+
+    /* Dead loop (original loops 0 times - trooper variant) */
+    for (iVar11 = 0; iVar11 < 0; iVar11++) {
+        /* no-op */
+    }
+
+    /* ===== Phase 3: Random debris spawning ===== */
+    if (DAT_00483736 != 0) {
+        if (DAT_00483736 == 1) {
+            iVar11 = ((int)(DAT_004879f4 + (DAT_004879f4 >> 0x1F & 0x1FFU)) >> 9) *
+                     ((int)(DAT_004879f0 + (DAT_004879f0 >> 0x1F & 0x1FFU)) >> 9);
+        } else {
+            if (DAT_00483736 == 2) {
+                iVar11 = DAT_004879f4 / 300;
+                iVar15 = DAT_004879f0 / 300;
+            } else {
+                iVar11 = DAT_004879f4 / 200;
+                iVar15 = DAT_004879f0 / 200;
+            }
+            iVar15 = iVar15 + ((int)DAT_004879f0 >> 0x1F);
+            iVar11 = iVar11 * (iVar15 - (iVar15 >> 0x1F));
+        }
+
+        for (iVar15 = 0; iVar15 < iVar11; iVar15++) {
+            do {
+                iVar3 = rand();
+                iVar9 = iVar3 % ((int)DAT_004879f0 - 0xe) + 7;
+                iVar3 = rand();
+                iVar3 = iVar3 % ((int)DAT_004879f4 - 0xe) + 7;
+            } while (*(char *)((unsigned int)*(unsigned char *)(
+                (iVar3 << ((unsigned char)DAT_00487a18 & 0x1F)) + (int)DAT_0048782c + iVar9) *
+                0x20 + (int)DAT_00487928) == 0);
+
+            bVar7 = 0;
+            uVar13 = 3;
+            iVar4 = rand();
+            FUN_00406d20(iVar9 * 0x40000, iVar3 * 0x40000, (char)(iVar4 % 7), 0x4e2000, uVar13, bVar7);
+        }
+    }
+
+    /* Dead loops (original loops 0 times - static entities, turrets, etc.) */
+    for (iVar11 = 0; iVar11 < 0; iVar11++) { /* static entity no-op */ }
+    for (iVar11 = 0; iVar11 < 0; iVar11++) { /* turret no-op */ }
+
+    /* ===== Phase 4: Clear tracking array ===== */
+    for (iVar11 = 0; iVar11 < 12; iVar11++) {
+        DAT_00487834[iVar11] = 0;
+    }
+
+    /* ===== Phase 5: Process entity placements from level file ===== */
+    iVar15 = 0;
+    iVar11 = (int)DAT_00487828;
+
+    while (iVar15 < DAT_00489278) {
+        iVar3 = iVar15 * 0x14;
+
+        switch (*(unsigned char *)(iVar3 + 8 + iVar11)) {
+        case 0:
+            /* Projectile placement */
+            if (DAT_00483754[3] != 0) {
+                bVar7 = *(unsigned char *)(iVar3 + 10 + iVar11);
+                iVar9 = (int)(bVar7 + 1);
+                iVar9 = iVar9 * iVar9 * iVar9 * 56000;
+                if (bVar7 == 0x0F) {
+                    iVar9 = 2000000000;
+                }
+                FUN_00406d20(
+                    *(int *)(iVar3 + iVar11) << 0x12,
+                    *(int *)(iVar3 + 4 + iVar11) << 0x12,
+                    *(char *)(iVar3 + 9 + iVar11),
+                    iVar9,
+                    *(unsigned char *)(iVar3 + 0xb + iVar11),
+                    *(unsigned char *)(iVar3 + 0xc + iVar11));
+                iVar11 = (int)DAT_00487828;
+            }
+            break;
+
+        case 1:
+            /* Wall segment placement */
+            if (DAT_00483754[2] != 0 && DAT_00489270 < 0x10) {
+                FUN_00407400(
+                    *(int *)(iVar3 + iVar11),
+                    *(int *)(iVar3 + 4 + iVar11),
+                    *(char *)(iVar3 + 0xc + iVar11),
+                    *(unsigned char *)(iVar3 + 9 + iVar11),
+                    *(char *)(iVar3 + 0xd + iVar11),
+                    *(unsigned char *)(iVar3 + 0xb + iVar11));
+                iVar11 = (int)DAT_00487828;
+
+                /* Check for linked wall pair */
+                if (*(char *)(iVar3 + 10 + (int)DAT_00487828) == 1 && DAT_00489270 < 0x10) {
+                    int wx = *(int *)(iVar3 + (int)DAT_00487828);
+                    int wy = *(int *)(iVar3 + 4 + (int)DAT_00487828);
+                    bVar7 = (*(char *)(iVar3 + 0xc + (int)DAT_00487828) + 2) & 3;
+
+                    if (bVar7 == 0) wy = wy + 1;
+                    else if (bVar7 == 1) wx = wx + 1;
+                    else if (bVar7 == 2) wy = wy - 1;
+                    else if (bVar7 == 3) wx = wx - 1;
+
+                    FUN_00407400(wx, wy, bVar7,
+                        *(unsigned char *)(iVar3 + 9 + (int)DAT_00487828),
+                        *(char *)(iVar3 + 0xd + (int)DAT_00487828),
+                        *(unsigned char *)(iVar3 + 0xb + (int)DAT_00487828));
+
+                    /* Link the two wall segments */
+                    *(char *)((int)DAT_00489e80 + DAT_00489270 * 0x20 - 5) =
+                        (char)DAT_00489270 - 2;
+                    *(char *)((int)DAT_00489e80 + DAT_00489270 * 0x20 - 0x25) =
+                        (char)DAT_00489270 - 1;
+                    iVar11 = (int)DAT_00487828;
+                }
+            }
+            break;
+
+        case 2:
+            /* Multi-type entity placement */
+            switch (*(unsigned char *)(iVar3 + 9 + iVar11)) {
+            case 0:
+                /* Decoration type 0 */
+                if (DAT_004892d8 < 0x78) {
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10) =
+                        *(int *)(iVar3 + iVar11);
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
+                        *(int *)(iVar3 + 4 + (int)DAT_00487828);
+                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 0;
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 8) =
+                        (int)((unsigned int)*(unsigned char *)(iVar3 + 10 + (int)DAT_00487828) * 0x800) >> 3;
+                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xd) =
+                        *(unsigned char *)(iVar3 + 0xb + (int)DAT_00487828);
+
+                    switch (*(unsigned char *)(iVar3 + 0xc + (int)DAT_00487828)) {
+                    case 0: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 0x1e; break;
+                    case 1: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 10; break;
+                    case 2: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 4; break;
+                    case 3: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 2; break;
+                    }
+
+                    DAT_004892d8 = DAT_004892d8 + 1;
+                    iVar15++;
+                    iVar11 = (int)DAT_00487828;
+                    continue;  /* skip the iVar15++ at end */
+                }
+                break;
+
+            case 1:
+                /* Decoration type 1 */
+                if (DAT_004892d8 < 0x78) {
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10) =
+                        *(int *)(iVar3 + iVar11);
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
+                        *(int *)(iVar3 + 4 + (int)DAT_00487828);
+                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 1;
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 8) =
+                        (int)((unsigned int)*(unsigned char *)(iVar3 + 10 + (int)DAT_00487828) * 0x800) >> 3;
+                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xd) =
+                        *(unsigned char *)(iVar3 + 0xb + (int)DAT_00487828);
+                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 1;
+                    DAT_004892d8 = DAT_004892d8 + 1;
+                    iVar11 = (int)DAT_00487828;
+                }
+                break;
+
+            case 2:
+                /* Main entity */
+                if (DAT_00489248 < 0x9c4) {
+                    int ebase = (int)DAT_004892e8 + DAT_00489248 * 0x80;
+
+                    *(int *)(ebase + 0x00) = *(int *)(iVar3 + iVar11) << 0x12;
+                    *(int *)(ebase + 0x08) = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
+                    *(int *)(ebase + 0x18) = 0;
+                    *(int *)(ebase + 0x1c) = 0;
+                    *(int *)(ebase + 0x04) = *(int *)(iVar3 + (int)DAT_00487828) << 0x12;
+                    *(int *)(ebase + 0x0c) = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
+                    *(int *)(ebase + 0x10) = 0;
+                    *(int *)(ebase + 0x14) = 0;
+                    *(unsigned char *)(ebase + 0x21) = 0x19;
+                    *(unsigned short *)(ebase + 0x24) = 0;
+                    *(unsigned char *)(ebase + 0x20) = 0;
+
+                    iVar9 = rand();
+                    *(char *)(ebase + 0x26) = (char)(iVar9 % 0x3c) + 2;
+                    *(unsigned char *)(ebase + 0x22) = 0xFF;
+                    *(int *)(ebase + 0x28) = 0;
+
+                    unsigned char etype = *(unsigned char *)(iVar3 + 10 + (int)DAT_00487828);
+                    *(int *)(ebase + 0x38) =
+                        *(int *)((int)DAT_00487abc + 0x34e0 + (unsigned int)etype * 4);
+                    *(int *)(ebase + 0x44) =
+                        *(int *)((int)DAT_00487abc + 0x351c + (unsigned int)etype * 4);
+                    *(int *)(ebase + 0x48) = 0;
+                    *(int *)(ebase + 0x4c) =
+                        *(int *)((int)DAT_00487abc + 0x354c + (unsigned int)etype * 4);
+                    *(unsigned char *)(ebase + 0x54) = 0;
+                    *(unsigned char *)(ebase + 0x40) = etype;
+                    *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x3458);
+                    *(int *)(ebase + 0x3c) = 0;
+                    *(unsigned char *)(ebase + 0x5c) = 0;
+
+                    DAT_00489248 = DAT_00489248 + 1;
+                    iVar11 = (int)DAT_00487828;
+
+                    if (etype == 0) {
+                        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x54) = 1;
+                        *(unsigned char *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x5a) = 0;
+                        iVar11 = (int)DAT_00487828;
+                    }
+                }
+                break;
+
+            case 3:
+                /* Team base position — store in local arrays */
+                if (local_90 < 128) {
+                    local_690[local_90] = *(int *)(iVar3 + iVar11);
+                    local_490[local_90] = *(int *)(iVar3 + 4 + iVar11);
+                    local_290[local_90] = (unsigned int)*(unsigned char *)(iVar3 + 10 + iVar11);
+                    local_90 = local_90 + 1;
+                    iVar15++;
+                    continue;
+                }
+                break;
+
+            case 4:
+                /* Turret decoration */
+                if (DAT_00483834 != 0 && DAT_004892d8 < 0x78) {
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10) =
+                        (*(int *)(iVar3 + iVar11) / 3) * 3;
+                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
+                        (*(int *)(iVar3 + 4 + (int)DAT_00487828) / 3) * 3;
+                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 2;
+                    DAT_004892d8 = DAT_004892d8 + 1;
+                    iVar11 = (int)DAT_00487828;
+                }
+                break;
+            }
+            break;
+
+        case 3:
+            /* Spawn point */
+            if (DAT_004892d4 < 0xfa) {
+                *(int *)((int)DAT_004876a0 + DAT_004892d4 * 0xc) =
+                    *(int *)(iVar3 + iVar11);
+                *(int *)((int)DAT_004876a0 + 4 + DAT_004892d4 * 0xc) =
+                    *(int *)(iVar3 + 4 + (int)DAT_00487828);
+                *(unsigned char *)((int)DAT_004876a0 + 8 + DAT_004892d4 * 0xc) =
+                    *(unsigned char *)(iVar3 + 9 + (int)DAT_00487828);
+                DAT_004892d4 = DAT_004892d4 + 1;
+                iVar11 = (int)DAT_00487828;
+            }
+            break;
+
+        case 4: {
+            /* Boss/special entity */
+            cVar8 = 0;
+            cVar14 = 0;
+            for (iVar9 = 0; iVar9 < DAT_00489278; iVar9++) {
+                if (*(char *)(iVar11 + 8 + iVar9 * 0x14) == 4) {
+                    if (*(char *)(iVar3 + 0xb + iVar11) == *(char *)(iVar11 + iVar9 * 0x14 + 9)) {
+                        iVar9 = DAT_00489278;
+                        cVar14 = cVar8;
+                    }
+                    cVar8 = cVar8 + 1;
+                }
+            }
+            int *piVar1 = (int *)(iVar11 + iVar15 * 0x14);
+            FUN_00407080(piVar1[0] << 0x12, piVar1[1] << 0x12, cVar14,
+                         *(unsigned char *)(iVar11 + 10 + iVar15 * 0x14));
+            iVar11 = (int)DAT_00487828;
+            break;
+        }
+        }
+
+        iVar15++;
+    }
+
+    /* ===== Phase 6: Post-placement water level ===== */
+    DAT_004892d0 = 0.0f;
+    if (DAT_00483735 == 2 ||
+        (DAT_00483735 == 1 && (rand() % 100 < (int)(unsigned int)DAT_00483962))) {
+        iVar11 = rand() % 6;
+        DAT_004892d0 = (float)DAT_004879f0;
+        if (iVar11 == 0) {
+            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_2;
+        } else if (iVar11 == 1) {
+            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_1;
+        } else if (iVar11 == 2) {
+            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_0;
+        } else {
+            DAT_004892d0 = 0.0f;
+        }
+    }
+
+    /* ===== Phase 7: Team base spawning (if bases exist and in network mode) ===== */
+    if (local_90 != 0 && DAT_0048764a != 0) {
+        FUN_00406d20(local_690[0] << 0x12, local_490[0] << 0x12, 7, 0xea6000,
+                     (char)local_290[0], 0);
+        if (local_290[0] == 1) {
+            *(int *)((int)DAT_00481f28 + DAT_00489260 * 0x40 - 0x2c) = 0x465000;
+            *(int *)((int)DAT_00481f28 + DAT_00489260 * 0x40 - 0x30) = 0x465000;
+        }
+    }
+
+    /* ===== Phase 8: Spawn point optimization (team mode) ===== */
+    if (DAT_0048373c != 0) {
+        DAT_004892d4 = 0;
+        local_5c = -1;
+        local_18a0[0] = 0;
+        local_18a0[0x181] = 0;
+        local_18a0[0x302] = 0;
+        local_18a0[0x483] = 0;
+
+        /* Build per-team base position lists */
+        for (iVar11 = 0; iVar11 < local_90; iVar11++) {
+            if ((unsigned char)local_290[iVar11] == 3) {
+                /* Team 3 = all teams */
+                for (uVar5 = 0; (int)uVar5 < 4; uVar5++) {
+                    unsigned int *puVar2 = local_18a0 + uVar5 * 0x181;
+                    int tidx = uVar5 * 0x181;
+                    aiStackY_1ea0[tidx + local_18a0[uVar5 * 0x181]] = local_690[iVar11];
+                    aiStackY_1ca0[tidx + *puVar2] = local_490[iVar11];
+                    local_18a0[tidx + *puVar2 + 0x80] = uVar5;
+                    *puVar2 = *puVar2 + 1;
+                }
+            } else {
+                uVar5 = (unsigned int)(unsigned char)local_290[iVar11];
+                unsigned int *puVar2 = local_18a0 + uVar5 * 0x181;
+                int tidx = uVar5 * 0x181;
+                aiStackY_1ea0[tidx + local_18a0[uVar5 * 0x181]] = local_690[iVar11];
+                aiStackY_1ca0[tidx + *puVar2] = local_490[iVar11];
+                local_18a0[tidx + *puVar2 + 0x80] = uVar5;
+                *puVar2 = *puVar2 + 1;
+            }
+        }
+
+        /* 5000-iteration optimization loop */
+        for (iVar11 = 0; iVar11 < 5000; iVar11++) {
+retry_spawn:
+            /* Generate candidate spawn positions per team */
+            for (iVar15 = 0; iVar15 < 4; iVar15++) {
+                stack_c8[iVar15] = 0;
+            }
+
+            for (iVar15 = 0; iVar15 < DAT_00489240; iVar15++) {
+                uVar5 = (unsigned int)*(unsigned char *)(DAT_00487810 + 0x2c + iVar15 * 0x598);
+                if (stack_c8[uVar5] == 0) {
+                    iVar3 = 0;
+                    do {
+                        uVar6 = local_18a0[uVar5 * 0x181];
+                        if (uVar6 == 0 || iVar3 > 7) {
+                            iVar9 = rand();
+                            iVar9 = iVar9 % ((int)DAT_004879f0 - 0xe) + 7;
+                            iVar4 = rand();
+                            iVar4 = iVar4 % ((int)DAT_004879f4 - 0xe) + 7;
+                        } else {
+                            iVar3++;
+                            iVar9 = rand();
+                            iVar4 = iVar9 % (int)uVar6 + uVar5 * 0x181;
+                            uVar6 = rand();
+                            uVar6 = uVar6 & 0x8000003F;
+                            if ((int)uVar6 < 0) {
+                                uVar6 = (uVar6 - 1 | 0xFFFFFFC0) + 1;
+                            }
+                            iVar9 = aiStackY_1ea0[iVar4] - uVar6 + 0x20;
+                            uVar6 = rand();
+                            uVar6 = uVar6 & 0x8000003F;
+                            if ((int)uVar6 < 0) {
+                                uVar6 = (uVar6 - 1 | 0xFFFFFFC0) + 1;
+                            }
+                            iVar4 = aiStackY_1ca0[iVar4] - uVar6 + 0x20;
+                            if (iVar9 < 0) iVar9 = 0;
+                            if ((int)DAT_004879f0 <= iVar9) iVar9 = (int)DAT_004879f0 - 1;
+                            if (iVar4 < 0) iVar4 = 0;
+                            if ((int)DAT_004879f4 <= iVar4) iVar4 = (int)DAT_004879f4 - 1;
+                        }
+                    } while (*(char *)((unsigned int)*(unsigned char *)(
+                        (iVar4 << ((unsigned char)DAT_00487a18 & 0x1F)) + (int)DAT_0048782c + iVar9) *
+                        0x20 + (int)DAT_00487928) == 0);
+
+                    aiStackY_58[uVar5] = iVar9;
+                    aiStackY_48[uVar5] = iVar4;
+                    stack_c8[uVar5] = 1;
+                }
+            }
+
+            /* Find minimum distance between any two teams */
+            iVar15 = 99999999;
+            for (iVar3 = 0; iVar3 < 3; iVar3++) {
+                iVar9 = iVar3;
+                if (stack_c8[iVar3] != 0) {
+                    while ((iVar9 = iVar9 + 1) < 4) {
+                        if (stack_c8[iVar9] != 0) {
+                            iVar4 = aiStackY_58[iVar3] - aiStackY_58[iVar9];
+                            if (iVar4 < 0) iVar4 = -iVar4;
+                            iVar10 = aiStackY_48[iVar3] - aiStackY_48[iVar9];
+                            if (iVar10 < 0) iVar10 = -iVar10;
+                            if (iVar10 + iVar4 < iVar15) {
+                                iVar15 = iVar10 + iVar4;
+                            }
+                        }
+                    }
+                }
+            }
+
+            /* If this is better than best so far, validate and save */
+            if (local_5c < iVar15) {
+                iVar3 = 0;
+                for (;;) {
+                    if (iVar3 > 3) {
+                        /* All passed validation — save as best */
+                        local_5c = iVar15;
+                        for (iVar15 = 0; iVar15 < 4; iVar15++) {
+                            aiStackY_8c[iVar15] = aiStackY_58[iVar15];
+                            aiStackY_7c[iVar15] = aiStackY_48[iVar15];
+                            aiStackY_6c[iVar15] = stack_c8[iVar15];
+                        }
+                        break;
+                    }
+                    if (stack_c8[iVar3] != 0) {
+                        /* Validate walkable area around spawn */
+                        iVar9 = aiStackY_58[iVar3];
+                        iVar4 = aiStackY_48[iVar3];
+                        if (iVar9 < 0x19 || (int)DAT_004879f0 - 0x19 <= iVar9 ||
+                            iVar4 < 0x3c || (int)DAT_004879f4 - 0x1e <= iVar4) {
+                            goto retry_spawn;
+                        }
+                        int scan = ((iVar4 - 0x32) << ((unsigned char)DAT_00487a18 & 0x1F)) - 0x10 + iVar9;
+                        int failed = 0;
+                        for (iVar4 = 0; iVar4 < 0x40 && !failed; iVar4 += 4) {
+                            for (iVar10 = 0; iVar10 < 0x20; iVar10 += 4) {
+                                if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + scan) *
+                                    0x20 + (int)DAT_00487928) == 0) {
+                                    failed = 1;
+                                    break;
+                                }
+                                scan += 4;
+                            }
+                            if (!failed) {
+                                scan = scan - 0x20 + DAT_00487a00 * 4;
+                            }
+                        }
+                        if (failed) goto retry_spawn;
+                    }
+                    iVar3++;
+                }
+            }
+        }
+
+        /* Place final team bases and spawn points */
+        for (iVar11 = 0; iVar11 < 4; iVar11++) {
+            if (aiStackY_6c[iVar11] != 0) {
+                FUN_00406d20(aiStackY_8c[iVar11] << 0x12, aiStackY_7c[iVar11] << 0x12,
+                             7, 0xea6000, (char)iVar11, 0);
+                for (iVar15 = 0; iVar15 < 4; iVar15++) {
+                    if (DAT_004892d4 < 0xfa) {
+                        iVar3 = rand();
+                        *(int *)((int)DAT_004876a0 + DAT_004892d4 * 0xc) =
+                            iVar3 % 0x60 - 0x30 + aiStackY_8c[iVar11];
+                        iVar3 = rand();
+                        *(int *)((int)DAT_004876a0 + 4 + DAT_004892d4 * 0xc) =
+                            iVar3 % 0x60 - 0x30 + aiStackY_7c[iVar11];
+                        *(char *)((int)DAT_004876a0 + 8 + DAT_004892d4 * 0xc) = (char)iVar11;
+                        DAT_004892d4 = DAT_004892d4 + 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
