@@ -215,23 +215,6 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     {
         unsigned char sky_type = g_ConfigBlob[0x1803];
         /* DIAG: Log sky fill state once */
-        {
-            static int sky_logged = 0;
-            if (!sky_logged) {
-                sky_logged = 1;
-                LOG("[DIAG] Sky fill: sky_type=%d (g_ConfigBlob[0x1803])\n", (int)sky_type);
-                LOG("[DIAG] Sprite ptrs: ab4=%p 234=%p e8c=%p e88=%p\n",
-                    DAT_00487ab4, DAT_00489234, DAT_00489e8c, DAT_00489e88);
-                if (sky_type < 3 && DAT_00489e8c && DAT_00489e88 && DAT_00489234) {
-                    int si = (sky_type == 0) ? 0x40 : ((sky_type == 1) ? 0x45 : 0x46);
-                    LOG("[DIAG] Sky sprite %d: w=%d h=%d offset=%d\n",
-                        si,
-                        (int)((unsigned char *)DAT_00489e8c)[si],
-                        (int)((unsigned char *)DAT_00489e88)[si],
-                        ((int *)DAT_00489234)[si]);
-                }
-            }
-        }
         if (sky_type < 3 && DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
             /* Tile a sprite across the buffer */
             int sky_sprite = (sky_type == 0) ? 0x40 : ((sky_type == 1) ? 0x45 : 0x46);
@@ -353,25 +336,6 @@ void Render_Frame(void)
     if (g_ScratchBuffer == NULL) {
         g_ScratchBuffer = (unsigned short *)malloc(640 * 480 * 2);
         if (!g_ScratchBuffer) return;
-    }
-
-    /* DIAG: Trace rendering state every ~2 sec */
-    {
-        static int diag_counter = 0;
-        if (diag_counter++ % 120 == 0) {
-            LOG("[DIAG] Render_Frame #%d: g_GameState=%d g_SubState=%d DAT_00481f50=%p\n",
-                diag_counter, (int)g_GameState, (int)g_SubState, DAT_00481f50);
-            if (g_GameState == 0 && DAT_00481f50 != NULL) {
-                LOG("[DIAG]   → path: Render_Game_World (gameplay)\n");
-            } else {
-                LOG("[DIAG]   → path: Software_Buffer copy (menu/intro)\n");
-            }
-            if (g_GameState != 0) {
-                LOG("[DIAG]   → will call: Render_Game_View_To + FUN_004076d0\n");
-            } else {
-                LOG("[DIAG]   → will SKIP: Render_Game_View_To (no cursor)\n");
-            }
-        }
     }
 
     /* 1. Draw background into scratch buffer.
@@ -655,14 +619,6 @@ void Render_Game_View_To(unsigned short *frame)
     /* ---- Draw mouse cursor sprite (0x22) on top of everything ---- */
     /* Original: FUN_00428650 draws sprite 0x22 during menu/gameplay rendering.
      * Hide during intro sequence (g_GameState 0x96/0x97) where cursor is irrelevant. */
-    {
-        static int cursor_logged = 0;
-        if (!cursor_logged) {
-            cursor_logged = 1;
-            LOG("[DIAG] Cursor draw reached! g_GameState=%d g_SubState=%d\n",
-                (int)g_GameState, (int)g_SubState);
-        }
-    }
     if (g_GameState < 0x90 &&
         DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
         int cur_sprite = 0x22;  /* cursor sprite index (decimal 34) */

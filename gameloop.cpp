@@ -491,16 +491,21 @@ void Game_Update_Render(void)
         }
         esc_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
 
-        /* Enter key (scan 0x1C) - start gameplay from level preview */
+        /* Enter key (scan 0x1C) - start gameplay from level preview.
+         * Original binary: substate 4 shows a camera-pan level preview and waits for Enter.
+         * COMPAT: Auto-start gameplay since we don't render the preview yet. */
         static unsigned char enter_prev = 0;
+        if (g_SubState == 4) {
+            /* Auto-transition: level preview → active gameplay */
+            g_SubState = 0;
+            g_TimerStart = timeGetTime();
+            g_TimerAux = 0;
+            g_FrameTimer = timeGetTime();
+        }
         if ((g_KeyboardState[0x1C] & 0x80) && !enter_prev) {
-            if (g_SubState == 4) {
-                /* Level preview → start active gameplay */
-                LOG("[GAME] Enter pressed → starting gameplay (substate 4→0)\n");
-                g_SubState = 0;
-                g_TimerStart = timeGetTime();
-                g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+            if (g_SubState == 2) {
+                /* Substate 2: Enter triggers round end (original behavior) */
+                /* TODO: implement when round system is decompiled */
             }
         }
         enter_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;

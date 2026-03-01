@@ -201,6 +201,7 @@ static void FUN_0044b990(void)
         if (keyState[k4] & 0x80) *buttons |= 0x10;  /* Fire Secondary */
         if (keyState[k5] & 0x80) *buttons |= 0x20;  /* Special/Detonate */
         if (keyState[k6] & 0x80) *buttons |= 0x40;  /* Brake */
+
     }
 }
 

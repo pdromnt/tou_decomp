@@ -89,7 +89,429 @@ int DAT_00485088 = 0;   /* total map/level count */
 int DAT_0048508c = 0;   /* GG theme/official level count */
 
 /* ===== Stub functions (to be decompiled later) ===== */
-void FUN_0041eae0(void) {}
+
+/* ===== FUN_0041eae0 - Tile Type Properties Table Init (0041EAE0) =====
+ * Initializes DAT_00487928: 256 entries × 0x20 bytes each.
+ * Called once from System_Init_Check at startup (before any level loading).
+ * All values are hardcoded. Key fields per entry:
+ *   [0x00] type_active    [0x03] passability (0=solid, 1=passable)
+ *   [0x04] overlay_flag   [0x05] movement_cost  [0x06] anim_enabled
+ *   [0x08] default_tile   [0x0A] destructible   [0x0B] blocking
+ *   [0x0C] draw_layer_1   [0x0D] draw_layer_2   [0x12] hit_points
+ *   [0x13-0x16] anim frames  [0x17] prev_type_link  [0x18] group_id
+ */
+void FUN_0041eae0(void)
+{
+    unsigned char *t = (unsigned char *)DAT_00487928;
+    int i;
+    char c;
+
+    /* --- Default init for entries 0..254 (stride 0x20) --- */
+    for (i = 0; i < 0x1FE0; i += 0x20) {
+        t[i + 4]    = 0;
+        t[i + 1]    = 0;
+        t[i + 2]    = 0;
+        t[i + 3]    = 0;
+        t[i + 5]    = 0;
+        t[i + 6]    = 1;
+        t[i + 7]    = 1;
+        t[i + 10]   = 0;
+        t[i + 0x0B] = 0;
+        t[i + 8]    = 0x80;
+        t[i + 9]    = 0;
+        t[i + 0x0E] = 0;
+        t[i + 0x0F] = 1;
+        t[i + 0x12] = 0x0C;
+        t[i + 0x0C] = 1;
+        t[i + 0x0D] = 1;
+        t[i + 0x13] = 99;
+        t[i + 0x14] = 0x67;
+        t[i + 0x15] = 0x6B;
+        t[i + 0x16] = 0x6F;
+        t[i + 0x17] = 0;
+        t[i + 0x18] = 0;
+        t[i + 0x1A] = 0;
+        t[i + 0x1B] = 0;
+    }
+
+    /* --- Specific tile type overrides --- */
+
+    /* special_flag_2 (offset 0x1B) for specific tiles */
+    t[0x25B] = 1;   /* tile 18 */
+    t[0x1FB] = 1;   /* tile 15 */
+    t[0x21B] = 1;   /* tile 16 */
+    t[0x23B] = 1;   /* tile 17 */
+    t[0xABB] = 1;   /* tile 85 */
+    t[0xADB] = 1;   /* tile 86 */
+    t[0xAFB] = 1;   /* tile 87 */
+    t[0xB1B] = 1;   /* tile 88 */
+    t[0x27B] = 1;   /* tile 19 */
+
+    /* special_flag_1 (offset 0x1A) */
+    t[0x0FA] = 1;   /* tile 7 */
+    t[0x35A] = 1;   /* tile 26 */
+    t[0x25A] = 1;   /* tile 18 */
+
+    /* group_id (offset 0x18) */
+    t[0x058] = 1;   /* tile 2 */
+    t[0x278] = 1;   /* tile 19 */
+    t[0x398] = 1;   /* tile 28 */
+    t[0x3B8] = 1;   /* tile 29 */
+    t[0x3D8] = 1;   /* tile 30 */
+    t[0x3F8] = 1;   /* tile 31 */
+
+    /* tile_param (offset 0x09) for specific tiles */
+    t[0x059] = 0xFF; /* tile 2 */
+    t[0x279] = 0xFF; /* tile 19 */
+    t[0x399] = 0;    /* tile 28 */
+    t[0x3B9] = 1;    /* tile 29 */
+    t[0x3D9] = 2;    /* tile 30 */
+    t[0x3F9] = 0xFF; /* tile 31 */
+
+    /* --- Passable terrain: tiles 28-30 (loop 0x380..0x3C0) --- */
+    for (i = 0x380; i < 0x3C1; i += 0x20) {
+        t[i + 0x0B] = 0;
+        t[i + 0x0C] = 1;
+        t[i + 6]    = 1;
+        t[i + 0x0D] = 1;
+        t[i + 3]    = 1;    /* passable */
+        t[i + 5]    = 2;    /* movement cost 2 */
+    }
+
+    /* tile 31 - passable, manual patch */
+    t[0x3EB] = 1;    /* [0x0B] */
+    t[0x3EC] = 0;    /* [0x0C] */
+    t[0x3E6] = 0;    /* [0x06] */
+    t[0x3ED] = 0;    /* [0x0D] */
+    t[0x3E3] = 1;    /* [0x03] passable */
+    t[0x3E5] = 2;    /* [0x05] movement cost 2 */
+
+    /* --- Active types: tile 0, 22-25, 64-71 --- */
+    /* type_active (offset 0x00) */
+    t[0]     = 1;    /* tile 0 */
+    t[0x2C0] = 1;    /* tile 22 */
+    t[0x2E0] = 1;    /* tile 23 */
+    t[0x300] = 1;    /* tile 24 */
+    t[800]   = 1;    /* tile 25 */
+    t[1]     = 1;    /* type_category: tile 0 */
+    t[0x2C1] = 1;    /* tile 22 */
+    t[0x2E1] = 1;    /* tile 23 */
+    t[0x301] = 1;    /* tile 24 */
+    t[0x321] = 1;    /* tile 25 */
+
+    /* type_active for tiles 64-71 */
+    t[0x801] = 1;
+    t[0x821] = 1;
+    t[0x841] = 1;
+    t[0x861] = 1;
+    t[0x881] = 1;
+    t[0x8A1] = 1;
+    t[0x8C1] = 1;
+    t[0x8E1] = 1;
+
+    /* passability (offset 0x03) - passable tiles */
+    t[3]     = 1;    /* tile 0 */
+    t[0x2C3] = 1;    /* tile 22 */
+    t[0x2E3] = 1;    /* tile 23 */
+    t[0x303] = 1;    /* tile 24 */
+    t[0x323] = 1;    /* tile 25 */
+    t[0x803] = 1;    /* tile 64 */
+    t[0x823] = 1;    /* tile 65 */
+    t[0x843] = 1;    /* tile 66 */
+    t[0x863] = 1;    /* tile 67 */
+    t[0x883] = 1;    /* tile 68 */
+    t[0x8A3] = 1;    /* tile 69 */
+    t[0x8C3] = 1;    /* tile 70 */
+    t[0x8E3] = 1;    /* tile 71 */
+
+    /* passability for tiles 2, 19 (extra passable ground) */
+    t[0x043] = 1;    /* tile 2 */
+    t[0x263] = 1;    /* tile 19 */
+    t[0x083] = 1;    /* tile 4 */
+    t[0x2A3] = 1;    /* tile 21 */
+
+    /* type_variant (offset 0x02) */
+    t[2]     = 1;    /* tile 0 */
+    t[0x2C2] = 1;    /* tile 22 */
+    t[0x2E2] = 1;    /* tile 23 */
+    t[0x302] = 1;    /* tile 24 */
+    t[0x322] = 1;    /* tile 25 */
+    t[0x802] = 1;    /* tile 64 */
+    t[0x822] = 1;    /* tile 65 */
+    t[0x842] = 1;    /* tile 66 */
+    t[0x862] = 1;    /* tile 67 */
+    t[0x882] = 1;    /* tile 68 */
+    t[0x8A2] = 1;    /* tile 69 */
+    t[0x8C2] = 1;    /* tile 70 */
+    t[0x8E2] = 1;    /* tile 71 */
+
+    /* Extended range type_variant: tiles 128-136 */
+    t[0x1002] = 1;
+    t[0x1022] = 1;
+    t[0x1042] = 1;
+    t[0x1062] = 1;
+    t[0x1082] = 1;
+    t[0x10A2] = 1;
+    t[0x10C2] = 1;
+    t[0x10E2] = 1;
+    t[0x1102] = 1;
+
+    /* anim_enabled=0 (offset 0x06) for active types */
+    t[6]     = 0;    /* tile 0 */
+    t[0x2C6] = 0;    /* tile 22 */
+    t[0x2E6] = 0;    /* tile 23 */
+    t[0x306] = 0;    /* tile 24 */
+    t[0x326] = 0;    /* tile 25 */
+    t[0x806] = 0;    /* tile 64 */
+    t[0x826] = 0;    /* tile 65 */
+    t[0x846] = 0;    /* tile 66 */
+    t[0x866] = 0;    /* tile 67 */
+    t[0x886] = 0;    /* tile 68 */
+    t[0x8A6] = 0;    /* tile 69 */
+    t[0x8C6] = 0;    /* tile 70 */
+    t[0x8E6] = 0;    /* tile 71 */
+    t[0x1006] = 0;   /* tile 128 */
+    t[0x1026] = 0;   /* tile 129 */
+    t[0x1046] = 0;   /* tile 130 */
+    t[0x1066] = 0;   /* tile 131 */
+    t[0x1086] = 0;   /* tile 132 */
+    t[0x10A6] = 0;   /* tile 133 */
+    t[0x10C6] = 0;   /* tile 134 */
+    t[0x10E6] = 0;   /* tile 135 */
+    t[0x1106] = 0;   /* tile 136 */
+    t[0x046] = 0;    /* tile 2 */
+    t[0x266] = 0;    /* tile 19 */
+    t[0x0A6] = 0;    /* tile 5 */
+    t[0x146] = 0;    /* tile 10 */
+    t[0x206] = 0;    /* tile 16 */
+
+    /* anim_style=0 (offset 0x07) for extended tiles */
+    t[0x1007] = 0;
+    t[0x1027] = 0;
+    t[0x1047] = 0;
+    t[0x1067] = 0;
+    t[0x1087] = 0;
+    t[0x10A7] = 0;
+    t[0x10C7] = 0;
+    t[0x10E7] = 0;
+    t[0x1107] = 0;
+    t[0x0A7] = 0;    /* tile 5 */
+    t[0x147] = 0;    /* tile 10 */
+    t[0x207] = 0;    /* tile 16 */
+
+    /* movement_cost=1 (offset 0x05) for active types */
+    t[5]     = 1;    /* tile 0 */
+    t[0x2C5] = 1;    /* tile 22 */
+    t[0x2E5] = 1;    /* tile 23 */
+    t[0x305] = 1;    /* tile 24 */
+    t[0x325] = 1;    /* tile 25 */
+    t[0x085] = 1;    /* tile 4 */
+    t[0x2A5] = 1;    /* tile 21 */
+    t[0x805] = 1;    /* tile 64 */
+    t[0x825] = 1;    /* tile 65 */
+    t[0x845] = 1;    /* tile 66 */
+    t[0x865] = 1;    /* tile 67 */
+    t[0x885] = 1;    /* tile 68 */
+    t[0x8A5] = 1;    /* tile 69 */
+    t[0x8C5] = 1;    /* tile 70 */
+    t[0x8E5] = 1;    /* tile 71 */
+
+    /* movement_cost=2 (offset 0x05) for tiles 2, 19 */
+    t[0x045] = 2;    /* tile 2 */
+    t[0x265] = 2;    /* tile 19 */
+
+    /* overlay_flag=1 (offset 0x04) for tiles 64-71 */
+    t[0x804] = 1;
+    t[0x824] = 1;
+    t[0x844] = 1;
+    t[0x864] = 1;
+    t[0x884] = 1;
+    t[0x8A4] = 1;
+    t[0x8C4] = 1;
+    t[0x8E4] = 1;
+
+    /* --- Entity types: tiles 100-115 (loop 0xC80..0xE80) --- */
+    for (i = 0xC80; i < 0xE80; i += 0x20) {
+        t[i + 1]    = 1;    /* type_category */
+        t[i + 3]    = 1;    /* passable */
+        t[i + 2]    = 1;    /* type_variant */
+        t[i + 5]    = 1;    /* movement_cost */
+        t[i + 6]    = 0;    /* anim_enabled=0 */
+        t[i + 4]    = 1;    /* overlay_flag */
+        t[i + 0x0C] = 0;    /* draw_layer_1=0 */
+        t[i + 0x0D] = 0;    /* draw_layer_2=0 */
+    }
+
+    /* --- Animation chain: tiles 100-103 --- */
+    for (i = 100; i < 104; i++) {
+        c = (char)i;
+        t[i * 0x20 + 0x17] = c - 1;   /* prev_type_link */
+        if (i == 100) {
+            t[0xC97] = 0;              /* tile 100 has no prev */
+        }
+        t[i * 0x20 + 0x13] = c;       /* anim_frame_0 = self */
+        t[i * 0x20 + 0x14] = c;       /* anim_frame_1 = self */
+        t[i * 0x20 + 0x15] = c;       /* anim_frame_2 = self */
+        t[i * 0x20 + 0x16] = c;       /* anim_frame_3 = self */
+    }
+
+    /* --- Animation chain: tiles 104-107 --- */
+    for (i = 104; i < 108; i++) {
+        c = (char)i;
+        t[i * 0x20 + 0x17] = c - 1;
+        if (i == 104) {
+            t[0xD17] = 0;
+        }
+        t[i * 0x20 + 0x13] = c - 4;
+        t[i * 0x20 + 0x14] = c;
+        t[i * 0x20 + 0x15] = c + 4;
+        t[i * 0x20 + 0x16] = c + 8;
+    }
+
+    /* --- Animation chain: tiles 108-111 --- */
+    for (i = 108; i < 112; i++) {
+        c = (char)i;
+        t[i * 0x20 + 0x17] = c - 1;
+        if (i == 108) {
+            t[0xD97] = 0;
+        }
+        t[i * 0x20 + 0x13] = c - 8;
+        t[i * 0x20 + 0x14] = c - 4;
+        t[i * 0x20 + 0x15] = c;
+        t[i * 0x20 + 0x16] = c + 4;
+    }
+
+    /* --- Animation chain: tiles 112-115 --- */
+    for (i = 112; i < 116; i++) {
+        c = (char)i;
+        t[i * 0x20 + 0x17] = c - 1;
+        if (i == 112) {
+            t[0xE17] = 0;
+        }
+        t[i * 0x20 + 0x13] = c - 12;
+        t[i * 0x20 + 0x14] = c - 8;
+        t[i * 0x20 + 0x15] = c - 4;
+        t[i * 0x20 + 0x16] = c;
+    }
+
+    /* --- blocking (offset 0x0B) for specific tiles --- */
+    t[0x04B] = 1;    /* tile 2 */
+    t[0x26B] = 1;    /* tile 19 */
+    t[0x0AB] = 1;    /* tile 5 */
+    t[0x100B] = 1;   /* tile 128 */
+    t[0x102B] = 1;   /* tile 129 */
+    t[0x104B] = 1;   /* tile 130 */
+    t[0x106B] = 1;   /* tile 131 */
+    t[0x108B] = 1;   /* tile 132 */
+    t[0x10AB] = 1;   /* tile 133 */
+    t[0x10CB] = 1;   /* tile 134 */
+    t[0x10EB] = 1;   /* tile 135 */
+    t[0x110B] = 1;   /* tile 136 */
+
+    /* draw_layer_1=0 (offset 0x0C) */
+    t[0x04C] = 0;    /* tile 2 */
+    t[0x26C] = 0;    /* tile 19 */
+    t[0x0AC] = 0;    /* tile 5 */
+    t[0x100C] = 0;   /* tile 128 */
+    t[0x102C] = 0;
+    t[0x104C] = 0;
+    t[0x106C] = 0;
+    t[0x108C] = 0;
+    t[0x10AC] = 0;
+    t[0x10CC] = 0;
+    t[0x10EC] = 0;
+    t[0x110C] = 0;
+    t[0x80C] = 0;    /* tile 64 */
+    t[0x82C] = 0;    /* tile 65 */
+    t[0x84C] = 0;    /* tile 66 */
+    t[0x86C] = 0;    /* tile 67 */
+    t[0x88C] = 0;    /* tile 68 */
+    t[0x8AC] = 0;    /* tile 69 */
+    t[0x8CC] = 0;    /* tile 70 */
+    t[0x8EC] = 0;    /* tile 71 */
+    t[0x0C]  = 0;    /* tile 0 */
+    t[0x2CC] = 0;    /* tile 22 */
+    t[0x2EC] = 0;    /* tile 23 */
+    t[0x30C] = 0;    /* tile 24 */
+    t[0x32C] = 0;    /* tile 25 */
+
+    /* draw_layer_2=0 (offset 0x0D) */
+    t[0x04D] = 0;    /* tile 2 */
+    t[0x26D] = 0;    /* tile 19 */
+    t[0x0AD] = 0;    /* tile 5 */
+    t[0x100D] = 0;   /* tile 128 */
+    t[0x102D] = 0;
+    t[0x104D] = 0;
+    t[0x106D] = 0;
+    t[0x108D] = 0;
+    t[0x10AD] = 0;
+    t[0x10CD] = 0;
+    t[0x10ED] = 0;
+    t[0x110D] = 0;
+    t[0x80D] = 0;    /* tile 64 */
+    t[0x82D] = 0;
+    t[0x84D] = 0;
+    t[0x86D] = 0;
+    t[0x88D] = 0;
+    t[0x8AD] = 0;
+    t[0x8CD] = 0;
+    t[0x8ED] = 0;
+    t[0x0D]  = 0;    /* tile 0 */
+    t[0x2CD] = 0;    /* tile 22 */
+    t[0x2ED] = 0;    /* tile 23 */
+    t[0x30D] = 0;    /* tile 24 */
+    t[0x32D] = 0;    /* tile 25 */
+    t[0x14D] = 0;    /* tile 10 */
+    t[0x20D] = 0;    /* tile 16 */
+
+    /* --- Decoration types: tiles 240-254 (loop 0x1E00..0x1FE0) --- */
+    for (i = 0x1E00; i < 0x1FE0; i += 0x20) {
+        t[i + 5]    = 1;    /* movement_cost=1 */
+        t[i + 0x0B] = 1;    /* blocking=1 */
+        t[i + 0x0C] = 0;    /* draw_layer_1=0 */
+        t[i + 0x0D] = 0;    /* draw_layer_2=0 */
+        t[i + 6]    = 0;    /* anim_enabled=0 */
+        t[i + 7]    = 0;    /* anim_style=0 */
+    }
+
+    /* destructible (offset 0x0A) for extended tiles */
+    t[0x100A] = 1;   /* tile 128 */
+    t[0x102A] = 1;
+    t[0x104A] = 1;
+    t[0x106A] = 1;
+    t[0x108A] = 1;
+    t[0x10AA] = 1;
+    t[0x10CA] = 1;
+    t[0x10EA] = 1;
+    t[0x110A] = 1;
+
+    /* default_tile=0x81 (offset 0x08) for wall tiles */
+    t[0x1E8] = 0x81; /* tile 15 */
+    t[0x228] = 0x81; /* tile 17 */
+    t[0x248] = 0x81; /* tile 18 */
+    t[0x268] = 0x81; /* tile 19 */
+    t[0x208] = 0x81; /* tile 16 */
+
+    /* default_tile for tiles 64-71 (sequential 0x81-0x88) */
+    t[0x808] = 0x81;
+    t[0x828] = 0x82;
+    t[0x848] = 0x83;
+    t[0x868] = 0x84;
+    t[0x888] = 0x85;
+    t[0x8A8] = 0x86;
+    t[0x8C8] = 0x87;
+    t[0x8E8] = 0x88;
+
+    /* tile_param (offset 0x09) cross-refs for tiles 129-136 → tiles 64-71 */
+    t[0x1029] = 0x40;
+    t[0x1049] = 0x41;
+    t[0x1069] = 0x42;
+    t[0x1089] = 0x43;
+    t[0x10A9] = 0x44;
+    t[0x10C9] = 0x45;
+    t[0x10E9] = 0x46;
+    t[0x1109] = 0x47;
+}
 void FUN_004265e0(int index) { (void)index; } /* Key binding auto-assign - stub */
 /* FUN_0045a060 moved to effects.cpp */
 /* FUN_0045b2a0 moved to effects.cpp */
@@ -2810,10 +3232,6 @@ void Init_Game_Config(void)
      * For now, enough to pass System_Init_Check. */
 
     Load_Options_Config();
-
-    /* DIAG: Log sky type after options.cfg load (may have overwritten our default) */
-    LOG("[DIAG] Post-options sky_type = %d (g_ConfigBlob[0x1803])\n",
-        (int)(unsigned char)g_ConfigBlob[0x1803]);
 }
 
 /* ===== Load_Options_Config (0042F360) ===== */
