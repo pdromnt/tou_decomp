@@ -447,37 +447,102 @@ int Render_Game_View(void)
 }
 
 /* ===== Font color palettes (DAT_004878f0) ===== */
-/* Each palette is a 256-entry RGB565 ramp from black to the target color.
- * Font pixel luminosity (0-255) indexes into the ramp for smooth anti-aliased text.
- * 14 palettes allocated at runtime in original (0x004878f0).
- * Built here at first use for simplicity. */
-static unsigned short Font_Palettes[6][256];
+/* 14 palettes (indices 0-13). Each is a 256-entry RGB565 ramp.
+ * Font pixel luminosity (0-255) indexes into the ramp for anti-aliased text.
+ * Original: FUN_0041e580 generates palettes 0-5 and 9-12 at startup.
+ * Palettes 6-8 are dynamic (built per-frame for special styles >= 0xFA).
+ * Palette 13 is unused. */
+static unsigned short Font_Palettes[14][256];
 static int Font_Palettes_Built = 0;
+
+/* Helper: pack R8,G8,B8 to RGB565 */
+static inline unsigned short PackRGB565(int r, int g, int b)
+{
+    if (r < 0) r = 0; if (r > 255) r = 255;
+    if (g < 0) g = 0; if (g > 255) g = 255;
+    if (b < 0) b = 0; if (b > 255) b = 255;
+    return (unsigned short)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b >> 3)));
+}
 
 static void Build_Font_Palettes(void)
 {
-    /* Target colors (R8, G8, B8) for each color_idx.
-     * These are the brightest color at luma=255; font pixel luma indexes the ramp. */
-    static const unsigned char targets[][3] = {
-        { 255, 255, 140 },  /* 0: golden yellow (headings, copyright) */
-        { 255, 255, 255 },  /* 1: white         (info text) */
-        {   0, 220, 235 },  /* 2: cyan          (clickable items) */
-        { 200, 200, 200 },  /* 3: light gray    */
-        { 255, 255,   0 },  /* 4: yellow        */
-        { 255, 128,   0 },  /* 5: orange        */
-    };
-
-    for (int c = 0; c < 6; c++) {
-        Font_Palettes[c][0] = 0;
-        for (int i = 1; i < 256; i++) {
-            int r = (targets[c][0] * i) / 255;
-            int g = (targets[c][1] * i) / 255;
-            int b = (targets[c][2] * i) / 255;
-            Font_Palettes[c][i] = (unsigned short)(((r & 0xF8) << 8) |
-                                                    ((g & 0xFC) << 3) |
-                                                    ((b & 0xF8) >> 3));
-        }
+    /* Palette 0: Golden yellow (two-phase ramp, matches FUN_0041e580)
+     * First half: pure saturated yellow (no blue)
+     * Second half: transitions toward white by adding blue */
+    Font_Palettes[0][0] = 0;
+    for (int i = 1; i < 128; i++) {
+        Font_Palettes[0][i] = PackRGB565(i, i, 0);
     }
+    for (int i = 128; i < 256; i++) {
+        int step = i - 128;
+        Font_Palettes[0][i] = PackRGB565(i, i, step * 2);
+    }
+
+    /* Palette 1: White (pure grayscale ramp) */
+    Font_Palettes[1][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[1][i] = PackRGB565(i, i, i);
+    }
+
+    /* Palette 2: Cyan (R=0, G=i*0.8, B=i) */
+    Font_Palettes[2][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[2][i] = PackRGB565(0, (int)(i * 0.8), i);
+    }
+
+    /* Palette 3: Dim yellow (R=i*2/3, G=i*2/3, B=i/3) */
+    Font_Palettes[3][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[3][i] = PackRGB565((int)(i * 0.667), (int)(i * 0.667), i / 3);
+    }
+
+    /* Palette 4: Dark blue (R=i*0.1, G=i*0.5, B=i*0.8) */
+    Font_Palettes[4][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[4][i] = PackRGB565((int)(i * 0.1), (int)(i * 0.5), (int)(i * 0.8));
+    }
+
+    /* Palette 5: Warm peach/skin (two-phase ramp)
+     * First half: R=i, G=i*0.8, B=i*0.6
+     * Second half: fade from warm (128,102,77) toward white */
+    Font_Palettes[5][0] = 0;
+    for (int i = 1; i < 128; i++) {
+        Font_Palettes[5][i] = PackRGB565(i, (int)(i * 0.8), (int)(i * 0.6));
+    }
+    for (int i = 128; i < 256; i++) {
+        double norm = (i - 128) / 128.0;
+        int r = (int)(128.0 + norm * 127.0);
+        int g = (int)(102.4 + norm * 153.6);
+        int b = (int)(76.8 + norm * 179.2);
+        Font_Palettes[5][i] = PackRGB565(r, g, b);
+    }
+
+    /* Palettes 6-8: Reserved for dynamic generation (left as black) */
+
+    /* Palette 9: Red (R=i, G=i*0.2, B=i*0.2) */
+    Font_Palettes[9][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[9][i] = PackRGB565(i, (int)(i * 0.2), (int)(i * 0.2));
+    }
+
+    /* Palette 10: Orange (R=i, G=i*0.8, B=i*0.2) */
+    Font_Palettes[10][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[10][i] = PackRGB565(i, (int)(i * 0.8), (int)(i * 0.2));
+    }
+
+    /* Palette 11: Bright cyan (R=i*0.2, G=i, B=i) */
+    Font_Palettes[11][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[11][i] = PackRGB565((int)(i * 0.2), i, i);
+    }
+
+    /* Palette 12: Blue (R=i*0.3, G=i*0.6, B=i*0.9) */
+    Font_Palettes[12][0] = 0;
+    for (int i = 1; i < 256; i++) {
+        Font_Palettes[12][i] = PackRGB565((int)(i * 0.3), (int)(i * 0.6), (int)(i * 0.9));
+    }
+
     Font_Palettes_Built = 1;
 }
 
@@ -496,8 +561,8 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
     if (!Font_Palettes_Built)
         Build_Font_Palettes();
 
-    /* Select base palette (clamp to valid range) */
-    if (color_idx < 0 || color_idx >= 6)
+    /* Select base palette (clamp to valid range, 14 palettes: 0-13) */
+    if (color_idx < 0 || color_idx >= 14)
         color_idx = 0;
     unsigned short *palette = Font_Palettes[color_idx];
 
