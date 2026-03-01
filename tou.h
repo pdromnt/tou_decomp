@@ -239,6 +239,29 @@ extern int                   DAT_004877b0;      /* scroll mode */
 extern int                   DAT_00485088;      /* total map/level count */
 extern int                   DAT_0048508c;      /* GG theme/official level count */
 
+/* ===== Ship/Player Data ===== */
+extern int                   DAT_004877f8[4];   /* active player index table (up to 4 viewports) */
+extern char                  DAT_00483738;       /* game mode (0=normal, 1=random, 2=config) */
+extern short                 DAT_0048373a;       /* initial lives */
+extern int                   DAT_00483830;       /* starting health */
+extern void                 *DAT_0048780c;       /* ship stats table (0x40 per ship, 9 ships) */
+extern unsigned char         DAT_0048236e[];     /* ship type per player (from level data) */
+extern char                  DAT_004836ce[];     /* player config ship IDs */
+extern char                  DAT_0048378e[];     /* ship-taken flags (9 entries) */
+extern void                 *DAT_00489eac[4];    /* per-player visibility buffers */
+extern int                   DAT_00487788[4];    /* per-player stat counters */
+
+/* ===== Color Transform (FUN_00424240) ===== */
+extern int                   DAT_00481d0c;       /* color matrix min R */
+extern int                   DAT_00481d10;       /* color matrix min G */
+extern int                   DAT_00481d14;       /* color matrix min B */
+extern int                   DAT_00481d18;       /* color threshold R */
+extern int                   DAT_00481d1c;       /* color threshold G */
+extern int                   DAT_00481d20;       /* color threshold B */
+extern int                   DAT_00481d2c;       /* color transition R */
+extern int                   DAT_00481d30;       /* color transition G */
+extern int                   DAT_00481d34;       /* color transition B */
+
 /* ===== Level / Map Data (level.cpp) ===== */
 extern unsigned int          DAT_004879f0;      /* map width (pixels + 14 border) */
 extern unsigned int          DAT_004879f4;      /* map height (pixels + 14 border) */
@@ -369,6 +392,11 @@ int  Menu_Init_And_Loop(void);
 int  Load_Level_Resources(void);
 void FUN_004102b0(void);
 void FUN_0041bc50(void);
+void FUN_0041b010(void);
+void FUN_0041b5d0(void);
+void FUN_0041bb00(void);
+int  FUN_004249c0(void);
+void FUN_00424240(int ship_type, int ship_index, int team_index);
 
 /* ===== Function Prototypes: init.cpp (config) ===== */
 void Load_Options_Config(void);
