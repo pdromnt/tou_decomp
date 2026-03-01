@@ -110,6 +110,82 @@ void Restore_Surfaces(void)
 /* Scratch buffer for compositing particles onto RGB565 before conversion */
 static unsigned short *g_ScratchBuffer = NULL;
 
+/* ===== Render_Game_World (based on FUN_00407720) ===== */
+/* Renders the game world (level background) into a 640×480 RGB565 buffer.
+ * Original iterates over player viewports for split-screen support;
+ * since player/ship systems are stubbed, we use a single centered viewport.
+ *
+ * Original also calls ~10 rendering subsystems after the background blit
+ * (entities, particles, shadows, HUD, etc.) — stubbed pending decompilation.
+ *
+ * param_1: destination RGB565 buffer (640×480)
+ * param_2: buffer stride in pixels (640) */
+static void Render_Game_World(unsigned short *buffer, int stride)
+{
+    if (!DAT_00481f50 || DAT_004879f0 == 0 || DAT_004879f4 == 0)
+        return;
+
+    unsigned short *src = (unsigned short *)DAT_00481f50;
+    int shift = DAT_00487a18 & 0x1F;
+
+    /* Viewport dimensions: full screen (single player) */
+    int vp_w = 640;
+    int vp_h = 480;
+
+    /* Clamp to available map area (minus 7-pixel borders each side) */
+    int avail_w = (int)DAT_004879f0 - 14;
+    int avail_h = (int)DAT_004879f4 - 14;
+    if (vp_w > avail_w) vp_w = avail_w;
+    if (vp_h > avail_h) vp_h = avail_h;
+
+    /* Center camera on map (original reads player position from DAT_00487810) */
+    int vp_left = ((int)DAT_004879f0 - vp_w) / 2;
+    int vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
+
+    /* Clamp to 7-pixel border (matches original clamping logic) */
+    if (vp_left < 7) vp_left = 7;
+    if (vp_top  < 7) vp_top  = 7;
+    if (vp_left + vp_w > (int)DAT_004879f0 - 7)
+        vp_left = (int)DAT_004879f0 - 7 - vp_w;
+    if (vp_top + vp_h > (int)DAT_004879f4 - 7)
+        vp_top = (int)DAT_004879f4 - 7 - vp_h;
+
+    /* Set viewport globals (used by entity/particle renderers) */
+    DAT_004806d8 = vp_w;           /* viewport width */
+    DAT_004806e4 = vp_h;           /* viewport height */
+    DAT_004806dc = vp_left;        /* viewport left (map coords) */
+    DAT_004806e0 = vp_top;         /* viewport top (map coords) */
+    DAT_004806d0 = vp_left + vp_w; /* viewport right */
+    DAT_004806d4 = vp_top + vp_h;  /* viewport bottom */
+    DAT_004806ec = 0;              /* screen X offset (0 for single player) */
+    DAT_004806e8 = 0;              /* screen Y offset (0 for single player) */
+
+    /* Clear buffer (needed if viewport < 640×480, e.g. tiny maps) */
+    memset(buffer, 0, 640 * 480 * 2);
+
+    /* Blit level background from stride-aligned source to screen buffer.
+     * Original uses DWORD copy (2 pixels at a time) for speed;
+     * memcpy per row achieves the same result with compiler optimization. */
+    for (int y = 0; y < vp_h; y++) {
+        unsigned short *s = src + ((vp_top + y) << shift) + vp_left;
+        unsigned short *d = buffer + (DAT_004806e8 + y) * stride + DAT_004806ec;
+        memcpy(d, s, vp_w * 2);
+    }
+
+    /* Original calls ~10 rendering subsystems here:
+     * FUN_0040dbd0 - entity sprites
+     * FUN_0040dce0 - entity sprites (layer 2)
+     * FUN_0040bb60 - shadow/lighting
+     * FUN_0040a870 - projectiles
+     * FUN_0040d6c0 - particles (layer 1)
+     * FUN_0040d810 - particles (layer 2)
+     * FUN_0040caf0 - explosions
+     * FUN_0040d930 - effects
+     * FUN_0040d360 - edge tiles/detail
+     * FUN_0040d100 - darkness/fog overlay
+     * All stubbed pending entity/particle system decompilation. */
+}
+
 /* ===== Render_Frame (0045D800) ===== */
 /*
  * Original pipeline:
@@ -139,14 +215,20 @@ void Render_Frame(void)
         if (!g_ScratchBuffer) return;
     }
 
-    /* 1. Copy current frame from Software_Buffer to scratch buffer.
-     *    Software_Buffer holds the CLEAN background (JPEG).
-     *    All overlays (menu items, particles) are drawn onto scratch each frame. */
-    int frameOffset = (g_FrameIndex & 0xFF) * (640 * 480);
-    unsigned short *src = Software_Buffer + frameOffset;
-    memcpy(g_ScratchBuffer, src, 640 * 480 * 2);
+    /* 1. Draw background into scratch buffer.
+     *    Gameplay state (g_GameState==0) with level data: blit level background.
+     *    Menu/intro: copy Software_Buffer (JPEG background). */
+    if (g_GameState == 0 && DAT_00481f50 != NULL) {
+        /* Game world: blit visible viewport from level background */
+        Render_Game_World(g_ScratchBuffer, 640);
+    } else {
+        /* Menu/intro: copy clean background from Software_Buffer */
+        int frameOffset = (g_FrameIndex & 0xFF) * (640 * 480);
+        unsigned short *src = Software_Buffer + frameOffset;
+        memcpy(g_ScratchBuffer, src, 640 * 480 * 2);
+    }
 
-    /* 2. Draw menu items onto scratch buffer (fresh each frame for hover updates) */
+    /* 2. Draw menu items / HUD onto scratch buffer (fresh each frame) */
     Render_Game_View_To(g_ScratchBuffer);
 
     /* 3. Draw particles/entities onto scratch buffer (RGB565) */

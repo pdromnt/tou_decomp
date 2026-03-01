@@ -216,6 +216,44 @@ extern int                   DAT_004877b0;      /* scroll mode */
 extern int                   DAT_00485088;      /* total map/level count */
 extern int                   DAT_0048508c;      /* GG theme/official level count */
 
+/* ===== Level / Map Data (level.cpp) ===== */
+extern unsigned int          DAT_004879f0;      /* map width (pixels + 14 border) */
+extern unsigned int          DAT_004879f4;      /* map height (pixels + 14 border) */
+extern int                   DAT_00487a00;      /* row stride (power-of-2) */
+extern int                   DAT_00487a18;      /* shift amount (low byte only) */
+extern int                   DAT_004879f8;      /* coarse grid cols (width>>4 + 2) */
+extern int                   DAT_004879fc;      /* coarse grid rows (height>>4 + 2) */
+extern int                   DAT_00487a04;      /* shadow grid cols (width/18 + 2) */
+extern int                   DAT_00487a08;      /* shadow grid rows (height/18 + 2) */
+extern void                 *DAT_0048782c;      /* tilemap pointer (byte per cell) */
+extern void                 *DAT_00481f50;      /* background RGB565 pixel data */
+extern void                 *DAT_00487828;      /* entity placement data (20 bytes each) */
+extern int                   DAT_00489278;      /* entity placement count */
+extern unsigned char         DAT_00483860[];     /* tile type table from .lev (0x39c bytes) */
+extern void                 *DAT_00487814;      /* coarse grid buffer */
+extern void                 *DAT_00489ea4;      /* shadow grid buffer 1 */
+extern void                 *DAT_00489ea8;      /* shadow grid buffer 2 */
+extern void                 *DAT_00489ea0;      /* swap/heightmap data */
+extern int                   DAT_00487a0c;      /* swap width */
+extern int                   DAT_00487a10;      /* swap height */
+extern unsigned short        DAT_0048384c;      /* tile fill color */
+extern char                  DAT_0048396d;      /* generated-map flag */
+extern char                  DAT_00483960;      /* swap-file enabled flag */
+extern char                 *DAT_00486938;      /* current level name pointer */
+extern int                   DAT_0048693c;      /* current level index (low byte used) */
+extern char                  DAT_004892e4;      /* random mirror flag */
+extern char                  DAT_004892e5;      /* difficulty flag (ship select) */
+extern char                  DAT_00489d7c[];     /* error string buffer (256 bytes) */
+extern void                 *DAT_00487aa4;      /* large game state buffer */
+extern int                   DAT_00489254;      /* edge count */
+extern void                 *DAT_00489e84;      /* edge record array */
+extern int                   DAT_00487810;      /* player data base address (int used as ptr) */
+extern int                   DAT_00489240;      /* player count */
+extern int                   DAT_00489244;      /* active (human) player count */
+extern int                   DAT_0048764a;      /* network/multiplayer flag */
+extern int                   DAT_0048227c;      /* player config packed value */
+extern void                 *DAT_00487928;      /* entity type table (0x10000 bytes) */
+
 /* ===== Misc ===== */
 extern int                   DAT_00481f48;
 
@@ -259,6 +297,7 @@ void Cleanup_Sound(void);
 /* ===== Function Prototypes: assets.cpp ===== */
 int   Load_Background_To_Buffer(char index);
 void *Load_JPEG_Asset(const char *filename, int *width, int *height);
+void *Load_JPEG_From_Memory(const unsigned char *data, int len, int *out_w, int *out_h);
 void  Load_Fonts(void);
 void  Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
                           unsigned short *dest_buf, int stride, int hover,
@@ -281,6 +320,11 @@ int  FUN_00422fc0(void);
 void FUN_0040d100(int buffer, int stride);
 void FUN_004076d0(int buffer, int stride);
 int  FUN_004257e0(int cx, int cy, int px, int py);
+
+/* ===== Function Prototypes: level.cpp ===== */
+int  Load_Level_File(const char *level_name);
+int  Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
+                     unsigned char *file_buf);
 
 /* ===== Function Prototypes: menu.cpp ===== */
 int  Menu_Init_And_Loop(void);

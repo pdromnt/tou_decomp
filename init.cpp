@@ -2760,7 +2760,18 @@ hover_decay:
 int  FUN_0042fc40(void) { return 1; }
 void FUN_0042fc10(void) {}
 void FUN_0041a8c0(void) {}
-void FUN_0041d740(void) {}
+/* ===== FUN_0041d740 - Compute end-game stats/awards (0041D740) ===== */
+/* Original: computes player/team awards ("Most valuable", "Most violent",
+ * "Survivor", etc.) and sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D
+ * (single-player results).
+ * TODO: Full implementation with award calculations.
+ * For now, route back to main menu page (0x00) so state 3 → state 1
+ * shows the main menu instead of getting stuck on action page 3. */
+void FUN_0041d740(void)
+{
+    LOG("[STUB] FUN_0041d740 - end game stats, returning to main menu\n");
+    DAT_004877a4 = 0;  /* Main menu page */
+}
 
 /* ===== Early_Init_Vars (0041EAD0) ===== */
 void Early_Init_Vars(void)

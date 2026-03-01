@@ -193,3 +193,17 @@ void *Load_JPEG_Asset(const char *filename, int *out_width, int *out_height)
     if (out_height) *out_height = height;
     return img_data;
 }
+
+/* ===== Load_JPEG_From_Memory ===== */
+/* Decodes JPEG/PNG data from a memory buffer using stb_image.
+ * Returns RGB24 pixel data (caller must stbi_image_free or Mem_Free).
+ * Sets out_w/out_h to image dimensions. Returns NULL on failure. */
+void *Load_JPEG_From_Memory(const unsigned char *data, int len, int *out_w, int *out_h)
+{
+    int width, height, channels;
+    unsigned char *img_data = stbi_load_from_memory(data, len, &width, &height, &channels, 3);
+    if (!img_data) return NULL;
+    if (out_w) *out_w = width;
+    if (out_h) *out_h = height;
+    return img_data;
+}

@@ -6,6 +6,7 @@
 #include "tou.h"
 #include <dinput.h>
 #include <stdio.h>
+#include <string.h>
 
 /* ===== Globals defined in this module ===== */
 char          g_MouseButtons = 0;     /* 004877BE */
@@ -143,14 +144,13 @@ void Game_State_Manager(void)
         DAT_004877b1 = 1;
         g_FrameTimer = timeGetTime();
 
-        /* Check if coming from intro or returning */
+        /* Music: If coming from state 0x98 (new game after intro),
+         * skip FUN_0040e130 since music is already playing from intro.
+         * Otherwise call FUN_0040e130 to start menu/gameplay music. */
         if (DAT_004877a4 == 0x98) {
             DAT_004877a4 = 0;
         } else {
             FUN_0040e130();
-            if (DAT_004877a4 == 0x98) {
-                DAT_004877a4 = 0;
-            }
         }
 
         /* Create game view surface */
@@ -230,9 +230,13 @@ void Game_State_Manager(void)
         Intro_Sequence();
         return;
 
-    case 0x98: /* New game */
+    case 0x98: /* New game - reload sprites, reset palette, init session */
         DAT_004877a4 = 0x98;
         g_GameState = 3;
+        /* Reset team palette[3] from gold (0x7FF0) back to gray (0x6739).
+         * It gets set to gold in FUN_0042d8b0 before sprites load;
+         * starting a new game resets it to the default gray team color. */
+        DAT_00483838[3] = 0x6739;
         iVar2 = Init_New_Game();
         if (iVar2 != 1) {
             g_GameState = 0xFE;
@@ -250,14 +254,166 @@ void Game_State_Manager(void)
     }
 }
 
+/* ===== Gameplay_Tick (0045DAA0) ===== */
+/* Fixed-timestep game simulation update.
+ * Called from Game_Update_Render when g_SubState == 0 (active gameplay).
+ * TODO: Full implementation with all ~20 subsystems. */
+static void Gameplay_Tick(void)
+{
+    /* Fixed timestep: 1000 / DAT_00483746 ms per tick, capped at 9 catch-up ticks.
+     * For now, just advance the frame timer to keep time flowing. */
+    DWORD now = timeGetTime();
+    DAT_004877f0 = now - g_FrameTimer;
+    g_FrameTimer = now;
+    if (DAT_004877f0 > 1000) {
+        DAT_004877f0 = 1000;
+    }
+
+    /* Increment tick counter */
+    g_TimerAux++;
+
+    /* TODO Phase 6: All gameplay subsystems:
+     * FUN_00460d50() - input/control update
+     * FUN_004609e0() - physics/movement
+     * FUN_00460660() - AI (every other tick)
+     * FUN_00460ac0() - collision
+     * FUN_00413720() - entity update
+     * FUN_00454340() - projectile update
+     * FUN_0044b0b0() - particle/effects
+     * FUN_00434310() - world/terrain
+     * FUN_004527e0() - sound update
+     * Entity rotation/timer loop
+     * FUN_00454b00() - weapon/item
+     * FUN_00458010() - camera/viewport
+     * FUN_00453cd0() - spawn/respawn
+     * FUN_00455d50() - score/objective
+     * FUN_004571f0(), FUN_00453a80() - UI/HUD
+     * FUN_004573e0() - status effects
+     * FUN_0045fc00(), FUN_0045e2c0() - network/sync
+     * FUN_00449040() - damage/health
+     */
+}
+
 /* ===== Game_Update_Render (00461710) - Gameplay frame ===== */
-/* TODO: Full implementation in Phase 6. Stub for now. */
+/* Main gameplay loop: keyboard input, game state updates, rendering.
+ * Called from WinMain when g_GameState == 0.
+ *
+ * Original: reads DirectInput keyboard, processes game keys (ESC, Enter,
+ * configurable bindings), runs Gameplay_Tick when g_SubState == 0,
+ * handles state transitions (pause, round end, game over),
+ * then renders via FUN_00407720 → DDraw blit/flip.
+ *
+ * g_SubState values in gameplay:
+ *   0 = active play (runs Gameplay_Tick)
+ *   1 = paused
+ *   2 = confirm exit
+ *   3 = post-round transition
+ *   4 = menu/level preview (waiting for Enter)
+ *   100 = round end
+ *   101 = game over */
 void Game_Update_Render(void)
 {
-    /* Placeholder - will contain keyboard input processing,
-     * game state updates, and rendering */
-    if (g_GameState == 0) {
-        /* Active gameplay - would call FUN_0045daa0() etc. */
+    /* ---- Read keyboard via DirectInput ---- */
+    if (g_ProcessInput != 0 && lpDI_Keyboard != NULL) {
+        HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
+        if (FAILED(hr)) {
+            if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
+                lpDI_Keyboard->Acquire();
+            }
+            memset(g_KeyboardState, 0, 256);
+        }
+    }
+
+    /* ---- COMPAT: Sync cursor from Windows position ---- */
+    {
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(hWnd_Main, &pt);
+        g_MouseDeltaX = pt.x << 18;
+        g_MouseDeltaY = pt.y << 18;
+    }
+
+    /* ---- Input processing ---- */
+    if (g_ProcessInput != 0) {
+        /* ESC key (scan 0x01) */
+        static unsigned char esc_prev = 0;
+        if ((g_KeyboardState[0x01] & 0x80) && !esc_prev) {
+            if (g_SubState == 0 || g_SubState == 4) {
+                /* Active gameplay or level preview: end round → return to menu.
+                 * Original: ESC sets g_SubState=100 which accumulates scores
+                 * then transitions to g_GameState=2 (RETURN_TO_MENU).
+                 * Simplified: go directly to state 5 (GAME_OVER) which
+                 * routes through state 3 → state 1 (back to main menu). */
+                LOG("[GAME] ESC pressed (substate=%d) → state 5 (GAME_OVER)\n", g_SubState);
+                g_GameState = 5;
+                return;
+            }
+        }
+        esc_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
+
+        /* Enter key (scan 0x1C) - start gameplay from level preview */
+        static unsigned char enter_prev = 0;
+        if ((g_KeyboardState[0x1C] & 0x80) && !enter_prev) {
+            if (g_SubState == 4) {
+                /* Level preview → start active gameplay */
+                LOG("[GAME] Enter pressed → starting gameplay (substate 4→0)\n");
+                g_SubState = 0;
+                g_TimerStart = timeGetTime();
+                g_TimerAux = 0;
+                g_FrameTimer = timeGetTime();
+            }
+        }
+        enter_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
+
+        /* F12 (scan 0x58): immediate exit */
+        if (g_KeyboardState[0x58] & 0x80) {
+            g_GameState = 0xFE;
+            return;
+        }
+    }
+
+    /* ---- Game logic update ---- */
+    switch (g_SubState) {
+    case 0:   /* Active gameplay */
+        Gameplay_Tick();
+        break;
+
+    case 4:   /* Level preview / waiting for Enter */
+        /* Update timing but don't run simulation */
+        {
+            DWORD now = timeGetTime();
+            DAT_004877f0 = now - g_FrameTimer;
+            g_FrameTimer = now;
+        }
+        break;
+
+    default:
+        /* Other states (paused, round end, etc.) - update timing */
+        {
+            DWORD now = timeGetTime();
+            DAT_004877f0 = now - g_FrameTimer;
+            g_FrameTimer = now;
+        }
+        break;
+    }
+
+    /* ---- Rendering ---- */
+    /* Original: locks DDraw surface, calls FUN_00407720() (game world renderer),
+     * blits to back buffer, flips.
+     * COMPAT: Render_Frame() copies Software_Buffer to DDraw surface.
+     * Since FUN_00407720 (game world renderer) is not yet implemented,
+     * Software_Buffer still contains the last menu background/content. */
+    Render_Frame();
+
+    /* ---- Frame rate limiter (~60fps) ---- */
+    {
+        static DWORD lastFrame = 0;
+        DWORD end = timeGetTime();
+        if (lastFrame != 0) {
+            DWORD elapsed = end - lastFrame;
+            if (elapsed < 16) Sleep(16 - elapsed);
+        }
+        lastFrame = timeGetTime();
     }
 }
 
@@ -274,10 +430,35 @@ void Handle_Menu_State(void)
 }
 
 /* ===== Init_New_Game (004228A0) ===== */
-/* TODO: Full implementation in Phase 6 */
+/* Clears sprite arrays, reinitializes math tables, and loads sprites.
+ * Called from Game_State_Manager case 0x98 (NEW_GAME).
+ * Returns 1 on success, 0 on failure. */
 int Init_New_Game(void)
 {
-    LOG("[STUB] Init_New_Game called\n");
+    LOG("[INIT] Init_New_Game\n");
+
+    /* Original clears sprite pixel cursors + all 20000 entries in
+     * frame offset / width / height tables, then calls FUN_00423150()
+     * to reload sprites from disk. Since we don't have the sprite
+     * file loader yet, SKIP the clearing — sprites loaded during
+     * System_Init_Check remain valid and must be preserved.
+     *
+     * TODO: When FUN_00423150 (sprite file loader) is implemented:
+     *   DAT_00481d28 = 0;  DAT_00481d24 = 0;
+     *   memset(DAT_00489234, 0, 20000 * 4);
+     *   memset(DAT_00489e8c, 0, 20000);
+     *   memset(DAT_00489e88, 0, 20000);
+     *   Init_Math_Tables((int *)DAT_00487ab0, 0x800);
+     *   FUN_00423150();
+     */
+
+    /* Reinitialize sin/cos lookup tables (safe — doesn't destroy sprites) */
+    if (DAT_00487ab0) {
+        Init_Math_Tables((int *)DAT_00487ab0, 0x800);
+    }
+
+    LOG("[INIT] Init_New_Game - math tables reinit (sprites preserved)\n");
+
     return 1;
 }
 
