@@ -230,14 +230,41 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     }
 
     /* Blit level background from stride-aligned source to screen buffer.
-     * Zero pixels (0x0000) in the level background represent empty/sky areas —
-     * skip them so the tiled sky pattern underneath shows through. */
-    for (int y = 0; y < vp_h; y++) {
-        unsigned short *s = src + ((vp_top + y) << shift) + vp_left;
-        unsigned short *d = buffer + (DAT_004806e8 + y) * stride + DAT_004806ec;
-        for (int x = 0; x < vp_w; x++) {
-            if (s[x] != 0) {
-                d[x] = s[x];
+     * Zero pixels (0x0000) in the level background represent empty/sky areas.
+     *
+     * Two modes (matching original FUN_00407720 viewport blit):
+     *   DAT_00483960 != 0 → FUN_0040c0a0 path: per-level sky from .SWP file
+     *     composites sky image behind transparent tile pixels
+     *   DAT_00483960 == 0 → direct blit, sky comes from tiled sprite fill above */
+    if (DAT_00483960 != 0 && DAT_00489ea0 != NULL) {
+        /* Per-level sky compositing (FUN_0040c0a0):
+         * For each pixel, if tile == 0, substitute from sky image buffer */
+        unsigned short *sky = (unsigned short *)DAT_00489ea0;
+        int sky_w = DAT_00487a0c;
+        int sky_h = DAT_00487a10;
+        for (int y = 0; y < vp_h; y++) {
+            unsigned short *s = src + ((vp_top + y) << shift) + vp_left;
+            unsigned short *d = buffer + (DAT_004806e8 + y) * stride + DAT_004806ec;
+            int sky_y = (vp_top + y) % sky_h;
+            for (int x = 0; x < vp_w; x++) {
+                if (s[x] != 0) {
+                    d[x] = s[x];
+                } else {
+                    int sky_x = (vp_left + x) % sky_w;
+                    d[x] = sky[sky_y * sky_w + sky_x];
+                }
+            }
+        }
+    } else {
+        /* Standard blit: tiled sprite sky already fills the buffer,
+         * skip transparent pixels to let it show through */
+        for (int y = 0; y < vp_h; y++) {
+            unsigned short *s = src + ((vp_top + y) << shift) + vp_left;
+            unsigned short *d = buffer + (DAT_004806e8 + y) * stride + DAT_004806ec;
+            for (int x = 0; x < vp_w; x++) {
+                if (s[x] != 0) {
+                    d[x] = s[x];
+                }
             }
         }
     }

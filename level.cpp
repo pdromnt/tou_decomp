@@ -105,8 +105,21 @@ int Load_SWP_Sky(const char *level_name)
     fread(DAT_00489ea0, 1, size, f);
     fclose(f);
 
+    /* Convert RGB555 (X1R5G5B5) → RGB565 (R5G6B5).
+     * SWP files store pixels in the original DirectDraw RGB555 format.
+     * Our compat renderer uses RGB565, same conversion as the sprite loader. */
+    {
+        unsigned short *px = (unsigned short *)DAT_00489ea0;
+        int count = w * h;
+        for (int i = 0; i < count; i++) {
+            unsigned short c = px[i];
+            /* R(14-10) → bits 15-11, G(9-5) → bits 10-5 (doubled MSB), B(4-0) stays */
+            px[i] = ((c & 0x7C00) << 1) | ((c & 0x03E0) << 1) | (c & 0x001F);
+        }
+    }
+
     g_MemoryTracker += size;
-    LOG("[LEVEL] Loaded SWP sky: %dx%d (%d bytes)\n", w, h, size);
+    LOG("[LEVEL] Loaded SWP sky: %dx%d (%d bytes), converted RGB555→RGB565\n", w, h, size);
     return 1;
 }
 
