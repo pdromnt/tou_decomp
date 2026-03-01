@@ -407,9 +407,10 @@ void Render_Game_View_To(unsigned short *frame)
     }
 
     /* ---- Draw mouse cursor sprite (0x22) on top of everything ---- */
-    /* Original: FUN_00428650 draws sprite 0x22 at cursor position with
-     * hotspot offset. The cursor is drawn LAST so it's always on top. */
-    if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+    /* Original: FUN_00428650 draws sprite 0x22 during menu/gameplay rendering.
+     * Hide during intro sequence (g_GameState 0x96/0x97) where cursor is irrelevant. */
+    if (g_GameState < 0x90 &&
+        DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
         int cur_sprite = 0x22;  /* cursor sprite index (decimal 34) */
         int cur_w = (int)((unsigned char *)DAT_00489e8c)[cur_sprite];
         int cur_h = (int)((unsigned char *)DAT_00489e88)[cur_sprite];

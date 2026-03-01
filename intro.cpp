@@ -266,6 +266,9 @@ void Intro_Sequence(void)
     if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) ||
         (GetAsyncKeyState(VK_SPACE) & 0x8000) ||
         (GetAsyncKeyState(VK_RETURN) & 0x8000)) {
+        /* Clear intro particles/entities so they don't bleed into menu */
+        DAT_00489250 = 0;  /* particle count */
+        DAT_00489248 = 0;  /* entity count */
         g_GameState = 0x98;
         Pause_Audio_Streams();
         return;
@@ -301,6 +304,8 @@ void Intro_Sequence(void)
         }
         else if (g_IntroSplashIndex == 2) {
             /* Splash 2 done: Move to new game state */
+            DAT_00489250 = 0;  /* clear particles */
+            DAT_00489248 = 0;  /* clear entities */
             g_GameState = 0x98;
         }
         g_IntroSplashIndex++;
