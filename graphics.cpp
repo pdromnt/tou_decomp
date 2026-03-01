@@ -138,9 +138,34 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     if (vp_w > avail_w) vp_w = avail_w;
     if (vp_h > avail_h) vp_h = avail_h;
 
-    /* Center camera on map (original reads player position from DAT_00487810) */
-    int vp_left = ((int)DAT_004879f0 - vp_w) / 2;
-    int vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
+    /* Camera: center viewport on player position (FUN_00407720 logic).
+     * Player position is in fixed-point 14.18 format (>> 18 = pixels).
+     * Falls back to map center if no active player. */
+    int vp_left, vp_top;
+    if (DAT_00487808 > 0 && DAT_00487810 != 0) {
+        int pidx = DAT_004877f8[0];
+        int poff = pidx * 0x598;
+        int player_x = *(int *)(DAT_00487810 + poff);       /* +0x00: X position */
+        int player_y = *(int *)(DAT_00487810 + poff + 4);   /* +0x04: Y position */
+
+        /* Read per-player viewport dimensions (if set) */
+        int pvp_w = *(int *)(DAT_00487810 + poff + 0x484);
+        int pvp_h = *(int *)(DAT_00487810 + poff + 0x488);
+        if (pvp_w > 0 && pvp_h > 0) {
+            vp_w = pvp_w;
+            vp_h = pvp_h;
+            if (vp_w > avail_w) vp_w = avail_w;
+            if (vp_h > avail_h) vp_h = avail_h;
+        }
+
+        /* Center viewport on player (>> 18 converts fixed-point to pixels) */
+        vp_left = (player_x >> 18) - vp_w / 2;
+        vp_top  = (player_y >> 18) - vp_h / 2;
+    } else {
+        /* Fallback: center on map */
+        vp_left = ((int)DAT_004879f0 - vp_w) / 2;
+        vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
+    }
 
     /* Clamp to 7-pixel border (matches original clamping logic) */
     if (vp_left < 7) vp_left = 7;
@@ -149,6 +174,25 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         vp_left = (int)DAT_004879f0 - 7 - vp_w;
     if (vp_top + vp_h > (int)DAT_004879f4 - 7)
         vp_top = (int)DAT_004879f4 - 7 - vp_h;
+
+    /* Screen shake (if player +0xC4 flag set) */
+    if (DAT_00487808 > 0 && DAT_00487810 != 0) {
+        int poff = DAT_004877f8[0] * 0x598;
+        if (*(char *)(DAT_00487810 + poff + 0xC4) != 0) {
+            vp_left += (rand() % 6) - 3;
+            vp_top  += (rand() % 6) - 3;
+            /* Re-clamp after shake */
+            if (vp_left < 7) vp_left = 7;
+            if (vp_top  < 7) vp_top  = 7;
+            if (vp_left + vp_w > (int)DAT_004879f0 - 7)
+                vp_left = (int)DAT_004879f0 - 7 - vp_w;
+            if (vp_top + vp_h > (int)DAT_004879f4 - 7)
+                vp_top = (int)DAT_004879f4 - 7 - vp_h;
+        }
+    }
+
+    /* Force even viewport width */
+    if (vp_w & 1) vp_w--;
 
     /* Set viewport globals (used by entity/particle renderers) */
     DAT_004806d8 = vp_w;           /* viewport width */

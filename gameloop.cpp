@@ -21,6 +21,11 @@ int  g_MouseDeltaY = 0;              /* 004877B8 */
 char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
 
+/* Gameplay tick timing and counters */
+short DAT_00483746 = 25;             /* tick rate: ticks per second (default 25 → 40ms/tick) */
+char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
+char  DAT_0048373e = 0;              /* activation guard flag */
+
 /* ===== Input_Update (00462560) - Mouse polling via DirectInput ===== */
 void Input_Update(void)
 {
@@ -254,44 +259,179 @@ void Game_State_Manager(void)
     }
 }
 
-/* ===== Gameplay_Tick (0045DAA0) ===== */
-/* Fixed-timestep game simulation update.
- * Called from Game_Update_Render when g_SubState == 0 (active gameplay).
- * TODO: Full implementation with all ~20 subsystems. */
-static void Gameplay_Tick(void)
+/* ===== FUN_0045e1f0 — Pre-tick entity flag reset ===== */
+/* Clears per-tick flags across 4 entity arrays before each simulation step. */
+void FUN_0045e1f0(void)
 {
-    /* Fixed timestep: 1000 / DAT_00483746 ms per tick, capped at 9 catch-up ticks.
-     * For now, just advance the frame timer to keep time flowing. */
-    DWORD now = timeGetTime();
-    DAT_004877f0 = now - g_FrameTimer;
-    g_FrameTimer = now;
-    if (DAT_004877f0 > 1000) {
-        DAT_004877f0 = 1000;
+    int i;
+
+    /* Main entities (DAT_004892e8, stride 0x80): clear damage flag if health < 30000 */
+    for (i = 0; i < DAT_00489248; i++) {
+        int off = i * 0x80;
+        int base = (int)DAT_004892e8;
+        if (*(unsigned int *)(base + off + 0x4C) < 30000 &&
+            *(short *)(base + off + 0x24) == 1) {
+            *(short *)(base + off + 0x24) = 0;
+        }
     }
 
-    /* Increment tick counter */
-    g_TimerAux++;
+    /* Troopers (DAT_00487884, stride 0x40): clear hit flag */
+    for (i = 0; i < DAT_0048924c; i++) {
+        *(char *)(DAT_00487884 + i * 0x40 + 0x2C) = 0;
+    }
 
-    /* TODO Phase 6: All gameplay subsystems:
-     * FUN_00460d50() - input/control update
-     * FUN_004609e0() - physics/movement
-     * FUN_00460660() - AI (every other tick)
-     * FUN_00460ac0() - collision
-     * FUN_00413720() - entity update
-     * FUN_00454340() - projectile update
-     * FUN_0044b0b0() - particle/effects
-     * FUN_00434310() - world/terrain
-     * FUN_004527e0() - sound update
-     * Entity rotation/timer loop
-     * FUN_00454b00() - weapon/item
-     * FUN_00458010() - camera/viewport
-     * FUN_00453cd0() - spawn/respawn
-     * FUN_00455d50() - score/objective
-     * FUN_004571f0(), FUN_00453a80() - UI/HUD
-     * FUN_004573e0() - status effects
-     * FUN_0045fc00(), FUN_0045e2c0() - network/sync
-     * FUN_00449040() - damage/health
-     */
+    /* Projectiles (DAT_00481f28, stride 0x40): clear update flag */
+    for (i = 0; i < DAT_00489260; i++) {
+        *(char *)(DAT_00481f28 + i * 0x40 + 0x1E) = 0;
+    }
+
+    /* Players (DAT_00487810, stride 0x598): clear per-tick flags */
+    for (i = 0; i < DAT_00489240; i++) {
+        int off = i * 0x598;
+        *(char *)(DAT_00487810 + off + 0xA1) = 0;
+        *(char *)(DAT_00487810 + off + 0xA3) = 0;
+    }
+}
+
+/* ===== Gameplay_Tick (0045DAA0) ===== */
+/* Fixed-timestep game simulation loop.
+ * Called from Game_Update_Render when g_SubState == 0 (active gameplay).
+ * Implements the full framework from the original with all subsystem calls.
+ * Individual subsystems are stubbed pending decompilation. */
+static void Gameplay_Tick(void)
+{
+    unsigned int tick_interval;
+    DWORD now;
+    int catch_up;
+    int tick;
+
+    if (DAT_00483746 < 1) DAT_00483746 = 25;
+    tick_interval = (unsigned int)(1000 / DAT_00483746);
+
+    /* Pre-tick setup: reset per-tick entity flags */
+    FUN_0045e1f0();
+
+    /* Busy-wait until at least one tick interval has elapsed */
+    now = timeGetTime();
+    while ((now - g_TimerAux * tick_interval) - g_TimerStart < tick_interval) {
+        now = timeGetTime();
+    }
+
+    /* Calculate how many ticks to catch up (max 9) */
+    now = timeGetTime();
+    catch_up = (int)((now - g_TimerAux * tick_interval - g_TimerStart) / tick_interval);
+    if (catch_up > 9) {
+        g_TimerStart += (catch_up - 9) * tick_interval;
+        catch_up = 9;
+    }
+
+    /* Execute each tick */
+    for (tick = 0; tick < catch_up; tick++) {
+        g_TimerAux++;
+
+        /* Sub-frame counter: 0→1→2→...→7→0 */
+        DAT_00489288++;
+        if (DAT_00489288 >= 8) DAT_00489288 = 0;
+
+        /* Activation pair logic */
+        if (DAT_004892a5 != 0) {
+            DAT_004892a5++;
+        }
+        if (DAT_004892a5 == 0 && DAT_004892a4 != 0 && DAT_0048373e == 0) {
+            DAT_004892a5 = 1;
+        }
+
+        /* ---- Subsystem calls (stubbed, decompiled individually later) ---- */
+        FUN_00460d50();                          /* input/control */
+        FUN_004609e0();                          /* physics step 1 */
+        if ((DAT_00489288 & 1) == 0) {
+            FUN_00460660();                      /* half-rate: physics step 2 / AI */
+        }
+        FUN_00460ac0();                          /* collision */
+        FUN_00413720();                          /* entity logic */
+        FUN_00454340();                          /* projectile update */
+        FUN_0044b0b0();                          /* AI behavior */
+        FUN_00434310();                          /* weapon/terrain */
+        FUN_004527e0();                          /* sound update */
+
+        /* Inline: effect/particle rotation and timer decrement */
+        {
+            int i;
+            for (i = 0; i < DAT_00489264; i++) {
+                int base = (int)DAT_00487780 + i * 0x20;
+                *(unsigned int *)(base + 0x10) = (*(unsigned int *)(base + 0x10) + 0x10) & 0x7FF;
+                if (*(int *)(base + 0x08) > 0) (*(int *)(base + 0x08))--;
+                if (*(int *)(base + 0x0C) > 0) (*(int *)(base + 0x0C))--;
+            }
+        }
+
+        FUN_00454b00();                          /* animation */
+        FUN_00458010();                          /* AI targeting */
+        FUN_00453cd0();                          /* map logic */
+        FUN_00455d50();                          /* bullet update */
+        FUN_004571f0();                          /* explosion/damage */
+        FUN_00453a80();                          /* item/pickup */
+        FUN_004573e0();                          /* particle system */
+
+        /* Conditional: turret sound */
+        if (DAT_00483834 != 0) {
+            FUN_004133d0('\0');
+        }
+
+        /* Conditional: trooper-related + round-end check */
+        if (DAT_00483835 != 0) {
+            if ((DAT_00489288 & 1) == 0) {
+                FUN_004533d0();
+            }
+            if (DAT_00489288 == 0) {
+                /* Every 8th tick: round-end check causes early return */
+                FUN_00453230();
+                return;
+            }
+        }
+
+        FUN_0045fc00();                          /* score/stat update */
+        FUN_0045e2c0();                          /* network sync */
+
+        /* Inline: health clamping for specific game modes */
+        if (DAT_004892a8 == 1) {
+            char mode_byte = *((char *)&DAT_00483740 + 1);
+            if (mode_byte == 2 || mode_byte == 4) {
+                int p;
+                for (p = 0; p < DAT_00489240; p++) {
+                    int *health = (int *)(DAT_00487810 + 0x20 + p * 0x598);
+                    if (*health > 0x1000) *health = 0x1000;
+                }
+            }
+        }
+
+        /* Incremental visibility map update (200 cells per tick) */
+        FUN_00449040('\0');
+
+        /* Inline: trooper tile validation */
+        {
+            int i;
+            for (i = 0; i < DAT_0048924c; i++) {
+                int off = i * 0x40;
+                int base = (int)DAT_00487884;
+                *(char *)(base + off + 0x2C) = 0;
+
+                /* Check tile at trooper position */
+                int tx = *(int *)(base + off) >> 0x12;
+                int ty = *(int *)(base + off + 8) >> 0x12;
+                int tile_idx = *(unsigned char *)((int)DAT_0048782c +
+                    (ty << (DAT_00487a18 & 0x1f)) + tx);
+                if (*(char *)((int)DAT_00487928 + tile_idx * 0x20 + 1) == '\x01') {
+                    *(char *)(base + off + 0x24) = 0;
+                } else {
+                    char stale = *(char *)(base + off + 0x24);
+                    stale++;
+                    if (stale >= 6) stale = 0;
+                    *(char *)(base + off + 0x24) = stale;
+                }
+            }
+        }
+    }  /* end tick loop */
 }
 
 /* ===== Game_Update_Render (00461710) - Gameplay frame ===== */

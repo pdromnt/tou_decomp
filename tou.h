@@ -308,26 +308,63 @@ extern void                 *DAT_00487928;      /* entity type table (0x10000 by
 extern char                  DAT_00483737;       /* trooper difficulty (0=none, 1-3=density) */
 extern char                  DAT_00483736;       /* debris difficulty */
 extern char                  DAT_00483735;       /* team base placement mode */
+extern char                  DAT_00483734;       /* critter spawn enable flag */
 extern char                  DAT_0048373c;       /* team mode flag */
+extern char                  DAT_0048372c;       /* ambient particle spawn mode (0=3x, 1=1x, 2=off) */
 extern unsigned char         DAT_00483962;       /* team base probability % */
 extern unsigned char         DAT_00483754[4];    /* entity enable flags [2]=walls, [3]=projectiles */
+extern int                   DAT_00483758;       /* entity density config packed */
 
 /* ===== Entity Spawning Counts ===== */
 extern int                   DAT_00489270;       /* wall segment count */
 extern int                   DAT_004892d4;       /* spawn point count */
 extern int                   DAT_004892d8;       /* decoration count */
-extern int                   DAT_004892dc;       /* misc counter */
-extern int                   DAT_004892e0;       /* misc counter */
+extern int                   DAT_004892dc;       /* visibility cursor X */
+extern int                   DAT_004892e0;       /* visibility cursor Y */
 extern int                   DAT_0048929c;       /* misc counter */
 extern int                   DAT_004892c0;       /* misc counter */
 extern int                   DAT_00489258;       /* misc counter */
-extern char                  DAT_004892a4;       /* misc flag */
-extern char                  DAT_004892a5;       /* misc flag */
+extern char                  DAT_004892a4;       /* team victory flag */
+extern char                  DAT_004892a5;       /* activation flag */
 extern int                   DAT_00487834[12];   /* entity tracking counters */
 extern float                 DAT_004892d0;       /* water level / weather effect */
 
-/* ===== Misc ===== */
-extern int                   DAT_00481f48;
+/* ===== Entity Behavior (entity.cpp) ===== */
+extern int  DAT_00486fa8[16];       /* per-player distance traveled */
+extern int  DAT_00486be8[16];       /* per-player damage received stats */
+extern int  DAT_00486e68[16];       /* per-player friendly fire stats */
+extern char DAT_00483747;           /* weapon auto-release mode flag */
+extern char DAT_00483745;           /* detonation mode flag */
+
+/* ===== Gameplay Tick (gameloop.cpp) ===== */
+extern short                 DAT_00483746;       /* tick rate (ticks per second, default 25) */
+extern char                  DAT_00489288;       /* sub-frame counter (0-7) */
+extern char                  DAT_0048373e;       /* activation guard flag */
+
+/* ===== Difficulty / Team Config ===== */
+extern int                   DAT_004892a8;       /* difficulty constant 1 (round length) */
+extern int                   DAT_004892ac;       /* difficulty constant 2 */
+extern char                  DAT_00483740;       /* difficulty setting 1 (from config blob) */
+extern char                  DAT_0048373f;       /* difficulty setting 2 */
+extern int                   DAT_00483748;       /* stat scaling packed (from config blob) */
+extern int                   DAT_0048374c;       /* speed scaling packed (from config blob) */
+extern int                   DAT_00483750;       /* misc config packed */
+extern char                  DAT_00483836;       /* team mode (0=none, 2=teams) */
+extern int                   DAT_00483824;       /* game scaling constant 1 */
+extern int                   DAT_00483828;       /* game scaling constant 2 */
+extern char                  DAT_0048372a;       /* team count setting */
+extern char                  DAT_0048372b;       /* team mode setting */
+extern char                  DAT_00483729;       /* game type setting */
+
+/* ===== Turret Placement ===== */
+extern int                   DAT_00489280;       /* turret array capacity */
+extern int                   DAT_0048927c;       /* turret count */
+extern int                   DAT_00481f48;       /* turret array ptr (cast from int) */
+extern int                   DAT_00489284;       /* turret init counter */
+
+/* ===== Trooper Spawn Placement ===== */
+extern int                   DAT_004892c8;       /* trooper spawn point count */
+extern int                   DAT_004892cc;       /* trooper spawn flag */
 
 /* ===== Debug Logging ===== */
 void Log(const char *format, ...);
@@ -383,6 +420,7 @@ void Handle_Menu_State(void);
 void Intro_Sequence(void);
 int  Init_New_Game(void);
 void Free_Game_Resources(void);
+void FUN_0045e1f0(void);       /* pre-tick entity flag reset */
 
 /* ===== Function Prototypes: effects.cpp ===== */
 void FUN_0045a060(void);
@@ -433,6 +471,42 @@ void FUN_00407080(int x, int y, unsigned char index, unsigned char type);
 void FUN_00407140(int x, int y, unsigned char type);
 void FUN_00440ba0(int x, int y, int team, char param);
 void FUN_00457c70(int index);
+int  FUN_00410030(void);        /* conditional entity spawn */
+void FUN_0041a370(void);        /* player stat scaling */
+void FUN_0041bed0(void);        /* difficulty constants */
+void FUN_00451500(void);        /* team initialization */
+void FUN_0041d2e0(void);        /* edge detection */
+void FUN_0041aea0(void);        /* player spawn init */
+void FUN_00449040(char param);  /* visibility map (0=incremental, 1=full) */
+
+/* ===== Function Prototypes: stubs.cpp (gameplay subsystems) ===== */
+void FUN_00460d50(void);        /* input/control update */
+void FUN_004609e0(void);        /* physics step 1 */
+void FUN_00460660(void);        /* half-rate physics */
+void FUN_00460ac0(void);        /* collision */
+void FUN_00413720(void);        /* entity logic */
+void FUN_00454340(void);        /* projectile update */
+void FUN_0044b0b0(void);        /* Entity_Behavior_Loop (entity.cpp) */
+void FUN_0044e510(int *ent);    /* Boundary_Clamp (entity.cpp) */
+void FUN_0040f9b0(int snd, int x, int y); /* positional sound (stub in entity.cpp) */
+void FUN_00434310(void);        /* weapon/terrain */
+void FUN_004527e0(void);        /* sound update */
+void FUN_00454b00(void);        /* animation */
+void FUN_00458010(void);        /* AI targeting */
+void FUN_00453cd0(void);        /* map logic */
+void FUN_00455d50(void);        /* bullet update */
+void FUN_004571f0(void);        /* explosion/damage */
+void FUN_00453a80(void);        /* item/pickup */
+void FUN_004573e0(void);        /* particle system */
+void FUN_004133d0(char param);  /* turret sound */
+void FUN_004533d0(void);        /* conditional half-rate */
+void FUN_00453230(void);        /* round-end check */
+void FUN_0045ddb2(void);        /* round-end cleanup */
+void FUN_0045fc00(void);        /* score/stat update */
+void FUN_0045e2c0(void);        /* network sync */
+void FUN_004104c0(int index);   /* turret init per-entry */
+void FUN_00460cf0(char a, int b); /* entity config helper */
+int  FUN_0044dfb0(int player);  /* find spawn point for player */
 
 /* ===== Function Prototypes: init.cpp (config) ===== */
 void Load_Options_Config(void);

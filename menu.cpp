@@ -172,7 +172,8 @@ int Load_Level_Resources(void)
         }
     }
 
-    /* FUN_0041a370() - Player stat scaling: STUB */
+    /* Player stat scaling: scale ship damage/health/speed, configure entity table */
+    FUN_0041a370();
 
     /* Allocate wall segment array (not in Init_Memory_Pools) */
     if (!DAT_00489e80) {
@@ -187,11 +188,20 @@ int Load_Level_Resources(void)
     LOG("[LEVEL] Entity spawning: %d entities, %d troopers, %d projectiles, %d debris, %d decor, %d spawns\n",
         DAT_00489248, DAT_0048924c, DAT_00489260, DAT_00489268, DAT_004892d8, DAT_004892d4);
 
-    /* FUN_0041d2e0() - Edge detection: STUB */
-    /* FUN_0041aea0() - Player pathfinding: STUB */
-    /* FUN_0041bed0() - Difficulty constants: STUB */
-    /* FUN_00451500() - Team initialization: STUB */
-    /* FUN_00449040('\x01') - Visibility map generation: STUB */
+    /* Edge detection: find walkable tiles adjacent to solid */
+    FUN_0041d2e0();
+
+    /* Player spawn init: find spawn positions for all players */
+    FUN_0041aea0();
+
+    /* Difficulty constants: map config indices to tick limits */
+    FUN_0041bed0();
+
+    /* Team initialization: count active teams */
+    FUN_00451500();
+
+    /* Visibility map: full rebuild for init */
+    FUN_00449040('\x01');
 
     /* Allocate large game state buffer if needed (original does this) */
     if (!DAT_00487aa4) {
@@ -213,20 +223,711 @@ int Load_Level_Resources(void)
     return 1;
 }
 
-/* ===== FUN_004102b0 - Turret placement ===== */
-/* Scans level tilemap for turret positions and places them.
- * TODO: Full decompilation in Phase 6. */
+/* ===== FUN_004102b0 - Turret Placement Scanner (004102B0) ===== */
+/* Three-pass tilemap scanner: count turret-capable tiles, record positions
+ * with random team, erase turrets from tilemap, then init each turret. */
 void FUN_004102b0(void)
 {
-    /* stub */
+    int iVar1, iVar2;
+    unsigned int uVar3;
+    int iVar4, iVar5;
+    int shift = (unsigned char)DAT_00487a18 & 0x1f;
+
+    /* Pass 1: count turret-capable tiles (step by 3 in X, -3 in Y) */
+    DAT_00489280 = 0;
+    if (DAT_00481f48 != 0) {
+        Mem_Free((void *)DAT_00481f48);
+    }
+    for (iVar5 = (int)DAT_004879f4 - 1; iVar5 > 0; iVar5 -= 3) {
+        iVar1 = 0;
+        if (0 < (int)DAT_004879f0) {
+            do {
+                unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (iVar5 << shift) + iVar1);
+                if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
+                    DAT_00489280++;
+                }
+                iVar1 += 3;
+            } while (iVar1 < (int)DAT_004879f0);
+        }
+    }
+
+    /* Allocate turret array (8 bytes per entry + 10000 overhead) */
+    DAT_00489280 += 10000;
+    DAT_00481f48 = (int)Mem_Alloc(DAT_00489280 * 8);
+    DAT_0048927c = 0;
+    g_MemoryTracker += DAT_00489280 * 8;
+
+    /* Pass 2: record turret positions */
+    for (iVar5 = (int)DAT_004879f4 - 1; iVar5 > 0; iVar5 -= 3) {
+        iVar4 = 0;
+        if (0 < (int)DAT_004879f0) {
+            do {
+                iVar2 = (iVar5 << shift);
+                unsigned char tile = *(unsigned char *)((int)DAT_0048782c + iVar2 + iVar4);
+                if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
+                    *(int *)(DAT_00481f48 + DAT_0048927c * 8) = iVar2 + iVar4;
+                    *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 5) = 0;
+                    *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 6) = 0;
+                    uVar3 = (unsigned int)rand() & 0x80000003;
+                    if ((int)uVar3 < 0) {
+                        uVar3 = (uVar3 - 1 | 0xFFFFFFFC) + 1;
+                    }
+                    *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 4) = (char)uVar3;
+                    *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 7) = 0;
+                    DAT_0048927c++;
+                }
+                iVar4 += 3;
+            } while (iVar4 < (int)DAT_004879f0);
+        }
+    }
+
+    /* Pass 3: erase turret tiles from tilemap and background */
+    iVar5 = 0;
+    if (0 < (int)DAT_004879f4) {
+        do {
+            iVar4 = 0;
+            if (0 < (int)DAT_004879f0) {
+                do {
+                    iVar2 = (iVar5 << shift) + (int)DAT_0048782c;
+                    unsigned char tile = *(unsigned char *)(iVar2 + iVar4);
+                    if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
+                        *(unsigned char *)(iVar2 + iVar4) = 0;
+                        *(unsigned short *)((int)DAT_00481f50 + ((iVar5 << shift) + iVar4) * 2) = 0;
+                    }
+                    iVar4++;
+                } while (iVar4 < (int)DAT_004879f0);
+            }
+            iVar5++;
+        } while (iVar5 < (int)DAT_004879f4);
+    }
+
+    /* Initialize each turret */
+    iVar5 = 0;
+    DAT_00489284 = 0;
+    if (0 < DAT_0048927c) {
+        do {
+            FUN_004104c0(iVar5);
+            iVar5++;
+        } while (iVar5 < DAT_0048927c);
+    }
+
+    LOG("[INIT] Turret placement: %d turrets found\n", DAT_0048927c);
 }
 
-/* ===== FUN_0041bc50 - Trooper placement ===== */
-/* Scans level tilemap for trooper spawn positions.
- * TODO: Full decompilation in Phase 6. */
+/* ===== FUN_0041bc50 - Trooper Spawn Placement (0041BC50) ===== */
+/* Scans tilemap for wall-edge spawn points. For each tile within 7-tile margin:
+ * if tile is wall-type AND tile above is open → record spawn point.
+ * Max 50000 entries, 0x1C bytes each. */
 void FUN_0041bc50(void)
 {
-    /* stub */
+    int shift = (unsigned char)DAT_00487a18 & 0x1f;
+    int stride_diff = DAT_00487a00 - (int)DAT_004879f0;
+
+    /* Allocate 1.4MB for trooper spawn data */
+    DAT_00487820 = Mem_Alloc(1400000);
+    g_MemoryTracker += 1400000;
+
+    int iVar3 = 0;
+    int iVar7 = (7 << shift) + 7;
+    DAT_004892c8 = 0;
+    DAT_004892cc = 1;
+
+    int row = 7;
+    if (7 < (int)DAT_004879f4 - 7) {
+        do {
+            int col = 7;
+            if (7 < (int)DAT_004879f0 - 7) {
+                unsigned int angle = 0x38;
+                do {
+                    unsigned char tile_cur = *(unsigned char *)((int)DAT_0048782c + iVar7);
+                    unsigned char tile_above = *(unsigned char *)((int)DAT_0048782c - DAT_00487a00 + iVar7);
+
+                    /* Current tile must be wall-type */
+                    int is_wall = (*(char *)((int)DAT_00487928 + (unsigned int)tile_cur * 0x20 + 4) == 1)
+                               || tile_cur == 0xF || tile_cur == 0x10
+                               || tile_cur == 0x11 || tile_cur == 0x13 || tile_cur == 0x12;
+
+                    /* Tile above must be open (not wall, not special, type byte 4 == 0, byte 0xB == 0) */
+                    int above_open = (tile_above != 0xF && tile_above != 0x11
+                                   && tile_above != 0x13 && tile_above != 0x12
+                                   && tile_above != 0x10
+                                   && *(char *)((int)DAT_00487928 + (unsigned int)tile_above * 0x20 + 4) == 0
+                                   && *(char *)((int)DAT_00487928 + (unsigned int)tile_above * 0x20 + 0xB) == 0);
+
+                    if (is_wall && above_open) {
+                        *(int *)((int)DAT_00487820 + iVar3 * 0x1c) = col;
+                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 4) = row;
+                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 8) = 0;
+                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 0xc) = 0;
+                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 0x18) = 0;
+                        /* Get facing angle from math LUT */
+                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 0x14) =
+                            (*(int *)((int)DAT_00487ab0 + (angle & 0x7FF) * 4) >> 10) & 0x7FF;
+                        iVar3 = DAT_004892c8 + 1;
+                        DAT_004892c8 = iVar3;
+                        if (iVar3 > 49999) goto done;
+                    }
+
+                    iVar7++;
+                    angle += 8;
+                    col++;
+                } while (col < (int)DAT_004879f0 - 7);
+            }
+            iVar7 += stride_diff + 14;
+            row++;
+        } while (row < (int)DAT_004879f4 - 7);
+    }
+done:
+    /* Set terminator flags */
+    if (DAT_004892c8 > 0) {
+        *(char *)((int)DAT_00487820 + 0x10) = 0;
+        *(char *)((int)DAT_00487820 + DAT_004892c8 * 0x1c - 0xb) = 0;
+    }
+
+    FUN_00453230();
+    FUN_004533d0();
+
+    LOG("[INIT] Trooper spawn: %d spawn points\n", DAT_004892c8);
+}
+
+/* ===== FUN_0041bed0 - Difficulty Constants (0041BED0) ===== */
+/* Maps config indices to scaled game constants (round length, etc.) */
+void FUN_0041bed0(void)
+{
+    int table1[14] = { 0, 5, 10, 0x14, 0x1e, 0x28, 0x32, 0x3c,
+                       0x78, 0xb4, 300, 600, 900, 0x708 };
+    int table2[8]  = { 0, 2, 5, 10, 0xf, 0x19, 0x32, 0x78 };
+
+    unsigned char idx = (unsigned char)DAT_00483740;
+    if (idx > 13) {
+        idx = 13;
+        DAT_00483740 = 13;
+    }
+    DAT_004892a8 = table1[idx] * 0x3f + 1;
+    if (idx == 0) {
+        DAT_004892a8 = 0;
+    }
+
+    if (DAT_0048373f > 7) {
+        DAT_0048373f = 7;
+    }
+    DAT_004892ac = table2[(unsigned char)DAT_0048373f] * 0x3f;
+
+    LOG("[INIT] Difficulty: setting1=%d → ticks=%d, setting2=%d → value=%d\n",
+        (int)(unsigned char)DAT_00483740, DAT_004892a8,
+        (int)(unsigned char)DAT_0048373f, DAT_004892ac);
+}
+
+/* ===== FUN_00451500 - Team Initialization (00451500) ===== */
+/* Scans players for active teams. If 0 teams have players, sets victory flag.
+ * If exactly 1 team, records that team. */
+void FUN_00451500(void)
+{
+    int team_active[4] = {0, 0, 0, 0};
+
+    if (DAT_00489240 > 0) {
+        int off = 0;
+        for (int i = 0; i < DAT_00489240; i++) {
+            /* Check if player has lives (+0x28) */
+            if (*(int *)(DAT_00487810 + off + 0x28) != 0) {
+                unsigned char team = *(unsigned char *)(DAT_00487810 + off + 0x2c);
+                if (team < 4) {
+                    team_active[team] = 1;
+                }
+            }
+            off += 0x598;
+        }
+    }
+
+    int count = 0;
+    int last_team = 0xFF;
+    for (int i = 0; i < 4; i++) {
+        if (team_active[i] != 0) {
+            count++;
+            last_team = i;
+        }
+    }
+
+    if (count == 0) {
+        DAT_004892a4 = (char)0xFF;
+        DAT_004892a5 = 1;
+        return;
+    }
+    if (count == 1) {
+        DAT_004892a4 = (char)(last_team + 1);
+    }
+
+    LOG("[INIT] Team init: %d active teams\n", count);
+}
+
+/* ===== FUN_0041a370 - Player Stat Scaling (0041A370) ===== */
+/* Scales ship stats (damage, health, speed) using config multipliers.
+ * Configures entity table entries based on game mode.
+ * Sets turret/trooper/team flags. */
+void FUN_0041a370(void)
+{
+    /* Part 1: Call entity config helper if misc config byte 3 == 0 */
+    if (((unsigned char *)&DAT_00483750)[3] == 0) {
+        FUN_00460cf0('\x01', 5);
+        FUN_00460cf0('\x0f', 5);
+    }
+
+    /* Part 2: Scale ship stats per player */
+    if (DAT_00489240 > 0) {
+        int off = 0;
+        for (int i = 0; i < DAT_00489240; i++) {
+            /* Scale damage: /20 then * multiplier byte */
+            unsigned int damage = *(unsigned int *)((char *)DAT_0048780c + off + 0x28);
+            damage /= 0x14;
+            damage *= ((unsigned int)(DAT_00483748 >> 16) & 0xFF);
+            *(unsigned int *)((char *)DAT_0048780c + off + 0x28) = damage;
+
+            /* Scale health: * multiplier / 20, clamp 1..200 */
+            unsigned int health = (unsigned int)*(unsigned char *)((char *)DAT_0048780c + off + 0x24);
+            health = (health * (unsigned int)((unsigned int)DAT_00483748 >> 24)) / 0x14;
+            if (health > 200) health = 200;
+            else if (health == 0) health = 1;
+            *((char *)DAT_0048780c + off + 0x24) = (char)health;
+
+            /* Scale speed: * multiplier / 20, clamp 1..200 */
+            unsigned int speed = (unsigned int)*(unsigned char *)((char *)DAT_0048780c + off + 0x23);
+            speed = (speed * (unsigned int)(DAT_0048374c & 0xFF)) / 0x14;
+            if (speed > 200) speed = 200;
+            else if (speed == 0) speed = 1;
+            *((char *)DAT_0048780c + off + 0x23) = (char)speed;
+
+            off += 0x40;
+        }
+    }
+
+    /* Part 3: Configure entity table based on game mode (DAT_00483754 byte 0) */
+    if (DAT_00487928) {
+        switch (DAT_00483754[0]) {
+        case 0:
+            *(char *)((int)DAT_00487928 + 0x4b) = 0;
+            *(char *)((int)DAT_00487928 + 0x4c) = 1;
+            *(char *)((int)DAT_00487928 + 0x46) = 1;
+            *(char *)((int)DAT_00487928 + 0x4d) = 1;
+            *(char *)((int)DAT_00487928 + 0x26b) = 0;
+            *(char *)((int)DAT_00487928 + 0x26c) = 1;
+            *(char *)((int)DAT_00487928 + 0x266) = 1;
+            *(char *)((int)DAT_00487928 + 0x26d) = 1;
+            break;
+        case 1:
+            *(char *)((int)DAT_00487928 + 0x4b) = 0;
+            *(char *)((int)DAT_00487928 + 0x4c) = 0;
+            *(char *)((int)DAT_00487928 + 0x46) = 1;
+            *(char *)((int)DAT_00487928 + 0x4d) = 1;
+            *(char *)((int)DAT_00487928 + 0x26b) = 0;
+            *(char *)((int)DAT_00487928 + 0x26c) = 0;
+            *(char *)((int)DAT_00487928 + 0x266) = 1;
+            *(char *)((int)DAT_00487928 + 0x26d) = 1;
+            break;
+        case 2:
+            *(char *)((int)DAT_00487928 + 0x46) = 0;
+            *(char *)((int)DAT_00487928 + 0x4b) = 0;
+            *(char *)((int)DAT_00487928 + 0x4c) = 1;
+            *(char *)((int)DAT_00487928 + 0x4d) = 0;
+            *(char *)((int)DAT_00487928 + 0x266) = 0;
+            *(char *)((int)DAT_00487928 + 0x26b) = 0;
+            *(char *)((int)DAT_00487928 + 0x26c) = 1;
+            *(char *)((int)DAT_00487928 + 0x26d) = 0;
+            break;
+        case 3:
+            *(char *)((int)DAT_00487928 + 0x46) = 0;
+            *(char *)((int)DAT_00487928 + 0x4b) = 1;
+            *(char *)((int)DAT_00487928 + 0x4c) = 0;
+            *(char *)((int)DAT_00487928 + 0x4d) = 0;
+            *(char *)((int)DAT_00487928 + 0x266) = 0;
+            *(char *)((int)DAT_00487928 + 0x26b) = 1;
+            *(char *)((int)DAT_00487928 + 0x26c) = 0;
+            *(char *)((int)DAT_00487928 + 0x26d) = 0;
+            break;
+        }
+    }
+
+    /* Part 4: Set turret/trooper/team flags */
+    /* DAT_00483860[0x106] = DAT_00483964 byte 2 in original binary */
+    if ((DAT_0048372b == 0 || DAT_00483860[0x106] != 0) && DAT_0048372b != 2) {
+        DAT_00483834 = 0;
+    } else {
+        DAT_00483834 = DAT_0048372a + 1;
+        if (DAT_00483834 != 0) {
+            DAT_00483836 = 0;
+            goto after_team;
+        }
+    }
+    DAT_00483836 = 2;
+after_team:
+
+    /* Trooper flag: enabled only for game type 1 (TDM) with no turrets */
+    if (DAT_00483729 == 1 && DAT_00483834 == 0) {
+        DAT_00483835 = 1;
+    } else {
+        DAT_00483835 = 0;
+    }
+
+    /* Part 5: Entity table tuning based on team mode */
+    if (DAT_00487928) {
+        if (DAT_00483836 == 2) {
+            /* Non-team mode entity params */
+            *(char *)((int)DAT_00487928 + 0x1ee) = 0;
+            *(char *)((int)DAT_00487928 + 0x20e) = 0;
+            *(char *)((int)DAT_00487928 + 0x26e) = 0;
+            *(char *)((int)DAT_00487928 + 0x22e) = 0;
+            *(char *)((int)DAT_00487928 + 0x24e) = 0;
+            *(char *)((int)DAT_00487928 + 0x80f) = 1;
+            *(char *)((int)DAT_00487928 + 0x82f) = 1;
+            *(char *)((int)DAT_00487928 + 0x84f) = 1;
+            *(char *)((int)DAT_00487928 + 0x86f) = 1;
+            *(char *)((int)DAT_00487928 + 0x88f) = 1;
+            *(char *)((int)DAT_00487928 + 0x8af) = 1;
+            *(char *)((int)DAT_00487928 + 0x8cf) = 1;
+            *(char *)((int)DAT_00487928 + 0x8ef) = 1;
+            *(char *)((int)DAT_00487928 + 0x812) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x832) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x852) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x872) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x892) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x8b2) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x8d2) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x8f2) = 0xc;
+            /* Extended entity range loop */
+            for (int j = 0xc80; j < 0xe80; j += 0x20) {
+                *(char *)((int)DAT_00487928 + j + 0xf) = 1;
+                *(char *)((int)DAT_00487928 + j + 0x12) = 0xc;
+            }
+        } else {
+            /* Team mode entity params */
+            *(char *)((int)DAT_00487928 + 0x1ee) = 0x40;
+            *(char *)((int)DAT_00487928 + 0x20e) = 0x40;
+            *(char *)((int)DAT_00487928 + 0x26e) = 0x40;
+            *(char *)((int)DAT_00487928 + 0x22e) = 0x40;
+            *(char *)((int)DAT_00487928 + 0x24e) = 0x40;
+            *(char *)((int)DAT_00487928 + 0x80f) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x82f) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x84f) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x86f) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x88f) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x8af) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x8cf) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x8ef) = 0xf;
+            *(char *)((int)DAT_00487928 + 0x812) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x832) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x852) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x872) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x892) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x8b2) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x8d2) = 0x11;
+            *(char *)((int)DAT_00487928 + 0x8f2) = 0x11;
+        }
+    }
+
+    /* Part 6: Compute damage scaling constants */
+    /* DAT_00483860[0x107] = DAT_00483964 byte 3 in original binary */
+    DAT_00483824 = (unsigned int)DAT_00483860[0x107] * (DAT_00483748 & 0xFF) * 0x17;
+    DAT_00483828 = DAT_00483824 / 3;
+
+    LOG("[INIT] Stat scaling: turrets=%d, troopers=%d, team_mode=%d, dmg_scale=%d\n",
+        (int)(unsigned char)DAT_00483834, (int)(unsigned char)DAT_00483835,
+        (int)(unsigned char)DAT_00483836, DAT_00483824);
+}
+
+/* ===== FUN_0041d2e0 - Edge Detection (0041D2E0) ===== */
+/* Scans tilemap for tile boundaries: walkable tiles adjacent to solid tiles.
+ * Records edge positions in DAT_00489e84 (fixed-point 14.18 format). */
+void FUN_0041d2e0(void)
+{
+    int shift = (unsigned char)DAT_00487a18 & 0x1f;
+    int stride_diff = DAT_00487a00 - (int)DAT_004879f0;
+    int tilemap = (int)DAT_0048782c;
+    int etable = (int)DAT_00487928;
+
+    int row = 7;
+    int count = 0;
+    DAT_00489254 = 0;
+    int idx = (7 << shift) + 7;
+
+    if (7 < (int)DAT_004879f4 - 7) {
+        do {
+            int col = 7;
+            if (7 < (int)DAT_004879f0 - 7) {
+                do {
+                    /* Check if current tile is walkable (type table +0x18 != 0) */
+                    unsigned char tile = *(unsigned char *)(tilemap + idx);
+                    if (*(char *)(etable + (unsigned int)tile * 0x20 + 0x18) != 0) {
+                        /* Check 4 neighbors for solid tile (type byte 0 == 1) */
+                        unsigned char t_left  = *(unsigned char *)(tilemap + idx - 1);
+                        unsigned char t_above = *(unsigned char *)(tilemap - DAT_00487a00 + idx);
+                        unsigned char t_right = *(unsigned char *)(tilemap + idx + 1);
+                        unsigned char t_below = *(unsigned char *)(tilemap + DAT_00487a00 + idx);
+
+                        int has_solid = (*(char *)(etable + (unsigned int)t_left * 0x20) == 1)
+                                     || (*(char *)(etable + (unsigned int)t_above * 0x20) == 1)
+                                     || (*(char *)(etable + (unsigned int)t_right * 0x20) == 1)
+                                     || (*(char *)(etable + (unsigned int)t_below * 0x20) == 1);
+
+                        if (has_solid && count < 5000) {
+                            *(int *)((int)DAT_00489e84 + count * 0x10) = col << 18;
+                            *(int *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 4) = row << 18;
+                            *(char *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 8) =
+                                *(char *)(etable + (unsigned int)*(unsigned char *)(tilemap + idx) * 0x20 + 0x19);
+                            count = DAT_00489254 + 1;
+                            DAT_00489254 = count;
+                        }
+                    }
+                    idx++;
+                    col++;
+                } while (col < (int)DAT_004879f0 - 7);
+            }
+            idx += stride_diff + 14;
+            row++;
+        } while (row < (int)DAT_004879f4 - 7);
+    }
+
+    LOG("[INIT] Edge detection: %d edges found\n", DAT_00489254);
+}
+
+/* ===== FUN_0041aea0 - Player Spawn Init (0041AEA0) ===== */
+/* For each player, finds a valid spawn point using FUN_0044dfb0. Sets initial
+ * position, health, and alive/dead status. */
+void FUN_0041aea0(void)
+{
+    if (DAT_00489240 <= 0) return;
+
+    int poff = 0;
+    int soff = 0;  /* ship stats table offset (0x40 per entry) */
+
+    for (int i = 0; i < DAT_00489240; i++) {
+        *(char *)(DAT_00487810 + poff + 0x26) = 0;
+
+        int result = FUN_0044dfb0(i);
+        while (result == 0 && *(unsigned char *)(DAT_00487810 + poff + 0x26) < 0x28) {
+            *(unsigned char *)(DAT_00487810 + poff + 0x26) =
+                *(unsigned char *)(DAT_00487810 + poff + 0x26) + 1;
+            result = FUN_0044dfb0(i);
+        }
+
+        if (*(char *)(DAT_00487810 + poff + 0x26) == 0x28) {
+            /* Failed to find spawn — mark dead */
+            *(char *)(DAT_00487810 + poff + 0x24) = 1;
+            *(char *)(DAT_00487810 + poff + 0x25) = 1;
+            *(char *)(DAT_00487810 + poff + 0x47c) = 0;
+            *(char *)(DAT_00487810 + poff + 0x47d) = 0;
+            *(int *)(DAT_00487810 + poff) = 0;
+            *(int *)(DAT_00487810 + poff + 4) = 0;
+        } else {
+            /* Spawn success — mark alive */
+            *(char *)(DAT_00487810 + poff + 0x26) = 0;
+            *(char *)(DAT_00487810 + poff + 0x24) = 0;
+            *(char *)(DAT_00487810 + poff + 0x25) = 0;
+            *(char *)(DAT_00487810 + poff + 0x47c) = 1;
+            *(char *)(DAT_00487810 + poff + 0x47d) = 0;
+        }
+
+        /* Copy position to previous position */
+        *(int *)(DAT_00487810 + poff + 0x08) = *(int *)(DAT_00487810 + poff);
+        *(int *)(DAT_00487810 + poff + 0x0c) = *(int *)(DAT_00487810 + poff + 4);
+
+        /* Set health from ship stats table */
+        if (DAT_0048780c) {
+            *(int *)(DAT_00487810 + poff + 0x20) = *(int *)((char *)DAT_0048780c + soff + 0x28);
+        }
+
+        /* Clear velocity */
+        *(int *)(DAT_00487810 + poff + 0x10) = 0;
+        *(int *)(DAT_00487810 + poff + 0x14) = 0;
+
+        /* Clear button state */
+        *(unsigned int *)(DAT_00487810 + poff + 0xB8) = 0;
+        *(unsigned int *)(DAT_00487810 + poff + 0xBC) = 0;
+
+        /* Set heading to 0 (pointing right) */
+        *(int *)(DAT_00487810 + poff + 0x18) = 0;
+
+        /* Default key bindings for player 0 (arrow keys + rshift/rctrl/numpadslash).
+         * FUN_0041a8c0 is supposed to copy config bindings but is currently stubbed,
+         * so we hardcode sensible defaults here. */
+        if (i == 0) {
+            *(unsigned char *)(DAT_00487810 + poff + 0xAC) = 0xCB; /* LEFT arrow: Turn Left */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAD) = 0xCD; /* RIGHT arrow: Turn Right */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAE) = 0xC8; /* UP arrow: Thrust */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAF) = 0x36; /* RSHIFT: Fire Primary */
+            *(unsigned char *)(DAT_00487810 + poff + 0xB0) = 0x9D; /* RCTRL: Fire Secondary */
+            *(unsigned char *)(DAT_00487810 + poff + 0xB1) = 0x35; /* NUMPAD /: Special/Detonate */
+            *(unsigned char *)(DAT_00487810 + poff + 0xB2) = 0xD0; /* DOWN arrow: Brake */
+        } else {
+            /* Player 2+ defaults: WASD + space/lctrl/lshift */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAC) = 0x1E; /* A: Turn Left */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAD) = 0x20; /* D: Turn Right */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAE) = 0x11; /* W: Thrust */
+            *(unsigned char *)(DAT_00487810 + poff + 0xAF) = 0x39; /* SPACE: Fire Primary */
+            *(unsigned char *)(DAT_00487810 + poff + 0xB0) = 0x1D; /* LCTRL: Fire Secondary */
+            *(unsigned char *)(DAT_00487810 + poff + 0xB1) = 0x2A; /* LSHIFT: Special/Detonate */
+            *(unsigned char *)(DAT_00487810 + poff + 0xB2) = 0x1F; /* S: Brake */
+        }
+
+        /* Mark as human player (0 = human, nonzero = AI) */
+        *(char *)(DAT_00487810 + poff + 0xDD) = 0;
+
+        /* Initialize energy to max */
+        *(int *)(DAT_00487810 + poff + 0x98) = DAT_00483830;
+
+        /* Check underwater tile: if tile type byte 4 == 1, set water flag */
+        int px = *(int *)(DAT_00487810 + poff) >> 18;
+        int py = *(int *)(DAT_00487810 + poff + 4) >> 18;
+        int shift = (unsigned char)DAT_00487a18 & 0x1f;
+        int tile_offset = (py << shift) + px;
+        unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_offset);
+        if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) == 1) {
+            *(char *)(DAT_00487810 + poff + 0x49f) = 0x3f;
+        } else {
+            *(char *)(DAT_00487810 + poff + 0x49f) = 0;
+        }
+
+        poff += 0x598;
+        soff += 0x40;
+    }
+
+    LOG("[INIT] Player spawn: %d players initialized, P0 pos=(%d,%d)\n",
+        DAT_00489240,
+        DAT_00487810 ? *(int *)(DAT_00487810) >> 18 : 0,
+        DAT_00487810 ? *(int *)(DAT_00487810 + 4) >> 18 : 0);
+}
+
+/* ===== FUN_00449040 - Visibility Map Scanner (00449040) ===== */
+/* Incremental LOS grid scanner. param==0: process 200 cells per call.
+ * param==1: process entire grid (init-time full rebuild).
+ * For opaque tiles, casts rays in 4 diagonal directions (19 tiles each). */
+void FUN_00449040(char param)
+{
+    int cells;
+    if (param == 0) {
+        cells = 200;
+    } else {
+        cells = (DAT_00487a08 - 2) * (DAT_00487a04 - 2);
+    }
+
+    int shadow_buf = (int)DAT_00489ea4;
+    int shift = (unsigned char)DAT_00487a18 & 0x1f;
+    int tilemap = (int)DAT_0048782c;
+    int etable = (int)DAT_00487928;
+
+    if (shadow_buf == 0 || tilemap == 0 || etable == 0) return;
+
+    while (cells > 0) {
+        /* Advance cursor */
+        DAT_004892dc++;
+        if (DAT_004892dc >= DAT_00487a04 - 1) {
+            DAT_004892e0++;
+            DAT_004892dc = 0;
+            if (DAT_004892e0 >= DAT_00487a08 - 1) {
+                DAT_004892e0 = 0;
+            }
+        }
+
+        int grid_x = DAT_004892dc * 18;
+        int grid_y = DAT_004892e0 * 18;
+        int tile_idx = (grid_y << shift) + grid_x;
+        int shadow_idx = DAT_00487a04 * DAT_004892e0 + DAT_004892dc;
+
+        unsigned char tile = *(unsigned char *)(tilemap + tile_idx);
+        int is_opaque = (*(char *)(etable + (unsigned int)tile * 0x20 + 5) == 1);
+
+        if (is_opaque) {
+            /* Ray 1: diagonal down-right (+1, +stride) for 19 tiles */
+            if (grid_x < (int)DAT_004879f0 - 22 && grid_y < (int)DAT_004879f4 - 22) {
+                int ri = 0, rp = tile_idx;
+                do {
+                    if (*(char *)(etable + (unsigned int)*(unsigned char *)(tilemap + rp) * 0x20 + 5) != 1) {
+                        /* Clear ray bit */
+                        if ((*(unsigned char *)(shadow_buf + shadow_idx) & 2) != 0)
+                            *(unsigned char *)(shadow_buf + shadow_idx) ^= 2;
+                        if ((*(unsigned char *)(shadow_buf + DAT_00487a04 + 1 + shadow_idx) & 0x20) != 0)
+                            *(unsigned char *)(shadow_buf + DAT_00487a04 + 1 + shadow_idx) ^= 0x20;
+                        goto ray2;
+                    }
+                    ri++;
+                    rp += 1 + DAT_00487a00;
+                } while (ri < 19);
+                /* All opaque: set ray bit */
+                *(unsigned char *)(shadow_buf + shadow_idx) |= 2;
+                *(unsigned char *)(shadow_buf + DAT_00487a04 + 1 + shadow_idx) |= 0x20;
+            }
+ray2:
+            /* Ray 2: right (+1, 0) for 19 tiles */
+            if (grid_x < (int)DAT_004879f0 - 18) {
+                int ri = 0;
+                unsigned char *rp = (unsigned char *)(tilemap + tile_idx);
+                do {
+                    if (*(char *)(etable + (unsigned int)*rp * 0x20 + 5) != 1) {
+                        if ((*(unsigned char *)(shadow_buf + shadow_idx) & 4) != 0)
+                            *(unsigned char *)(shadow_buf + shadow_idx) ^= 4;
+                        if ((*(unsigned char *)(shadow_buf + 1 + shadow_idx) & 0x40) != 0)
+                            *(unsigned char *)(shadow_buf + 1 + shadow_idx) ^= 0x40;
+                        goto ray3;
+                    }
+                    rp++;
+                    ri++;
+                } while (ri < 19);
+                *(unsigned char *)(shadow_buf + shadow_idx) |= 4;
+                *(unsigned char *)(shadow_buf + 1 + shadow_idx) |= 0x40;
+            }
+ray3:
+            /* Ray 3: down (0, +stride) for 19 tiles */
+            if (grid_y < (int)DAT_004879f4 - 22) {
+                int ri = 0, rp = tile_idx;
+                do {
+                    if (*(char *)(etable + (unsigned int)*(unsigned char *)(tilemap + rp) * 0x20 + 5) != 1) {
+                        if ((*(unsigned char *)(shadow_buf + shadow_idx) & 1) != 0)
+                            *(unsigned char *)(shadow_buf + shadow_idx) ^= 1;
+                        if ((*(unsigned char *)(shadow_buf + DAT_00487a04 + shadow_idx) & 0x10) != 0)
+                            *(unsigned char *)(shadow_buf + DAT_00487a04 + shadow_idx) ^= 0x10;
+                        goto ray4;
+                    }
+                    rp += DAT_00487a00;
+                    ri++;
+                } while (ri < 19);
+                *(unsigned char *)(shadow_buf + shadow_idx) |= 1;
+                *(unsigned char *)(shadow_buf + DAT_00487a04 + shadow_idx) |= 0x10;
+            }
+ray4:
+            /* Ray 4: diagonal up-right (+1, -stride) for 19 tiles */
+            if (grid_x < (int)DAT_004879f0 - 22 && DAT_004892e0 > 0) {
+                int ri = 0, rp = tile_idx;
+                do {
+                    if (*(char *)(etable + (unsigned int)*(unsigned char *)(tilemap + rp) * 0x20 + 5) != 1) {
+                        if ((*(unsigned char *)(shadow_buf + shadow_idx) & 8) != 0)
+                            *(unsigned char *)(shadow_buf + shadow_idx) ^= 8;
+                        unsigned char *nb = (unsigned char *)(shadow_buf - DAT_00487a04 + 1 + shadow_idx);
+                        if ((*nb & 0x80) != 0)
+                            *nb ^= 0x80;
+                        goto next_cell;
+                    }
+                    rp += 1 - DAT_00487a00;
+                    ri++;
+                } while (ri < 19);
+                *(unsigned char *)(shadow_buf + shadow_idx) |= 8;
+                *(unsigned char *)(shadow_buf - DAT_00487a04 + 1 + shadow_idx) |= 0x80;
+            }
+        } else {
+            /* Non-opaque tile: clear all visibility bits */
+            *(unsigned char *)(shadow_buf + shadow_idx) = 0;
+            unsigned char *b;
+            b = (unsigned char *)(shadow_buf + DAT_00487a04 + 1 + shadow_idx);
+            if ((*b & 0x20) != 0) *b ^= 0x20;
+            b = (unsigned char *)(shadow_buf + 1 + shadow_idx);
+            if ((*b & 0x40) != 0) *b ^= 0x40;
+            b = (unsigned char *)(shadow_buf + DAT_00487a04 + shadow_idx);
+            if ((*b & 0x10) != 0) *b ^= 0x10;
+            if (DAT_004892e0 > 0) {
+                b = (unsigned char *)(shadow_buf - DAT_00487a04 + 1 + shadow_idx);
+                if ((*b & 0x80) != 0) *b ^= 0x80;
+            }
+        }
+next_cell:
+        cells--;
+    }
 }
 
 /* ===== Globals for ship/player system ===== */
@@ -256,9 +957,12 @@ int DAT_00481d34 = 0xA0;
 char          DAT_00483737 = 0;       /* trooper difficulty (0=none,1-3=density) */
 char          DAT_00483736 = 0;       /* debris difficulty */
 char          DAT_00483735 = 0;       /* team base placement mode */
+char          DAT_00483734 = 0;       /* critter spawn enable flag */
 char          DAT_0048373c = 0;       /* team mode flag */
+char          DAT_0048372c = 0;       /* ambient particle spawn mode (0=3x, 1=1x, 2=off) */
 unsigned char DAT_00483962 = 0;       /* team base probability % */
 unsigned char DAT_00483754[4] = {0, 0, 1, 1}; /* entity enable flags [2]=walls, [3]=projectiles */
+int           DAT_00483758 = 0;       /* entity density config packed */
 
 int           DAT_00489270 = 0;       /* wall segment count */
 int           DAT_004892d4 = 0;       /* spawn point count */
@@ -268,9 +972,34 @@ int           DAT_004892e0 = 0;       /* misc counter */
 int           DAT_0048929c = 0;       /* misc counter */
 int           DAT_004892c0 = 0;       /* misc counter */
 int           DAT_00489258 = 0;       /* misc counter */
-char          DAT_004892a4 = 0;       /* misc flag */
-char          DAT_004892a5 = 0;       /* misc flag */
+char          DAT_004892a4 = 0;       /* team victory flag */
+char          DAT_004892a5 = 0;       /* activation flag */
 void         *DAT_00489e80 = NULL;    /* wall segment array */
+
+/* ===== Init function globals ===== */
+/* Difficulty / Team / Config (from options.cfg config blob at 0x48372x-0x48375x) */
+char          DAT_00483740 = 0;       /* difficulty setting 1 (round time index, 0-13) */
+char          DAT_0048373f = 0;       /* difficulty setting 2 (0-7) */
+int           DAT_00483748 = 0x14141414; /* stat scaling packed (each byte = 20 = 1x) */
+int           DAT_0048374c = 0x14;    /* speed scaling packed (low byte = 20 = 1x) */
+int           DAT_00483750 = 0;       /* misc config packed */
+char          DAT_0048372a = 0;       /* team count setting */
+char          DAT_0048372b = 0;       /* team mode setting */
+char          DAT_00483729 = 0;       /* game type setting */
+int           DAT_004892a8 = 0;       /* difficulty constant 1 (round tick limit) */
+int           DAT_004892ac = 0;       /* difficulty constant 2 */
+char          DAT_00483836 = 0;       /* team mode flag (0=teams, 2=no-teams) */
+int           DAT_00483824 = 0;       /* game damage scaling constant */
+int           DAT_00483828 = 0;       /* game damage scaling constant / 3 */
+
+/* Turret placement */
+int           DAT_00489280 = 0;       /* turret array capacity */
+int           DAT_0048927c = 0;       /* turret count */
+int           DAT_00489284 = 0;       /* turret init counter */
+
+/* Trooper spawn placement */
+int           DAT_004892c8 = 0;       /* trooper spawn point count */
+int           DAT_004892cc = 1;       /* trooper spawn flag */
 int           DAT_00487834[12] = {0}; /* entity tracking counters */
 float         DAT_004892d0 = 0.0f;    /* water level / weather */
 
