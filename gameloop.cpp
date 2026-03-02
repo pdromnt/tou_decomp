@@ -26,8 +26,7 @@ short DAT_00483746 = 60;             /* tick rate: ticks per second (default 60 
 char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
 char  DAT_0048373e = 0;              /* activation guard flag */
 
-/* Pause menu state */
-int g_PauseSelection = 0;            /* 0=Continue, 1=Skip level, 2=Exit to menu */
+/* Pause menu state (unused — original binary has no visible pause menu selection) */
 
 /* ===== Input_Update (00462560) - Mouse polling via DirectInput ===== */
 void Input_Update(void)
@@ -478,81 +477,82 @@ void Game_Update_Render(void)
     }
 
     /* ---- Input processing ---- */
+    /* Key debounce: original uses DAT_00489ee8 (500ms cooldown after keypress).
+     * We use static edge-detect flags per key for the same effect. */
     if (g_ProcessInput != 0) {
-        /* ESC key (scan 0x01) — toggles pause menu */
-        static unsigned char esc_prev = 0;
-        if ((g_KeyboardState[0x01] & 0x80) && !esc_prev) {
-            if (g_SubState == 0) {
-                /* Active gameplay → pause */
-                LOG("[GAME] ESC → pause\n");
-                g_SubState = 1;
-                g_PauseSelection = 0;
-            } else if (g_SubState == 1) {
-                /* Paused → resume (ESC acts as "Continue") */
-                LOG("[GAME] ESC → resume\n");
+        static DWORD key_cooldown = 0;  /* DAT_00489ee8: key repeat timer */
+        DWORD now_input = timeGetTime();
+
+        /* State 4: Level preview — Enter starts gameplay, ESC/F10 exits */
+        if (g_SubState == 4) {
+            static unsigned char enter4_prev = 0;
+            if ((g_KeyboardState[0x1C] & 0x80) && !enter4_prev && now_input >= key_cooldown) {
                 g_SubState = 0;
-            } else if (g_SubState == 4) {
-                /* Level preview → exit to menu */
-                LOG("[GAME] ESC (level preview) → exit\n");
+                key_cooldown = now_input + 500;
+                g_NeedsRedraw = 2;
+                g_TimerStart = timeGetTime();
+                g_TimerAux = 0;
+                g_FrameTimer = timeGetTime();
+            }
+            enter4_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
+
+            /* ESC in state 4: exit to menu */
+            static unsigned char esc4_prev = 0;
+            if ((g_KeyboardState[0x01] & 0x80) && !esc4_prev) {
                 g_GameState = 5;
                 return;
             }
-        }
-        esc_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
+            esc4_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
 
-        /* Pause menu navigation (when SubState == 1) */
-        if (g_SubState == 1) {
-            /* Up arrow (scan 0xC8) */
-            static unsigned char up_prev = 0;
-            if ((g_KeyboardState[0xC8] & 0x80) && !up_prev) {
-                if (g_PauseSelection > 0) g_PauseSelection--;
-            }
-            up_prev = (g_KeyboardState[0xC8] & 0x80) ? 1 : 0;
-
-            /* Down arrow (scan 0xD0) */
-            static unsigned char dn_prev = 0;
-            if ((g_KeyboardState[0xD0] & 0x80) && !dn_prev) {
-                if (g_PauseSelection < 2) g_PauseSelection++;
-            }
-            dn_prev = (g_KeyboardState[0xD0] & 0x80) ? 1 : 0;
-
-            /* Enter (scan 0x1C) — select pause menu option */
-            static unsigned char enter_pause_prev = 0;
-            if ((g_KeyboardState[0x1C] & 0x80) && !enter_pause_prev) {
-                if (g_PauseSelection == 0) {
-                    /* Continue */
-                    g_SubState = 0;
-                } else if (g_PauseSelection == 1) {
-                    /* Skip level → advance to next level (simplified: end round) */
-                    g_GameState = 5;
-                    return;
-                } else if (g_PauseSelection == 2) {
-                    /* Exit to menu */
-                    g_GameState = 5;
-                    return;
-                }
-            }
-            enter_pause_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
-        }
-
-        /* Enter key (scan 0x1C) - start gameplay from level preview.
-         * Original binary: substate 4 shows a camera-pan level preview and waits for Enter.
-         * COMPAT: Auto-start gameplay since we don't render the preview yet. */
-        static unsigned char enter_prev = 0;
-        if (g_SubState == 4) {
-            /* Auto-transition: level preview → active gameplay */
+            /* COMPAT: Auto-start gameplay (level preview camera not implemented) */
             g_SubState = 0;
             g_TimerStart = timeGetTime();
             g_TimerAux = 0;
             g_FrameTimer = timeGetTime();
         }
-        if ((g_KeyboardState[0x1C] & 0x80) && !enter_prev) {
-            if (g_SubState == 2) {
-                /* Substate 2: Enter triggers round end (original behavior) */
-                /* TODO: implement when round system is decompiled */
+
+        /* State 2: ESC pause menu — F10/Enter/ESC (matching original FUN_00461710).
+         * Original sprite 0x37 panel shows: "F10 Exit to menu / Enter Next level / Esc Back to the game" */
+        if (g_SubState == 2) {
+            /* F10 (scan 0x44): exit to menu — sets round counter to max, forcing game-over */
+            static unsigned char f10_prev = 0;
+            if ((g_KeyboardState[0x44] & 0x80) && !f10_prev && now_input >= key_cooldown) {
+                g_GameState = 5;
+                key_cooldown = now_input + 500;
+                g_NeedsRedraw = 1;
+                return;
             }
+            f10_prev = (g_KeyboardState[0x44] & 0x80) ? 1 : 0;
+
+            /* Enter (scan 0x1C): next level / skip level */
+            static unsigned char enter2_prev = 0;
+            if ((g_KeyboardState[0x1C] & 0x80) && !enter2_prev && now_input >= key_cooldown) {
+                /* Original: sets g_SubState=100 → state 3 transition (next round).
+                 * Our decomp maps this to exit for now (full state machine not implemented). */
+                g_GameState = 5;
+                key_cooldown = now_input + 500;
+                g_NeedsRedraw = 1;
+                return;
+            }
+            enter2_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
         }
-        enter_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
+
+        /* ESC key (scan 0x01) — toggle between active (0) and ESC menu (2).
+         * Original: DAT_00489296 = -(DAT_00489296 != 2) & 2
+         * State 0/1 → 2 (show ESC menu), State 2 → 0 (resume).
+         * Excluded from states 3 and 4 only. */
+        if (g_SubState != 3 && g_SubState != 4) {
+            static unsigned char esc_prev = 0;
+            if ((g_KeyboardState[0x01] & 0x80) && !esc_prev && now_input >= key_cooldown) {
+                g_SubState = -(g_SubState != 2) & 2;
+                key_cooldown = now_input + 500;
+                g_NeedsRedraw = 1;
+                g_TimerStart = timeGetTime();
+                g_TimerAux = 0;
+                g_FrameTimer = timeGetTime();
+            }
+            esc_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
+        }
 
         /* F12 (scan 0x58): immediate exit */
         if (g_KeyboardState[0x58] & 0x80) {

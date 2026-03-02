@@ -13,6 +13,9 @@
 #include <string.h>
 
 /* ===== Globals defined in this module ===== */
+int                 DAT_00489238    = 640;   /* Screen/viewport width */
+int                 DAT_0048923c    = 480;   /* Screen/viewport height */
+
 LPDIRECTDRAW        lpDD            = NULL;  /* 00489EC8 */
 LPDIRECTDRAWSURFACE lpDDS_Primary   = NULL;  /* 00489ED8 */
 LPDIRECTDRAWSURFACE lpDDS_Back      = NULL;  /* 00489ECC */
@@ -279,7 +282,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
         if (ratio_x < 1.0f || ratio_y < 1.0f) {
             /* Sky bigger than map: simple rect copy from sky buffer (no parallax needed) */
-            int tile_src = (vp_left << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
+            int tile_src = (vp_top << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
             unsigned short *sky_src = (unsigned short *)((int)DAT_00481f50 + tile_src * 2);
             unsigned short *dst = buffer + (DAT_004806e8 * stride + DAT_004806ec);
             int sky_stride = DAT_00487a00;
@@ -337,6 +340,51 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     FUN_0040d930((int)buffer, stride);       /* Misc effects (glow/smoke) */
     FUN_0040d360((int)buffer, stride);       /* Edge tiles/detail */
     FUN_0040d100((int)buffer, stride);       /* Darkness/fog overlay */
+
+    /* ---- Pause / overlay states (end of FUN_00407720) ---- */
+    if (g_SubState != 0) {
+        if (g_SubState == 1) {
+            /* State 1 (Pause key): text overlay with key name + version string.
+             * Original: "Game Paused. Press \"[KEY]\" to continue." + "TOU v1.0" */
+            char pause_msg[100];
+            const char *key_name = "???";
+            if (g_KeyNameTable && DAT_004837ba < 256 && g_KeyNameTable[DAT_004837ba])
+                key_name = g_KeyNameTable[DAT_004837ba];
+            sprintf(pause_msg, "Game Paused. Press \"%s\" to continue.", key_name);
+            Draw_Text_To_Buffer(pause_msg, 3, 2,
+                buffer + (DAT_0048923c - 0x1e) * stride + 8,
+                stride, 0, DAT_00489238 - 0x10, 0);
+            Draw_Text_To_Buffer("TOU v1.0", 3, 0,
+                buffer + (DAT_0048923c - 0x0f) * stride + 8,
+                stride, 0, DAT_00489238 - 0x10, 0);
+        }
+        else if (g_SubState == 2) {
+            /* State 2 (ESC menu): render sprite 0x37 centered on screen */
+            if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+                int frame_off = ((int *)DAT_00489234)[0x37];
+                int spr_h = (int)((unsigned char *)DAT_00489e88)[0x37];
+                int spr_w = (int)((unsigned char *)DAT_00489e8c)[0x37];
+                unsigned short *spr_px = (unsigned short *)DAT_00487ab4;
+
+                if (spr_w > 0 && spr_h > 0) {
+                    int cx = (DAT_00489238 - spr_w) / 2;
+                    int cy = (DAT_0048923c - spr_h) / 2;
+                    unsigned short *dst = buffer + cy * stride + cx;
+                    int src_idx = frame_off;
+                    for (int y = 0; y < spr_h; y++) {
+                        for (int x = 0; x < spr_w; x++) {
+                            unsigned short pixel = spr_px[src_idx];
+                            if (pixel != 0) {
+                                dst[x] = pixel;
+                            }
+                            src_idx++;
+                        }
+                        dst += stride;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /* ===== Render_Frame (0045D800) ===== */
@@ -390,44 +438,6 @@ void Render_Frame(void)
     if (g_GameState != 0) {
         Render_Game_View_To(g_ScratchBuffer);
         FUN_004076d0((int)g_ScratchBuffer, 640);
-    }
-
-    /* Pause overlay: darken screen + draw menu options when paused */
-    if (g_GameState == 0 && g_SubState == 1) {
-        /* Darken the screen by 50% (shift each channel right by 1) */
-        for (int i = 0; i < 640 * 480; i++) {
-            unsigned short px = g_ScratchBuffer[i];
-            g_ScratchBuffer[i] = ((px >> 1) & 0x7BEF);  /* halve R, G, B */
-        }
-
-        /* Draw pause menu text using the font system.
-         * Font 0 = large, Font 2 = medium.
-         * Color 0 = golden (headings), Color 1 = white (info), Color 2 = cyan (clickable). */
-        const char *title = "PAUSED";
-        const char *opt0 = "Continue";
-        const char *opt1 = "Skip Level";
-        const char *opt2 = "Exit to Menu";
-
-        int cx = 260;  /* approximate center for large font */
-        int cy_title = 160;
-        int cy_opt0 = 220;
-        int cy_opt1 = 250;
-        int cy_opt2 = 280;
-
-        /* Title in golden (font 0, color 0) */
-        Draw_Text_To_Buffer(title, 0, 0,
-            g_ScratchBuffer + cy_title * 640 + cx, 640, 0, 0, 0);
-
-        /* Menu options: highlighted option uses color 0 (golden), others use color 1 (white) */
-        Draw_Text_To_Buffer(opt0, 2, (g_PauseSelection == 0) ? 0 : 1,
-            g_ScratchBuffer + cy_opt0 * 640 + cx, 640,
-            (g_PauseSelection == 0) ? 80 : 0, 0, 0);
-        Draw_Text_To_Buffer(opt1, 2, (g_PauseSelection == 1) ? 0 : 1,
-            g_ScratchBuffer + cy_opt1 * 640 + cx, 640,
-            (g_PauseSelection == 1) ? 80 : 0, 0, 0);
-        Draw_Text_To_Buffer(opt2, 2, (g_PauseSelection == 2) ? 0 : 1,
-            g_ScratchBuffer + cy_opt2 * 640 + cx, 640,
-            (g_PauseSelection == 2) ? 80 : 0, 0, 0);
     }
 
     /* 3. Lock the offscreen surface */

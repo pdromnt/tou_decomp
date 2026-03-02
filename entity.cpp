@@ -4875,6 +4875,130 @@ void FUN_0044e510(int *ent)
     }
 }
 
+/* ===== FUN_0044e3b0 — Force Field Attraction/Repulsion ===== */
+/* Scans category-6 indexed entities (force field projectiles) for the first
+ * enemy projectile within range.  If the projectile's flag at +0x40 is set,
+ * attract the entity towards it; otherwise repel. */
+static void FUN_0044e3b0(int *ent)
+{
+    int ex = ent[0];
+    int ey = ent[1];
+    unsigned int i = 0;
+
+    if (DAT_0048784c == 0) return;
+
+    int *pIdx = (int *)((int)DAT_0048781c + 0x18000);
+    for (;;) {
+        int *proj = (int *)(*pIdx * 0x80 + (int)DAT_004892e8);
+
+        /* Check: different team AND within ±0x1040000 on both axes */
+        if (*(char *)((int)DAT_00487810 + 0x2c +
+             (unsigned int)*(unsigned char *)((int)proj + 0x22) * 0x598) !=
+            (char)ent[0xb] &&
+            ex - 0x1040000 < *proj && *proj < ex + 0x1040000 &&
+            ey - 0x1040000 < proj[2] && proj[2] < ey + 0x1040000)
+        {
+            break;  /* found matching enemy projectile */
+        }
+
+        i++;
+        pIdx++;
+        if (DAT_0048784c <= i) return;  /* no match found */
+    }
+
+    int off = *pIdx * 0x80;
+    unsigned long long angle = FUN_004257e0(
+        *(int *)(off + (int)DAT_004892e8),
+        *(int *)(off + 8 + (int)DAT_004892e8),
+        ex, ey);
+    int a = (int)angle;
+
+    if (*(char *)(off + 0x40 + (int)DAT_004892e8) != '\0') {
+        /* Attract: pull entity towards projectile (weaker force) */
+        ent[4] += *(int *)((int)DAT_00487ab0 + a * 4) >> 2;
+        ent[5] += *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 2;
+    } else {
+        /* Repel: push entity away from projectile (stronger force) */
+        ent[4] -= *(int *)((int)DAT_00487ab0 + a * 4) >> 1;
+        ent[5] -= *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 1;
+    }
+}
+
+/* ===== FUN_0044e7a0 — Teleporter Check ===== */
+/* Checks if entity is standing on a teleporter pad. If so, teleports it to
+ * the paired destination with cooldown, sound, and visual effects. */
+static void FUN_0044e7a0(int *ent)
+{
+    int bFound = 0;
+    int i = 0;
+
+    if (0 < DAT_00489264) {
+        int off = 0;
+        int base = (int)DAT_00487780;
+        do {
+            int ex = ent[0];
+            if (*(int *)(base + off) - 0x280000 < ex &&
+                ex < *(int *)(base + off) + 0x280000)
+            {
+                int ty = *(int *)(base + 4 + off);
+                int ey = ent[1];
+                if (ty - 0x280000 < ey && ey < ty + 0x280000) {
+                    char team = *(char *)(base + 0x15 + off);
+                    if (((char)ent[0xb] == team || team == '\x03') &&
+                        (bFound = 1,
+                         *(int *)(base + 8 + off) == 0) &&
+                        *(char *)((int)ent + 0x47f) == '\0')
+                    {
+                        FUN_0040f9b0(7, ex, ey);
+                        *(unsigned char *)((int)ent + 0x47f) = 0xfa;
+
+                        int paired_base = base + 0x14;
+                        int dest_off = (unsigned int)*(unsigned char *)(paired_base + off) * 0x20;
+
+                        *(int *)((int)DAT_00487780 + 0xc + off) = 0x36;
+                        *(int *)(dest_off + 0xc + (int)DAT_00487780) = 0x36;
+
+                        ent[4] = 0;
+                        ent[5] = 0;
+
+                        FUN_004357b0(
+                            *(int *)(dest_off + (int)DAT_00487780) >> 0x12,
+                            *(int *)(dest_off + 4 + (int)DAT_00487780) >> 0x12,
+                            9, 0, '\x02', 0, 0, 0, 0, '\0', '\0', 0xff);
+
+                        base = (int)DAT_00487780;
+
+                        /* Check if destination tile is walkable (type prop[1]==1) */
+                        int dx = *(int *)(dest_off + (int)DAT_00487780) >> 0x12;
+                        int dy = *(int *)(dest_off + 4 + (int)DAT_00487780) >> 0x12;
+                        int tidx = dx + (dy << ((unsigned char)DAT_00487a18 & 0x1f));
+                        if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tidx) *
+                            0x20 + 1 + (int)DAT_00487928) == '\x01')
+                        {
+                            *(unsigned char *)(ent + 0x128) = 0xff;
+                            ent[0] = *(int *)(dest_off + (int)DAT_00487780);
+                            ent[1] = *(int *)(dest_off + 4 + (int)DAT_00487780);
+                            base = (int)DAT_00487780;
+                        }
+                    }
+                }
+            }
+            i++;
+            off += 0x20;
+        } while (i < DAT_00489264);
+    }
+
+    /* Decrement cooldown timer */
+    if (*(char *)((int)ent + 0x47f) != '\0') {
+        *(char *)((int)ent + 0x47f) -= 1;
+    }
+
+    /* Reset cooldown if not touching any teleporter */
+    if (!bFound) {
+        *(unsigned char *)((int)ent + 0x47f) = 0;
+    }
+}
+
 /* ===== FUN_0044e1c0 — Position_Integration ===== */
 /* Integrates position from velocity, applies gravity, tile-based forces,
  * velocity drag, and speed cap. */
@@ -5419,11 +5543,11 @@ void FUN_0044b0b0(void)
 
             /* Force field effects (every 8th tick) */
             if (DAT_00489288 == '\0') {
-                /* FUN_0044e3b0 stub — force field attraction/repulsion */
+                FUN_0044e3b0((int *)ent);
             }
 
-            /* Teleporter check (stub) */
-            /* FUN_0044e7a0 stub */
+            /* Teleporter check */
+            FUN_0044e7a0((int *)ent);
         }
 
         /* Read tile at current position */

@@ -85,7 +85,7 @@ extern unsigned char         g_SubState;        /* 00489296 */
 extern unsigned char         g_NeedsRedraw;     /* 00489297 */
 extern unsigned char         g_SurfaceReady;    /* 00489298 */
 extern unsigned char         g_SubState2;       /* 00489299 */
-extern int                   g_PauseSelection;  /* pause menu: 0=Continue, 1=Skip, 2=Exit */
+/* g_PauseSelection removed — original binary has no visible pause menu selection */
 
 /* ===== Timing (winmain.cpp) ===== */
 extern DWORD                 g_TimerStart;      /* 004892B0 */
@@ -290,6 +290,10 @@ extern int                   DAT_00481d2c;       /* color transition R */
 extern int                   DAT_00481d30;       /* color transition G */
 extern int                   DAT_00481d34;       /* color transition B */
 
+/* ===== Screen / Viewport dimensions ===== */
+extern int                   DAT_00489238;      /* Screen/viewport width (default 640) */
+extern int                   DAT_0048923c;      /* Screen/viewport height (default 480) */
+
 /* ===== Level / Map Data (level.cpp) ===== */
 extern unsigned int          DAT_004879f0;      /* map width (pixels + 14 border) */
 extern unsigned int          DAT_004879f4;      /* map height (pixels + 14 border) */
@@ -364,6 +368,10 @@ extern char                  DAT_004892a5;       /* activation flag */
 extern int                   DAT_00487834[12];   /* entity tracking counters */
 extern float                 DAT_004892d0;       /* water level / weather effect */
 extern float                 DAT_0048385c;       /* weather/temperature threshold */
+
+/* ===== Configurable Key Scan Codes (from config blob) ===== */
+extern unsigned char         DAT_004837ba;       /* Pause key scan code */
+extern unsigned char         DAT_004837bb;       /* Camera cycle key scan code */
 
 /* ===== Entity Behavior (entity.cpp) ===== */
 extern int  DAT_00486fa8[16];       /* per-player distance traveled */
