@@ -557,7 +557,7 @@ void FUN_00413720(void);        /* entity logic */
 extern void                 *DAT_004876b8;      /* color degradation palette LUT */
 extern unsigned short        DAT_00481e8c;      /* tile explosion color accumulator */
 extern unsigned short        DAT_00481e8e;      /* tile explosion count accumulator */
-extern void                 *DAT_00487880;      /* sprite bounding data table */
+/* DAT_00487880 == g_PhysicsParams (defined in memory.cpp) */
 extern char                  DAT_0048373b;      /* shared lives mode flag */
 extern char                  DAT_00483744;      /* respawn delay mode */
 extern void                 *DAT_00487704[4];   /* color degradation LUT pointers (palette[24..27]) */

@@ -33,7 +33,7 @@ static double _DAT_004753e0_d = 0.4;         /* very close threshold (double in 
 void *DAT_004876b8 = 0;         /* color degradation palette LUT */
 unsigned short DAT_00481e8c = 0; /* tile explosion color accumulator */
 unsigned short DAT_00481e8e = 0; /* tile explosion count accumulator */
-void *DAT_00487880 = 0;         /* sprite bounding data table */
+/* DAT_00487880 == g_PhysicsParams (defined in memory.cpp) */
 char DAT_0048373b = '\0';       /* shared lives mode flag */
 char DAT_00483744 = '\0';       /* respawn delay mode */
 
@@ -2818,7 +2818,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
     int iVar2 = (unsigned int)*(unsigned char *)((unsigned int)(unsigned char)(param_2 + 0x10) *
         0x20 + 0x17 + (int)DAT_00489e80) * 0x10;
     unsigned int local_4 = 10;
-    int iVar4 = *(int *)(iVar2 + 4 + (int)DAT_00487880) >> 1;
+    int iVar4 = *(int *)(iVar2 + 4 + (int)g_PhysicsParams) >> 1;
     unsigned int *param_1 = puVar5;
     unsigned int local_8 = local_c;
 
@@ -2862,7 +2862,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
             /* All directions blocked — apply crush damage */
             if ((char)puVar1[9] != '\0') return;
 
-            int damage = *(int *)(iVar2 + 8 + (int)DAT_00487880);
+            int damage = *(int *)(iVar2 + 8 + (int)g_PhysicsParams);
             puVar1[8] -= (unsigned int)damage;
             DAT_00486be8[param_3] += (int)((unsigned int)(damage + ((int)damage >> 0x1f & 0x1fff)) >> 0xd);
 
