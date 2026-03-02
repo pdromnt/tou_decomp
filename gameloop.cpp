@@ -22,7 +22,7 @@ char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
 
 /* Gameplay tick timing and counters */
-short DAT_00483746 = 25;             /* tick rate: ticks per second (default 25 → 40ms/tick) */
+short DAT_00483746 = 60;             /* tick rate: ticks per second (default 60 → ~16.7ms/tick) */
 char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
 char  DAT_0048373e = 0;              /* activation guard flag */
 
@@ -308,7 +308,7 @@ static void Gameplay_Tick(void)
     int catch_up;
     int tick;
 
-    if (DAT_00483746 < 1) DAT_00483746 = 25;
+    if (DAT_00483746 < 1) DAT_00483746 = 60;
     tick_interval = (unsigned int)(1000 / DAT_00483746);
 
     /* Pre-tick setup: reset per-tick entity flags */

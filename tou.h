@@ -143,7 +143,10 @@ extern DWORD                 g_FrameTimer;      /* 004877F4 */
 extern unsigned char         DAT_004877b1;
 extern unsigned char         DAT_004877a4;
 extern DWORD                 DAT_004892b8;
+extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
+extern char                  DAT_00483732;      /* config option (preserved across Load_Options_Config) */
+extern char                  DAT_0048372d;      /* config option (preserved across Load_Options_Config) */
 
 /* ===== Intro particle system (memory.cpp) ===== */
 extern int                   DAT_00489248;      /* Entity count (also main entity count in gameplay) */
@@ -199,6 +202,7 @@ extern void                 *DAT_00489234;      /* Sprite frame offsets (80KB, 2
 extern void                 *DAT_00489e8c;      /* Sprite widths (20KB, bytes) */
 extern void                 *DAT_00489e88;      /* Sprite heights (20KB, bytes) */
 extern void                 *DAT_00481cf8;      /* Temp buffer (3.6MB) */
+extern void                 *DAT_004878f0[14];  /* Color palette LUT pointers (8KB each) */
 extern char                  DAT_00481c58[80];   /* Entity config defaults table 1 */
 extern char                  DAT_00481ca8[80];   /* Entity config defaults table 2 */
 extern int                   DAT_00481d28;      /* Sprite RGB pixel write cursor */
@@ -248,9 +252,20 @@ extern int                   DAT_004877e0;      /* scrollbar area height */
 extern int                   DAT_004877ac;      /* scroll item start index */
 extern int                   DAT_004877b0;      /* scroll mode */
 
-/* ===== Level/Map counts ===== */
+/* ===== Level/Map counts and arrays ===== */
 extern int                   DAT_00485088;      /* total map/level count */
 extern int                   DAT_0048508c;      /* GG theme/official level count */
+extern void                 *DAT_00485090[300]; /* level name strings */
+extern void                 *DAT_00485540[300]; /* level tile data strings */
+extern void                 *DAT_004859f0[300]; /* level extra data strings */
+extern char                  DAT_00485ea0[300]; /* level generated-map flags */
+extern char                  DAT_00487f70[256]; /* formatted level count string */
+extern char                  DAT_00480740[256]; /* current GG theme name buffer */
+extern int                   DAT_00486484;      /* GG theme count */
+extern void                 *DAT_00486488[300]; /* GG theme directory names */
+extern int                   DAT_00485fcc;      /* music file count */
+extern int                   DAT_00485fd0;      /* selected music index */
+extern void                 *DAT_00485fd4[300]; /* music file name strings */
 
 /* ===== Ship/Player Data ===== */
 extern int                   DAT_004877f8[4];   /* active player index table (up to 4 viewports) */
@@ -312,8 +327,17 @@ extern int                   DAT_00487810;      /* player data base address (int
 extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
 extern int                   DAT_0048764a;      /* network/multiplayer flag */
+extern int                   DAT_0048764b;      /* result flag (tournament) */
 extern int                   DAT_0048227c;      /* player config packed value */
 extern void                 *DAT_00487928;      /* entity type table (0x10000 bytes) */
+
+/* ===== End-Game Award System (init.cpp / FUN_0041d740) ===== */
+extern unsigned char         DAT_00487368[362];  /* player award table: [0]=count, [n*0x20+1]=name */
+extern char                  DAT_004874c9[6];    /* player award winner indices */
+extern unsigned char         DAT_004874d4[362];  /* team award table: [0]=count, [n*0x20+1]=name */
+extern char                  DAT_00487635[6];    /* team award winner indices */
+extern unsigned char         DAT_00487648;       /* highest team score */
+extern char                  DAT_00487644[4];    /* winning team indices */
 
 /* ===== Entity Spawning Config ===== */
 extern char                  DAT_00483737;       /* trooper difficulty (0=none, 1-3=density) */
@@ -344,7 +368,9 @@ extern float                 DAT_0048385c;       /* weather/temperature threshol
 /* ===== Entity Behavior (entity.cpp) ===== */
 extern int  DAT_00486fa8[16];       /* per-player distance traveled */
 extern int  DAT_00486be8[16];       /* per-player damage received stats */
-extern int  DAT_00486e68[16];       /* per-player friendly fire stats */
+extern int  DAT_00486e68[16];       /* per-player damage dealt stats */
+extern int  DAT_004870e8[16];       /* per-player explosion stats */
+extern int  DAT_00486d28[16];       /* per-player building stats */
 extern char DAT_00483747;           /* weapon auto-release mode flag */
 extern char DAT_00483745;           /* detonation mode flag */
 
@@ -403,7 +429,7 @@ extern char                  DAT_0048371f;       /* sound effects enabled flag *
 extern int                   DAT_00487840;       /* indexed entity count (for proximity scan) */
 
 /* ===== Wall Particle System ===== */
-void FUN_0044f630(int x, int y);                 /* wall particle impulse */
+void FUN_0044f630(int x, int y, int velX, int velY, float scale, int maxDist, int spread, char direction); /* wall segment ripple */
 
 /* ===== Debug Logging ===== */
 void Log(const char *format, ...);
@@ -614,5 +640,28 @@ int  FUN_0042fc40(void);
 void FUN_0042fc10(void);
 void FUN_0041a8c0(void);
 void FUN_0041d740(void);
+
+/* ===== AI / Pathfinding Globals (entity.cpp) ===== */
+extern int   DAT_00481eb4;       /* pathfinding frontier count A */
+extern int   DAT_00481eb8;       /* pathfinding frontier count B */
+extern int   DAT_00481ebc;       /* pathfinding frontier count C */
+extern int   DAT_00481ec0;       /* pathfinding frontier count D */
+extern int   DAT_00481ec4;       /* AI vision range X */
+extern int   DAT_00481ec8;       /* AI vision range Y */
+extern int  *DAT_00481ea4;       /* pathfinding read buffer A */
+extern int  *DAT_00481e90;       /* pathfinding write buffer A */
+extern int  *DAT_00481e9c;       /* pathfinding read count ptr A */
+extern int  *DAT_00481eac;       /* pathfinding write count ptr A */
+extern int  *DAT_00481ea8;       /* pathfinding read buffer B */
+extern int  *DAT_00481e94;       /* pathfinding write buffer B */
+extern int  *DAT_00481ea0;       /* pathfinding read count ptr B */
+extern int  *DAT_00481eb0;       /* pathfinding write count ptr B */
+extern int   DAT_00481e98;       /* pathfinding alternation flag */
+
+/* ===== Pathfinding Work Buffers (memory.cpp) ===== */
+extern void *DAT_00481f40;       /* pathfinding buffer 1 (8000 bytes) */
+extern void *DAT_00481f3c;       /* pathfinding buffer 2 (8000 bytes) */
+extern void *DAT_00481f38;       /* pathfinding buffer 3 (8000 bytes) */
+extern void *DAT_00481f44;       /* pathfinding buffer 4 (8000 bytes) */
 
 #endif /* TOU_H */

@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 /* ===== Globals defined in this module ===== */
 
@@ -55,6 +56,17 @@ unsigned short DAT_00483820 = 0;  /* Fade target color (RGB565) for blend-to-bac
 int DAT_0048764b = 0;
 int DAT_0048764a = 0;
 
+/* End-game award system */
+unsigned char DAT_00487368[362] = {0}; /* player award table */
+char          DAT_004874c9[6]  = {0}; /* player award winner indices */
+unsigned char DAT_004874d4[362] = {0}; /* team award table */
+char          DAT_00487635[6]  = {0}; /* team award winner indices */
+unsigned char DAT_00487648     = 0;   /* highest team score */
+char          DAT_00487644[4]  = {0}; /* winning team indices */
+unsigned int  DAT_004892bc     = 0;   /* elapsed round time */
+char          DAT_00483732     = 0;   /* config option */
+char          DAT_0048372d     = 0;   /* config option */
+
 /* Menu / session init (FUN_0042d8b0) */
 char        **g_MenuStrings  = NULL;  /* 00481D3C */
 void         *g_GameViewData = NULL;  /* 00481D40 */
@@ -84,9 +96,24 @@ int           DAT_004877e0   = 0;  /* scrollbar area height */
 int           DAT_004877ac   = 0;  /* scroll item start index */
 int           DAT_004877b0   = 0;  /* scroll mode */
 
-/* Level/map counts */
+/* Level/map counts and arrays */
 int DAT_00485088 = 0;   /* total map/level count */
 int DAT_0048508c = 0;   /* GG theme/official level count */
+void *DAT_00485090[300] = {0};  /* level name strings (256 bytes each) */
+void *DAT_00485540[300] = {0};  /* level tile type data (256 bytes each) */
+void *DAT_004859f0[300] = {0};  /* level extra data (256 bytes each) */
+char  DAT_00485ea0[300] = {0};  /* level generated-map flags */
+char  DAT_00487f70[256] = {0};  /* formatted level count string */
+char  DAT_00480740[256] = {0};  /* current GG theme name buffer */
+
+/* GG theme arrays */
+int   DAT_00486484 = 0;         /* GG theme count */
+void *DAT_00486488[300] = {0};  /* GG theme directory name strings */
+
+/* Music scanner */
+int   DAT_00485fcc = 0;         /* music file count */
+int   DAT_00485fd0 = 0;         /* selected music index */
+void *DAT_00485fd4[300] = {0};  /* music file name strings */
 
 /* ===== Stub functions (to be decompiled later) ===== */
 
@@ -1556,9 +1583,367 @@ void FUN_00420be0(void)
         offset += 0x218;
     }
 }
-void FUN_0041e580(void) {}
-int  FUN_00414060(void) { return 1; }
-void FUN_00413f70(void) {}
+/* ===== FUN_0041e580 — Color LUT Initialization (0041E580) ===== */
+/* Generates 12 color palette ramps (up to 256 entries each, unsigned short RGB565).
+ * Stored in DAT_004878f0[0..12]. Each palette maps 0-255 intensity to a
+ * colored RGB565 value used for font rendering and UI effects.
+ * FPU constants decoded from binary double-precision data at 0x475618-0x475698. */
+void FUN_0041e580(void)
+{
+    int i, r, g, b, v;
+    unsigned short *pal;
+
+    /* Helper: encode R,G,B (0-255 each) into palette's RGB565 format.
+     * Matches original bit manipulation:
+     * pixel = (B >> 3) + (((R & 0x1f8) << 5) + (G & 0x3ff8)) * 4 */
+    #define PAL_ENC(R, G, B) \
+        ((unsigned short)(((B) >> 3) + ((((R) & 0x1f8) << 5) + ((G) & 0x3ff8)) * 4))
+
+    /* Palette 0 first half (0..0x7f): golden yellow ramp (R=G=i, B=0) */
+    pal = (unsigned short *)DAT_004878f0[0];
+    for (i = 0; i < 0x80; i++) {
+        v = (i > 0xff) ? 0xff : i;
+        pal[i] = PAL_ENC(v, v, 0);
+    }
+
+    /* Palette 0 second half (entries 127-254): yellow-to-white transition
+     * R/G ramp from 0x80-0xFF, B ramp from 0-254 (step 2) */
+    {
+        int j = 0x80;
+        for (i = 0; i < 0x100; i += 2, j++) {
+            int rg = (j > 0xfe) ? 0xff : j;
+            int bv = (i > 0xff) ? 0xff : i;
+            *(unsigned short *)((char *)pal + 0xfe + i) =
+                (unsigned short)((bv >> 3) + (((rg & 0x1f8) << 5) + (rg & 0x3ff8)) * 4);
+        }
+    }
+
+    /* Palette 1 (DAT_004878f0[1]): white/grayscale ramp */
+    pal = (unsigned short *)DAT_004878f0[1];
+    for (i = 0; i < 0x100; i++) {
+        v = (i > 0xff) ? 0xff : i;
+        pal[i] = PAL_ENC(v, v, v);
+    }
+
+    /* Palette 2 (DAT_004878f0[2]): cyan tint (R=0, G=i*0.8, B=i) */
+    pal = (unsigned short *)DAT_004878f0[2];
+    for (i = 0; i < 0x100; i++) {
+        g = (int)(i * 0.8);
+        if (g > 0xff) g = 0xff;
+        v = (i > 0xff) ? 0xff : i;
+        pal[i] = (unsigned short)((v >> 3) + ((g & 0x3ff8) * 4));
+    }
+
+    /* Palette 3 (DAT_004878f0[3]): warm yellow (R=G=i*2/3, B=i/3) */
+    pal = (unsigned short *)DAT_004878f0[3];
+    for (i = 0; i < 0x100; i++) {
+        g = (int)(i * (2.0 / 3.0));
+        if (g > 0xff) g = 0xff;
+        b = i / 3;
+        if (b > 0xff) b = 0xff;
+        pal[i] = (unsigned short)((b >> 3) + (((g & 0x1f8) << 5) + (g & 0x3ff8)) * 4);
+    }
+
+    /* Palette 4 (DAT_004878f0[4]): cool blue (R=i*0.1, G=i*0.5, B=i*0.8) */
+    pal = (unsigned short *)DAT_004878f0[4];
+    for (i = 0; i < 0x100; i++) {
+        r = (int)(i * 0.1);
+        g = (int)(i * 0.5);
+        b = (int)(i * 0.8);
+        if (r > 0xff) r = 0xff;
+        if (g > 0xff) g = 0xff;
+        if (b > 0xff) b = 0xff;
+        pal[i] = PAL_ENC(r, g, b);
+    }
+
+    /* Palette 5 first half (0..0x7f): warm orange (R=i, G=i*0.8, B=i*0.6) */
+    pal = (unsigned short *)DAT_004878f0[5];
+    for (i = 0; i < 0x80; i++) {
+        v = (i > 0xff) ? 0xff : i;
+        g = (int)(i * 0.8);
+        b = (int)(i * 0.6);
+        if (g > 0xff) g = 0xff;
+        if (b > 0xff) b = 0xff;
+        pal[i] = PAL_ENC(v, g, b);
+    }
+
+    /* Palette 5 second half (0x80..0xff): bright transition
+     * R = i+128, G = i*1.2+102.4, B = i*1.4+76.8 */
+    for (i = 0; i < 0x80; i++) {
+        r = (int)((double)i * 128.0 * (1.0/128.0) + 128.0);
+        g = (int)((double)i * 153.6 * (1.0/128.0) + 102.4);
+        b = (int)((double)i * 179.2 * (1.0/128.0) + 76.8);
+        if (r > 0xff) r = 0xff;
+        if (g > 0xff) g = 0xff;
+        if (b > 0xff) b = 0xff;
+        pal[0x80 + i] = PAL_ENC(r, g, b);
+    }
+
+    /* Palette 9 (DAT_004878f0[9]): red-magenta (R=i, G=ftol*0.2, B=ftol*0.2) */
+    pal = (unsigned short *)DAT_004878f0[9];
+    for (i = 0; i < 0x100; i++) {
+        v = (i > 0xff) ? 0xff : i;
+        g = (int)(i * 0.2);
+        if (g > 0xff) g = 0xff;
+        pal[i] = (unsigned short)((g >> 3) + (((v & 0x1f8) << 5) + (g & 0x3ff8)) * 4);
+    }
+
+    /* Palette 10 (DAT_004878f0[10]): warm orange (R=i, G=i*0.8, B=i*0.2) */
+    pal = (unsigned short *)DAT_004878f0[10];
+    for (i = 0; i < 0x100; i++) {
+        v = (i > 0xff) ? 0xff : i;
+        g = (int)(i * 0.8);
+        b = (int)(i * 0.2);
+        if (g > 0xff) g = 0xff;
+        if (b > 0xff) b = 0xff;
+        pal[i] = PAL_ENC(v, g, b);
+    }
+
+    /* Palette 11 (DAT_004878f0[11]): green-cyan (R=i*0.2, G=i, B=i) */
+    pal = (unsigned short *)DAT_004878f0[11];
+    for (i = 0; i < 0x100; i++) {
+        r = (int)(i * 0.2);
+        v = (i > 0xff) ? 0xff : i;
+        if (r > 0xff) r = 0xff;
+        pal[i] = PAL_ENC(r, v, v);
+    }
+
+    /* Palette 12 (DAT_004878f0[12]): cool blue-purple (R=i*0.3, G=i*0.6, B=i*0.9) */
+    pal = (unsigned short *)DAT_004878f0[12];
+    for (i = 0; i < 0x100; i++) {
+        r = (int)(i * 0.3);
+        g = (int)(i * 0.6);
+        b = (int)(i * 0.9);
+        if (r > 0xff) r = 0xff;
+        if (g > 0xff) g = 0xff;
+        if (b > 0xff) b = 0xff;
+        pal[i] = PAL_ENC(r, g, b);
+    }
+
+    #undef PAL_ENC
+}
+/* ===== FUN_00420f80 — Validate Level Header (00420F80) ===== */
+/* Checks if the first 19 bytes of the header match "TOU level file v1.4" */
+static int FUN_00420f80(char *header)
+{
+    const char *sig = "TOU level file v1.4";
+    for (int i = 0; i < 0x13; i++) {
+        if (sig[i] != header[i]) return 0;
+    }
+    return 1;
+}
+
+/* ===== FUN_00413d40 — Register Level Entry (00413D40) ===== */
+/* Allocates 3x 256-byte buffers per level: name, tile data, extra data.
+ * Sets the generated-map flag and increments total level count. */
+static void FUN_00413d40(const char *name, const char *tiledata, const char *extradata)
+{
+    /* Level name buffer */
+    void *buf1 = Mem_Alloc(0x100);
+    g_MemoryTracker += 0x100;
+    DAT_00485090[DAT_00485088] = buf1;
+    strcpy((char *)buf1, name);
+
+    /* Tile type data buffer */
+    void *buf2 = Mem_Alloc(0x100);
+    g_MemoryTracker += 0x100;
+    DAT_00485540[DAT_00485088] = buf2;
+    strcpy((char *)buf2, tiledata);
+
+    /* Extra data buffer */
+    void *buf3 = Mem_Alloc(0x100);
+    g_MemoryTracker += 0x100;
+    DAT_004859f0[DAT_00485088] = buf3;
+    strcpy((char *)buf3, extradata);
+
+    DAT_00485ea0[DAT_00485088] = DAT_0048396d;
+    DAT_00485088++;
+}
+
+/* ===== FUN_00413e70 — Scan Music Files by Extension (00413E70) ===== */
+/* Scans for music files matching the given pattern (e.g. "music\\*.mp3").
+ * Each found file gets a 256-byte name buffer. */
+static void FUN_00413e70(const char *pattern)
+{
+    WIN32_FIND_DATAA fd;
+    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    do {
+        /* Skip directories */
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+        /* Allocate name buffer and store filename */
+        void *buf = Mem_Alloc(0x100);
+        g_MemoryTracker += 0x100;
+        DAT_00485fd4[DAT_00485fcc] = buf;
+        strcpy((char *)buf, fd.cFileName);
+        DAT_00485fcc++;
+    } while (FindNextFileA(hFind, &fd));
+
+    FindClose(hFind);
+}
+
+/* ===== FUN_00414060 — Level File Scanner (00414060) ===== */
+/* Scans levels\ directory for .lev files and ggstuff\ for GG themes.
+ * Returns 1 if any levels found, 0 if none. */
+int FUN_00414060(void)
+{
+    WIN32_FIND_DATAA fd;
+    char pathbuf[512];
+    char header[0x400];
+
+    DAT_00485088 = 0;
+
+    /* Phase 1: Scan for levels\*.lev files */
+    HANDLE hFind = FindFirstFileA("levels\\*.lev", &fd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            /* Skip directories */
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+            /* Build path: "levels\<filename>" */
+            strcpy(pathbuf, "levels\\");
+            strcat(pathbuf, fd.cFileName);
+
+            /* Append ".LEV" extension for the data file path */
+            {
+                /* Find end of pathbuf, replace extension with ".LEV" */
+                char levpath[512];
+                strcpy(levpath, pathbuf);
+                /* Try to find last '.' */
+                char *dot = strrchr(levpath, '.');
+                if (dot) strcpy(dot, ".LEV");
+
+                /* Open file and read header */
+                FILE *fp = fopen(levpath, "rb");
+                if (!fp) fp = fopen(pathbuf, "rb");
+                if (fp) {
+                    size_t nread = fread(header, 1, 0x400, fp);
+                    fclose(fp);
+
+                    if (nread >= 0x400) {
+                        /* Copy tile type table from header offset 0x3a (988 bytes) */
+                        memcpy(DAT_00483860, header + 0x3a, 0x39c);
+
+                        /* Format level count for debug */
+                        FUN_004644af(DAT_00487f70, (const unsigned char *)"%d", DAT_00485088);
+
+                        /* Validate header signature */
+                        if (FUN_00420f80(header) == 1) {
+                            /* Register this level: name from CFileFind, tile data, extra data */
+                            FUN_00413d40(fd.cFileName, (const char *)DAT_00483860, (const char *)&DAT_00483860[0x100]);
+                        }
+                    }
+                }
+            }
+        } while (FindNextFileA(hFind, &fd));
+        FindClose(hFind);
+    }
+
+    /* Phase 2: Scan for ggstuff\*.* (GG theme directories) */
+    DAT_00486484 = 0;
+    hFind = FindFirstFileA("ggstuff\\*.*", &fd);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            /* Only directories (skip . and ..) */
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            if (fd.cFileName[0] == '.') continue;
+
+            /* Check if it's a valid GG directory (has subdirectories) */
+            char subpath[512];
+            strcpy(subpath, "ggstuff\\");
+            strcat(subpath, fd.cFileName);
+
+            /* Allocate name buffer for GG theme */
+            void *buf = Mem_Alloc(0x100);
+            g_MemoryTracker += 0x100;
+            DAT_00486488[DAT_00486484] = buf;
+            strcpy((char *)buf, fd.cFileName);
+            DAT_00486484++;
+        } while (FindNextFileA(hFind, &fd));
+        FindClose(hFind);
+    }
+
+    /* Phase 3: Process GG themes — generate levels from each theme */
+    DAT_0048508c = DAT_00485088; /* mark where official levels end */
+    for (int i = 0; i < DAT_00486484; i++) {
+        DAT_0048396d = 2; /* mark as GG-generated */
+        strcpy(DAT_00480740, (const char *)DAT_00486488[i]);
+        /* FUN_00415a60 parses info.txt — too complex, stub for now */
+        /* FUN_00415a60(); */
+
+        /* Register the GG theme as a level entry */
+        FUN_004644af(pathbuf, (const unsigned char *)"%s", (const char *)DAT_00486488[i]);
+        FUN_00413d40(pathbuf, (const char *)&DAT_00483860[0x200], (const char *)&DAT_00483860[0x300]);
+    }
+
+    /* Phase 4: Validate level selection indices in config blob */
+    if (DAT_00485088 == 0) {
+        return 0; /* no levels found */
+    }
+
+    /* DAT_00481f5c is g_ConfigBlob + 4; scan up to 0x48227c */
+    unsigned int *pIdx = (unsigned int *)&g_ConfigBlob[4];
+    unsigned int *pEnd = (unsigned int *)&g_ConfigBlob[0x48227c - 0x481F58];
+    while (pIdx < pEnd) {
+        if (*pIdx >= (unsigned int)DAT_00485088) {
+            *pIdx = rand() % DAT_00485088;
+        }
+        pIdx++;
+    }
+
+    return 1;
+}
+
+/* ===== FUN_00413f70 — Music File Scanner (00413F70) ===== */
+/* Scans music\ directory for supported audio formats.
+ * Sets DAT_00485fd0 to index of MAINMENU track if found, else random. */
+void FUN_00413f70(void)
+{
+    DAT_00485fcc = 0;
+
+    /* Scan for various music formats (MP3/WMA/ASF/OGG only if audio streaming enabled) */
+    if (DAT_00483720[2] != '\0') {
+        FUN_00413e70("music\\*.mp3");
+        FUN_00413e70("music\\*.wma");
+        FUN_00413e70("music\\*.asf");
+        FUN_00413e70("music\\*.ogg");
+    }
+    /* Always scan for tracker formats */
+    FUN_00413e70("music\\*.it");
+    FUN_00413e70("music\\*.xm");
+    FUN_00413e70("music\\*.s3m");
+    FUN_00413e70("music\\*.mod");
+
+    if (DAT_00485fcc != 0) {
+        /* Default to random track */
+        DAT_00485fd0 = rand() % DAT_00485fcc;
+
+        /* Look for "MAINMENU" named track to use as default */
+        for (int i = 0; i < DAT_00485fcc; i++) {
+            const char *name = (const char *)DAT_00485fd4[i];
+            int len = (int)strlen(name);
+            if (len <= 9) continue; /* too short to be "MAINMENU.xxx" */
+
+            /* Case-insensitive compare first 8 chars to "MAINMENU" */
+            int match = 0;
+            const char *target = "MAINMENU";
+            for (int j = 0; j < 8; j++) {
+                if (toupper((unsigned char)name[j]) == target[j]) {
+                    match++;
+                }
+            }
+            if (match == 8) {
+                DAT_00485fd0 = i;
+                return;
+            }
+        }
+    }
+    else {
+        DAT_00485fd0 = 0;
+    }
+}
 /* ===== FUN_0041e4a0 — Entity Config Defaults (0041E4A0) ===== */
 /* Zeroes two 80-byte config tables (DAT_00481c58, DAT_00481ca8)
  * then sets specific byte defaults for entity properties. */
@@ -3315,16 +3700,452 @@ void FUN_0042fc10(void)
 }
 void FUN_0041a8c0(void) {}
 /* ===== FUN_0041d740 - Compute end-game stats/awards (0041D740) ===== */
-/* Original: computes player/team awards ("Most valuable", "Most violent",
- * "Survivor", etc.) and sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D
- * (single-player results).
- * TODO: Full implementation with award calculations.
- * For now, route back to main menu page (0x00) so state 3 → state 1
- * shows the main menu instead of getting stuck on action page 3. */
+/* Computes player and team awards at end of round.
+ * Player awards: Most valuable, Most violent, Survivor, Most moving,
+ *   Most explosive, Base builder award, Most useless, Greedy award
+ * Team awards: The best, Odd award, Greedy award, Most violent, Explosive award
+ * Sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D (tournament end). */
+
+/* Helper: add a player award entry */
+static void AddPlayerAward(const char *name, int winner_idx)
+{
+    int count = DAT_00487368[0];
+    if (count >= 6) return;
+    strcpy((char *)&DAT_00487368[count * 0x20 + 1], name);
+    DAT_004874c9[count] = (char)winner_idx;
+    DAT_00487368[0] = (unsigned char)(count + 1);
+}
+
+/* Helper: add a team award entry */
+static void AddTeamAward(const char *name, int winner_idx)
+{
+    int count = DAT_004874d4[0];
+    if (count >= 6) return;
+    strcpy((char *)&DAT_004874d4[count * 0x20 + 1], name);
+    DAT_00487635[count] = (char)winner_idx;
+    DAT_004874d4[0] = (unsigned char)(count + 1);
+}
+
 void FUN_0041d740(void)
 {
-    LOG("[STUB] FUN_0041d740 - end game stats, returning to main menu\n");
-    DAT_004877a4 = 0;  /* Main menu page */
+    unsigned char saved_cfg_820 = (unsigned char)DAT_00483820;
+    unsigned char saved_cfg_725 = DAT_00483724[1];
+    unsigned char saved_cfg_732 = DAT_00483732;
+    unsigned char saved_cfg_72d = DAT_0048372d;
+
+    Load_Options_Config();
+
+    if (DAT_0048764a == 0) {
+        /* Not tournament mode - compute awards */
+        DAT_00483820 = (unsigned short)saved_cfg_820;
+        DAT_00483732 = saved_cfg_732;
+        DAT_00483724[1] = saved_cfg_725;
+        DAT_0048372d = saved_cfg_72d;
+
+        /* --- Find highest team score across 3 teams --- */
+        unsigned char highest_score = 0;
+        DAT_00487648 = 0;
+        for (int i = 0; i < 3; i++) {
+            unsigned char score = ((unsigned char *)&DAT_0048693c)[i + 1];
+            if (score > highest_score) {
+                highest_score = score;
+                DAT_00487648 = score;
+            }
+        }
+
+        /* --- Find all teams tied at highest score --- */
+        DAT_00487640[3] = 0;  /* winning team count */
+        for (int i = 0; i < 3; i++) {
+            if (((unsigned char *)&DAT_0048693c)[i + 1] == highest_score) {
+                DAT_00487644[DAT_00487640[3]] = (char)i;
+                DAT_00487640[3]++;
+            }
+        }
+
+        unsigned int playerCount = DAT_00489240;
+
+        /* Reset award counts */
+        DAT_00487368[0] = 0;
+        DAT_004874d4[0] = 0;
+
+        /* ========== PLAYER AWARDS ========== */
+
+        /* --- 1. "Most valuable" - highest kills/damage-taken ratio > 1.4 --- */
+        float ratios[16];
+        if (playerCount > 0) {
+            for (int i = 0; i < (int)playerCount; i++) {
+                if (DAT_00486be8[i] == 0) {
+                    DAT_00486be8[i] = 1;
+                }
+                ratios[i] = (float)(unsigned int)DAT_00486e68[i]
+                          / (float)(int)DAT_00486be8[i];
+            }
+        }
+        {
+            float best_ratio = 0.0f;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                if (ratios[i] > best_ratio && ratios[i] > 1.4f) {
+                    best_ratio = ratios[i];
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Most valuable", best_idx);
+            }
+        }
+
+        /* --- 2. "Most violent" - highest damage above average (x1.2) --- */
+        {
+            int avg = 0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg = (int)((double)((unsigned int)DAT_00486e68[i] / playerCount) * 1.2
+                                + (double)avg);
+                }
+            }
+            unsigned int best_val = 0;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_00486e68[i];
+                if (val > best_val && val > (unsigned int)avg) {
+                    best_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Most violent", best_idx);
+            }
+        }
+
+        /* --- 3. "Survivor" - lowest damage-taken below average (x0.8) --- */
+        {
+            int avg = 0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg = (int)((double)((unsigned int)DAT_00486be8[i] / playerCount) * 0.8
+                                + (double)avg);
+                }
+            }
+            unsigned int lowest_val = 2000000000;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_00486be8[i];
+                if (val < lowest_val && val < (unsigned int)avg) {
+                    lowest_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Survivor", best_idx);
+            }
+        }
+
+        /* --- 4. "Most moving" - highest movement above average (x1.2) --- */
+        {
+            int avg = 0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg = (int)((double)((unsigned int)DAT_00486fa8[i] / playerCount) * 1.2
+                                + (double)avg);
+                }
+            }
+            unsigned int best_val = 0;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_00486fa8[i];
+                if (val > best_val && val > (unsigned int)avg) {
+                    best_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Most moving", best_idx);
+            }
+        }
+
+        /* --- 5. "Most explosive" - highest explosions above average (x1.2) --- */
+        {
+            int avg = 0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg = (int)((double)((unsigned int)DAT_004870e8[i] / playerCount) * 1.2
+                                + (double)avg);
+                }
+            }
+            unsigned int best_val = 0;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_004870e8[i];
+                if (val > best_val && val > (unsigned int)avg) {
+                    best_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Most explosive", best_idx);
+            }
+        }
+
+        /* --- 6. "Base builder award" - highest building above average (x1.2) --- */
+        {
+            int avg = 0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg = (int)((double)((unsigned int)DAT_00486d28[i] / playerCount) * 1.2
+                                + (double)avg);
+                }
+            }
+            unsigned int best_val = 0;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_00486d28[i];
+                if (val > best_val && val > (unsigned int)avg) {
+                    best_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Base builder award", best_idx);
+            }
+        }
+
+        /* --- 7. "Most useless" - lowest damage below average (x0.8) --- */
+        {
+            int avg = 0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg = (int)((double)((unsigned int)DAT_00486e68[i] / playerCount) * 0.8
+                                + (double)avg);
+                }
+            }
+            unsigned int lowest_val = 2000000000;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_00486e68[i];
+                if (val < lowest_val && val < (unsigned int)avg) {
+                    lowest_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Most useless", best_idx);
+            }
+        }
+
+        /* --- 8. "Greedy award" (player) - highest pickups above average (x1.2) --- */
+        {
+            double avg_d = 0.0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg_d += (double)((unsigned int)DAT_00487228[i] / playerCount) * 1.2;
+                }
+            }
+            unsigned int best_val = 0;
+            int best_idx = 0xff;
+            for (int i = 0; i < (int)playerCount; i++) {
+                unsigned int val = (unsigned int)DAT_00487228[i];
+                if (val > best_val && (double)val > avg_d) {
+                    best_val = val;
+                    best_idx = i;
+                }
+            }
+            if (best_idx != 0xff) {
+                AddPlayerAward("Greedy award", best_idx);
+            }
+        }
+
+        /* ========== TEAM AWARDS ========== */
+
+        /* --- Per-team player counts and performance scores --- */
+        int team_player_count[4] = {0, 0, 0, 0};
+        int team_player_count_nz[4] = {0, 0, 0, 0};  /* non-zero version */
+        int team_perf_sum[4] = {0, 0, 0, 0};
+        float team_perf_score[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+        /* Count players per team */
+        if (playerCount > 0) {
+            unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
+            for (unsigned int i = 0; i < playerCount; i++) {
+                unsigned int team = *player_ptr;
+                team_player_count[team]++;
+                team_player_count_nz[team]++;
+                player_ptr += 0x598;
+            }
+        }
+
+        /* Ensure non-zero counts for division */
+        for (int i = 0; i < 4; i++) {
+            if (team_player_count_nz[i] == 0)
+                team_player_count_nz[i] = 1;
+        }
+
+        /* Sum per-team performance (offset 0x494 from player base) */
+        if (playerCount > 0) {
+            unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
+            for (unsigned int i = 0; i < playerCount; i++) {
+                unsigned int team = *player_ptr;
+                int perf = *(int *)(player_ptr + 0x468);
+                team_perf_sum[team] += perf;
+                player_ptr += 0x598;
+            }
+        }
+
+        /* Compute average performance per team */
+        for (int i = 0; i < 4; i++) {
+            team_perf_sum[i] = team_perf_sum[i] / team_player_count_nz[i];
+        }
+
+        /* Compute weighted team scores: for each player above half the team average,
+         * add (player_perf / player_deaths_or_1) to team score */
+        if (playerCount > 0) {
+            unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
+            unsigned int remaining = playerCount;
+            do {
+                unsigned int team = *player_ptr;
+                int perf = *(int *)(player_ptr + 0x468);
+                if (perf > team_perf_sum[team] / 2) {
+                    unsigned int deaths = *(player_ptr - 8);  /* offset 0x24 from entity base */
+                    if (deaths == 0) deaths = 1;
+                    team_perf_score[team] += (float)(perf / (int)deaths);
+                }
+                player_ptr += 0x598;
+                remaining--;
+            } while (remaining != 0);
+        }
+
+        /* Normalize by team size */
+        for (int i = 0; i < 4; i++) {
+            team_perf_score[i] = team_perf_score[i] / (float)team_player_count_nz[i];
+        }
+
+        /* a. "The best" - team with highest performance score */
+        {
+            float best_score = 0.0f;
+            int best_team = 0xff;
+            for (int i = 0; i < 4; i++) {
+                if (team_perf_score[i] > best_score) {
+                    best_score = team_perf_score[i];
+                    best_team = i;
+                }
+            }
+            if (best_team != 0xff) {
+                AddTeamAward("The best", best_team);
+            }
+        }
+
+        /* b. "Odd award" - random team (25% chance, random team with players) */
+        {
+            unsigned int r = rand() % 4;
+            if (r == 0) {
+                unsigned int team = rand() % 4;
+                if (team_player_count[team] != 0) {
+                    AddTeamAward("Odd award", team);
+                }
+            }
+        }
+
+        /* c. "Greedy award" (team) - team with most total pickups above average */
+        {
+            double avg_d = 0.0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg_d += (double)((unsigned int)DAT_00487228[i] / playerCount) * 1.2;
+                }
+            }
+            int team_pickups[4] = {0, 0, 0, 0};
+            if (playerCount > 0) {
+                unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    unsigned int team = *player_ptr;
+                    team_pickups[team] += DAT_00487228[i];
+                    player_ptr += 0x598;
+                }
+            }
+            int best_val = 0;
+            int best_team = 0xff;
+            for (int i = 0; i < 4; i++) {
+                if (team_pickups[i] > best_val && (double)team_pickups[i] > avg_d) {
+                    best_val = team_pickups[i];
+                    best_team = i;
+                }
+            }
+            if (best_team != 0xff) {
+                AddTeamAward("Greedy award", best_team);
+            }
+        }
+
+        /* d. "Most violent" (team) - team with most total damage above average */
+        {
+            double avg_d = 0.0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg_d += (double)((unsigned int)DAT_00486e68[i] / playerCount) * 1.2;
+                }
+            }
+            int team_damage[4] = {0, 0, 0, 0};
+            if (playerCount > 0) {
+                unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    unsigned int team = *player_ptr;
+                    team_damage[team] += DAT_00486e68[i];
+                    player_ptr += 0x598;
+                }
+            }
+            int best_val = 0;
+            int best_team = 0xff;
+            for (int i = 0; i < 4; i++) {
+                if (team_damage[i] > best_val && (double)team_damage[i] > avg_d) {
+                    best_val = team_damage[i];
+                    best_team = i;
+                }
+            }
+            if (best_team != 0xff) {
+                AddTeamAward("Most violent", best_team);
+            }
+        }
+
+        /* e. "Explosive award" (team) - team with most total explosions above average */
+        {
+            double avg_d = 0.0;
+            if (playerCount > 0) {
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    avg_d += (double)((unsigned int)DAT_004870e8[i] / playerCount) * 1.2;
+                }
+            }
+            int team_explosions[4] = {0, 0, 0, 0};
+            if (playerCount > 0) {
+                unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
+                for (unsigned int i = 0; i < playerCount; i++) {
+                    unsigned int team = *player_ptr;
+                    team_explosions[team] += DAT_004870e8[i];
+                    player_ptr += 0x598;
+                }
+            }
+            int best_val = 0;
+            int best_team = 0xff;
+            for (int i = 0; i < 4; i++) {
+                if (team_explosions[i] > best_val && (double)team_explosions[i] > avg_d) {
+                    best_val = team_explosions[i];
+                    best_team = i;
+                }
+            }
+            if (best_team != 0xff) {
+                AddTeamAward("Explosive award", best_team);
+            }
+        }
+
+        /* Set scoreboard page */
+        DAT_004877a4 = 0x13;
+    }
+    else {
+        /* Tournament mode */
+        DAT_004877a4 = 0x1d;
+        DAT_0048764b = (((unsigned char *)&DAT_0048693c)[1] != 0) ? 2 : 1;
+    }
+
+    /* Record elapsed time */
+    DAT_004892bc = timeGetTime() - DAT_004892b8;
 }
 
 /* ===== Early_Init_Vars (0041EAD0) ===== */
@@ -3358,6 +4179,9 @@ void Init_Game_Config(void)
 
     /* Sky config byte 0 (DAT_00483758): used by FUN_0041a8c0 as float LUT index */
     g_ConfigBlob[0x1800] = 3;   /* DAT_00483758 */
+
+    /* Tick rate: 60 ticks/sec (0x3C). Offset 0x17EE in config blob = DAT_00483746. */
+    g_ConfigBlob[0x17EE] = 0x3C;  /* DAT_00483746 = 60 */
 
     /* TODO: Full config initialization (entity defaults, key bindings, etc.)
      * See DECOMP_PLAN.md Phase 2 for details.

@@ -13,7 +13,9 @@
 /* ===== Globals defined in this module ===== */
 int  DAT_00486fa8[16] = {0};   /* per-player distance traveled */
 int  DAT_00486be8[16] = {0};   /* per-player damage received stats */
-int  DAT_00486e68[16] = {0};   /* per-player friendly fire stats */
+int  DAT_00486e68[16] = {0};   /* per-player damage dealt stats */
+int  DAT_004870e8[16] = {0};   /* per-player explosion stats */
+int  DAT_00486d28[16] = {0};   /* per-player building stats */
 char DAT_00483747 = '\0';      /* weapon auto-release mode flag */
 char DAT_00483745 = '\0';      /* detonation mode flag */
 
@@ -35,8 +37,137 @@ void *DAT_00487880 = 0;         /* sprite bounding data table */
 char DAT_0048373b = '\0';       /* shared lives mode flag */
 char DAT_00483744 = '\0';       /* respawn delay mode */
 
-/* Wall particle stub — empty until wall segment system is implemented */
-void FUN_0044f630(int x, int y) { (void)x; (void)y; }
+/* ===== AI / Pathfinding Globals ===== */
+int   DAT_00481eb4 = 0;         /* pathfinding frontier count A */
+int   DAT_00481eb8 = 0;         /* pathfinding frontier count B */
+int   DAT_00481ebc = 0;         /* pathfinding frontier count C */
+int   DAT_00481ec0 = 0;         /* pathfinding frontier count D */
+int   DAT_00481ec4 = 0;         /* AI vision range X */
+int   DAT_00481ec8 = 0;         /* AI vision range Y */
+int  *DAT_00481ea4 = NULL;      /* pathfinding read buffer A */
+int  *DAT_00481e90 = NULL;      /* pathfinding write buffer A */
+int  *DAT_00481e9c = NULL;      /* pathfinding read count ptr A */
+int  *DAT_00481eac = NULL;      /* pathfinding write count ptr A */
+int  *DAT_00481ea8 = NULL;      /* pathfinding read buffer B */
+int  *DAT_00481e94 = NULL;      /* pathfinding write buffer B */
+int  *DAT_00481ea0 = NULL;      /* pathfinding read count ptr B */
+int  *DAT_00481eb0 = NULL;      /* pathfinding write count ptr B */
+int   DAT_00481e98 = 0;         /* pathfinding alternation flag */
+
+/* Float/double constants from binary (AI decision making) */
+static double _DAT_00475640 = 0.9;         /* health retreat threshold */
+static double _DAT_00475680 = 0.6;         /* health aggression threshold */
+static float  _DAT_004757a4 = 0.05f;       /* weapon cooldown scale */
+static float  _DAT_004757a0 = 500.0f;      /* base fire rate bonus (no health cap) */
+static float  _DAT_0047579c = 2500.0f;     /* energy cost scale */
+static float  _DAT_00475798 = 60.0f;       /* minimum fire threshold */
+static float  _DAT_00475790 = 0.1f;        /* velocity norm scale */
+static float  _DAT_0047578c = 0.0009f;     /* velocity micro scale */
+static float  _DAT_00475788 = 1.4e-05f;    /* velocity pico scale */
+static float  _DAT_00475784 = 7.0e-05f;    /* distance micro scale */
+static float  _DAT_00475780 = 10240.0f;    /* conveyor speed A */
+static float  _DAT_0047577c = 30720.0f;    /* conveyor speed B */
+static float  _DAT_00475778 = 35840.0f;    /* conveyor speed C */
+static double _DAT_00475770 = 0.125;        /* LOS distance scale */
+static float  _DAT_00475794 = 0.016666668f; /* fire rate norm (1/60) */
+static float  _DAT_004757a8 = 0.5f;        /* melee velocity scale */
+
+/* Weapon range data tables (from binary at 0x47ee0c) */
+static int DAT_0047ee0c[4] = { 0x20, 0x19, 0x14, 0x12 };  /* base range per weapon level */
+static int DAT_0047ee1c[4] = { 0x10, 0x0c, 0x09, 0x05 };  /* range bonus per weapon level */
+static int DAT_0047ee2c[2] = { 0x02, 0x00 };               /* range minimum */
+static int DAT_0047ee34[4] = { 0x07, 0x0a, 0x12, 0x28 };   /* step count per weapon level */
+static float DAT_0047ee48[4] = { 0.5f, 0.6f, 0.9f, 1.0f }; /* weapon accuracy per level */
+
+/* ===== FUN_0044f630 — Wall Segment Ripple Displacement (0044F630) ===== */
+/* Finds nearest wall segment to impact point, then applies a sine-wave
+ * displacement across nearby segments to create a ripple/wobble effect.
+ * Called on wall bounce (FUN_0044f840) and particle-wall collision. */
+static const double _DAT_004757d0 = 0.00005;  /* ripple intensity scale */
+
+void FUN_0044f630(int x, int y, int velX, int velY, float scale,
+                  int maxDist, int spread, char direction)
+{
+    int nearest = 0;
+    int bestDist = maxDist;
+    int tileX = x >> 0x12;
+    int tileY = y >> 0x12;
+
+    /* Phase 1: Find nearest wall segment (skip segment 0) */
+    if (DAT_004892c8 <= 1) return;
+
+    int *seg = (int *)((int)DAT_00487820 + 0x1c);  /* start at segment[1] */
+    for (int i = 1; i < DAT_004892c8; i++) {
+        int dy = tileY - seg[1];
+        int dx = tileX - seg[0];
+        int absDy = dy < 0 ? -dy : dy;
+        int absDx = dx < 0 ? -dx : dx;
+        int dist = absDy + absDx;
+        if (dist < bestDist) {
+            nearest = i;
+            bestDist = dist;
+        }
+        seg = (int *)((char *)seg + 0x1c);
+    }
+
+    if (nearest == 0) return;
+
+    /* Phase 2: Compute ripple intensity from impact velocity */
+    int vxDiv4 = velX / 4;   /* rounding toward zero (matches CDQ+AND+ADD+SAR) */
+    int absVx = vxDiv4 < 0 ? -vxDiv4 : vxDiv4;
+    int absVy = velY < 0 ? -velY : velY;
+    int speedFactor = (absVx + absVy) >> 9;
+    float intensity = (float)((float)speedFactor * scale * (float)_DAT_004757d0 * (float)spread);
+
+    /* Phase 3: Compute sine table step (byte offset per iteration) */
+    int step = 0x800 / (spread * 4);
+    int sinStepBytes = step * 4;
+
+    /* Phase 4: Apply ripple across segment range [nearest-spread+1, nearest+spread-1] */
+    int relOff = 1 - spread;
+    if (relOff >= spread) return;
+
+    int sinOffset = 0;
+    int segIdx = nearest + relOff;
+    int segByteOff = segIdx * 0x1c;
+
+    while (relOff < spread) {
+        if (segIdx >= 0 && segIdx < DAT_004892c8) {
+            /* Check segment is close enough to the nearest on the main axis */
+            int nearX = *(int *)((int)DAT_00487820 + nearest * 0x1c);
+            int segX = *(int *)((int)DAT_00487820 + segByteOff);
+            int xDiff = segX - nearX;
+            int absXDiff = xDiff < 0 ? -xDiff : xDiff;
+            int absRel = relOff < 0 ? -relOff : relOff;
+
+            if (absXDiff <= absRel) {
+                int sinVal = *(int *)((char *)DAT_00487ab0 + sinOffset);
+                float disp = (float)sinVal * intensity;
+
+                if (DAT_004892cc == -1) {
+                    /* Vertical wall: displace field2 (offset +8) */
+                    int *target = (int *)((int)DAT_00487820 + segByteOff + 8);
+                    if (direction != 0)
+                        *target = (int)((float)*target - disp);
+                    else
+                        *target = (int)(disp + (float)*target);
+                } else {
+                    /* Horizontal wall: displace field3 (offset +0xC) */
+                    int *target = (int *)((int)DAT_00487820 + segByteOff + 0xc);
+                    if (direction != 0)
+                        *target = (int)((float)*target - disp);
+                    else
+                        *target = (int)(disp + (float)*target);
+                }
+            }
+        }
+
+        sinOffset += sinStepBytes;
+        relOff++;
+        segByteOff += 0x1c;
+        segIdx++;
+    }
+}
 
 /* ===== FUN_0040fd70 — Positional Sound with Entity Dedup (0040FD70) ===== */
 /* Manages per-entity sound state: if same sound is already playing, reset timer.
@@ -171,7 +302,1462 @@ int FUN_00450dd0(int x, int y)
 }
 
 /* ===== Sub-function stubs (Tier 4+, implement later) ===== */
-static void FUN_0044ad30(int *ent, int idx)   { (void)ent; (void)idx; }  /* AI behavior — needs 10 sub-functions */
+/* ===== FUN_004483c0 — Find Nearest Walkable Tile (004483C0) ===== */
+/* Adjusts coordinates to the nearest walkable shadow-grid cell.
+ * Used by A* pathfinding to snap start/end to valid positions. */
+static void FUN_004483c0(int *param_1, int *param_2)
+{
+    int iVar1 = *param_2;
+    if (*(char *)((int)DAT_00489ea4 + DAT_00487a04 * iVar1 + *param_1) != '\0')
+        return;
+    int iVar5 = iVar1 - 1;
+    int local_c = -1;
+    int iVar3 = iVar5 * DAT_00487a04;
+    do {
+        if ((0 < iVar5) && (iVar5 < DAT_00487a08)) {
+            int iVar4 = -1;
+            int iVar2 = *param_1 - 1;
+            do {
+                if (((0 < iVar2) && (iVar2 < DAT_00487a04)) &&
+                   (*(char *)((int)DAT_00489ea4 + iVar3 + iVar2) != '\0')) {
+                    *param_2 = iVar1 + local_c;
+                    *param_1 = *param_1 + iVar4;
+                    return;
+                }
+                iVar4++;
+                iVar2++;
+            } while (iVar4 < 2);
+        }
+        iVar3 += DAT_00487a04;
+        local_c++;
+        iVar5++;
+        if (1 < local_c)
+            return;
+    } while (true);
+}
+
+/* ===== FUN_004495e0 — Dual Ray Wall Check (004495E0) ===== */
+/* Fires two rays simultaneously; returns 1 if ray A hits wall first,
+ * 2 if ray B hits wall first, 0 if neither hits within 5 steps. */
+static int FUN_004495e0(int param_1, int param_2, int param_3, int param_4,
+                        int param_5, int param_6)
+{
+    int iVar1 = param_1;
+    int iVar2 = iVar1;
+    int iVar3 = param_2;
+    int count = 0;
+    while (1) {
+        iVar1 += param_3;
+        param_2 += param_4;
+        iVar2 += param_5;
+        iVar3 += param_6;
+        if ((0 < iVar1) && (0 < param_2) &&
+            (iVar1 < (int)DAT_004879f0 * 0x40000) &&
+            (param_2 < (int)DAT_004879f4 * 0x40000) &&
+            (*(char *)((unsigned int)*(unsigned char *)((iVar1 >> 0x12) +
+                       (int)DAT_0048782c +
+                       ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
+                       0x20 + 1 + (int)DAT_00487928) == '\0'))
+            return 1;
+        if ((0 < iVar2) && (0 < iVar3) &&
+            (iVar2 < (int)DAT_004879f0 * 0x40000) &&
+            (iVar3 < (int)DAT_004879f4 * 0x40000) &&
+            (*(char *)((unsigned int)*(unsigned char *)((iVar2 >> 0x12) +
+                       (int)DAT_0048782c +
+                       ((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
+                       0x20 + 1 + (int)DAT_00487928) == '\0'))
+            return 2;
+        count++;
+        if (4 < count)
+            return 0;
+    }
+}
+
+/* ===== FUN_004494e0 — Forward Trajectory Collision (004494E0) ===== */
+/* Checks if the entity's forward trajectory (based on ship speed/angle)
+ * will hit an impassable tile within 7 steps. Returns 1 if collision. */
+static int FUN_004494e0(int param_1, int param_2, int param_3, int param_4, int param_5)
+{
+    int iVar3 = param_5;
+    int count = 0;
+    int iVar2 = (int)DAT_00487810 + iVar3 * 0x598;
+    unsigned int uVar4 = (unsigned int)*(unsigned char *)(iVar3 * 0x40 + 0x23 + (int)DAT_0048780c);
+    iVar3 = *(int *)(iVar2 + 0x18);
+    signed char sVar1 = (signed char)((0 < *(int *)(iVar2 + 0xd4)) + 0xb);
+    while (1) {
+        param_3 += ((int)(*(int *)((int)DAT_00487ab0 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
+        param_4 += ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
+        param_1 += param_3;
+        param_2 += param_4;
+        if ((0 < param_1) && (0 < param_2) &&
+            (param_1 < (int)DAT_004879f0 * 0x40000) &&
+            (param_2 < (int)DAT_004879f4 * 0x40000) &&
+            (*(char *)((unsigned int)*(unsigned char *)((param_1 >> 0x12) +
+                       (int)DAT_0048782c +
+                       ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
+                       0x20 + 1 + (int)DAT_00487928) == '\0'))
+            return 1;
+        count++;
+        if (6 < count)
+            return 0;
+    }
+}
+
+/* ===== FUN_004497c0 — Dodge/Strafe Decision (004497C0) ===== */
+/* Decides whether the AI should strafe left/right or move forward/backward
+ * based on the angle difference between facing and velocity direction. */
+static void FUN_004497c0(int param_1, char param_2)
+{
+    unsigned long long uVar6 = (unsigned long long)(unsigned int)FUN_004257e0(
+        0, 0, *(int *)(param_1 + 0x10), *(int *)(param_1 + 0x14));
+    unsigned int uVar3 = (unsigned int)(*(int *)(param_1 + 0x18) - (int)uVar6) & 0x7ff;
+    int iVar4 = 0x800 - (int)uVar3;
+    unsigned int uVar2 = (uVar3 - 0x400) & 0x7ff;
+    int thresh1, thresh2;
+    if (param_2 == '\0') {
+        thresh1 = 0x155;
+        thresh2 = 0x155;
+    } else {
+        thresh1 = 0xe3;
+        thresh2 = 0xe3;
+    }
+
+    if ((uVar3 < (unsigned int)thresh1) || (iVar4 < thresh1)) {
+        unsigned int uVar_b = *(unsigned int *)(param_1 + 0xb8);
+        unsigned int uVar_s = uVar_b | 0x40;
+        *(unsigned int *)(param_1 + 0xb8) = uVar_s;
+        if ((uVar_b & 4) != 0)
+            *(unsigned int *)(param_1 + 0xb8) = uVar_s ^ 4;
+        return;
+    }
+    if ((uVar2 < (unsigned int)thresh2) || (iVar4 < thresh2)) {
+        unsigned int uVar_b = *(unsigned int *)(param_1 + 0xb8);
+        unsigned int uVar_s = uVar_b | 4;
+        *(unsigned int *)(param_1 + 0xb8) = uVar_s;
+        if ((uVar_b & 0x40) != 0)
+            *(unsigned int *)(param_1 + 0xb8) = uVar_s ^ 0x40;
+    }
+}
+
+/* ===== FUN_004496e0 — Line-of-Sight Step Check (004496E0) ===== */
+/* Walks from (param_1,param_2) toward (param_3,param_4) in tile-sized steps.
+ * Returns 1 (as long long) if LOS is clear, 0 if blocked. */
+static long long FUN_004496e0(int param_1, int param_2, int param_3, int param_4, char param_5)
+{
+    int dx = param_3 - param_1;
+    int dy = param_4 - param_2;
+    /* Compute step count from distance: sqrt(dx_tile^2 + dy_tile^2) * 0.125 */
+    int dx_tile = dx >> 0x12;
+    int dy_tile = dy >> 0x12;
+    int dist_sq = dx_tile * dx_tile + dy_tile * dy_tile;
+    int uVar1 = (int)(sqrt((double)dist_sq) * _DAT_00475770);  /* __ftol */
+    if (uVar1 != 0) {
+        if (param_5 != '\0') {
+            if (0x18 < uVar1) return 0LL;
+        } else {
+            if (0x10 < uVar1) return 0LL;
+        }
+        if (0 < uVar1) {
+            int step_dx = dx / uVar1;
+            int step_dy = dy / uVar1;
+            int steps = 0;
+            do {
+                param_2 += step_dy;
+                param_1 += step_dx;
+                unsigned int tileOff = (unsigned int)*(unsigned char *)((param_1 >> 0x12) +
+                    (int)DAT_0048782c +
+                    ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20;
+                if (*(char *)(tileOff + 1 + (int)DAT_00487928) == '\0')
+                    return 0LL;
+                steps++;
+            } while (steps < uVar1);
+        }
+    }
+    return 1LL;
+}
+
+/* ===== FUN_0044de10 — Validate Spawn Position (0044DE10) ===== */
+/* Checks a 16x16 tile area is fully passable. Returns 1 if valid. */
+static unsigned int FUN_0044de10(int param_1, unsigned int param_2)
+{
+    if (param_1 <= 0xd || param_1 >= (int)DAT_004879f0 - 0xe ||
+        (int)param_2 <= 0xd || (int)param_2 >= (int)DAT_004879f4 - 0xe)
+        return 0;
+    int iVar3 = 0;
+    unsigned int idx = ((param_2 - 8) << ((unsigned char)DAT_00487a18 & 0x1f)) - 8 + param_1;
+    do {
+        int iVar2 = 0;
+        do {
+            unsigned int uVar1 = idx++;
+            if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + uVar1) *
+                0x20 + 1 + (int)DAT_00487928) == '\0')
+                return 0;
+            iVar2++;
+        } while (iVar2 < 0x10);
+        iVar3++;
+        idx = (idx - 0x10) + DAT_00487a00;
+        if (0xf < iVar3)
+            return 1;
+    } while (1);
+}
+
+/* ===== FUN_0044ab20 — Find Nearest Enemy Player (0044AB20) ===== */
+/* Scans all players for the nearest enemy within AI vision range.
+ * Returns (index << 8) | 1 if found, or count & 0xFFFFFF00 if not. */
+static unsigned int FUN_0044ab20(int *param_1)
+{
+    int iVar5 = (DAT_00481ec8 >> 0x12) * (DAT_00481ec8 >> 0x12);
+    unsigned int uVar6 = 0;
+    unsigned int local_4 = 0xffffffff;
+    unsigned int uVar2 = (unsigned int)DAT_00489240;
+    if (0 < DAT_00489240) {
+        char *pcVar4 = (char *)((int)DAT_00487810 + 0x24);
+        do {
+            if ((pcVar4[8] != (char)param_1[0xb]) && (*pcVar4 == '\0')) {
+                int iVar3 = (*(int *)(pcVar4 - 0x20) - param_1[1]) >> 0x12;
+                int iVar1 = (*(int *)(pcVar4 - 0x24) - *param_1) >> 0x12;
+                iVar1 = iVar1 * iVar1 + iVar3 * iVar3;
+                if (iVar1 < iVar5) {
+                    iVar5 = iVar1;
+                    local_4 = uVar6;
+                }
+            }
+            uVar6++;
+            pcVar4 += 0x598;
+        } while ((int)uVar6 < DAT_00489240);
+        uVar2 = local_4;
+        if (local_4 != 0xffffffff)
+            return (local_4 & 0xffffff00) | 1;
+    }
+    return uVar2 & 0xffffff00;
+}
+
+/* ===== FUN_0044ac80 — Check Wall Above/Below for Evasion (0044AC80) ===== */
+/* Checks tiles directly above and below entity for solid walls.
+ * Sets movement flags for evasion. Returns 1 if wall found. */
+static unsigned int FUN_0044ac80(int *param_1)
+{
+    unsigned int uVar2 = (unsigned int)param_1[1] >> 0x12;
+    unsigned char bVar4 = (unsigned char)DAT_00487a18;
+    int iVar5 = *param_1 >> 0x12;
+
+    /* Check tile below (+1 row) */
+    if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c +
+        ((uVar2 + 1) << (bVar4 & 0x1f)) + iVar5) * 0x20 + 0x18 + (int)DAT_00487928) != '\0') {
+        int idx = (uVar2 << (bVar4 & 0x1f)) + iVar5;
+        char cVar1 = *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + idx) *
+            0x20 + 4 + (int)DAT_00487928);
+        if (cVar1 != '\0') {
+            param_1[0x2e] |= 4;
+        }
+        return 1;
+    }
+    /* Check tile above (-1 row) */
+    if (*(char *)((unsigned int)*(unsigned char *)(((uVar2 - 1) << (bVar4 & 0x1f)) +
+        iVar5 + (int)DAT_0048782c) * 0x20 + 0x18 + (int)DAT_00487928) != '\0') {
+        int idx = (uVar2 << (bVar4 & 0x1f)) + iVar5;
+        char cVar1 = *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + idx) *
+            0x20 + 4 + (int)DAT_00487928);
+        if (cVar1 == '\0') {
+            param_1[0x2e] |= 4;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/* ===== FUN_00449420 — Projectile Trajectory Prediction (00449420) ===== */
+/* Predicts if a projectile from entity will hit a solid wall or
+ * leave the map. Returns 1 if it will hit a wall. */
+static int FUN_00449420(int *param_1)
+{
+    int iVar2 = *param_1;
+    int iVar3 = param_1[1];
+    int vx = param_1[4] << 3;
+    int vy = param_1[5] << 3;
+    int count = 0;
+    do {
+        iVar2 += vx;
+        iVar3 += vy;
+        vy += DAT_00483824 * 0x40;
+        if ((0 < iVar2) && (0 < iVar3) &&
+            (iVar2 < (int)DAT_004879f0 * 0x40000) &&
+            (iVar3 < (int)DAT_004879f4 * 0x40000)) {
+            unsigned int tileOff = (unsigned int)*(unsigned char *)((iVar2 >> 0x12) +
+                (int)DAT_0048782c +
+                ((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20;
+            if (*(char *)(tileOff + 0x18 + (int)DAT_00487928) != '\0')
+                return 1;
+            if (*(char *)(tileOff + (int)DAT_00487928 + 1) == '\0')
+                return 0;
+        }
+        count++;
+        if (0xe < count)
+            return 0;
+    } while (1);
+}
+
+/* ===== FUN_0044aa50 — Find Nearest Waypoint/Ammo Pickup (0044AA50) ===== */
+/* Scans edge/waypoint records for nearest one matching entity's team.
+ * Sets target position if found. Returns (index << 8) | 1 on success. */
+static unsigned int FUN_0044aa50(int *param_1)
+{
+    int iVar1 = -1;
+    int iVar5 = 0;
+    int iVar4 = 999999999;
+    int local_4 = -1;
+    if (0 < DAT_00489254) {
+        char *pcVar3 = (char *)((int)DAT_00489e84 + 8);
+        do {
+            if ((*pcVar3 == (char)param_1[0xb]) || (*pcVar3 == (char)-1)) {
+                iVar1 = (*(int *)(pcVar3 - 4) - param_1[1]) >> 0x12;
+                int iVar2 = (*(int *)(pcVar3 - 8) - *param_1) >> 0x12;
+                iVar2 = iVar2 * iVar2 + iVar1 * iVar1;
+                iVar1 = local_4;
+                if (iVar2 < iVar4) {
+                    iVar1 = iVar5;
+                    iVar4 = iVar2;
+                    local_4 = iVar5;
+                }
+            }
+            iVar5++;
+            pcVar3 += 0x10;
+        } while (iVar5 < DAT_00489254);
+        if (iVar1 != -1) {
+            iVar1 *= 0x10;
+            param_1[0x114] = *(int *)(iVar1 + (int)DAT_00489e84);
+            int iVar4_2 = *(int *)(iVar1 + 4 + (int)DAT_00489e84);
+            param_1[0x116] = 0;
+            param_1[0x115] = iVar4_2;
+            return (((unsigned int)iVar1) & 0xffffff00) | 1;
+        }
+    }
+    return (unsigned int)DAT_00489254 & 0xffffff00;
+}
+
+/* ===== FUN_0044abb0 — Find Nearest Enemy and Set Target (0044ABB0) ===== */
+/* Scans players for nearest enemy, sets targeting data on entity. */
+static void FUN_0044abb0(int *param_1)
+{
+    int iVar5 = (DAT_00481ec8 >> 0x12) * (DAT_00481ec8 >> 0x12);
+    int iVar1 = -1;
+    int iVar4 = 0;
+    int local_4 = -1;
+    if (0 < DAT_00489240) {
+        char *pcVar3 = (char *)((int)DAT_00487810 + 0x24);
+        do {
+            if ((pcVar3[8] != (char)param_1[0xb]) && (*pcVar3 == '\0')) {
+                int iVar2 = (*(int *)(pcVar3 - 0x20) - param_1[1]) >> 0x12;
+                iVar1 = (*(int *)(pcVar3 - 0x24) - *param_1) >> 0x12;
+                iVar2 = iVar1 * iVar1 + iVar2 * iVar2;
+                iVar1 = local_4;
+                if (iVar2 < iVar5) {
+                    iVar1 = iVar4;
+                    iVar5 = iVar2;
+                    local_4 = iVar4;
+                }
+            }
+            iVar4++;
+            pcVar3 += 0x598;
+        } while (iVar4 < DAT_00489240);
+        if (iVar1 != -1) {
+            param_1[0x10e] = *(int *)(iVar1 * 0x598 + (int)DAT_00487810);
+            iVar1 = *(int *)(iVar1 * 0x598 + 4 + (int)DAT_00487810);
+            param_1[0x38] = 1;
+            param_1[0x10f] = iVar1;
+        }
+    }
+}
+
+/* ===== FUN_00449c50 — Wall Avoidance with Ray Casting (00449C50) ===== */
+/* Tests walls at 3 angle pairs around entity facing direction,
+ * then checks forward/backward clearance. Calls dodge if stuck. */
+static void FUN_00449c50(int *param_1, int param_2, int param_3)
+{
+    int iVar5 = param_1[1];
+    int iVar1 = *param_1;
+    unsigned int uVar2, uVar3;
+    int iVar4;
+
+    /* Test 1: +/-0x199 from facing */
+    uVar2 = (param_1[6] + 0x199U) & 0x7ff;
+    uVar3 = (param_1[6] - 0x199U) & 0x7ff;
+    iVar4 = FUN_004495e0(iVar1, iVar5,
+        *(int *)((int)DAT_00487ab0 + uVar2 * 4) * 3,
+        *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4) * 3,
+        *(int *)((int)DAT_00487ab0 + uVar3 * 4) * 3,
+        *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4) * 3);
+    if (iVar4 == 1) {
+        unsigned int b = param_1[0x2e];
+        unsigned int s = b | 2;
+        param_1[0x2e] = (int)s;
+        if ((b & 1) != 0)
+            param_1[0x2e] = (int)(s ^ 1);
+    } else if (iVar4 == 2) {
+        unsigned int b = param_1[0x2e];
+        unsigned int s = b | 1;
+        param_1[0x2e] = (int)s;
+        if ((b & 2) != 0)
+            param_1[0x2e] = (int)(s ^ 2);
+    }
+
+    /* Test 2: +/-0x100 from facing */
+    uVar3 = (param_1[6] - 0x100U) & 0x7ff;
+    uVar2 = (param_1[6] + 0x100U) & 0x7ff;
+    iVar4 = FUN_004495e0(iVar1, iVar5,
+        *(int *)((int)DAT_00487ab0 + uVar2 * 4),
+        *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4),
+        *(int *)((int)DAT_00487ab0 + uVar3 * 4),
+        *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4));
+    if (iVar4 == 1) {
+        unsigned int b = param_1[0x2e];
+        unsigned int s = b | 2;
+        param_1[0x2e] = (int)s;
+        if ((b & 1) != 0)
+            param_1[0x2e] = (int)(s ^ 1);
+    } else if (iVar4 == 2) {
+        unsigned int b = param_1[0x2e];
+        unsigned int s = b | 1;
+        param_1[0x2e] = (int)s;
+        if ((b & 2) != 0)
+            param_1[0x2e] = (int)(s ^ 2);
+    }
+
+    /* Test 3: +/-0x300 from facing */
+    uVar3 = (param_1[6] - 0x300U) & 0x7ff;
+    uVar2 = (param_1[6] + 0x300U) & 0x7ff;
+    iVar4 = FUN_004495e0(iVar1, iVar5,
+        *(int *)((int)DAT_00487ab0 + uVar2 * 4),
+        *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4),
+        *(int *)((int)DAT_00487ab0 + uVar3 * 4),
+        *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4));
+    if (iVar4 == 1) {
+        unsigned int b = param_1[0x2e];
+        unsigned int s = b | 2;
+        param_1[0x2e] = (int)s;
+        if ((b & 1) != 0)
+            param_1[0x2e] = (int)(s ^ 1);
+    } else if (iVar4 == 2) {
+        unsigned int b = param_1[0x2e];
+        unsigned int s = b | 1;
+        param_1[0x2e] = (int)s;
+        if ((b & 2) != 0)
+            param_1[0x2e] = (int)(s ^ 2);
+    }
+
+    /* Forward clearance check: walk backward (facing - 0x400) 5 steps */
+    uVar2 = (unsigned int)param_1[6] & 0x7ff;
+    uVar3 = (param_1[6] - 0x400U) & 0x7ff;
+    int local_14 = 0;
+    int iVar4b = iVar5;
+    int iVar6 = iVar1;
+    do {
+        iVar6 = iVar6 + *(int *)((int)DAT_00487ab0 + uVar3 * 4);
+        iVar4b = iVar4b + *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4);
+        if ((0 < iVar6) && (0 < iVar4b) &&
+            (iVar6 < (int)DAT_004879f0 * 0x40000) &&
+            (iVar4b < (int)DAT_004879f4 * 0x40000) &&
+            (*(char *)((unsigned int)*(unsigned char *)((iVar6 >> 0x12) +
+                (int)DAT_0048782c +
+                ((iVar4b >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
+                0x20 + 1 + (int)DAT_00487928) == '\0'))
+            goto LAB_00449f58;
+        local_14++;
+    } while (local_14 < 5);
+
+    /* Forward clearance check: walk forward 5 steps */
+    local_14 = 0;
+    iVar4b = iVar1;
+    iVar6 = iVar5;
+    while (1) {
+        iVar4b = iVar4b + *(int *)((int)DAT_00487ab0 + uVar2 * 4);
+        iVar6 = iVar6 + *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4);
+        if ((0 < iVar4b) && (0 < iVar6) &&
+            (iVar4b < (int)DAT_004879f0 * 0x40000) &&
+            (iVar6 < (int)DAT_004879f4 * 0x40000) &&
+            (*(char *)((unsigned int)*(unsigned char *)((iVar4b >> 0x12) +
+                (int)DAT_0048782c +
+                ((iVar6 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
+                0x20 + 1 + (int)DAT_00487928) == '\0'))
+            break;
+        local_14++;
+        if (4 < local_14) {
+LAB_00449f58:
+            if (20000 < param_2) {
+                if ((90000 < param_2) && ((char)param_1[0x39] == '\0')) {
+                    FUN_004497c0((int)param_1, '\0');
+                }
+                if ((120000 < param_2) && ((char)param_1[0x39] == '\0')) {
+                    int res = FUN_004494e0(iVar1, iVar5, param_1[4] << 3,
+                                           param_1[5] << 3, param_3);
+                    if (res != 0) {
+                        FUN_004497c0((int)param_1, '\0');
+                    }
+                }
+            }
+            return;
+        }
+    }
+    /* Forward clear — set backward flag */
+    uVar2 = (unsigned int)param_1[0x2e];
+    uVar3 = uVar2 | 0x40;
+    param_1[0x2e] = (int)uVar3;
+    if ((uVar2 & 4) != 0) {
+        param_1[0x2e] = (int)(uVar3 ^ 4);
+    }
+    goto LAB_00449f58;
+}
+
+/* ===== FUN_004498a0 — Pathfinding Movement (004498A0) ===== */
+/* Advances along the pathfinding waypoint list, checks terrain tile types
+ * for conveyors/speed tiles, and sets movement buttons accordingly.
+ * The __ftol() calls compute velocity from entity speed/angle and tile effects. */
+static void FUN_004498a0(int *param_1, int param_2)
+{
+    int *piVar4 = param_1;
+    int iVar2 = param_1[0x3d];
+    param_1[0x3d] = iVar2 + 1;
+    if (2 < iVar2 + 1) {
+        iVar2 = param_1[0x3b];
+        param_1[0x3d] = 0;
+        if (iVar2 == param_1[0x3c] - 1) {
+            param_1[0x38] = 1;
+        } else {
+            long long lVar8 = FUN_004496e0(*param_1, param_1[1],
+                param_1[iVar2 * 2 + 0x40] << 0x12,
+                param_1[iVar2 * 2 + 0x41] << 0x12,
+                (char)param_1[0x39]);
+            if ((int)lVar8 != 0) {
+                param_1[0x3a] = 0xfc;
+                param_1[0x3b] = param_1[0x3b] + 1;
+            }
+        }
+    }
+
+    /* Get current waypoint target position */
+    int wp_idx = piVar4[0x3b];
+    int wp_x = piVar4[wp_idx * 2 + 0x3e];
+    int wp_y = piVar4[wp_idx * 2 + 0x3f];
+
+    int iVar2b = *piVar4;   /* entity x */
+    int iVar3 = piVar4[1];  /* entity y */
+
+    /* Compute tile-space delta to waypoint */
+    int dx_tile = wp_x - (iVar2b >> 0x12);
+    int dy_tile = wp_y - (iVar3 >> 0x12);
+
+    /* Compute velocity from entity speed and angle:
+     * vx = cos(angle) * speed, vy = sin(angle) * speed
+     * The disassembly shows: ent[4] (vx), ent[5] (vy) are current velocity,
+     * then it computes from distance to waypoint using sqrt and scaling. */
+    int vx = piVar4[4];
+    int vy = piVar4[5];
+    /* Normalize velocity to get speed scalar */
+    int vx_norm = ((vx + ((unsigned int)(vx >> 0x1f) >> 0x17)) >> 9);
+    int vy_norm = ((vy + ((unsigned int)(vy >> 0x1f) >> 0x17)) >> 9);
+    int speed_sq = vx_norm * vx_norm + vy_norm * vy_norm;
+    float speed_f = sqrtf((float)speed_sq);
+
+    /* Compute projected target position based on current velocity */
+    /* dx = wp_x_tile - ent_x_tile, dy = wp_y_tile - ent_y_tile */
+    /* The disasm computes: target_x = dx * (tiny_scale * speed) / dist - vx_term */
+    /* target_y = dy * (tiny_scale * speed) / dist - vy_term */
+    float dist_f = sqrtf((float)(dx_tile * dx_tile + dy_tile * dy_tile));
+    float vel_scale = speed_f * _DAT_0047578c;
+
+    int target_x, target_y;
+    if (dist_f > 0.0f) {
+        target_x = (int)((float)dx_tile * _DAT_00475788 * speed_f / dist_f - (float)vx * _DAT_00475790);
+        target_y = (int)((float)dy_tile * _DAT_00475788 * speed_f / dist_f - (float)vy * _DAT_00475790);
+    } else {
+        target_x = (int)(-(float)vx * _DAT_00475790);
+        target_y = (int)(-(float)vy * _DAT_00475790);
+    }
+
+    /* Compute combined distance metric */
+    int combined = target_x * target_x + target_y * target_y;
+    float combined_f = sqrtf((float)combined);
+    /* Subtract gravity influence */
+    target_y = (int)(combined_f * _DAT_00475784 * (float)target_y - (float)DAT_00483824);
+
+    /* Check terrain tile type for conveyors/speed modifiers */
+    unsigned char bVar1 = *(unsigned char *)(((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
+        (iVar2b >> 0x12) + (int)DAT_0048782c);
+
+    /* Conveyor tile types 0x40-0x47, 0x64-0x73, 0x16-0x19 modify velocity */
+    if (bVar1 == 0x40 || (99 < bVar1 && bVar1 < 0x68)) {
+        target_y = (int)(_DAT_00475780 * vel_scale + (float)target_y);
+    }
+    if (bVar1 == 0x41 || (0x67 < bVar1 && bVar1 < 0x6c)) {
+        target_y = (int)((float)target_y - _DAT_00475780 * vel_scale);
+    }
+    if (bVar1 == 0x42 || (0x6b < bVar1 && bVar1 < 0x70)) {
+        target_x = (int)(_DAT_00475780 * vel_scale + (float)target_x);
+    }
+    if (bVar1 == 0x43 || (0x6f < bVar1 && bVar1 < 0x74)) {
+        target_x = (int)((float)target_x - _DAT_00475780 * vel_scale);
+    }
+    if (bVar1 == 0x44) {
+        target_y = (int)(_DAT_0047577c * vel_scale + (float)target_y);
+    } else if (bVar1 == 0x45) {
+        target_y = (int)((float)target_y - _DAT_0047577c * vel_scale);
+    } else if (bVar1 == 0x46) {
+        target_x = (int)(_DAT_0047577c * vel_scale + (float)target_x);
+    } else if (bVar1 == 0x47) {
+        target_x = (int)((float)target_x - _DAT_0047577c * vel_scale);
+    } else if (bVar1 == 0x16) {
+        target_y = (int)(_DAT_00475778 * vel_scale + (float)target_y);
+    } else if (bVar1 == 0x17) {
+        target_y = (int)((float)target_y - _DAT_00475778 * vel_scale);
+    } else if (bVar1 == 0x18) {
+        target_x = (int)(_DAT_00475778 * vel_scale + (float)target_x);
+    } else if (bVar1 == 0x19) {
+        target_x = (int)((float)target_x - _DAT_00475778 * vel_scale);
+    }
+
+    /* Compute angle to adjusted target and decide movement direction */
+    unsigned long long uVar9 = (unsigned long long)(unsigned int)FUN_004257e0(0, 0, target_x, target_y);
+    unsigned int uVar7 = ((unsigned int)piVar4[6] - (unsigned int)uVar9) & 0x7ff;
+
+    unsigned int uVar6;
+    if ((param_2 < 60000) || (uVar7 < 0x2aa) || ((int)(0x800 - uVar7) < 0x2aa)) {
+        uVar6 = (unsigned int)piVar4[0x2e] | 4;  /* forward */
+    } else {
+        if ((0x198 < ((uVar7 - 0x400) & 0x7ff)) && (0x198 < (int)(0x800 - uVar7)))
+            goto LAB_00449c28;
+        uVar6 = (unsigned int)piVar4[0x2e] | 0x40;  /* backward */
+    }
+    piVar4[0x2e] = (int)uVar6;
+
+LAB_00449c28:
+    if (0x3ff < uVar7) {
+        piVar4[0x2e] = piVar4[0x2e] | 1;  /* turn left */
+        return;
+    }
+    piVar4[0x2e] = piVar4[0x2e] | 2;  /* turn right */
+}
+
+/* ===== FUN_00449fd0 — Weapon Fire Decision (00449FD0) ===== */
+/* Checks if firing the current weapon would hit an enemy using ballistic
+ * prediction with gravity. Sets fire button if projectile will intersect. */
+static void FUN_00449fd0(int *param_1)
+{
+    int iVar19 = (int)DAT_00487abc;
+    unsigned int uVar13 = (unsigned int)*(unsigned char *)((char)param_1[0xd] + 0x3c + (int)param_1);
+    unsigned int uVar16 = (unsigned int)*(unsigned char *)((int)param_1 + 0x35);
+    int iVar10 = iVar19 + uVar13 * 0x218;
+    char cVar2 = *(char *)(iVar10 + 0x7c);
+
+    if (cVar2 == '\0') return;
+    if (cVar2 == '\x02') {
+        param_1[0x2e] = param_1[0x2e] | 0x10;
+        return;
+    }
+    if (cVar2 == '\x03') {
+        if (param_1[0x116] != 2) return;
+        if (*param_1 <= param_1[0x114] - 0x1900000) return;
+        if (param_1[0x114] + 0x1900000 <= *param_1) return;
+        if (param_1[1] <= param_1[0x115] - 0x1900000) return;
+        if (param_1[0x115] + 0x1900000 <= param_1[1]) return;
+        param_1[0x2e] = param_1[0x2e] | 0x10;
+        return;
+    }
+
+    int iVar3 = *param_1;
+    int iVar7 = iVar3 + DAT_00481ec4;
+    int iVar14 = iVar3 - DAT_00481ec4;
+    int iVar4 = param_1[1];
+    int iVar8 = iVar4 + DAT_00481ec8;
+    int iVar15 = iVar4 - DAT_00481ec8;
+
+    /* Weapon parameters from level/type tables */
+    unsigned int weap_level = (unsigned int)*(unsigned char *)((int)param_1 + 0xdd);
+    int local_5c = DAT_0047ee1c[weap_level];
+    int iVar20 = (int)weap_level - 1;
+    int local_64 = DAT_0047ee0c[iVar20];
+    int iVar5 = DAT_0047ee34[iVar20];
+    float fVarAcc = DAT_0047ee48[iVar20];
+
+    int iVar1b = uVar16 + uVar13 * 0x86;
+
+    /* Compute fire rate from weapon stats */
+    float fVar6 = (float)((unsigned int)*(unsigned char *)(iVar10 + 0xa0 + uVar16) *
+                  (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) * _DAT_004757a4 +
+                  (float)(*(int *)(iVar19 + 0xdc + iVar1b * 4) *
+                  (unsigned int)*(unsigned char *)(param_1 + 0x27) *
+                  DAT_0048382c >> 0xc);
+    if (DAT_00483830 == 0) {
+        fVar6 = fVar6 + _DAT_004757a0;
+    } else if (*(unsigned char *)((int)&DAT_0048374c + 3) < 0xf1) {
+        fVar6 = ((float)(unsigned int)(*(int *)(iVar19 + 0x10c + iVar1b * 4) * 7) /
+                (float)DAT_00483830) * _DAT_0047579c + fVar6;
+    }
+
+    if (fVar6 < _DAT_00475798) {
+        /* Scale down range when fire rate too low */
+        float scale = (_DAT_00475798 - fVar6);
+        local_64 = (int)((float)(0x32 - local_64) * scale * _DAT_00475794 + (float)local_64);
+        local_5c = (int)((float)(0x1e - local_5c) * scale * _DAT_00475794 + (float)local_5c);
+    }
+
+    /* Compute projectile initial velocity based on weapon type */
+    int local_60 = 0;
+    int local_68 = 0;
+    int facing = param_1[6];
+    int proj_speed;
+
+    if (uVar13 == 1) {
+        /* Special weapon types with different speed indices */
+        if (uVar16 == 0) {
+            proj_speed = *(int *)(iVar19 + 0x2cc);
+        } else if (uVar16 == 1) {
+            proj_speed = *(int *)(iVar19 + 0x2c4);
+        } else if (uVar16 == 2) {
+            proj_speed = *(int *)(iVar19 + 0x2c8);
+        } else {
+            goto skip_proj;
+        }
+    } else {
+        int offset = iVar1b;
+        proj_speed = *(int *)(iVar19 + 0xac + offset * 4);
+    }
+    {
+        /* Compute X velocity: cos(facing) * speed / 64 + entity_vx * accuracy */
+        int cos_val = *(int *)((int)DAT_00487ab0 + facing * 4);
+        int sin_val = *(int *)((int)DAT_00487ab0 + 0x800 + facing * 4);
+        local_60 = (int)((float)(cos_val * proj_speed >> 6) + (float)param_1[4] * fVarAcc);
+        local_68 = (int)((float)(sin_val * proj_speed >> 6) + (float)param_1[5] * fVarAcc);
+    }
+skip_proj:
+
+    /* Iterate over all players and check if projectile will intersect */
+    int local_2c = 0;
+    if (0 < DAT_00489240) {
+        unsigned char *local_4c = (unsigned char *)((int)DAT_0048780c + 0x23);
+        int *piVar17 = (int *)((int)DAT_00487810 + 4);
+        do {
+            if (((char)param_1[0xb] != (char)piVar17[10]) &&
+                (iVar14 < piVar17[-1]) && (piVar17[-1] < iVar7) &&
+                (iVar15 < *piVar17) && (*piVar17 < iVar8)) {
+
+                int local_58 = piVar17[-1];
+                int local_6c = *piVar17;
+
+                /* Enemy lead prediction: if enemy is alive and weapon level >= 2 */
+                int iVar23 = 0;
+                int iVar9 = 0;
+                if ((char)piVar17[0x128] != '\0' || iVar20 < 2) {
+                    iVar23 = 0;
+                    iVar9 = 0;
+                } else {
+                    signed char sVar12 = (signed char)((0 < piVar17[0x34]) + 0xb);
+                    iVar23 = ((int)(*(int *)((int)DAT_00487ab0 + piVar17[5] * 4) *
+                              (unsigned int)*local_4c) >> sVar12) / 2;
+                    iVar9 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + piVar17[5] * 4) *
+                             (unsigned int)*local_4c) >> sVar12) / 2;
+                }
+
+                int local_38 = 0;
+                int iVar21 = local_68 * 4;
+                int iVar22 = piVar17[4] * 4;
+                int local_3c = local_64;
+                int iVar18 = piVar17[3] << 2;
+
+                if (0 < iVar5) {
+                    int gravity_step = (*(int *)(iVar19 + 0x88 + iVar1b * 4) * DAT_00483828 * 0x10) / 2;
+                    iVar23 = (iVar23 << 4) / 2;
+                    int iVar10b = ((DAT_00483824 + iVar9) * 0x10) / 2;
+                    int local_54 = iVar4;
+                    int local_44 = iVar3;
+                    do {
+                        iVar21 += gravity_step;
+                        local_54 += iVar21;
+                        local_44 += local_60 * 4;
+                        iVar21 += gravity_step;
+                        iVar18 += iVar23;
+                        local_58 += iVar18;
+                        iVar22 += iVar10b;
+                        local_6c += iVar22;
+                        iVar18 += iVar23;
+                        iVar22 += iVar10b;
+
+                        /* Bounds check */
+                        if (local_44 < 0 || (int)DAT_004879f0 <= (local_44 >> 0x12) ||
+                            local_54 < 0 || (int)DAT_004879f4 <= (local_54 >> 0x12) ||
+                            local_58 < 0 || (int)DAT_004879f0 <= (local_58 >> 0x12) ||
+                            local_6c < 0 || (int)DAT_004879f4 <= (local_6c >> 0x12))
+                            break;
+
+                        /* Check passability at projectile position */
+                        if (*(char *)((unsigned int)*(unsigned char *)(
+                            ((local_54 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
+                            (local_44 >> 0x12) + (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\0')
+                            break;
+
+                        local_3c += local_5c;
+
+                        /* Distance check: projectile vs enemy */
+                        int dist_x = local_44 - local_58;
+                        if (dist_x < 0) dist_x = local_58 - local_44;
+                        int dist_y = local_54 - local_6c;
+                        if (dist_y < 0) dist_y = local_6c - local_54;
+
+                        if (dist_y + dist_x < local_3c * 0x40000) {
+                            param_1[0x2e] = param_1[0x2e] | 0x10;
+                            return;
+                        }
+                        local_38++;
+                    } while (local_38 < iVar5);
+                }
+            }
+            local_2c++;
+            local_4c += 0x40;
+            piVar17 += 0x166;
+        } while (local_2c < DAT_00489240);
+    }
+}
+
+/* ===== FUN_0044a6b0 — Melee/Close Range Attack Decision (0044A6B0) ===== */
+/* Similar to FUN_00449fd0 but for melee range. Checks if entity can
+ * hit an enemy at close range with melee weapon (type index 1). */
+static void FUN_0044a6b0(int *param_1)
+{
+    int iVar4 = *param_1;
+    int iVar5 = param_1[1];
+    int iVar6 = iVar4 - DAT_00481ec4;
+    int iVar2 = iVar4 + DAT_00481ec4;
+    int iVar7 = iVar5 - DAT_00481ec8;
+    int iVar11 = DAT_00481ec8 + iVar5;
+    unsigned char bVar3 = *(unsigned char *)((int)param_1 + 0xdd);
+    int facing = param_1[6];
+
+    /* Compute melee velocity from weapon type 1 speed (0x2c4 offset) */
+    int melee_speed = *(int *)((int)DAT_00487abc + 0x2c4);
+    int cos_val = *(int *)((int)DAT_00487ab0 + facing * 4);
+    int sin_val = *(int *)((int)DAT_00487ab0 + 0x800 + facing * 4);
+
+    /* __ftol: initial X velocity = cos*speed/64 + entity_vx * 0.5 */
+    int lVar18 = (int)((float)(cos_val * melee_speed >> 6) + (float)param_1[4] * _DAT_004757a8);
+    /* __ftol: initial Y velocity = sin*speed/64 + entity_vy * 0.5 */
+    int lVar19 = (int)((float)(sin_val * melee_speed >> 6) + (float)param_1[5] * _DAT_004757a8);
+
+    int local_34 = 0;
+    if (0 < DAT_00489240) {
+        unsigned char *local_48 = (unsigned char *)((int)DAT_0048780c + 0x23);
+        int *piVar12 = (int *)((int)DAT_00487810 + 4);
+        do {
+            if (((char)param_1[0xb] != (char)piVar12[10]) &&
+                (iVar6 < piVar12[-1]) && (piVar12[-1] < iVar2) &&
+                (iVar7 < *piVar12) && (*piVar12 < iVar11)) {
+
+                int local_58 = piVar12[-1];
+                int local_50 = *piVar12;
+
+                /* Enemy lead prediction */
+                int iVar16 = 0;
+                int iVar8 = 0;
+                if ((char)piVar12[0x128] != '\0' || ((int)(bVar3 - 1) < 2)) {
+                    iVar16 = 0;
+                    iVar8 = 0;
+                } else {
+                    signed char sVar1 = (signed char)((0 < piVar12[0x34]) + 0xb);
+                    iVar16 = ((int)(*(int *)((int)DAT_00487ab0 + piVar12[5] * 4) *
+                              (unsigned int)*local_48) >> sVar1) / 2;
+                    iVar8 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + piVar12[5] * 4) *
+                             (unsigned int)*local_48) >> sVar1) / 2;
+                }
+
+                int iVar14 = lVar19 * 4;
+                int iVar15 = piVar12[4] * 4;
+                int local_4c = 0x20;
+                iVar16 = (iVar16 << 4) / 2;
+                int local_38 = 0;
+                int iVar13 = piVar12[3] << 2;
+                int iVar17 = (*(int *)((int)DAT_00487abc + 0x2a0) * DAT_00483828 * 0x10) / 2;
+                iVar8 = ((DAT_00483824 + iVar8) * 0x10) / 2;
+                int local_54 = iVar5;
+                int local_40 = iVar4;
+
+                do {
+                    iVar14 += iVar17;
+                    iVar15 += iVar8;
+                    local_54 += iVar14;
+                    local_40 += lVar18 * 4;
+                    iVar14 += iVar17;
+                    iVar13 += iVar16;
+                    local_58 += iVar13;
+                    iVar13 += iVar16;
+                    local_50 += iVar15;
+                    iVar15 += iVar8;
+
+                    /* Bounds check */
+                    if (local_40 < 0 || (int)DAT_004879f0 <= (local_40 >> 0x12) ||
+                        local_54 < 0 || (int)DAT_004879f4 <= (local_54 >> 0x12) ||
+                        local_58 < 0 || (int)DAT_004879f0 <= (local_58 >> 0x12) ||
+                        local_50 < 0 || (int)DAT_004879f4 <= (local_50 >> 0x12))
+                        break;
+
+                    /* Check passability */
+                    if (*(char *)((unsigned int)*(unsigned char *)(
+                        ((local_54 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
+                        (local_40 >> 0x12) + (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\0')
+                        break;
+
+                    local_4c += 4;
+
+                    /* Distance check */
+                    int dist_x = local_40 - local_58;
+                    if (dist_x < 0) dist_x = local_58 - local_40;
+                    int dist_y = local_54 - local_50;
+                    if (dist_y < 0) dist_y = local_50 - local_54;
+
+                    if (dist_y + dist_x < local_4c * 0x40000) {
+                        param_1[0x2e] = param_1[0x2e] | 8;
+                        return;
+                    }
+                    local_38++;
+                } while (local_38 < 0x14);
+            }
+            local_34++;
+            local_48 += 0x40;
+            piVar12 += 0x166;
+        } while (local_34 < DAT_00489240);
+    }
+}
+
+/* ===== FUN_00448470 — A* Bidirectional Pathfinding (00448470) ===== */
+/* Bidirectional BFS/wave expansion with 8-directional movement.
+ * Fills waypoint array in entity for pathfinding movement. */
+static int FUN_00448470(int *param_1, int param_2, int param_3)
+{
+    int local_60[24];
+    unsigned char local_70[8];
+    int local_68, local_64;
+    int local_7c = 0;
+    int local_78 = 0;
+    int local_74 = 0;
+    unsigned int local_80;
+    int *local_84;
+    int bVar14;
+    int bVar15;
+    int local_86_flag = 0; /* bool local_86 */
+    int iVar10;
+
+    param_1[0x3c] = 0;
+    param_1[0x3b] = 0;
+
+    /* 8-directional neighbor offsets */
+    local_60[0] = DAT_00487a04;           /* S */
+    local_60[1] = DAT_00487a04 + 1;       /* SE */
+    local_60[2] = 1;                       /* E */
+    local_60[3] = 1 - DAT_00487a04;       /* NE */
+    local_60[4] = -DAT_00487a04;           /* N */
+    local_60[5] = -1 - DAT_00487a04;      /* NW */
+    local_60[6] = -1;                      /* W */
+    local_60[7] = DAT_00487a04 - 1;       /* SW */
+
+    /* Reverse direction offsets (index + 8) */
+    local_60[8] = 0;    /* dx for dir 0 (S) */
+    local_60[9] = 1;
+    local_60[10] = 1;
+    local_60[11] = 1;
+    local_60[12] = 0;
+    local_60[13] = -1;
+    local_60[14] = -1;
+    local_60[15] = -1;
+    /* dy offsets (index + 16) */
+    local_60[16] = 1;
+    local_60[17] = 1;
+    local_60[18] = 0;
+    local_60[19] = -1;
+    local_60[20] = -1;
+    local_60[21] = -1;
+    local_60[22] = 0;
+    local_60[23] = 1;
+
+    /* Direction bitmasks */
+    local_70[0] = 1;
+    local_70[1] = 2;
+    local_70[2] = 4;
+    local_70[3] = 8;
+    local_70[4] = 0x10;
+    local_70[5] = 0x20;
+    local_70[6] = 0x40;
+    local_70[7] = 0x80;
+
+    unsigned int uVar8 = (unsigned int)DAT_00487a08 * (unsigned int)DAT_00487a04;
+
+    /* Clear visited grid */
+    DAT_00481eb4 = 0;
+    DAT_00481eb8 = 0;
+    DAT_00481ebc = 0;
+    DAT_00481ec0 = 0;
+    memset((void *)DAT_00489ea8, 0, uVar8);
+
+    /* Initialize pathfinding buffers */
+    DAT_00481ea4 = (int *)DAT_00481f40;
+    DAT_00481e90 = (int *)DAT_00481f3c;
+    DAT_00481e9c = &DAT_00481eb4;
+    DAT_00481eac = &DAT_00481eb8;
+    DAT_00481ea8 = (int *)DAT_00481f38;
+    DAT_00481e94 = (int *)DAT_00481f44;
+    DAT_00481ea0 = &DAT_00481ebc;
+    DAT_00481eb0 = &DAT_00481ec0;
+    DAT_00481e98 = 1;
+
+    /* Convert world coords to shadow-grid coords: (x>>18 + 9) / 18 */
+    local_68 = ((*param_1 >> 0x12) + 9) / 0x12;
+    param_2 = ((param_2 >> 0x12) + 9) / 0x12;
+    local_64 = ((param_1[1] >> 0x12) + 9) / 0x12;
+    iVar10 = (param_3 >> 0x12) + 9;
+    param_3 = iVar10 / 0x12;
+
+    if ((local_68 == param_2) && (local_64 == param_3)) {
+        DAT_00481e98 = 1;
+        return 0;
+    }
+
+    FUN_004483c0(&local_68, &local_64);
+    FUN_004483c0(&param_2, &param_3);
+
+    /* Seed start position into frontier A */
+    if (*DAT_00481eac < 1000) {
+        DAT_00481e90[*DAT_00481eac * 2] = local_64 * DAT_00487a04 + local_68;
+        *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = 99;
+        *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = 1;
+        *DAT_00481eac = *DAT_00481eac + 1;
+    }
+
+    /* Seed end position into frontier B */
+    if (*DAT_00481eb0 < 1000) {
+        DAT_00481e94[*DAT_00481eb0 * 2] = DAT_00487a04 * param_3 + param_2;
+        *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)199;
+        *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = 1;
+        *DAT_00481eb0 = *DAT_00481eb0 + 1;
+    }
+
+    /* Swap buffers based on alternation flag */
+    int *puVar5;
+    if (DAT_00481e98 != 0) {
+        DAT_00481ea4 = (int *)DAT_00481f3c;
+        DAT_00481e90 = (int *)DAT_00481f40;
+        puVar5 = &DAT_00481eb4;
+        DAT_00481e9c = &DAT_00481eb8;
+        DAT_00481eac = &DAT_00481eb4;
+        DAT_00481ea8 = (int *)DAT_00481f44;
+        DAT_00481e94 = (int *)DAT_00481f38;
+        DAT_00481ea0 = &DAT_00481ec0;
+        DAT_00481eb0 = &DAT_00481ebc;
+    } else {
+        DAT_00481ea4 = (int *)DAT_00481f40;
+        DAT_00481e90 = (int *)DAT_00481f3c;
+        puVar5 = &DAT_00481eb8;
+        DAT_00481e9c = &DAT_00481eb4;
+        DAT_00481eac = &DAT_00481eb8;
+        DAT_00481ea8 = (int *)DAT_00481f38;
+        DAT_00481e94 = (int *)DAT_00481f44;
+        DAT_00481ea0 = &DAT_00481ebc;
+        DAT_00481eb0 = &DAT_00481ec0;
+    }
+    DAT_00481e98 = (DAT_00481e98 == 0) ? 1 : 0;
+
+    local_7c = 0;
+    local_78 = 0;
+    local_74 = 0;
+
+    /* Main BFS loop */
+    do {
+        *puVar5 = 0;
+        iVar10 = 0;
+        int *piVar11 = DAT_00481ea4;
+
+        /* Process frontier A */
+        if (0 < *DAT_00481e9c) {
+            do {
+                local_86_flag = !local_86_flag;
+                int iVar7 = *piVar11;
+                char cVar4 = (char)(*(char *)(piVar11 + 1)) - 1;
+                *(char *)(piVar11 + 1) = cVar4;
+                if (cVar4 == '\0') {
+                    if (*(char *)(iVar7 + (int)DAT_00489ea8) == '\0') {
+                        *(char *)(iVar7 + (int)DAT_00489ea8) = *(char *)((int)piVar11 + 5);
+                        unsigned char bVar1 = *(unsigned char *)(iVar7 + (int)DAT_00489ea4);
+                        /* Even directions first */
+                        int iVar6 = 0;
+                        int *piVar13 = local_60;
+                        int found_meeting = 0;
+                        do {
+                            if ((local_70[iVar6] & bVar1) != 0) {
+                                unsigned char bVar2 = *(unsigned char *)(*piVar13 + iVar7 + (int)DAT_00489ea8);
+                                if (bVar2 == 0) {
+                                    if (*DAT_00481eac < 1000) {
+                                        DAT_00481e90[*DAT_00481eac * 2] = *piVar13 + iVar7;
+                                        *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
+                                        *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = 1;
+                                        *DAT_00481eac = *DAT_00481eac + 1;
+                                    }
+                                } else if (99 < bVar2) {
+                                    local_7c = local_60[iVar6] + iVar7;
+                                    local_74 = 10000;
+                                    iVar10 = *DAT_00481e9c + 5;
+                                    local_78 = iVar7;
+                                    found_meeting = 1;
+                                    break;
+                                }
+                            }
+                            iVar6 += 2;
+                            piVar13 += 2;
+                        } while (iVar6 < 8);
+
+                        /* Odd directions */
+                        if (!found_meeting) {
+                            iVar6 = 1;
+                            piVar13 = local_60 + 1;
+                            do {
+                                local_86_flag = !local_86_flag;
+                                if ((local_70[iVar6] & bVar1) != 0) {
+                                    unsigned char bVar2 = *(unsigned char *)(iVar7 + *piVar13 + (int)DAT_00489ea8);
+                                    if (bVar2 == 0) {
+                                        if (*DAT_00481eac < 1000) {
+                                            DAT_00481e90[*DAT_00481eac * 2] = iVar7 + *piVar13;
+                                            *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
+                                            *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = local_86_flag + 1;
+                                            *DAT_00481eac = *DAT_00481eac + 1;
+                                        }
+                                    } else if (99 < bVar2) {
+                                        local_7c = local_60[iVar6] + iVar7;
+                                        local_74 = 10000;
+                                        iVar10 = *DAT_00481e9c + 5;
+                                        local_78 = iVar7;
+                                        break;
+                                    }
+                                }
+                                iVar6 += 2;
+                                piVar13 += 2;
+                            } while (iVar6 < 8);
+                        }
+                    }
+                } else if (*(char *)(iVar7 + (int)DAT_00489ea8) == '\0') {
+                    /* Re-queue with decremented timer */
+                    if (*DAT_00481eac < 1000) {
+                        DAT_00481e90[*DAT_00481eac * 2] = *piVar11;
+                        *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = *(char *)((int)piVar11 + 5);
+                        *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = (char)piVar11[1];
+                        *DAT_00481eac = *DAT_00481eac + 1;
+                    }
+                }
+                piVar11 += 2;
+                iVar10++;
+            } while (iVar10 < *DAT_00481e9c);
+        }
+
+        if (*DAT_00481eac == 0 || iVar10 != *DAT_00481e9c) break;
+
+        /* Process frontier B */
+        iVar10 = 0;
+        local_80 = 0;
+        *DAT_00481eb0 = 0;
+        local_84 = DAT_00481ea8;
+        if (0 < *DAT_00481ea0) {
+            do {
+                local_86_flag = !local_86_flag;
+                int iVar10b = *local_84;
+                char cVar4 = (char)(*(char *)(local_84 + 1)) - 1;
+                *(char *)(local_84 + 1) = cVar4;
+                if (cVar4 == '\0') {
+                    if (*(char *)(iVar10b + (int)DAT_00489ea8) == '\0') {
+                        *(char *)(iVar10b + (int)DAT_00489ea8) = *(char *)((int)local_84 + 5);
+                        unsigned char bVar1 = *(unsigned char *)(iVar10b + (int)DAT_00489ea4);
+                        /* Even directions */
+                        int iVar7 = 0;
+                        int *piVar11b = local_60;
+                        int found_meeting = 0;
+                        do {
+                            if ((bVar1 & local_70[iVar7]) != 0) {
+                                unsigned char bVar2 = *(unsigned char *)(*piVar11b + iVar10b + (int)DAT_00489ea8);
+                                if (bVar2 == 0) {
+                                    if (*DAT_00481eb0 < 1000) {
+                                        DAT_00481e94[*DAT_00481eb0 * 2] = *piVar11b + iVar10b;
+                                        *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
+                                        *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = 1;
+                                        *DAT_00481eb0 = *DAT_00481eb0 + 1;
+                                    }
+                                } else if (bVar2 < 100) {
+                                    local_7c = local_60[iVar7] + iVar10b;
+                                    local_80 = *DAT_00481ea0 + 5;
+                                    local_74 = 10000;
+                                    local_78 = iVar10b;
+                                    found_meeting = 1;
+                                    break;
+                                }
+                            }
+                            iVar7 += 2;
+                            piVar11b += 2;
+                        } while (iVar7 < 8);
+
+                        /* Odd directions */
+                        if (!found_meeting) {
+                            iVar7 = 1;
+                            piVar11b = local_60 + 1;
+                            do {
+                                local_86_flag = !local_86_flag;
+                                if ((bVar1 & local_70[iVar7]) != 0) {
+                                    unsigned char bVar2 = *(unsigned char *)(*piVar11b + iVar10b + (int)DAT_00489ea8);
+                                    if (bVar2 == 0) {
+                                        if (*DAT_00481eb0 < 1000) {
+                                            DAT_00481e94[*DAT_00481eb0 * 2] = *piVar11b + iVar10b;
+                                            *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
+                                            *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = local_86_flag + 1;
+                                            *DAT_00481eb0 = *DAT_00481eb0 + 1;
+                                        }
+                                    } else if (bVar2 < 100) {
+                                        local_7c = local_60[iVar7] + iVar10b;
+                                        local_80 = *DAT_00481ea0 + 5;
+                                        local_74 = 10000;
+                                        local_78 = iVar10b;
+                                        break;
+                                    }
+                                }
+                                iVar7 += 2;
+                                piVar11b += 2;
+                            } while (iVar7 < 8);
+                        }
+                    }
+                } else if (*(char *)(iVar10b + (int)DAT_00489ea8) == '\0') {
+                    if (*DAT_00481eb0 < 1000) {
+                        DAT_00481e94[*DAT_00481eb0 * 2] = *local_84;
+                        *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = *(char *)((int)local_84 + 5);
+                        *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = (char)local_84[1];
+                        *DAT_00481eb0 = *DAT_00481eb0 + 1;
+                    }
+                }
+                local_84 += 2;
+                iVar10 = (int)(local_80 + 1);
+                local_80 = (unsigned int)iVar10;
+            } while (iVar10 < *DAT_00481ea0);
+        }
+
+        if (*DAT_00481eb0 == 0 || iVar10 != *DAT_00481ea0) break;
+
+        /* Swap buffers for next iteration */
+        if (DAT_00481e98 != 0) {
+            DAT_00481ea4 = (int *)DAT_00481f3c;
+            DAT_00481e90 = (int *)DAT_00481f40;
+            puVar5 = &DAT_00481eb4;
+            DAT_00481e9c = &DAT_00481eb8;
+            DAT_00481eac = &DAT_00481eb4;
+            DAT_00481ea8 = (int *)DAT_00481f44;
+            DAT_00481e94 = (int *)DAT_00481f38;
+            DAT_00481ea0 = &DAT_00481ec0;
+            DAT_00481eb0 = &DAT_00481ebc;
+        } else {
+            DAT_00481ea4 = (int *)DAT_00481f40;
+            DAT_00481e90 = (int *)DAT_00481f3c;
+            puVar5 = &DAT_00481eb8;
+            DAT_00481e9c = &DAT_00481eb4;
+            DAT_00481eac = &DAT_00481eb8;
+            DAT_00481ea8 = (int *)DAT_00481f38;
+            DAT_00481e94 = (int *)DAT_00481f44;
+            DAT_00481ea0 = &DAT_00481ebc;
+            DAT_00481eb0 = &DAT_00481ec0;
+        }
+        DAT_00481e98 = (DAT_00481e98 == 0) ? 1 : 0;
+        local_74++;
+        if (8999 < local_74) break;
+    } while (true);
+
+    /* Trace path from meeting point */
+    iVar10 = 0;
+    if (local_7c != 0) {
+        int iVar7 = local_7c % DAT_00487a04;
+        iVar10 = local_7c / DAT_00487a04;
+        bVar14 = (99 < (unsigned char)*(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8)) ? 1 : 0;
+        if (bVar14) {
+            iVar7 = local_78 % DAT_00487a04;
+            iVar10 = local_78 / DAT_00487a04;
+        }
+
+        /* Trace path from start side */
+        unsigned int uVar9 = 0;
+        char cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+        while (cVar4 != 'c') {  /* 99 = 'c' */
+            unsigned int uVar8b = uVar9 & 0x80000001;
+            bVar15 = (uVar8b == 0) ? 1 : 0;
+            if ((int)uVar8b < 0) {
+                bVar15 = ((uVar8b - 1 | 0xfffffffe) == 0xffffffff) ? 1 : 0;
+            }
+            if (bVar15) {
+                param_1[param_1[0x3c] * 2 + 0x3e] = iVar7 * 0x12;
+                param_1[param_1[0x3c] * 2 + 0x3f] = iVar10 * 0x12;
+                int iVar12 = param_1[0x3c];
+                param_1[0x3c] = iVar12 + 1;
+                if (100 < iVar12 + 1) break;
+            }
+            local_80 = (unsigned int)((unsigned char)(cVar4 + 3) & 7);
+            iVar10 = iVar10 + local_60[local_80 + 0x10];
+            iVar7 = iVar7 + local_60[local_80 + 8];
+            uVar9++;
+            cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+        }
+
+        /* Reverse the waypoint array */
+        int iVar7b = param_1[0x3c];
+        int iVar12 = 0;
+        int iVar10b = iVar7b / 2;
+        if (0 < iVar10b) {
+            int *piVar11 = param_1 + 0x3f;
+            do {
+                int tmp1 = piVar11[-1];
+                piVar11[-1] = param_1[(iVar7b - iVar12) * 2 + 0x3c];
+                param_1[(param_1[0x3c] - iVar12) * 2 + 0x3c] = tmp1;
+                int tmp2 = *piVar11;
+                *piVar11 = param_1[(param_1[0x3c] - iVar12) * 2 + 0x3d];
+                param_1[(param_1[0x3c] - iVar12) * 2 + 0x3d] = tmp2;
+                iVar12++;
+                iVar7b = param_1[0x3c];
+                iVar10b = iVar7b / 2;
+                piVar11 += 2;
+            } while (iVar12 < iVar10b);
+        }
+
+        /* Trace path from end side */
+        if (param_1[0x3c] < 0x65) {
+            if (bVar14) {
+                local_78 = local_7c;
+            }
+            iVar7 = local_78 % DAT_00487a04;
+            uVar9 = 0;
+            iVar10 = local_78 / DAT_00487a04;
+            cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+            while (cVar4 != (char)0xc7) {  /* 199 = 0xC7 */
+                unsigned int uVar8b = uVar9 & 0x80000001;
+                if ((int)uVar8b < 0) {
+                    uVar8b = (uVar8b - 1 | 0xfffffffe) + 1;
+                }
+                if (uVar8b == 1) {
+                    param_1[param_1[0x3c] * 2 + 0x3e] = iVar7 * 0x12;
+                    param_1[param_1[0x3c] * 2 + 0x3f] = iVar10 * 0x12;
+                    int iVar12b = param_1[0x3c];
+                    param_1[0x3c] = iVar12b + 1;
+                    if (100 < iVar12b + 1) {
+                        return iVar10;
+                    }
+                }
+                local_80 = (unsigned int)((unsigned char)(cVar4 + (char)0x9f) & 7);
+                iVar10 = iVar10 + local_60[local_80 + 0x10];
+                iVar7 = iVar7 + local_60[local_80 + 8];
+                uVar9++;
+                cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+            }
+        }
+    }
+    return iVar10;
+}
+
+/* ===== FUN_0044ad30 — Main AI Behavior Orchestrator (0044AD30) ===== */
+/* Top-level AI function called for each bot entity. Orchestrates:
+ * target acquisition, pathfinding, movement, and weapon firing. */
+static void FUN_0044ad30(int *param_1, int param_2)
+{
+    int *piVar2 = param_1;
+
+    DAT_00481ec4 = 0x6400000;
+    DAT_00481ec8 = 0x4b00000;
+
+    /* Dead entity: 1% chance to press special button, then return */
+    if ((char)param_1[9] != '\0') {
+        int iVar5 = rand();
+        if (iVar5 % 100 == 0) {
+            param_1[0x2e] = param_1[0x2e] | 0x20;
+        }
+        return;
+    }
+
+    /* Find nearest enemy player */
+    unsigned int uVar3 = FUN_0044ab20(param_1);
+
+    /* If no enemy found and health is low, try evasion */
+    if (((char)uVar3 == '\0') &&
+        ((double)param_1[8] / (double)*(int *)(param_2 * 0x40 + 0x28 + (int)DAT_0048780c) < _DAT_00475640)) {
+        unsigned int uVar4 = FUN_0044ac80(param_1);
+        if ((char)uVar4 != '\0') return;
+        unsigned int uVar4b = FUN_00449420(param_1);
+        if (uVar4b != 0) return;
+    }
+
+    /* If active target is in range, clear enemy tracking */
+    if ((param_1[0x116] == 2) && ((char)uVar3 == '\0') &&
+        (param_1[0x114] - DAT_00481ec4 < *param_1) &&
+        (*param_1 < param_1[0x114] + DAT_00481ec4) &&
+        (param_1[0x115] - DAT_00481ec8 < param_1[1]) &&
+        (param_1[1] < DAT_00481ec8 + param_1[0x115])) {
+        param_1[0x10e] = 0;
+    }
+
+    /* Set target destination */
+    if (DAT_004892a4 == '\0') {
+        if (param_1[0x10e] != 0) {
+            param_1[0x114] = param_1[0x10e];
+            param_1[0x115] = param_1[0x10f];
+            param_1[0x116] = 2;
+            goto LAB_0044aecc;
+        }
+        if ((double)param_1[8] / (double)*(int *)(param_2 * 0x40 + 0x28 + (int)DAT_0048780c) < _DAT_00475680)
+            goto LAB_0044ae83;
+        param_1[0x114] = param_1[0x117];
+        param_1[0x115] = param_1[0x118];
+    } else {
+LAB_0044ae83:
+        uVar3 = FUN_0044aa50(param_1);
+        if ((char)uVar3 != '\0')
+            goto LAB_0044aecc;
+        param_1[0x114] = param_1[0x117];
+        param_1[0x115] = param_1[0x118];
+    }
+    param_1[0x116] = 4;
+
+LAB_0044aecc:
+    /* Check if pathfinding needs refresh */
+    {
+        int iVar5 = param_1[0x3a];
+        param_1[0x3a] = iVar5 - 1;
+        if ((param_1[0x38] == 1) || (iVar5 - 1 < 0)) {
+            /* Pick random valid position */
+            int rnd_x = 0, rnd_y = 0;
+            int attempts = 0;
+            do {
+                rnd_x = rand() % (int)DAT_004879f0;
+                rnd_y = rand() % (int)DAT_004879f4;
+                unsigned int valid = FUN_0044de10(rnd_x, (unsigned int)rnd_y);
+                if ((char)valid != '\0') break;
+                attempts++;
+            } while (attempts < 100);
+            piVar2[0x117] = rnd_x << 0x12;
+            piVar2[0x118] = rnd_y << 0x12;
+
+            FUN_00448470(piVar2, piVar2[0x114], piVar2[0x115]);
+            piVar2[0x3a] = 0xfc;
+            piVar2[0x38] = 0;
+        }
+    }
+
+    /* Update nearest enemy target */
+    FUN_0044abb0(piVar2);
+
+    /* Compute speed scalar from velocity */
+    int iVar5 = piVar2[4];
+    int iVar6 = piVar2[5];
+    iVar5 = ((int)(iVar5 + ((unsigned int)(iVar5 >> 0x1f) >> 21)) >> 0xb) * piVar2[4];
+    iVar6 = ((int)(iVar6 + ((unsigned int)(iVar6 >> 0x1f) >> 21)) >> 0xb) * piVar2[5];
+    iVar5 = ((int)(iVar5 + ((unsigned int)(iVar5 >> 0x1f) >> 21)) >> 0xb) +
+            ((int)(iVar6 + ((unsigned int)(iVar6 >> 0x1f) >> 21)) >> 0xb);
+
+    /* Movement decisions */
+    FUN_004498a0(piVar2, iVar5);
+    FUN_00449c50(piVar2, iVar5, param_2);
+    FUN_00449fd0(piVar2);
+    FUN_0044a6b0(piVar2);
+}
 static void FUN_0044c9a0(int *ent)            { (void)ent; }  /* ftol — handled inline by caller */
 static void FUN_00401000_impl(int idx);  /* forward declaration — defined below */
 
@@ -701,7 +2287,8 @@ static void FUN_0044f840_impl(int *ent)
     ent[4] = ent[4] - ent[4] / 3;
 
     if (DAT_00483835 != '\0') {
-        FUN_0044f630(ent[0], ent[1]);
+        FUN_0044f630(ent[0], ent[1], ent[4], ent[5], 1.0f, 0x18, 0xc,
+                     *(char *)((int)ent + 0x49d));
     }
 }
 
@@ -1645,8 +3232,1115 @@ static void FUN_0040fb70_impl(int idx)
     }
 }
 
-/* ===== FUN_00401000 — Main Entity Update (Tier 4+, stub) ===== */
-static void FUN_00401000_impl(int idx) { (void)idx; }
+/* ===== FUN_00401000 — Main Entity Update / Weapon Fire Effect Spawner =====
+ * Address: 00401000, ~22KB machine code
+ *
+ * When a weapon fires or an entity triggers an effect, this function spawns
+ * the appropriate particles, projectiles, edge records, explosions, and debris.
+ *
+ * param idx = entity/player index
+ * Entity data at DAT_00487810 + idx * 0x598
+ * Particle data at DAT_004892e8 (stride 0x80, count DAT_00489248)
+ * Entity type defs at DAT_00487abc (accessed as int[])
+ */
+static void FUN_00401000_impl(int idx)
+{
+    int *piVar1;
+    int iVar11, iVar12, iVar13, iVar16;
+    unsigned int uVar6, uVar7, uVar8;
+    int local_c;
+    unsigned int local_14;
+    unsigned int local_8;
+    int uVar10;
+    unsigned char uVar9 = (unsigned char)idx;
+
+    int *typeTable = (int *)DAT_00487abc;
+    int *sincos    = (int *)DAT_00487ab0;
+    /* sincos[angle] = sin, sincos[0x200 + angle] = cos (2048 entries each) */
+
+    iVar12 = idx * 0x598;
+    uVar7  = *(unsigned int *)(iVar12 + 0x18 + (int)DAT_00487810);
+
+    local_14 = (unsigned int)*(unsigned char *)(
+        *(char *)(iVar12 + 0x34 + (int)DAT_00487810) +
+        iVar12 + 0x3c + (int)DAT_00487810);
+
+    if (local_14 == 0x32) return;
+
+    if (local_14 == 0x17) {
+        if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) != '\x01' ||
+            *(int *)(iVar12 + 0xa4 + (int)DAT_00487810) != 0) {
+            goto do_switch;
+        }
+        local_14 = 0x5a;
+    }
+    else if (local_14 < 0x2d) {
+        goto do_switch;
+    }
+
+    /* For local_14 >= 0x2d (and 0x5a override): play sound, update stats */
+    FUN_0040f9b0((int)local_14,
+                 *(int *)(iVar12 + (int)DAT_00487810),
+                 *(int *)(iVar12 + 4 + (int)DAT_00487810));
+    iVar13 = (int)DAT_00487810;
+    DAT_00486d28[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481ca8 + local_14);
+    DAT_004870e8[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481c58 + local_14);
+
+do_switch:
+    uVar9 = (unsigned char)idx;
+
+    switch (local_14) {
+
+    /* ===== CASE 0: Scatter debris (30 particles) ===== */
+    case 0:
+    {
+        local_c = 0;
+        do {
+            if (0x9c3 < DAT_00489248) break;
+            iVar13 = rand();
+            uVar8 = (iVar13 % 0x46 - 0x23 + uVar7) & 0x7ff;
+            iVar13 = rand();
+            iVar13 = iVar13 % 0x46 + 0x46;
+            {
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x18) = (sincos[uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                *(int *)(p + 0x1c) = (sincos[0x200 + uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                *(unsigned char *)(p + 0x21) = 0;
+                uVar8 = rand(); uVar8 &= 0x80000001;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+                *(short *)(p + 0x24) = (short)uVar8 * 6;
+                *(unsigned char *)(p + 0x20) = 0;
+                *(unsigned char *)(p + 0x26) = 8;
+                *(unsigned char *)(p + 0x22) = uVar9;
+                *(int *)(p + 0x28) = 0;
+                uVar8 = rand(); uVar8 &= 0x80000003;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                *(int *)(p + 0x38) = typeTable[uVar8 + 0x22];
+                uVar8 = rand(); uVar8 &= 0x80000003;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                *(int *)(p + 0x44) = typeTable[uVar8 + 0x31];
+                *(int *)(p + 0x48) = 0;
+                uVar8 = rand(); uVar8 &= 0x80000003;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                *(int *)(p + 0x4c) = typeTable[uVar8 + 0x3d];
+                *(unsigned char *)(p + 0x54) = 0;
+                uVar8 = rand(); uVar8 &= 0x80000003;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                *(char *)(p + 0x40) = (char)uVar8;
+                *(int *)(p + 0x34) = typeTable[0];
+                *(int *)(p + 0x3c) = 0;
+                *(unsigned char *)(p + 0x5c) = 0;
+            }
+            DAT_00489248++;
+            iVar13 = rand();
+            uVar8 = iVar13 % 100 + 0x14;
+            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                ((int)uVar8 >> 3) + 30000 + ((uVar8 & 0x1fffff8) * 0x20 + (uVar8 & 0x3ffffff8)) * 4;
+            iVar13 = rand();
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = iVar13 % 0x32 + 0x50;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            local_c++;
+            iVar13 = (int)DAT_00487810;
+        } while (local_c < 0x1e);
+        break;
+    }
+
+    /* ===== CASE 1: Beam projectiles ===== */
+    case 1:
+    {
+        char cVar3 = *(char *)(iVar12 + 0x35 + iVar13);
+        if (cVar3 != '\0') {
+            if (cVar3 == '\x01') {
+                uVar8 = uVar7 - 0x2a;
+                local_c = 0;
+                do {
+                    unsigned int ang = uVar8 & 0x7ff;
+                    if (0x9c3 < DAT_00489248) break;
+                    int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                    *(int *)(p) = *(int *)(iVar12 + iVar13);
+                    *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    *(int *)(p + 0x18) = (sincos[ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                    *(int *)(p + 0x1c) = (sincos[0x200 + ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                    *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+                    *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                    *(unsigned char *)(p + 0x21) = 1;
+                    *(unsigned short *)(p + 0x24) = 0;
+                    *(unsigned char *)(p + 0x20) = 0;
+                    *(unsigned char *)(p + 0x26) = 0xc;
+                    *(unsigned char *)(p + 0x22) = uVar9;
+                    *(int *)(p + 0x28) = 0;
+                    *(int *)(p + 0x38) = typeTable[0xa8];
+                    *(int *)(p + 0x44) = typeTable[0xb7];
+                    *(int *)(p + 0x48) = 0;
+                    *(int *)(p + 0x4c) = typeTable[0xc3];
+                    *(unsigned char *)(p + 0x54) = 0;
+                    *(unsigned char *)(p + 0x40) = 0;
+                    *(int *)(p + 0x34) = typeTable[0x86];
+                    *(int *)(p + 0x3c) = 0;
+                    *(unsigned char *)(p + 0x5c) = 0;
+                    uVar8 = ang + 0x2a;
+                    DAT_00489248++;
+                    local_c++;
+                    iVar13 = (int)DAT_00487810;
+                } while (local_c < 3);
+            }
+            else if (cVar3 == '\x02' && DAT_00489248 < 0x9c4) {
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                *(int *)(p) = *(int *)(iVar12 + iVar13);
+                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x18) = (sincos[uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                *(int *)(p + 0x1c) = (sincos[0x200 + uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                *(unsigned char *)(p + 0x21) = 1;
+                *(unsigned short *)(p + 0x24) = 0;
+                *(unsigned char *)(p + 0x20) = 0;
+                *(unsigned char *)(p + 0x26) = 0xc;
+                *(unsigned char *)(p + 0x22) = uVar9;
+                *(int *)(p + 0x28) = 0;
+                *(int *)(p + 0x38) = typeTable[0xa9];
+                *(int *)(p + 0x44) = typeTable[0xb8];
+                *(int *)(p + 0x48) = 0;
+                *(int *)(p + 0x4c) = typeTable[0xc4];
+                *(unsigned char *)(p + 0x54) = 0;
+                *(unsigned char *)(p + 0x40) = 1;
+                *(int *)(p + 0x34) = typeTable[0x86];
+                *(int *)(p + 0x3c) = 0;
+                *(unsigned char *)(p + 0x5c) = 0;
+                DAT_00489248++;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 2;
+                piVar1 = (int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3c);
+                *piVar1 *= 6;
+                iVar13 = (int)DAT_00487810;
+            }
+            break;
+        }
+        if (0x9c3 < DAT_00489248) break;
+        {
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(p) = *(int *)(iVar12 + iVar13);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = (sincos[uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            *(int *)(p + 0x1c) = (sincos[0x200 + uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(unsigned char *)(p + 0x21) = 1;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = 0;
+            *(unsigned char *)(p + 0x26) = 0xc;
+            *(unsigned char *)(p + 0x22) = uVar9;
+            *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[0xaa];
+            *(int *)(p + 0x44) = typeTable[0xb9];
+            *(int *)(p + 0x48) = 0;
+            *(int *)(p + 0x4c) = typeTable[0xc5];
+            *(unsigned char *)(p + 0x54) = 0;
+            *(unsigned char *)(p + 0x40) = 2;
+        }
+        {
+            uVar10 = typeTable[0x86];
+            goto LAB_00401856;
+        }
+    }
+
+    /* ===== CASE 2 ===== */
+    case 2:
+    {
+        if (*(char *)(iVar12 + 0x35 + iVar13) == '\0') {
+            if (DAT_00489248 < 0x9c4) {
+                iVar13 = rand();
+                uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
+                iVar13 = idx * 0x40;
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                *(int *)(p) = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 8) = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x18) = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[uVar8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                *(int *)(p + 0x1c) = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[0x200 + uVar8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                *(int *)(p + 4) = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 0xc) = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                *(unsigned char *)(p + 0x21) = 2;
+                iVar13 = rand();
+                *(short *)(p + 0x24) = (short)(iVar13 % 6);
+                *(unsigned char *)(p + 0x20) = 10;
+                *(unsigned char *)(p + 0x26) = 0xf;
+                *(unsigned char *)(p + 0x22) = uVar9;
+                *(int *)(p + 0x28) = 0;
+                *(int *)(p + 0x38) = typeTable[0x12e];
+                *(int *)(p + 0x44) = typeTable[0x13d];
+                *(int *)(p + 0x48) = 0;
+                *(int *)(p + 0x4c) = typeTable[0x149];
+                *(unsigned char *)(p + 0x54) = 0;
+                *(unsigned char *)(p + 0x40) = 0;
+                *(int *)(p + 0x34) = typeTable[0x10c];
+                *(int *)(p + 0x3c) = 0;
+                *(unsigned char *)(p + 0x5c) = 0;
+                DAT_00489248++;
+                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 0x14;
+                uVar8 = rand(); uVar8 &= 0x8000000f;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff0) + 1;
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                    *(unsigned short *)((int)DAT_00487aa8 + 0x140 + uVar8 * 2) + 30000;
+                iVar13 = rand();
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = iVar13 % 400 + 0x96;
+                iVar13 = (int)DAT_00487810;
+            }
+            break;
+        }
+        if (0x9c3 < DAT_00489248) break;
+        {
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(p) = *(int *)(iVar12 + iVar13);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = (sincos[uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            *(int *)(p + 0x1c) = (sincos[0x200 + uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(unsigned char *)(p + 0x21) = 0x14;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = 0;
+            *(unsigned char *)(p + 0x26) = 0xff;
+            *(unsigned char *)(p + 0x22) = uVar9;
+            *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[0xa9b];
+            *(int *)(p + 0x44) = typeTable[0xaaa];
+            *(int *)(p + 0x48) = 0;
+            *(int *)(p + 0x4c) = typeTable[0xab6];
+            *(unsigned char *)(p + 0x54) = 0;
+            *(unsigned char *)(p + 0x40) = 1;
+        }
+        {
+            uVar10 = typeTable[0xa78];
+LAB_00401856:
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 + 0x34) = uVar10;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 + 0x3c) = 0;
+            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 + 0x5c) = 0;
+            DAT_00489248++;
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    /* ===== CASE 3: Trooper spawn ===== */
+    case 3:
+    {
+        if (399 < DAT_0048924c) break;
+        if (*(char *)(iVar12 + 0x35 + iVar13) == '\0') {
+            iVar13 = rand(); iVar11 = iVar13 % 0x3c + 0x5a;
+        } else {
+            iVar13 = rand(); iVar11 = iVar13 % 0x1e + 200;
+        }
+        iVar11 <<= 9;
+        iVar13 = iVar12 + (int)DAT_00487810;
+        uVar9 = *(unsigned char *)(iVar13 + 0x2c);
+        {
+            char cVar3a = *(char *)(iVar13 + 0x35) << 1;
+            uVar8 = rand(); uVar8 &= 0x80000001;
+            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+            char cVar4 = (char)uVar8;
+            FUN_00407210(*(int *)(iVar13 + 8), *(int *)(iVar13 + 0xc), 0, 0, cVar4 * '\x02' + -1, iVar11, uVar9, cVar3a);
+        }
+        iVar13 = (int)DAT_00487810;
+        break;
+    }
+
+    /* ===== CASE 4: Thruster trail ===== */
+    case 4:
+    {
+        *(int *)(iVar12 + 0x10 + iVar13) += sincos[uVar7] >> 3;
+        *(int *)(iVar12 + 0x14 + (int)DAT_00487810) += sincos[0x200 + uVar7] >> 3;
+        iVar13 = (int)DAT_00487810;
+        if ((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
+             (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0)
+        {
+            int ftol_count = (int)DAT_004892d0;
+            local_c = 0;
+            if (0 < ftol_count) {
+                do {
+                    if (0x9c3 < DAT_00489248) break;
+                    iVar13 = rand(); iVar11 = rand();
+                    uVar8 = (iVar11 % 0x15e + 0x351 + *(int *)(iVar12 + 0x18 + (int)DAT_00487810)) & 0x7ff;
+                    int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                    *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
+                    *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                    *(int *)(p + 0x18) = sincos[uVar8] * (iVar13 % 0x14) >> 3;
+                    *(int *)(p + 0x1c) = sincos[0x200 + uVar8] * (iVar13 % 0x14) >> 3;
+                    *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
+                    *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                    *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                    *(unsigned char *)(p + 0x21) = 0x67;
+                    iVar13 = rand(); *(short *)(p + 0x24) = (short)(iVar13 % 6);
+                    *(unsigned char *)(p + 0x20) = 0;
+                    *(unsigned char *)(p + 0x26) = 0xff;
+                    *(unsigned char *)(p + 0x22) = 0xff;
+                    *(int *)(p + 0x28) = 0;
+                    *(int *)(p + 0x38) = typeTable[0x360c]; *(int *)(p + 0x44) = typeTable[0x361b];
+                    *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x3627];
+                    *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
+                    *(int *)(p + 0x34) = typeTable[0x35ea]; *(int *)(p + 0x3c) = 0;
+                    *(unsigned char *)(p + 0x5c) = 0;
+                    DAT_00489248++;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 0;
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 3;
+                    uVar8 = rand(); uVar8 &= 0x80000007;
+                    if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff8) + 1;
+                    *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = (char)uVar8 + '\x14';
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x12;
+                    {
+                        int pp = (int)DAT_004892e8 + DAT_00489248 * 0x80;
+                        *(unsigned int *)(pp - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp - 0x1b) * 2) + 30000;
+                    }
+                    local_c++;
+                    iVar13 = (int)DAT_00487810;
+                } while (local_c < ftol_count);
+            }
+        }
+        break;
+    }
+
+    /* ===== CASE 6: Trooper dynamic spawn ===== */
+    case 6:
+    {
+        if (399 < DAT_0048924c) break;
+        uVar9 = *(unsigned char *)(iVar12 + 0x2c + iVar13);
+        iVar11 = rand(); iVar11 = (iVar11 % 100 + 300) * 0x200;
+        uVar8 = rand(); uVar8 &= 0x80000001;
+        if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+        FUN_00407210(*(int *)(iVar12 + iVar13 + 8), *(int *)(iVar12 + iVar13 + 0xc),
+                     0, 0, (char)uVar8 * '\x02' + -1, iVar11, uVar9, '\x01');
+        iVar13 = (int)DAT_00487810;
+        break;
+    }
+
+    /* ===== CASE 7: Teleport with particle effects ===== */
+    case 7:
+    {
+        iVar13 = rand();
+        if (iVar13 % 10 == 0) {
+            piVar1 = (int *)(iVar12 + 0x20 + (int)DAT_00487810);
+            *piVar1 += -0x4e2000;
+            iVar13 = (int)DAT_00487810;
+        } else {
+            local_c = 0;
+            int foundX = 0, foundY = 0;
+            int found = 0;
+            do {
+                iVar13 = rand();
+                foundX = iVar13 % 600 - 300 + (*(int *)(iVar12 + (int)DAT_00487810) >> 0x12);
+                iVar11 = rand();
+                foundY = iVar11 % 600 - 300 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x12);
+                uVar6 = FUN_0044de10(foundX, foundY);
+                if ((char)uVar6 == '\x01') { found = 1; break; }
+                local_c++;
+                iVar13 = (int)DAT_00487810;
+            } while (local_c < 10);
+
+            if (found) {
+                /* Spawn teleport particles in circle around entity */
+                unsigned int angleParam = 0;
+                while (1) {
+                    if (0x9c3 < DAT_00489248) break;
+                    uVar6 = rand(); uVar6 &= 0x8000003f;
+                    if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffffc0) + 1;
+                    unsigned int uVar15 = (unsigned int)FUN_004257e0(
+                        *(int *)(iVar12 + (int)DAT_00487810) >> 0x12,
+                        *(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x12, foundX, foundY);
+                    iVar11 = sincos[uVar15];
+                    iVar16 = sincos[0x200 + uVar15];
+                    int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                    *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
+                    *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    *(int *)(p + 0x18) = ((int)(sincos[angleParam] * (int)uVar6) >> 10) + (iVar11 >> 1);
+                    *(int *)(p + 0x1c) = ((int)(sincos[0x200 + angleParam] * (int)uVar6) >> 10) + (iVar16 >> 1);
+                    *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+                    *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                    *(unsigned char *)(p + 0x21) = 0x67;
+                    iVar11 = rand(); *(short *)(p + 0x24) = (short)(iVar11 % 6);
+                    *(unsigned char *)(p + 0x20) = 0;
+                    *(unsigned char *)(p + 0x26) = 0xff;
+                    *(unsigned char *)(p + 0x22) = 0xff;
+                    *(int *)(p + 0x28) = 0;
+                    *(int *)(p + 0x38) = typeTable[0x3611]; *(int *)(p + 0x44) = typeTable[0x3620];
+                    *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x362c];
+                    *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 5;
+                    *(int *)(p + 0x34) = typeTable[0x35ea]; *(int *)(p + 0x3c) = 0;
+                    *(unsigned char *)(p + 0x5c) = 0;
+                    DAT_00489248++;
+                    uVar6 = rand(); uVar6 &= 0x80000007;
+                    if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffff8) + 1;
+                    angleParam += 0x40;
+                    *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = (char)uVar6 + '\x04';
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0x27;
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x21;
+                    {
+                        int pp2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                        *(unsigned int *)(pp2 - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp2 - 0x1b) * 2) + 30000;
+                    }
+                    if (0x1fff < (int)angleParam) break;
+                }
+                /* Spawn water edge records if in water */
+                if ((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
+                     (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0)
+                {
+                    iVar11 = 0;
+                    do {
+                        if (0x5db < DAT_0048925c) break;
+                        int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+                        *(int *)(e) = *(int *)(iVar12 + (int)DAT_00487810);
+                        *(int *)(e + 4) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                        uVar6 = rand(); uVar6 &= 0x800000ff;
+                        if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffff00) + 1;
+                        *(unsigned int *)(e + 8) = (0x80 - uVar6) * 0x400;
+                        uVar6 = rand(); uVar6 &= 0x800000ff;
+                        if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffff00) + 1;
+                        *(unsigned int *)(e + 0xc) = (0x80 - uVar6) * 0x400;
+                        iVar16 = rand(); *(char *)(e + 0x10) = (char)(iVar16 % 5) + '\x02';
+                        iVar16 = rand(); *(char *)(e + 0x11) = (char)(iVar16 % 3);
+                        *(unsigned short *)(e + 0x12) = 0;
+                        *(unsigned char *)(e + 0x14) = 0xff;
+                        *(unsigned char *)(e + 0x15) = 0;
+                        DAT_0048925c++;
+                        iVar11++;
+                    } while (iVar11 < 0x20);
+                }
+                /* Teleport entity */
+                *(int *)(iVar12 + (int)DAT_00487810) = foundX * 0x40000;
+                *(unsigned int *)(iVar12 + 4 + (int)DAT_00487810) = (unsigned int)foundY * 0x40000;
+                *(int *)(iVar12 + 8 + (int)DAT_00487810) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(iVar12 + 0xc + (int)DAT_00487810) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(unsigned char *)(iVar12 + 0x4a0 + (int)DAT_00487810) = 0xff;
+                iVar13 = (int)DAT_00487810;
+                goto LAB_00402bc8;
+            }
+        }
+        break;
+    }
+
+    case 10: case 0xc:
+        *(int *)(iVar12 + 0xa4 + iVar13) = 300;
+        iVar13 = (int)DAT_00487810;
+        break;
+
+    case 0xd:
+        *(int *)(iVar12 + 0xa4 + iVar13) = 500;
+        iVar13 = (int)DAT_00487810;
+        break;
+
+    /* ===== CASE 0x10: Fluid source + particle ===== */
+    case 0x10:
+    {
+        iVar13 = rand();
+        uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
+        if (((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
+             (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0) &&
+            ((float)_DAT_004753e0_d < DAT_0048385c) && (DAT_0048925c < 0x5dc))
+        {
+            int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+            *(int *)(e) = (sincos[uVar7] * 600 >> 6) + *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(e + 4) = (sincos[0x200 + uVar7] * 600 >> 6) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(e + 8) = (sincos[uVar8] * 0x32 >> 6) + (*(int *)(iVar12 + 0x10 + (int)DAT_00487810) >> 1);
+            *(int *)(e + 0xc) = (sincos[0x200 + uVar8] * 0x32 >> 6) - 500 + (*(int *)(iVar12 + 0x14 + (int)DAT_00487810) >> 1);
+            uVar6 = rand(); uVar6 &= 0x80000001;
+            if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffffe) + 1;
+            *(char *)(e + 0x10) = (char)uVar6;
+            *(unsigned char *)(e + 0x11) = 0; *(unsigned short *)(e + 0x12) = 0;
+            *(unsigned char *)(e + 0x14) = 0xff; *(unsigned char *)(e + 0x15) = 0;
+            DAT_0048925c++;
+        }
+        iVar13 = (int)DAT_00487810;
+        if (DAT_00489250 < 2000) {
+            int pp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+            *(int *)(pp) = (sincos[uVar7] * 500 >> 6) + *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(pp + 4) = (sincos[0x200 + uVar7] * 500 >> 6) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(pp + 8) = (sincos[uVar8] * 0x30 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            *(int *)(pp + 0xc) = (sincos[0x200 + uVar8] * 0x30 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            uVar8 = rand(); uVar8 &= 0x80000003;
+            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+            *(char *)(pp + 0x10) = (char)uVar8 + '\x01';
+            *(unsigned char *)(pp + 0x11) = 1; *(unsigned char *)(pp + 0x12) = 2;
+            *(unsigned char *)(pp + 0x13) = 200; *(unsigned char *)(pp + 0x14) = uVar9;
+            *(unsigned char *)(pp + 0x15) = 0;
+            DAT_00489250++;
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    case 0x12:
+        *(int *)(iVar12 + 0xa4 + iVar13) = 0x1c2;
+        iVar13 = (int)DAT_00487810;
+        break;
+
+    /* ===== CASE 0x15: Scatter 14 particles ===== */
+    case 0x15:
+    {
+        local_c = 0;
+        do {
+            if (0x9c3 < DAT_00489248) break;
+            uVar8 = rand(); uVar8 &= 0x800007ff;
+            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffff800) + 1;
+            iVar13 = rand(); iVar13 = iVar13 % 0x32 + 0x3c;
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = (sincos[uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x10 + (int)DAT_00487810) >> 1);
+            *(int *)(p + 0x1c) = (sincos[0x200 + uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x14 + (int)DAT_00487810) >> 1);
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(unsigned char *)(p + 0x21) = 0x11;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0x14;
+            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[0x908]; *(int *)(p + 0x44) = typeTable[0x917];
+            *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x923];
+            *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
+            *(int *)(p + 0x34) = typeTable[0x8e6]; *(int *)(p + 0x3c) = 0;
+            *(unsigned char *)(p + 0x5c) = 0;
+            DAT_00489248++;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 1;
+            local_c++;
+            iVar13 = (int)DAT_00487810;
+        } while (local_c < 0xe);
+        break;
+    }
+
+    /* ===== CASE 0x19: Multi-directional beam ===== */
+    case 0x19:
+    {
+        char cVar3_19 = *(char *)(iVar12 + 0x35 + iVar13);
+        if (cVar3_19 == '\0') {
+            FUN_0040f9b0(0x10f, *(int *)(iVar12 + iVar13), *(int *)(iVar12 + 4 + iVar13));
+            uVar8 = uVar7 - 0x80;
+            local_c = 0;
+            do {
+                iVar13 = (int)DAT_00487810;
+                if (0x9c3 < DAT_00489248) break;
+                uVar8 &= 0x7ff;
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x18) = sincos[uVar8] >> 1;
+                *(int *)(p + 0x1c) = sincos[0x200 + uVar8] >> 1;
+                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                *(unsigned char *)(p + 0x21) = 0x19;
+                *(unsigned short *)(p + 0x24) = 0;
+                *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0;
+                *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
+                *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
+                uVar8 += 0x80;
+                *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
+                *(int *)(p + 0x48) = 0;
+                *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
+                *(unsigned char *)(p + 0x54) = 0;
+                *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+                *(int *)(p + 0x34) = typeTable[0xd16]; *(int *)(p + 0x3c) = 0;
+                *(unsigned char *)(p + 0x5c) = 0;
+                DAT_00489248++;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x9c4;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                local_c++;
+                iVar13 = (int)DAT_00487810;
+            } while (local_c < 3);
+        } else {
+            int sndId = (cVar3_19 == '\x02') ? 0x111 : 0x110;
+            FUN_0040f9b0(sndId, *(int *)(iVar12 + iVar13), *(int *)(iVar12 + 4 + iVar13));
+            iVar13 = (int)DAT_00487810;
+            if (DAT_00489248 < 0x9c4) {
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x18) = 0; *(int *)(p + 0x1c) = 0;
+                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                *(unsigned char *)(p + 0x21) = 0x19;
+                *(unsigned short *)(p + 0x24) = 0;
+                *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0x32;
+                *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
+                *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
+                *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
+                *(int *)(p + 0x48) = 0;
+                *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
+                *(unsigned char *)(p + 0x54) = 0;
+                *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+                *(int *)(p + 0x34) = typeTable[0xd16]; *(int *)(p + 0x3c) = 0;
+                *(unsigned char *)(p + 0x5c) = 0;
+                DAT_00489248++;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 6000;
+                iVar13 = (int)DAT_00487810;
+            }
+        }
+        break;
+    }
+
+    /* ===== CASE 0x1a: Multi-beam (up to 10 beams, type 0x69) ===== */
+    /* This case is extremely repetitive - spawns beams at various angles.
+     * Due to output size constraints, I use a helper macro. */
+    case 0x1a:
+    {
+        /* Spawn beam at heading+0x200 and heading-0x200 */
+        #define SPAWN_BEAM_0x69(angleExpr) do { \
+            uVar8 = (angleExpr) & 0x7ff; \
+            if (DAT_00489248 < 0x9c4) { \
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8; \
+                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810); \
+                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
+                *(int *)(p + 0x18) = (sincos[uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810); \
+                *(int *)(p + 0x1c) = (sincos[0x200 + uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810); \
+                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810); \
+                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0; \
+                *(unsigned char *)(p + 0x21) = 0x69; \
+                *(unsigned short *)(p + 0x24) = 0; \
+                *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xf; \
+                *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0; \
+                *(int *)(p + 0x38) = typeTable[0x371d]; *(int *)(p + 0x44) = typeTable[0x372c]; \
+                *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x3738]; \
+                *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 5; \
+                *(int *)(p + 0x34) = typeTable[0x36f6]; *(int *)(p + 0x3c) = 0; \
+                *(unsigned char *)(p + 0x5c) = 0; \
+                DAT_00489248++; \
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x32; \
+                iVar13 = (int)DAT_00487810; \
+            } \
+        } while(0)
+
+        uVar8 = (*(int *)(iVar12 + 0x18 + iVar13) + 0x200U) & 0x7ff;
+        SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + iVar13) + 0x200U);
+        if (DAT_00489248 < 0x9c4) {
+            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x200U);
+        }
+        if (*(char *)(iVar12 + 0x35 + iVar13) != '\0') {
+            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x180U);
+            if (DAT_00489248 < 0x9c4) {
+                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x180U);
+            }
+        }
+        if (1 < *(unsigned char *)(iVar12 + 0x35 + iVar13)) {
+            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x280U);
+            if (DAT_00489248 < 0x9c4) {
+                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x280U);
+            }
+        }
+        if (2 < *(unsigned char *)(iVar12 + 0x35 + iVar13)) {
+            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x400U);
+            if (DAT_00489248 < 0x9c4) {
+                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x380U);
+                if (DAT_00489248 < 0x9c4) {
+                    SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x380U);
+                }
+            }
+        }
+        if (3 < *(unsigned char *)(iVar12 + 0x35 + iVar13)) {
+            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x300U);
+            if (DAT_00489248 < 0x9c4) {
+                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x300U);
+            }
+        }
+        #undef SPAWN_BEAM_0x69
+        break;
+    }
+
+    /* ===== CASE 0x20: Edge record spawn ===== */
+    case 0x20:
+    {
+        if (DAT_0048925c < 0x5dc) {
+            int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+            *(int *)(e) = *(int *)(iVar12 + iVar13);
+            *(int *)(e + 4) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(e + 8) = 0; *(int *)(e + 0xc) = 0;
+            iVar13 = rand(); *(char *)(e + 0x10) = (char)(iVar13 % 3) + '\f';
+            uVar8 = rand(); uVar8 &= 0x80000003;
+            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+            *(char *)(e + 0x11) = (char)uVar8;
+            *(unsigned short *)(e + 0x12) = 0;
+            *(unsigned char *)(e + 0x14) = uVar9; *(unsigned char *)(e + 0x15) = 0;
+            DAT_0048925c++;
+            *(unsigned char *)(DAT_0048925c * 0x20 + (int)DAT_00481f2c - 0xb) = 2;
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    /* ===== CASE 0x21: Explosion record ===== */
+    case 0x21:
+    {
+        if (DAT_0048926c < 100) {
+            int e = DAT_0048926c * 0x20 + (int)DAT_00487a9c;
+            *(int *)(e) = *(int *)(iVar12 + iVar13);
+            *(int *)(e + 4) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(e + 8) = *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            *(int *)(e + 0xc) = *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *(unsigned char *)(e + 0x18) = uVar9;
+            *(int *)(e + 0x10) = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
+            uVar8 = rand(); uVar8 &= 0x80000001;
+            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+            *(char *)(e + 0x19) = (char)uVar8;
+            iVar13 = rand(); *(char *)(e + 0x1a) = (char)(iVar13 % 0x50) + '\x14';
+            *(int *)(e + 0x14) = 2000;
+            DAT_0048926c++;
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    /* ===== CASE 0x2b: Self-propelled projectile ===== */
+    case 0x2b:
+    {
+        if (DAT_00489248 < 0x9c4) {
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(p) = *(int *)(iVar12 + iVar13);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = *(int *)(iVar12 + 0x10 + (int)DAT_00487810) / 2;
+            *(int *)(p + 0x1c) = 0;
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(unsigned char *)(p + 0x21) = 0x2b;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xff;
+            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[0x16a4]; *(int *)(p + 0x44) = typeTable[0x16b3];
+            *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x16bf];
+            *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
+            *(int *)(p + 0x34) = typeTable[0x1682]; *(int *)(p + 0x3c) = 0;
+            *(unsigned char *)(p + 0x5c) = 0;
+            DAT_00489248++;
+            piVar1 = (int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34);
+            *piVar1 += (unsigned int)*(unsigned char *)(iVar12 + 0x2c + (int)DAT_00487810) * 100;
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    /* ===== CASE 0x2c: Homing projectile with recoil ===== */
+    case 0x2c:
+    {
+        if (DAT_00489248 < 0x9c4) {
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(p) = *(int *)(iVar12 + iVar13);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = 0; *(int *)(p + 0x1c) = 0;
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(unsigned char *)(p + 0x21) = 0x2c;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xfe;
+            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x172a];
+            *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1739];
+            *(int *)(p + 0x48) = 0;
+            *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1745];
+            *(unsigned char *)(p + 0x54) = 0;
+            *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            *(int *)(p + 0x34) = typeTable[0x1708]; *(int *)(p + 0x3c) = 0;
+            *(unsigned char *)(p + 0x5c) = 0;
+            DAT_00489248++;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            iVar13 = (int)DAT_00487810;
+        }
+        if (*(char *)(*(unsigned char *)(iVar12 + 0x35 + iVar13) + 0x5cc0 + (int)DAT_00487abc) != '\0') {
+            piVar1 = (int *)(iVar12 + 0x10 + iVar13);
+            *piVar1 -= sincos[uVar7] >> 7;
+            *(int *)(iVar12 + 0x14 + (int)DAT_00487810) -= sincos[0x200 + uVar7] >> 7;
+            *(unsigned char *)(iVar12 + 0xc4 + (int)DAT_00487810) = 3;
+            uVar7 = rand(); uVar7 &= 0x800007ff;
+            if ((int)uVar7 < 0) uVar7 = (uVar7 - 1 | 0xfffff800) + 1;
+            *(int *)(iVar12 + 0x10 + (int)DAT_00487810) -= sincos[uVar7] >> 5;
+            *(int *)(iVar12 + 0x14 + (int)DAT_00487810) -= sincos[0x200 + uVar7] >> 5;
+            uVar7 = rand(); uVar7 &= 0x800007ff;
+            if ((int)uVar7 < 0) uVar7 = (uVar7 - 1 | 0xfffff800) + 1;
+            *(int *)(iVar12 + (int)DAT_00487810) += sincos[uVar7];
+            piVar1 = (int *)(iVar12 + 4 + (int)DAT_00487810);
+            *piVar1 += sincos[0x200 + uVar7];
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    /* ===== CASE 0x2d: Trail projectile ===== */
+    case 0x2d:
+    {
+        if (DAT_00489248 < 0x9c4) {
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(p) = *(int *)(iVar12 + iVar13);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = 0; *(int *)(p + 0x1c) = 0;
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(unsigned char *)(p + 0x21) = 0x2d;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xfe;
+            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17b0];
+            *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17bf];
+            *(int *)(p + 0x48) = 0;
+            *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17cb];
+            *(unsigned char *)(p + 0x54) = 0;
+            *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            *(int *)(p + 0x34) = typeTable[0x178e]; *(int *)(p + 0x3c) = 0;
+            *(unsigned char *)(p + 0x5c) = 0;
+            DAT_00489248++;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x32;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            iVar13 = (int)DAT_00487810;
+        }
+        break;
+    }
+
+    /* ===== CASE 0x5a: Delayed fire ===== */
+    case 0x5a:
+        *(int *)(iVar12 + 0xa4 + iVar13) = 400;
+        iVar13 = (int)DAT_00487810;
+        break;
+
+    /* ===== DEFAULT + many explicit cases: Generic projectile ===== */
+    /* Cases 5,8,9,0xb,0xe,0xf,0x11,0x13,0x14,0x16,0x17,0x18,0x1b-0x1f,0x22-0x2a,0x2e-0x59 */
+    default:
+    {
+        if (0x9c3 < DAT_00489248) break;
+        unsigned int param1_byte = 0;
+        unsigned int localc_byte = 0x12;
+        local_8 = uVar7;
+
+        if (local_14 == 0xb || local_14 == 0xf || local_14 == 0x18 ||
+            local_14 == 0x1d || local_14 == 0x25 || local_14 == 0x24 || local_14 == 0x27)
+            local_8 = (uVar7 - 0x400) & 0x7ff;
+
+        if (local_14 == 8) localc_byte = 0x12;
+        else if (local_14 == 0x1c) localc_byte = 0xff;
+        else if (local_14 == 0xb) localc_byte = 0xff;
+        else {
+            if (local_14 == 0xf || local_14 == 0x28) localc_byte = 0xff;
+            if (local_14 == 0x22) {
+                if (*(char *)(iVar12 + 0x35 + iVar13) != '\0') { localc_byte = 0xff; param1_byte = 0x6e; }
+            } else if (local_14 == 0x1b) localc_byte = 0x32;
+            else if (local_14 == 0x23) localc_byte = 0x78;
+            else if (local_14 == 9) localc_byte = 0x1e;
+        }
+
+        {
+            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            int typeOff = local_14 * 0x86;
+            unsigned char wl = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            *(int *)(p) = *(int *)(iVar12 + iVar13);
+            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x18) = (typeTable[wl + typeOff + 0x2b] * sincos[local_8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            *(int *)(p + 0x1c) = (typeTable[wl + typeOff + 0x2b] * sincos[0x200 + local_8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
+            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+            *(char *)(p + 0x21) = (char)local_14;
+            *(unsigned short *)(p + 0x24) = 0;
+            *(unsigned char *)(p + 0x20) = (unsigned char)param1_byte;
+            *(unsigned char *)(p + 0x26) = (unsigned char)localc_byte;
+            *(unsigned char *)(p + 0x22) = uVar9;
+            *(int *)(p + 0x28) = 0;
+            *(int *)(p + 0x38) = typeTable[wl + typeOff + 0x22];
+            *(int *)(p + 0x44) = typeTable[wl + typeOff + 0x31];
+            *(int *)(p + 0x48) = 0;
+            *(int *)(p + 0x4c) = typeTable[wl + typeOff + 0x3d];
+            *(unsigned char *)(p + 0x54) = 0;
+            *(unsigned char *)(p + 0x40) = wl;
+            *(int *)(p + 0x34) = typeTable[local_14 * 0x86];
+            *(int *)(p + 0x3c) = 0;
+            *(unsigned char *)(p + 0x5c) = 0;
+        }
+        DAT_00489248++;
+
+        /* Sound assignment for weapon type 0 */
+        if (local_14 == 0) {
+            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                uVar8 = rand(); uVar8 &= 0x80000003;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                    *(unsigned short *)((int)DAT_00487aa8 + 0xb4 + uVar8 * 2) + 30000;
+            }
+            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01') {
+                iVar13 = rand();
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                    *(unsigned short *)((int)DAT_00487aa8 + 0xcc + (iVar13 % 5) * 2) + 30000;
+            }
+            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x02') {
+                iVar13 = rand();
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                    *(unsigned short *)((int)DAT_00487aa8 + 0xf2 + (iVar13 % 3) * 2) + 30000;
+            }
+        }
+
+        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
+        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+
+        /* Type-specific post-spawn */
+        if (local_14 == 0x16) {
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x12;
+        } else if (local_14 == 0xb) {
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
+                *(int *)(iVar12 + 0x470 + (int)DAT_00487810) += 1;
+        } else if (local_14 == 0x2e) {
+            piVar1 = (int *)(iVar12 + 0x46c + (int)DAT_00487810); *piVar1 += 1;
+        } else if (local_14 == 0x11) {
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 1;
+            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
+                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x60) = 0x1b;
+            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x02')
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x48) = (int)0xfffffff0;
+        } else if (local_14 == 0x1d) {
+            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
+            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0;
+        } else if (local_14 == 0x27) {
+            *(int *)(iVar12 + 0x468 + (int)DAT_00487810) += 1;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+        } else {
+            if (local_14 == 0x29 || local_14 == 0x2a) {
+                piVar1 = (int *)(iVar12 + 0x478 + (int)DAT_00487810); *piVar1 += 1;
+            }
+            if (local_14 == 0x28) {
+                *(int *)(iVar12 + 0x474 + (int)DAT_00487810) += 1;
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = 0x24;
+            } else if (local_14 == 0x22) {
+                if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                    iVar13 = rand();
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = iVar13 % 10 + 1;
+                    uVar8 = rand(); uVar8 &= 0x80000001;
+                    if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+                    *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x60) = (char)uVar8;
+                } else {
+                    *(int *)(iVar12 + 0x464 + (int)DAT_00487810) += 1;
+                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = 0;
+                }
+            } else if (local_14 == 0x1b) {
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
+            } else {
+                if (local_14 == 0x1c) {
+                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x157c;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = 0;
+                    goto LAB_00406a71;
+                }
+                if (local_14 == 0x26) {
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                    iVar13 = rand();
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = iVar13 % 0x7fb;
+                    if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = sincos[local_8] >> 3;
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = sincos[0x200 + local_8] >> 3;
+                    } else {
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = 0;
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = 0;
+                    }
+                    goto LAB_0040651d;
+                }
+                if (local_14 == 0xe) {
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x1130;
+                    if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = sincos[local_8] >> 3;
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = sincos[0x200 + local_8] >> 3;
+                    } else {
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = 0;
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = 0;
+                    }
+                    goto LAB_00406a71;
+                }
+                if (local_14 == 0x23) {
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = sincos[local_8] >> 1;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = sincos[0x200 + local_8] >> 1;
+                    goto LAB_0040651d;
+                }
+                if (local_14 == 0x1f) {
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x5a) = 0xff;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x9c4;
+LAB_00406a71:
+                    piVar1 = (int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34);
+                    *piVar1 += (unsigned int)*(unsigned char *)(iVar12 + 0x2c + (int)DAT_00487810) * 100;
+                }
+                else if (local_14 == 0xf || local_14 == 0x18) goto LAB_00406a71;
+
+                if (local_14 == 0x18)
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x157c;
+                else if (local_14 == 0xf) {
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 4000;
+                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
+                }
+                else if (local_14 == 0x17 && *(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x19;
+            }
+        }
+
+LAB_0040651d:
+        {
+            int pp = (int)DAT_004892e8 + DAT_00489248 * 0x80;
+            iVar13 = (int)DAT_00487810;
+            if (*(char *)((unsigned int)*(unsigned char *)(pp - 0x40) + local_14 * 0x218 + 0x130 + (int)DAT_00487abc) == '\x01') {
+                unsigned int pIdx2 = 99;
+                if (local_14 == 0xb) pIdx2 = 0;
+                else if (local_14 == 0x17) pIdx2 = 1;
+                else if (local_14 == 0xf) pIdx2 = 2;
+                else if (local_14 == 0x18) pIdx2 = 3;
+                else if (local_14 == 0x1f) pIdx2 = 4;
+                else if (local_14 == 0x1c) pIdx2 = 5;
+                else if (local_14 == 0xe) pIdx2 = 6;
+                else if (local_14 == 0x2e) pIdx2 = 7;
+                else if (local_14 == 0x27) pIdx2 = 8;
+                *(unsigned char *)(pp - 0x24) = 6;
+                *(int *)((int)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = DAT_00489248 - 1;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x30) = DAT_00487834[pIdx2];
+                iVar13 = (int)DAT_00487810;
+                DAT_00487834[pIdx2]++;
+            }
+        }
+        break;
+    }
+
+    } /* end switch */
+
+    /* Post-switch: Apply recoil from entity type table */
+LAB_00402bc8:
+    {
+        unsigned char bVar2 = *(unsigned char *)(
+            (unsigned int)*(unsigned char *)(iVar12 + 0x35 + iVar13) +
+            local_14 * 0x218 + 0xa0 + (int)DAT_00487abc);
+        if (bVar2 != 0) {
+            piVar1 = (int *)(iVar12 + 0x10 + iVar13);
+            *piVar1 -= (int)(((int)(sincos[uVar7] * (unsigned int)bVar2) >> 4) *
+                       (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) >> 8;
+            piVar1 = (int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *piVar1 -= (int)(((int)((unsigned int)*(unsigned char *)(
+                (unsigned int)*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) +
+                local_14 * 0x218 + 0xa0 + (int)DAT_00487abc) *
+                sincos[0x200 + uVar7]) >> 4) *
+                (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) >> 8;
+        }
+    }
+}
 
 /* ===== FUN_0044d930 — Trooper Recruitment (0044D930) ===== */
 static void FUN_0044d930_impl(int *ent)
@@ -2262,73 +4956,276 @@ static void FUN_0044e1c0(int *ent)
 }
 
 /* ===== FUN_00450630 — Wall_Collision ===== */
-/* Simplified wall collision: checks sprite footprint against tilemap.
- * If overlapping solid tiles, restores previous position and reflects velocity.
- * Full version uses per-pixel sprite collision mask at sprite 0x19B (411). */
+/* Per-pixel sprite collision against tilemap using collision mask at sprite 0x19B.
+ * Phase 1: Scan sprite footprint, count solid tile overlaps, accumulate collision normal.
+ * Phase 2A (1-3 hits, entity alive): Replace solid tiles, apply drag, restore position.
+ * Phase 2B (>3 hits or entity dead): Reflect velocity off surface, apply impact damage. */
 static void FUN_00450630(int *ent, int player_idx)
 {
-    /* Get entity position in tile coordinates */
-    int tx = ent[0] >> 0x12;
-    int ty = ent[1] >> 0x12;
-    int shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int col_x_sum = 0;   /* accumulated collision X offset */
+    int col_y_sum = 0;   /* accumulated collision Y offset */
+    int col_count = 0;   /* collision pixel count */
+    int void_hit = 0;    /* hit a void tile (prop[0]==0) */
 
-    /* Check a 3x3 grid around entity center */
-    int solid_count = 0;
-    int push_x = 0, push_y = 0;
+    /* Sprite 0x19B collision mask dimensions */
+    int frame_off = *(int *)((int)DAT_00489234 + 0x66c);
+    unsigned int spr_w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+    unsigned int half_w = spr_w >> 1;
+    unsigned char spr_h = *(unsigned char *)((int)DAT_00489e88 + 0x19b);
+    unsigned int half_h = (unsigned int)(spr_h >> 1);
 
-    for (int dy = -1; dy <= 1; dy++) {
-        for (int dx = -1; dx <= 1; dx++) {
-            int cx = tx + dx;
-            int cy = ty + dy;
-            if (cx < 0 || cy < 0 || cx >= (int)DAT_004879f0 || cy >= (int)DAT_004879f4)
-                continue;
+    /* Entity position in tile coords, centered on sprite */
+    int sx = (ent[0] >> 0x12) - (int)half_w;
+    int sy = (ent[1] >> 0x12) - (int)half_h;
+    int tile_idx = (sy << ((unsigned char)DAT_00487a18 & 0x1f)) + sx;
 
-            int tile_idx = (cy << shift) + cx;
-            unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_idx);
-            char *tile_props = (char *)((int)DAT_00487928 + (unsigned int)tile * 0x20);
-
-            /* Check passability flag at tile_table+3 */
-            if (tile_props[3] == '\0') {
-                solid_count++;
-                push_x += dx;
-                push_y += dy;
-            }
-        }
+    /* bVar2: if entity has active weapon slot AND weapon type == 0x0C,
+     * use alternate passability check (offset 7 instead of 3) */
+    int use_alt_pass = 0;
+    if (ent[0x29] != 0 &&
+        *(char *)((char)ent[0xd] + 0x3c + (int)ent) == '\x0c') {
+        use_alt_pass = 1;
     }
 
-    if (solid_count > 3) {
-        /* Heavy collision: restore position, reflect and dampen velocity */
-        unsigned int abs_vx = (ent[4] < 0) ? -ent[4] : ent[4];
-        unsigned int abs_vy = (ent[5] < 0) ? -ent[5] : ent[5];
+    /* Phase 1: Scan sprite collision mask against tilemap */
+    int row = 0;
+    if (spr_h != 0) {
+        do {
+            int col = 0;
+            if ((int)spr_w > 0) {
+                do {
+                    if (*(char *)((int)DAT_00489e94 + frame_off) != '\0') {
+                        int tx = col + sx;
+                        int ty = row + sy;
+                        if (tx > 0 && tx < (int)DAT_004879f0 &&
+                            ty > 0 && ty < (int)DAT_004879f4)
+                        {
+                            char *props = (char *)((unsigned int)*(unsigned char *)
+                                ((int)DAT_0048782c + tile_idx) * 0x20 + (int)DAT_00487928);
 
-        if ((int)(abs_vx + abs_vy) < 0x186A1) {
-            /* Low speed: just stop */
-            ent[4] = 0;
-            ent[5] = 0;
-        } else {
-            /* Reflect velocity and dampen */
-            ent[4] = -(ent[4] >> 1);
-            ent[5] = -(ent[5] >> 1);
+                            /* Check passability: normal=props[3], flying=props[7] */
+                            int blocked = 0;
+                            if (props[3] == '\0' && !use_alt_pass) {
+                                blocked = 1;
+                            } else if (props[7] == '\0' && use_alt_pass) {
+                                blocked = 1;
+                            }
 
-            /* Impact damage based on speed */
-            int impact = (int)(abs_vx + abs_vy) >> 0xD;
-            if ((int)(abs_vx + abs_vy) > 0x45880 && (char)ent[9] == '\0') {
-                ent[8] -= (int)(abs_vx + abs_vy);
-                DAT_00486be8[player_idx] += impact;
-                *(char *)((int)ent + 0xA3) = 1;
-                *(char *)(ent + 0x31) = 3;
+                            if (blocked) {
+                                col_x_sum += (col - (int)half_w);
+                                col_y_sum += (row - (int)half_h);
+                                col_count++;
+                                if (props[0xb] != '\0') {
+                                    col_count = 0x14;  /* extra-solid tile */
+                                }
+                            }
+
+                            /* Void tile check (prop[0] == 0) */
+                            if (props[0] == '\0') {
+                                void_hit = 1;
+                            }
+                        }
+                    }
+                    frame_off++;
+                    tile_idx++;
+                    col++;
+                } while (col < (int)spr_w);
             }
+            tile_idx += (int)DAT_00487a00 - (int)spr_w;
+            row++;
+        } while (row < (int)(unsigned int)spr_h);
+
+        /* Energy explosion on void tile contact */
+        if (void_hit && *(unsigned char *)((int)ent + 0xc6) != 0) {
+            FUN_0044ea70_impl(ent);
         }
+
+        if (col_count > 3)
+            goto heavy_collision;
+    }
+
+    /* Light collision or no collision */
+    if ((char)ent[9] == '\x01') {
+        /* Dead entities always take the heavy path */
+        goto heavy_collision;
+    }
+
+    if (col_count < 1) {
+        return;  /* No collision */
+    }
+
+    /* Phase 2A: Light collision (1-3 pixels) — push through solid tiles */
+    {
+        int frame_off2 = *(int *)((int)DAT_00489234 + 0x66c);
+        unsigned int w2 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+        int sx2 = (ent[0] >> 0x12) - (int)(w2 >> 1);
+        int sy2 = (ent[1] >> 0x12) -
+            (int)((unsigned int)(*(unsigned char *)((int)DAT_00489e88 + 0x19b)) >> 1);
+        int idx2 = (sy2 << ((unsigned char)DAT_00487a18 & 0x1f)) + sx2;
+        unsigned int h2 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b);
+
+        if (h2 != 0) {
+            int r2 = 0;
+            do {
+                int c2 = 0;
+                int tx2 = sx2;
+                if (w2 > 0) {
+                    do {
+                        if (*(char *)((int)DAT_00489e94 + frame_off2) != '\0' &&
+                            tx2 > 0 && tx2 < (int)DAT_004879f0 &&
+                            sy2 > 0 && sy2 < (int)DAT_004879f4)
+                        {
+                            int ti = (unsigned int)*(unsigned char *)((int)DAT_0048782c + idx2) * 0x20
+                                     + (int)DAT_00487928;
+                            if (*(char *)(ti + 3) == '\0' && *(char *)(ti + 0xb) == '\0') {
+                                /* Replace tile with its replacement (prop[0xe]) */
+                                *(unsigned char *)((int)DAT_0048782c + idx2) =
+                                    *(unsigned char *)(ti + 0xe);
+                                /* Update color map */
+                                unsigned char new_tile = *(unsigned char *)((int)DAT_0048782c + idx2);
+                                if (*(char *)((unsigned int)new_tile * 0x20 + (int)DAT_00487928) == '\x01') {
+                                    *(unsigned short *)((int)DAT_00481f50 + idx2 * 2) = 0;
+                                } else {
+                                    *(unsigned short *)((int)DAT_00481f50 + idx2 * 2) = DAT_0048384c;
+                                }
+                            }
+                        }
+                        frame_off2++;
+                        idx2++;
+                        c2++;
+                        tx2++;
+                    } while (c2 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b));
+                }
+                w2 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+                idx2 += (int)DAT_00487a00 - (int)w2;
+                r2++;
+                sy2++;
+            } while (r2 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b));
+        }
+
+        /* Apply drag (multiply velocity by 0.95) */
+        ent[4] = (int)((double)ent[4] * 0.95);
+        ent[5] = (int)((double)ent[5] * 0.95);
+
         /* Restore to previous position */
         ent[0] = ent[2];
         ent[1] = ent[3];
     }
-    else if (solid_count > 0 && (char)ent[9] != '\x01') {
-        /* Light collision: restore position, dampen velocity */
-        ent[4] = (int)((double)ent[4] * -0.5);
-        ent[5] = (int)((double)ent[5] * -0.5);
+    return;
+
+heavy_collision:
+    {
+        /* Compute absolute velocity sum */
+        int abs_vx = ent[4];
+        abs_vx = (abs_vx ^ (abs_vx >> 31)) - (abs_vx >> 31);
+        int abs_vy = ent[5];
+        abs_vy = (abs_vy ^ (abs_vy >> 31)) - (abs_vy >> 31);
+
+        if (abs_vx + abs_vy <= 0x186a0) {
+            /* Low speed: just stop */
+            ent[4] = 0;
+            ent[5] = 0;
+        } else {
+            /* Reflect velocity off collision surface */
+            int wallAngle = FUN_004257e0(0, 0, col_x_sum, col_y_sum);
+            int velAngle  = FUN_004257e0(0, 0, ent[4], ent[5]);
+            int reflAngle = (wallAngle * 2 + 0x400 - velAngle) & 0x7ff;
+
+            /* Compute speed magnitude */
+            int vx6 = ent[4] >> 6;
+            int vy6 = ent[5] >> 6;
+            int squared = vx6 * vx6 + vy6 * vy6;
+            double speed = sqrt((double)squared);
+
+            /* Bounce factor from config: clamped to 64 */
+            int bounce_raw = ((int)(unsigned char)g_ConfigBlob[0x1A12] *
+                              (int)(unsigned char)g_ConfigBlob[0x17F6]) / 10;
+            if (bounce_raw > 64) bounce_raw = 64;
+
+            /* Compute reflected velocity using sin/cos LUT */
+            /* Scale factor: 2^-19 (double at 0x4757e0 = 0x3EC0000000000000) */
+            double lut_scale = 1.0 / 524288.0;  /* 2^-19 */
+
+            int sinVal = *(int *)((int)DAT_00487ab0 + reflAngle * 4);
+            int cosVal = *(int *)((int)DAT_00487ab0 + 0x800 + reflAngle * 4);
+
+            ent[4] = (int)(speed * (double)sinVal * lut_scale * (double)bounce_raw);
+            ent[5] = (int)(speed * (double)cosVal * lut_scale * (double)bounce_raw);
+
+            /* Compute impact damage */
+            int dmg_raw = (int)((double)(unsigned char)g_ConfigBlob[0x1A11] *
+                                (double)(unsigned char)g_ConfigBlob[0x17F5] *
+                                speed * 0.25f);
+
+            if (dmg_raw > 0x45880 && (char)ent[9] == '\0') {
+                /* Apply damage */
+                ent[8] -= dmg_raw;
+                /* Score: damage >> 13 */
+                DAT_00486be8[player_idx] += (dmg_raw + (dmg_raw >> 31 & 0x1fff)) >> 0xd;
+                /* Play random bounce sound */
+                FUN_0040f9b0(rand() % 3 + 0x116, ent[0], ent[1]);
+                /* Set hurt state */
+                *(unsigned char *)((int)ent + 0xa3) = 1;
+                *(unsigned char *)((int)ent + 0xc4) = 3;
+            }
+        }
+
+        /* Restore to previous position */
         ent[0] = ent[2];
         ent[1] = ent[3];
+
+        /* Phase 2B cleanup: clear solid tiles at restored position (only for alive entities) */
+        if ((char)ent[9] == '\0') {
+            int frame_off3 = *(int *)((int)DAT_00489234 + 0x66c);
+            unsigned int w3 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+            int sx3 = (ent[2] >> 0x12) - (int)(w3 >> 1);
+            int sy3 = (ent[3] >> 0x12) -
+                (int)((unsigned int)(*(unsigned char *)((int)DAT_00489e88 + 0x19b)) >> 1);
+            int idx3 = (sy3 << ((unsigned char)DAT_00487a18 & 0x1f)) + sx3;
+            unsigned int h3 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b);
+
+            if ((int)h3 > 0) {
+                int r3 = 0;
+                do {
+                    int c3 = 0;
+                    int tx3 = sx3;
+                    if ((int)w3 > 0) {
+                        do {
+                            if (*(char *)((int)DAT_00489e94 + frame_off3) != '\0' &&
+                                tx3 > 0 && tx3 < (int)DAT_004879f0 &&
+                                sy3 > 0 && sy3 < (int)DAT_004879f4)
+                            {
+                                int ti = (unsigned int)*(unsigned char *)((int)DAT_0048782c + idx3)
+                                         * 0x20 + (int)DAT_00487928;
+                                if (*(char *)(ti + 3) == '\0' && *(char *)(ti + 0xb) == '\0') {
+                                    *(unsigned char *)((int)DAT_0048782c + idx3) =
+                                        *(unsigned char *)(ti + 0xe);
+                                    unsigned char new_tile = *(unsigned char *)
+                                        ((int)DAT_0048782c + idx3);
+                                    if (*(char *)((unsigned int)new_tile * 0x20 +
+                                        (int)DAT_00487928) == '\x01') {
+                                        *(unsigned short *)((int)DAT_00481f50 + idx3 * 2) = 0;
+                                    } else {
+                                        *(unsigned short *)((int)DAT_00481f50 + idx3 * 2) =
+                                            DAT_0048384c;
+                                    }
+                                }
+                            }
+                            frame_off3++;
+                            idx3++;
+                            c3++;
+                            tx3++;
+                        } while (c3 < (int)(unsigned int)*(unsigned char *)
+                                 ((int)DAT_00489e8c + 0x19b));
+                    }
+                    w3 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+                    idx3 += (int)DAT_00487a00 - (int)w3;
+                    r3++;
+                    sy3++;
+                } while (r3 < (int)(unsigned int)*(unsigned char *)
+                         ((int)DAT_00489e88 + 0x19b));
+            }
+        }
     }
 }
 

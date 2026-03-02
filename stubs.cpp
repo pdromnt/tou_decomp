@@ -4001,57 +4001,308 @@ void FUN_004573e0(void)
 {
     int i, off;
 
-    /* Phase 1: Advance animation frame for all segments */
-    for (i = 0; i < DAT_00489270; i++) {
-        off = i * 0x20;
-        unsigned char *anim = (unsigned char *)((int)DAT_00489e80 + off + 0x18);
-        *anim = *anim + 1;
-        if (*anim > 3) *anim = 0;
-    }
-
-    /* Phase 2: Process active segments (animation frame == 0) */
+    /* Loop 1: Advance animation frame for all segments */
     for (i = 0; i < DAT_00489270; i++) {
         off = i * 0x20;
         int base = (int)DAT_00489e80;
+        *(char *)(base + off + 0x18) = *(char *)(base + off + 0x18) + 1;
+        if (*(unsigned char *)(base + off + 0x18) > 3) {
+            *(unsigned char *)(base + off + 0x18) = 0;
+        }
+    }
 
-        if (*(char *)(base + off + 0x18) != '\0') continue;
+    /* Loop 2: Progress update + tile destruction (for active segments) */
+    int iVar8 = (int)DAT_00489e80;
+    for (i = 0; i < DAT_00489270; i++) {
+        off = i * 0x20;
 
-        int timer = *(int *)(base + off + 0x10);
+        if (*(char *)(iVar8 + off + 0x18) != '\0') continue;
 
-        if (timer > 0) {
-            /* Countdown phase - timer running */
-            *(int *)(base + off + 0x10) = timer - 1;
+        /* Progress reset if < 1 */
+        if (*(int *)(iVar8 + off + 0x0C) < 1) {
+            *(int *)(iVar8 + off + 0x10) = 200;
+            unsigned int pindex = (unsigned int)*(unsigned char *)((int)DAT_00489e80 + off + 0x17);
+            *(int *)((int)DAT_00489e80 + off + 0x0C) =
+                *(int *)((int)g_PhysicsParams + pindex * 0x10 + 0xC);
 
-            /* Spawn fire particles if in viewport */
-            int px = *(int *)(base + off) >> 4;
-            int py = *(int *)(base + off + 4) >> 4;
-            if (px >= 0 && py >= 0 &&
-                (*(unsigned char *)((int)DAT_00487814 + px + py * DAT_004879f8) & 0x08) &&
-                DAT_0048385c > 0.2f && DAT_0048925c < 1500)
+            unsigned char linked = *(unsigned char *)((int)DAT_00489e80 + off + 0x1B);
+            iVar8 = (int)DAT_00489e80;
+            if (linked != 0xFF) {
+                *(int *)((unsigned int)linked * 0x20 + 0x10 + (int)DAT_00489e80) = 200;
+                int lbase = (int)DAT_00489e80 + (unsigned int)*(unsigned char *)((int)DAT_00489e80 + off + 0x1B) * 0x20;
+                unsigned int lpindex = (unsigned int)*(unsigned char *)(lbase + 0x17);
+                *(int *)(lbase + 0x0C) = *(int *)((int)g_PhysicsParams + lpindex * 0x10 + 0xC);
+                iVar8 = (int)DAT_00489e80;
+            }
+        }
+
+        /* Advance opening progress */
+        *(int *)(iVar8 + off + 0x0C) += 0x19000;
+
+        /* Clamp to max from PhysicsParams */
+        int *pProgress = (int *)((int)DAT_00489e80 + off + 0x0C);
+        int max_size = *(int *)((unsigned int)*(unsigned char *)((int)DAT_00489e80 + off + 0x17) * 0x10 +
+                       0xC + (int)g_PhysicsParams);
+        if (*pProgress > max_size) {
+            *pProgress = max_size;
+        }
+        iVar8 = (int)DAT_00489e80;
+
+        /* Tile destruction when timer == 0 */
+        if (*(int *)((int)DAT_00489e80 + off + 0x10) == 0) {
+            unsigned int sprite_idx = (unsigned int)*(unsigned char *)((int)DAT_00489e80 + off + 0x1A);
+            unsigned int w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + sprite_idx);
+            int h = (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + sprite_idx);
+            int x0 = *(int *)((int)DAT_00489e80 + off);
+            int y0 = *(int *)((int)DAT_00489e80 + off + 4);
+            int progress = *(int *)((int)DAT_00489e80 + off + 8) >> 0x12;
+            int shift = (unsigned char)DAT_00487a18 & 0x1F;
+            int stride = DAT_00487a00;
+
+            switch (*(unsigned char *)((int)DAT_00489e80 + off + 0x15)) {
+            case 0: { /* down */
+                int start_y = progress + y0;
+                if ((int)(start_y + h) > (int)(DAT_004879f4 - 7))
+                    h = (DAT_004879f4 - start_y) - 7;
+                int tile = (start_y << shift) - (int)w / 2 + x0;
+                if (0 < h) {
+                    int rows = h;
+                    unsigned int cols = w;
+                    int tmap = (int)DAT_0048782c;
+                    do {
+                        for (; cols != 0; cols--) {
+                            if (*(unsigned char *)(tmap + tile) > 0xEF) {
+                                *(unsigned char *)(tmap + tile) = 0;
+                                *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
+                                tmap = (int)DAT_0048782c;
+                                iVar8 = (int)DAT_00489e80;
+                            }
+                            tile++;
+                        }
+                        tile += stride - (int)w;
+                        rows--;
+                        cols = w;
+                    } while (rows != 0);
+                }
+                break;
+            }
+            case 1: { /* right */
+                int start_x = x0 + progress;
+                if ((int)(start_x + h) > (int)(DAT_004879f0 - 7))
+                    h = (DAT_004879f0 - start_x) - 7;
+                int tile = ((y0 - (int)w / 2) << shift) + start_x;
+                int tmap = (int)DAT_0048782c;
+                for (; w != 0; w--) {
+                    int rh = h;
+                    if (0 < h) {
+                        do {
+                            if (*(unsigned char *)(tmap + tile) > 0xEF) {
+                                *(unsigned char *)(tmap + tile) = 0;
+                                *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
+                                tmap = (int)DAT_0048782c;
+                                iVar8 = (int)DAT_00489e80;
+                            }
+                            tile++;
+                            rh--;
+                        } while (rh != 0);
+                    }
+                    tile += stride - h;
+                }
+                break;
+            }
+            case 2: { /* up */
+                int start_y = (y0 - progress) - h;
+                int adj_y = start_y + 1;
+                if (adj_y < 7) { h = start_y - 6 + h; adj_y = 7; }
+                int tile = (adj_y << shift) - (int)w / 2 + x0;
+                if (0 < h) {
+                    int rows = h;
+                    unsigned int cols = w;
+                    int tmap = (int)DAT_0048782c;
+                    do {
+                        for (; cols != 0; cols--) {
+                            if (*(unsigned char *)(tmap + tile) > 0xEF) {
+                                *(unsigned char *)(tmap + tile) = 0;
+                                *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
+                                tmap = (int)DAT_0048782c;
+                                iVar8 = (int)DAT_00489e80;
+                            }
+                            tile++;
+                        }
+                        tile += stride - (int)w;
+                        rows--;
+                        cols = w;
+                    } while (rows != 0);
+                }
+                break;
+            }
+            case 3: { /* left */
+                int start_x = (x0 - progress) - h;
+                int adj_x = start_x + 1;
+                if (adj_x < 7) { h = start_x - 6 + h; adj_x = 7; }
+                int tile = ((y0 - (int)w / 2) << shift) + adj_x;
+                int tmap = (int)DAT_0048782c;
+                for (; w != 0; w--) {
+                    int rh = h;
+                    if (0 < h) {
+                        do {
+                            if (*(unsigned char *)(tmap + tile) > 0xEF) {
+                                *(unsigned char *)(tmap + tile) = 0;
+                                *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
+                                tmap = (int)DAT_0048782c;
+                                iVar8 = (int)DAT_00489e80;
+                            }
+                            tile++;
+                            rh--;
+                        } while (rh != 0);
+                    }
+                    tile += stride - h;
+                }
+                break;
+            }
+            }
+        }
+    }
+
+    /* Loop 3: Timer/fire OR movement/behavior, then ALWAYS render */
+    iVar8 = (int)DAT_00489e80;
+    for (i = 0; i < DAT_00489270; i++) {
+        off = i * 0x20;
+
+        if (*(char *)(off + 0x18 + iVar8) != '\0') continue;
+
+        int timer = *(int *)(off + 0x10 + iVar8);
+
+        if (timer == 0) {
+            /* === Movement/behavior === */
+            unsigned int pindex = (unsigned int)*(unsigned char *)(off + 0x17 + iVar8);
+            int speed = *(int *)(pindex * 0x10 + 4 + (int)g_PhysicsParams);
+
+            if (pindex == 2) {
+                /* Type 2: Proximity-based door */
+                int score = 0;
+                if (DAT_00489240 > 0) {
+                    int count = DAT_00489240;
+                    char *pcTeam = (char *)((int)DAT_00487810 + 0x2C);
+                    do {
+                        if (pcTeam[-8] == '\0') {
+                            char doorTeam = *(char *)(off + 0x19 + iVar8);
+                            if (*pcTeam == doorTeam || doorTeam == '\x03') {
+                                int dy = (*(int *)(pcTeam - 0x28) >> 0x12) -
+                                         *(int *)(off + 4 + iVar8);
+                                int dx = (*(int *)(pcTeam - 0x2C) >> 0x12) -
+                                         *(int *)(off + iVar8);
+                                int dist = (int)sqrt((double)(dx * dx + dy * dy));
+                                if (dist > 0x4F) dist = 0x4F;
+                                else if (dist < 0) dist = 0;
+                                score += (0x4F - dist);
+                            }
+                        }
+                        pcTeam += 0x598;
+                        count--;
+                    } while (count != 0);
+                    if (score > 0x50) score = 0x50;
+                }
+                *(int *)(off + 8 + iVar8) = score << 0x12;
+            }
+            else if (pindex == 3) {
+                /* Type 3: Triggered door */
+                int triggered = 0;
+                if (DAT_00489240 > 0) {
+                    int count = DAT_00489240;
+                    char *pcTeam = (char *)((int)DAT_00487810 + 0x2C);
+                    do {
+                        if (pcTeam[-8] == '\0') {
+                            char doorTeam = *(char *)(off + 0x19 + iVar8);
+                            if (*pcTeam == doorTeam || doorTeam == '\x03') {
+                                int dy = (*(int *)(pcTeam - 0x28) >> 0x12) -
+                                         *(int *)(off + 4 + iVar8);
+                                int dx = (*(int *)(pcTeam - 0x2C) >> 0x12) -
+                                         *(int *)(off + iVar8);
+                                int dist = (int)sqrt((double)(dx * dx + dy * dy));
+                                if ((double)dist < 96.0) {
+                                    triggered = 1;
+                                }
+                            }
+                        }
+                        pcTeam += 0x598;
+                        count--;
+                    } while (count != 0);
+                    if (triggered) {
+                        *(int *)(off + 8 + iVar8) += speed;
+                        if (*(int *)(off + 8 + (int)DAT_00489e80) > 0x1400000)
+                            *(int *)(off + 8 + (int)DAT_00489e80) = 0x1400000;
+                        goto trap_render;
+                    }
+                }
+                *(int *)(off + 8 + iVar8) -= speed;
+                if (*(int *)(off + 8 + (int)DAT_00489e80) < 0)
+                    *(int *)(off + 8 + (int)DAT_00489e80) = 0;
+            }
+            else {
+                /* Type 0/1: Oscillating door */
+                char delay = *(char *)(off + 0x16 + iVar8);
+                if (delay == '\0') {
+                    int prog = *(int *)(off + 8 + iVar8);
+                    prog += (int)*(signed char *)(off + 0x14 + iVar8) * speed;
+                    *(int *)(off + 8 + iVar8) = prog;
+                } else {
+                    *(char *)(off + 0x16 + iVar8) = delay - 1;
+                }
+
+                if (*(int *)(off + 8 + (int)DAT_00489e80) > 0x1400000) {
+                    *(int *)(off + 8 + (int)DAT_00489e80) = 0x1400000;
+                    *(char *)(off + 0x14 + (int)DAT_00489e80) =
+                        -*(char *)(off + 0x14 + (int)DAT_00489e80);
+                    *(char *)(off + 0x16 + (int)DAT_00489e80) =
+                        *(char *)((unsigned int)*(unsigned char *)(off + 0x17 + (int)DAT_00489e80) *
+                                  0x10 + (int)g_PhysicsParams);
+                }
+                if (*(int *)(off + 8 + (int)DAT_00489e80) < 0) {
+                    *(int *)(off + 8 + (int)DAT_00489e80) = 0;
+                    *(char *)(off + 0x14 + (int)DAT_00489e80) =
+                        -*(char *)(off + 0x14 + (int)DAT_00489e80);
+                    *(char *)(off + 0x16 + (int)DAT_00489e80) =
+                        *(char *)((unsigned int)*(unsigned char *)(off + 0x17 + (int)DAT_00489e80) *
+                                  0x10 + (int)g_PhysicsParams);
+                }
+            }
+        }
+        else {
+            /* === Timer countdown + fire particles === */
+            *(int *)(off + 0x10 + iVar8) = timer - 1;
+
+            /* Check viewport visibility */
+            int base = (int)DAT_00489e80;
+            int vx = *(int *)(off + base) >> 4;
+            int vy = *(int *)(off + 4 + base) >> 4;
+            if ((*(unsigned char *)((int)DAT_00487814 + vx + vy * DAT_004879f8) & 0x08) &&
+                DAT_0048385c > 0.2f && DAT_0048925c < 0x5DC)
             {
-                int rx = rand() % 30 - 15 + *(int *)(base + off);
-                int ry = rand() % 30 - 15 + *(int *)(base + off + 4);
-                char dir = *(char *)(base + off + 0x15);
-                int progress = *(int *)(base + off + 8) >> 0x12;
+                int rx = rand() % 0x1E - 0xF + *(int *)(off + (int)DAT_00489e80);
+                iVar8 = off + (int)DAT_00489e80;
+                int ry = rand() % 0x1E - 0xF + *(int *)(iVar8 + 4);
+                char dir = *(char *)(iVar8 + 0x15);
+                int prog = *(int *)(iVar8 + 8) >> 0x12;
 
-                if (dir == 3) rx -= progress;
-                if (dir == 1) rx += progress;
-                if (dir == 0) ry += progress;
-                if (dir == 2) ry -= progress;
+                if (dir == '\x03') rx -= prog;
+                if (dir == '\x01') rx += prog;
+                if (dir == '\0')   ry += prog;
+                if (dir == '\x02') ry -= prog;
 
-                unsigned int angle = rand() & 0x1FF;
-                /* Sign-correct the 9-bit mask */
+                unsigned int angle = rand();
+                angle = angle & 0x800001FF;
                 if ((int)angle < 0) angle = (angle - 1 | 0xFFFFFE00) + 1;
 
-                if (DAT_0048925c < 1500) {
+                if (DAT_0048925c < 0x5DC) {
                     int pidx = DAT_0048925c * 0x20;
                     *(int *)((int)DAT_00481f2c + pidx) = rx << 0x12;
                     *(int *)((int)DAT_00481f2c + pidx + 4) = ry << 0x12;
-                    int speed = rand() % 30 + 10;
+                    int spd = rand() % 0x1E + 10;
                     *(int *)((int)DAT_00481f2c + pidx + 8) =
-                        speed * *(int *)((int)DAT_00487ab0 + (angle + 0x300) * 4) >> 6;
+                        spd * *(int *)((int)DAT_00487ab0 + (angle + 0x300) * 4) >> 6;
                     *(int *)((int)DAT_00481f2c + pidx + 0xC) =
-                        speed * *(int *)((int)DAT_00487ab0 + 0x800 + (angle + 0x300) * 4) >> 6;
+                        spd * *(int *)((int)DAT_00487ab0 + 0x800 + (angle + 0x300) * 4) >> 6;
                     *(char *)((int)DAT_00481f2c + pidx + 0x10) = (char)(rand() % 5) + 0x16;
                     *(char *)((int)DAT_00481f2c + pidx + 0x11) = 0;
                     *(short *)((int)DAT_00481f2c + pidx + 0x12) = 0;
@@ -4062,206 +4313,9 @@ void FUN_004573e0(void)
             }
         }
 
-        /* Opening progress update */
-        if (*(int *)(base + off + 0x0C) < 1) {
-            /* Reset: door reached end, start closing/reopening */
-            *(int *)(base + off + 0x10) = 200;
-            unsigned int pindex = (unsigned int)*(unsigned char *)(base + off + 0x17);
-            *(int *)(base + off + 0x0C) = *(int *)((int)g_PhysicsParams + pindex * 0x10 + 0xC);
-
-            /* Handle linked segment */
-            unsigned char linked = *(unsigned char *)(base + off + 0x1B);
-            if (linked != 0xFF) {
-                int loff = (unsigned int)linked * 0x20;
-                *(int *)(base + loff + 0x10) = 200;
-                unsigned int lpindex = (unsigned int)*(unsigned char *)(base + loff + 0x17);
-                *(int *)(base + loff + 0x0C) = *(int *)((int)g_PhysicsParams + lpindex * 0x10 + 0xC);
-            }
-        }
-
-        /* Advance opening progress */
-        *(int *)(base + off + 0x0C) += 0x19000;
-        int max_size = *(int *)((int)g_PhysicsParams +
-                       (unsigned int)*(unsigned char *)(base + off + 0x17) * 0x10 + 0xC);
-        if (*(int *)(base + off + 0x0C) > max_size) {
-            *(int *)(base + off + 0x0C) = max_size;
-        }
-
-        /* Tile destruction when timer == 0 */
-        if (*(int *)(base + off + 0x10) == 0) {
-            unsigned int sprite_idx = (unsigned int)*(unsigned char *)(base + off + 0x1A);
-            unsigned int w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + sprite_idx);
-            unsigned int h = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + sprite_idx);
-            int x0 = *(int *)(base + off);
-            int y0 = *(int *)(base + off + 4);
-            int progress = *(int *)(base + off + 8) >> 0x12;
-            int shift = (unsigned char)DAT_00487a18 & 0x1F;
-            int stride = DAT_00487a00;
-
-            switch (*(unsigned char *)(base + off + 0x15)) {
-            case 0: { /* down */
-                int start_y = y0 + progress;
-                if ((int)(start_y + h) > (int)(DAT_004879f4 - 7))
-                    h = DAT_004879f4 - start_y - 7;
-                int tile = (start_y << shift) + x0 - w/2;
-                for (unsigned int row = h; row > 0; row--) {
-                    for (unsigned int col = w; col > 0; col--) {
-                        if (*(unsigned char *)((int)DAT_0048782c + tile) > 0xEF) {
-                            *(unsigned char *)((int)DAT_0048782c + tile) = 0;
-                            *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
-                        }
-                        tile++;
-                    }
-                    tile += stride - w;
-                }
-                break;
-            }
-            case 1: { /* right */
-                int start_x = x0 + progress;
-                if ((int)(start_x + h) > (int)(DAT_004879f0 - 7))
-                    h = DAT_004879f0 - start_x - 7;
-                int tile = ((y0 - w/2) << shift) + start_x;
-                for (unsigned int col = w; col > 0; col--) {
-                    for (unsigned int row = h; row > 0; row--) {
-                        if (*(unsigned char *)((int)DAT_0048782c + tile) > 0xEF) {
-                            *(unsigned char *)((int)DAT_0048782c + tile) = 0;
-                            *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
-                        }
-                        tile++;
-                    }
-                    tile += stride - h;
-                }
-                break;
-            }
-            case 2: { /* up */
-                int start_y = y0 - progress - h;
-                int adj_y = start_y + 1;
-                if (adj_y < 7) { h += adj_y - 7; adj_y = 7; }
-                int tile = (adj_y << shift) + x0 - w/2;
-                for (unsigned int row = h; row > 0; row--) {
-                    for (unsigned int col = w; col > 0; col--) {
-                        if (*(unsigned char *)((int)DAT_0048782c + tile) > 0xEF) {
-                            *(unsigned char *)((int)DAT_0048782c + tile) = 0;
-                            *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
-                        }
-                        tile++;
-                    }
-                    tile += stride - w;
-                }
-                break;
-            }
-            case 3: { /* left */
-                int start_x = x0 - progress - h;
-                int adj_x = start_x + 1;
-                if (adj_x < 7) { h += adj_x - 7; adj_x = 7; }
-                int tile = ((y0 - w/2) << shift) + adj_x;
-                for (unsigned int col = w; col > 0; col--) {
-                    for (unsigned int row = h; row > 0; row--) {
-                        if (*(unsigned char *)((int)DAT_0048782c + tile) > 0xEF) {
-                            *(unsigned char *)((int)DAT_0048782c + tile) = 0;
-                            *(unsigned short *)((int)DAT_00481f50 + tile * 2) = 0;
-                        }
-                        tile++;
-                    }
-                    tile += stride - h;
-                }
-                break;
-            }
-            }
-        }
-    }
-
-    /* Phase 3: Movement/behavior + rendering for active segments */
-    for (i = 0; i < DAT_00489270; i++) {
-        off = i * 0x20;
-        int base = (int)DAT_00489e80;
-
-        if (*(char *)(base + off + 0x18) != '\0') continue;
-
-        int timer = *(int *)(base + off + 0x10);
-
-        if (timer == 0) {
-            unsigned int pindex = (unsigned int)*(unsigned char *)(base + off + 0x17);
-            int speed = *(int *)((int)g_PhysicsParams + pindex * 0x10 + 4);
-
-            if (pindex == 2) {
-                /* Type 2: Proximity-based door */
-                int score = 0;
-                if (DAT_00489240 > 0) {
-                    for (int p = 0; p < DAT_00489240; p++) {
-                        int poff = p * 0x598;
-                        if (*(char *)(DAT_00487810 + poff + 0x24) == '\0') {
-                            char team = *(char *)(base + off + 0x19);
-                            char pteam = *(char *)(DAT_00487810 + poff + 0x2C);
-                            if (pteam == team || team == 3) {
-                                /* Calculate tile distance */
-                                int dx = (*(int *)(DAT_00487810 + poff) >> 0x12) - *(int *)(base + off);
-                                int dy = (*(int *)(DAT_00487810 + poff + 8) >> 0x12) - *(int *)(base + off + 4);
-                                int dist = (int)sqrt((double)(dx*dx + dy*dy));
-                                if (dist > 0x4F) dist = 0x4F;
-                                if (dist < 0) dist = 0;
-                                score += (0x4F - dist);
-                            }
-                        }
-                    }
-                    if (score > 0x50) score = 0x50;
-                }
-                *(int *)(base + off + 8) = score << 0x12;
-            }
-            else if (pindex == 3) {
-                /* Type 3: Triggered door */
-                int triggered = 0;
-                if (DAT_00489240 > 0) {
-                    for (int p = 0; p < DAT_00489240; p++) {
-                        int poff = p * 0x598;
-                        if (*(char *)(DAT_00487810 + poff + 0x24) == '\0') {
-                            char team = *(char *)(base + off + 0x19);
-                            char pteam = *(char *)(DAT_00487810 + poff + 0x2C);
-                            if (pteam == team || team == 3) {
-                                int dx = (*(int *)(DAT_00487810 + poff) >> 0x12) - *(int *)(base + off);
-                                int dy = (*(int *)(DAT_00487810 + poff + 8) >> 0x12) - *(int *)(base + off + 4);
-                                double dist = sqrt((double)(dx*dx + dy*dy));
-                                if (dist < 96.0) {
-                                    triggered = 1;
-                                }
-                            }
-                        }
-                    }
-                    if (triggered) {
-                        *(int *)(base + off + 8) += speed;
-                        if (*(int *)(base + off + 8) > 0x1400000)
-                            *(int *)(base + off + 8) = 0x1400000;
-                        goto trap_render;
-                    }
-                }
-                *(int *)(base + off + 8) -= speed;
-                if (*(int *)(base + off + 8) < 0)
-                    *(int *)(base + off + 8) = 0;
-            }
-            else {
-                /* Type 0/1: Oscillating door */
-                char delay = *(char *)(base + off + 0x16);
-                if (delay == 0) {
-                    *(int *)(base + off + 8) += *(char *)(base + off + 0x14) * speed;
-                } else {
-                    *(char *)(base + off + 0x16) = delay - 1;
-                }
-
-                if (*(int *)(base + off + 8) > 0x1400000) {
-                    *(int *)(base + off + 8) = 0x1400000;
-                    *(char *)(base + off + 0x14) = -*(char *)(base + off + 0x14);
-                    *(char *)(base + off + 0x16) = *(char *)((int)g_PhysicsParams + pindex * 0x10);
-                }
-                if (*(int *)(base + off + 8) < 0) {
-                    *(int *)(base + off + 8) = 0;
-                    *(char *)(base + off + 0x14) = -*(char *)(base + off + 0x14);
-                    *(char *)(base + off + 0x16) = *(char *)((int)g_PhysicsParams + pindex * 0x10);
-                }
-            }
-        }
-
 trap_render:
         FUN_00457c70(i);
+        iVar8 = (int)DAT_00489e80;
     }
 }
 /* ===== Turret tile helpers ===== */
