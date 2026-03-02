@@ -1877,19 +1877,258 @@ int FUN_004249c0(void)
 }
 
 
-/* ===== FUN_00440ba0 - Tilemap Paint (STUB) (00440BA0) ===== */
+/* ===== FUN_00440ba0 - Tilemap Paint (00440BA0) ===== */
 /* Called by FUN_00406d20 for type-7 (team base) projectiles.
- * Paints a circular area on the tilemap. Non-critical for visual rendering. */
-void FUN_00440ba0(int x, int y, int team, char param)
+ * Paints sprite pixels onto the tilemap as colored tiles for the given team.
+ * Checks player proximity if param != 0. Records paint location in DAT_00489e84. */
+void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
 {
-    /* stub */
+    unsigned int uVar2 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x4659);
+    unsigned int uVar3 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x4659);
+    int iVar8 = param_1 - (unsigned int)(*(unsigned char *)((int)DAT_00489e8c + 0x4659) >> 1);
+    int iVar6 = (param_2 - uVar3) + -2;
+
+    if (-1 < param_2) {
+        /* If param_4 set, check all players aren't near paint location */
+        if ((param_4 != '\0')) {
+            int local_c = 0;
+            if (0 < DAT_00489240) {
+                int *piVar5 = (int *)(DAT_00487810 + 4);
+                do {
+                    if (((((char)piVar5[8] == '\0') && (iVar8 + -8 < piVar5[-1] >> 0x12)) &&
+                        (piVar5[-1] >> 0x12 < (int)(uVar2 + 8 + iVar8))) &&
+                       (((int)((param_2 - uVar3) + -10) < *piVar5 >> 0x12 &&
+                        (*piVar5 >> 0x12 < (int)(uVar3 + 8 + iVar6))))) {
+                        return;
+                    }
+                    local_c = local_c + 1;
+                    piVar5 = piVar5 + 0x166;
+                } while (local_c < DAT_00489240);
+            }
+        }
+
+        /* Check tile property byte at offset 0x18 in entity table entry */
+        if (*(char *)((unsigned int)*(unsigned char *)((param_2 << ((unsigned char)DAT_00487a18 & 0x1f)) +
+            (int)DAT_0048782c + param_1) * 0x20 + 0x18 + (int)DAT_00487928) == '\0') {
+
+            unsigned char uVar7;
+            int frameOff;
+            if (param_3 == 0) {
+                uVar7 = 0x1c;
+                frameOff = *(int *)((int)DAT_00489234 + 0x11964);
+            } else if (param_3 == 1) {
+                uVar7 = 0x1d;
+                frameOff = *(int *)((int)DAT_00489234 + 0x11af4);
+            } else if (param_3 == 2) {
+                uVar7 = 0x1e;
+                frameOff = *(int *)((int)DAT_00489234 + 0x11c84);
+            } else {
+                uVar7 = 2;
+                frameOff = *(int *)((int)DAT_00489234 + 0x11e14);
+            }
+
+            int local_c2 = 0;
+            int tileIdx = (iVar6 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
+            int iVar11 = (int)DAT_00489e8c;
+            if (uVar3 != 0) {
+                do {
+                    int iVar9 = 0;
+                    int iVar10 = iVar8;
+                    if (uVar2 != 0) {
+                        do {
+                            if (((iVar10 < (int)DAT_004879f0) && (0 < iVar10)) &&
+                               ((iVar6 < (int)DAT_004879f4 &&
+                                (((0 < iVar6 &&
+                                  (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20 +
+                                   (int)DAT_00487928) == '\x01')) &&
+                                  (*(short *)((int)DAT_00487ab4 + frameOff * 2) != 0)))))) {
+                                short sVar1 = *(short *)((int)DAT_00487ab4 + frameOff * 2);
+                                *(short *)((int)DAT_00481f50 + tileIdx * 2) = sVar1;
+                                *(unsigned char *)((int)DAT_0048782c + tileIdx) = uVar7;
+                                iVar11 = (int)DAT_00489e8c;
+                            }
+                            frameOff = frameOff + 1;
+                            tileIdx = tileIdx + 1;
+                            iVar9 = iVar9 + 1;
+                            iVar10 = iVar10 + 1;
+                        } while (iVar9 < (int)(unsigned int)*(unsigned char *)(iVar11 + 0x4659));
+                    }
+                    uVar2 = (unsigned int)*(unsigned char *)(iVar11 + 0x4659);
+                    tileIdx = tileIdx + (DAT_00487a00 - (int)uVar2);
+                    local_c2 = local_c2 + 1;
+                    iVar6 = iVar6 + 1;
+                } while (local_c2 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x4659));
+            }
+
+            /* Record paint location in array */
+            if (DAT_00489254 < 5000) {
+                *(int *)((int)DAT_00489e84 + DAT_00489254 * 0x10) = param_1;
+                *(int *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 4) = param_2;
+                *(unsigned char *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 8) = (unsigned char)param_3;
+                DAT_00489254 = DAT_00489254 + 1;
+            }
+        }
+    }
 }
 
-/* ===== FUN_00457c70 - Wall Render Setup (STUB) (00457C70) ===== */
-/* Called by FUN_00407400 after adding a wall segment. */
-void FUN_00457c70(int index)
+/* ===== FUN_00457c70 - Wall Render Setup (00457C70) ===== */
+/* Called by FUN_00407400 after adding a wall segment.
+ * Renders a wall segment by painting sprite pixels onto the tilemap.
+ * 4 orientations based on direction byte at offset +0x15 in wall data entry.
+ * Case 0=down, 1=right, 2=up, 3=left. */
+void FUN_00457c70(int param_1)
 {
-    /* stub */
+    int *piVar1;
+    short sVar2;
+    char cVar3;
+    unsigned int uVar4;
+    unsigned int uVar5;
+    unsigned int uVar6;
+    int iVar7;
+    int iVar8;
+    int iVar9;
+    int local_c;
+    unsigned int local_8;
+    unsigned int local_4;
+
+    cVar3 = (char)param_1 + -0x10;
+    uVar4 = (unsigned int)*(unsigned char *)(param_1 * 0x20 + 0x1a + (int)DAT_00489e80);
+    piVar1 = (int *)(param_1 * 0x20 + (int)DAT_00489e80);
+    uVar5 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + uVar4);
+    local_8 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + uVar4);
+    if (*(unsigned char *)((int)piVar1 + 0x15) < 4) {
+        iVar9 = (int)uVar5 >> 1;
+        switch (*(unsigned char *)((int)piVar1 + 0x15)) {
+        case 0:
+            iVar8 = (piVar1[2] >> 0x12) + piVar1[1];
+            if ((int)DAT_004879f4 + -7 < (int)(iVar8 + local_8)) {
+                local_8 = ((int)DAT_004879f4 - iVar8) - 7;
+            }
+            iVar8 = ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) - iVar9) + *piVar1;
+            iVar9 = *(int *)((int)DAT_00489234 + uVar4 * 4);
+            uVar4 = uVar5;
+            iVar7 = (int)DAT_0048782c;
+            if (0 < (int)local_8) {
+                do {
+                    for (; uVar4 != 0; uVar4 = uVar4 - 1) {
+                        sVar2 = *(short *)((int)DAT_00487ab4 + iVar9 * 2);
+                        if ((sVar2 != 0) &&
+                           (*(char *)((unsigned int)*(unsigned char *)(iVar7 + iVar8) * 0x20 +
+                            (int)DAT_00487928) == '\x01')) {
+                            *(char *)(iVar7 + iVar8) = cVar3;
+                            *(short *)((int)DAT_00481f50 + iVar8 * 2) = sVar2;
+                            iVar7 = (int)DAT_0048782c;
+                        }
+                        iVar9 = iVar9 + 1;
+                        iVar8 = iVar8 + 1;
+                    }
+                    iVar8 = iVar8 + (DAT_00487a00 - (int)uVar5);
+                    local_8 = local_8 - 1;
+                    uVar4 = uVar5;
+                } while (local_8 != 0);
+                return;
+            }
+            break;
+        case 1:
+            iVar8 = (piVar1[2] >> 0x12) + *piVar1;
+            if ((int)DAT_004879f0 + -7 < (int)(iVar8 + local_8)) {
+                local_8 = ((int)DAT_004879f0 - iVar8) - 7;
+            }
+            local_c = 0;
+            iVar8 = ((piVar1[1] - iVar9) << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
+            iVar9 = (int)DAT_0048782c;
+            if (uVar5 != 0) {
+                do {
+                    if (0 < (int)local_8) {
+                        iVar7 = (*(int *)((int)DAT_00489234 + uVar4 * 4) + local_c) * 2;
+                        uVar6 = local_8;
+                        do {
+                            sVar2 = *(short *)(iVar7 + (int)DAT_00487ab4);
+                            if ((sVar2 != 0) &&
+                               (*(char *)((unsigned int)*(unsigned char *)(iVar9 + iVar8) * 0x20 +
+                                (int)DAT_00487928) == '\x01')) {
+                                *(char *)(iVar9 + iVar8) = cVar3;
+                                *(short *)((int)DAT_00481f50 + iVar8 * 2) = sVar2;
+                                iVar9 = (int)DAT_0048782c;
+                            }
+                            iVar7 = iVar7 + (int)uVar5 * 2;
+                            iVar8 = iVar8 + 1;
+                            uVar6 = uVar6 - 1;
+                        } while (uVar6 != 0);
+                    }
+                    iVar8 = iVar8 + (DAT_00487a00 - (int)local_8);
+                    local_c = local_c + 1;
+                } while (local_c < (int)uVar5);
+                return;
+            }
+            break;
+        case 2:
+            iVar8 = *(int *)((int)DAT_00489234 + uVar4 * 4);
+            iVar7 = piVar1[1] - (piVar1[2] >> 0x12);
+            local_4 = iVar7 - 6;
+            if (5 < (int)(iVar7 - (int)local_8)) {
+                local_4 = local_8;
+            }
+            iVar9 = ((iVar7 << ((unsigned char)DAT_00487a18 & 0x1f)) - iVar9) + *piVar1;
+            uVar4 = uVar5;
+            iVar7 = (int)DAT_0048782c;
+            if (0 < (int)local_4) {
+                do {
+                    for (; uVar4 != 0; uVar4 = uVar4 - 1) {
+                        sVar2 = *(short *)((int)DAT_00487ab4 + iVar8 * 2);
+                        if ((sVar2 != 0) &&
+                           (*(char *)((unsigned int)*(unsigned char *)(iVar7 + iVar9) * 0x20 +
+                            (int)DAT_00487928) == '\x01')) {
+                            *(char *)(iVar7 + iVar9) = cVar3;
+                            *(short *)((int)DAT_00481f50 + iVar9 * 2) = sVar2;
+                            iVar7 = (int)DAT_0048782c;
+                        }
+                        iVar8 = iVar8 + 1;
+                        iVar9 = iVar9 + 1;
+                    }
+                    iVar9 = iVar9 - (DAT_00487a00 + (int)uVar5);
+                    local_4 = local_4 - 1;
+                    uVar4 = uVar5;
+                } while (local_4 != 0);
+            }
+            break;
+        case 3:
+            iVar8 = *piVar1 - (piVar1[2] >> 0x12);
+            uVar6 = iVar8 - 6;
+            if (5 < (int)(iVar8 - (int)local_8)) {
+                uVar6 = local_8;
+            }
+            local_c = 0;
+            iVar8 = ((piVar1[1] - iVar9) << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
+            iVar9 = (int)DAT_0048782c;
+            if (uVar5 != 0) {
+                do {
+                    if (0 < (int)uVar6) {
+                        iVar7 = (*(int *)((int)DAT_00489234 + uVar4 * 4) + local_c) * 2;
+                        local_4 = uVar6;
+                        do {
+                            sVar2 = *(short *)(iVar7 + (int)DAT_00487ab4);
+                            if ((sVar2 != 0) &&
+                               (*(char *)((unsigned int)*(unsigned char *)(iVar9 + iVar8) * 0x20 +
+                                (int)DAT_00487928) == '\x01')) {
+                                *(char *)(iVar9 + iVar8) = cVar3;
+                                *(short *)((int)DAT_00481f50 + iVar8 * 2) = sVar2;
+                                iVar9 = (int)DAT_0048782c;
+                            }
+                            iVar7 = iVar7 + (int)uVar5 * 2;
+                            iVar8 = iVar8 + -1;
+                            local_4 = local_4 - 1;
+                        } while (local_4 != 0);
+                    }
+                    iVar8 = iVar8 + DAT_00487a00 + (int)uVar6;
+                    local_c = local_c + 1;
+                } while (local_c < (int)uVar5);
+                return;
+            }
+            break;
+        }
+    }
+    return;
 }
 
 

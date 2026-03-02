@@ -63,6 +63,7 @@ extern LPDIRECTDRAW          lpDD;              /* 00489EC8 */
 extern LPDIRECTDRAWSURFACE   lpDDS_Primary;     /* 00489ED8 */
 extern LPDIRECTDRAWSURFACE   lpDDS_Back;        /* 00489ECC */
 extern LPDIRECTDRAWSURFACE   lpDDS_Offscreen;   /* 00489ED0 */
+extern LPDIRECTDRAWSURFACE   DAT_00481d44;      /* 00481D44 - offscreen surface 640x480 */
 
 /* ===== DirectInput Globals (init.cpp) ===== */
 extern LPDIRECTINPUT         lpDI;              /* 00489ED4 */
@@ -198,6 +199,8 @@ extern void                 *DAT_00489234;      /* Sprite frame offsets (80KB, 2
 extern void                 *DAT_00489e8c;      /* Sprite widths (20KB, bytes) */
 extern void                 *DAT_00489e88;      /* Sprite heights (20KB, bytes) */
 extern void                 *DAT_00481cf8;      /* Temp buffer (3.6MB) */
+extern char                  DAT_00481c58[80];   /* Entity config defaults table 1 */
+extern char                  DAT_00481ca8[80];   /* Entity config defaults table 2 */
 extern int                   DAT_00481d28;      /* Sprite RGB pixel write cursor */
 extern int                   DAT_00481d24;      /* Sprite grayscale pixel write cursor */
 
@@ -531,6 +534,10 @@ extern unsigned short        DAT_00481e8e;      /* tile explosion count accumula
 extern void                 *DAT_00487880;      /* sprite bounding data table */
 extern char                  DAT_0048373b;      /* shared lives mode flag */
 extern char                  DAT_00483744;      /* respawn delay mode */
+extern void                 *DAT_00487704[4];   /* color degradation LUT pointers (palette[24..27]) */
+extern unsigned int          DAT_00483840;      /* fire color match R threshold */
+extern unsigned int          DAT_00483844;      /* fire color match G threshold */
+extern unsigned int          DAT_00483848;      /* fire color match B threshold */
 
 /* ===== Sub-functions ===== */
 void FUN_0040fd70(float param1, int snd, int x, int y);   /* positional sound variant */
@@ -540,8 +547,9 @@ void FUN_00454340(void);        /* projectile update */
 void FUN_0044b0b0(void);        /* Entity_Behavior_Loop (entity.cpp) */
 void FUN_0044e510(int *ent);    /* Boundary_Clamp (entity.cpp) */
 void FUN_0040f9b0(int snd, int x, int y); /* positional sound (stub in entity.cpp) */
-void FUN_004357b0(int x, int y, int size, int p3, int p4, int p5, int p6, int p7, int p8,
-                  int p9, char p10, unsigned char p11); /* spawn explosion (stub) */
+void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, char param_5,
+                  int param_6, int param_7, int param_8, int param_9,
+                  char param_10, char param_11, unsigned char param_12); /* AoE tile damage / explosion */
 void FUN_00451e70(int particle_idx, int damage); /* building damage (stub) */
 void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner); /* explosion knockback */
 void FUN_00434310(void);        /* weapon/terrain */
@@ -560,7 +568,7 @@ void FUN_0045ddb2(void);        /* round-end cleanup */
 void FUN_0045fc00(void);        /* score/stat update */
 void FUN_0045e2c0(void);        /* network sync */
 void FUN_004104c0(int index);   /* turret init per-entry */
-void FUN_00460cf0(char a, int b); /* entity config helper */
+void FUN_00460cf0(char a, unsigned char b); /* tile replacement helper */
 int  FUN_0044dfb0(int player);  /* find spawn point for player */
 
 /* ===== Function Prototypes: init.cpp (config) ===== */

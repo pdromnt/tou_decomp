@@ -705,9 +705,311 @@ static void FUN_0044f840_impl(int *ent)
     }
 }
 
-/* ===== FUN_0044f900 — Weapon Selection (0044F900) ===== */
-/* Tier 4 — extremely complex, keep as stub */
-static void FUN_0044f900_impl(int *ent, int idx) { (void)ent; (void)idx; }
+/* ===== FUN_0044f900 — Weapon Selection & Firing (0044F900) ===== */
+/* Handles weapon cycling, firing charge, terrain speed effects, and
+ * automatic weapon selection for AI-controlled entities. */
+static void FUN_0044f900_impl(int *ent, int idx)
+{
+    unsigned char bVar3 = (unsigned char)DAT_00487a18;
+    int localX = ent[0];
+    int tileY = ent[1] >> 0x12;
+    int tileX = localX >> 0x12;
+    char local_5e = '\x04';  /* default terrain speed */
+
+    /* Check current tile for terrain speed modifier */
+    unsigned char bVar1 = *(unsigned char *)((tileY << (bVar3 & 0x1f)) + tileX + (int)DAT_0048782c);
+    int tileProps = (unsigned int)bVar1 * 0x20 + (int)DAT_00487928;
+    char cVar6 = *(char *)(tileProps + 0x18);
+    if (cVar6 != '\0') {
+        local_5e = *(char *)(tileProps + 0x19);
+    }
+    int local_5d = (cVar6 == '\0' || bVar1 == 0x1f) ? 1 : 0;
+
+    /* Check tile below */
+    bVar1 = *(unsigned char *)(((tileY + 1) << (bVar3 & 0x1f)) + tileX + (int)DAT_0048782c);
+    tileProps = (unsigned int)bVar1 * 0x20 + (int)DAT_00487928;
+    if (*(char *)(tileProps + 0x18) != '\0') {
+        local_5e = *(char *)(tileProps + 0x19);
+        local_5d = (bVar1 == 0x1f) ? 1 : 0;
+    }
+
+    /* Check tile above */
+    bVar1 = *(unsigned char *)(((tileY - 1) << (bVar3 & 0x1f)) + tileX + (int)DAT_0048782c);
+    tileProps = (unsigned int)bVar1 * 0x20 + (int)DAT_00487928;
+    if (*(char *)(tileProps + 0x18) != '\0') {
+        local_5e = *(char *)(tileProps + 0x19);
+        local_5d = (bVar1 == 0x1f) ? 1 : 0;
+    }
+
+    /* If on terrain: find passable tile ahead using aim direction */
+    if (cVar6 != '\0') {
+        unsigned long long uVar16 = FUN_004257e0(localX, ent[1], ent[2], ent[3]);
+        ent[4] = 0;
+        ent[5] = 0;
+        int attempts = 0;
+        int iVar8 = ent[0];
+        do {
+            iVar8 = (*(int *)((int)DAT_00487ab0 + (int)uVar16 * 4) >> 2) + iVar8;
+            ent[0] = iVar8;
+            int iVar12 = ent[1] + (*(int *)((int)DAT_00487ab0 + 0x800 + (int)uVar16 * 4) >> 2);
+            ent[1] = iVar12;
+            int tx = iVar8 >> 0x12;
+            iVar12 = iVar12 >> 0x12;
+            if (0 < tx && tx < DAT_004879f0 && 0 < iVar12 && iVar12 < DAT_004879f4 &&
+                *(char *)((unsigned int)*(unsigned char *)((iVar12 << ((unsigned char)DAT_00487a18 & 0x1f)) +
+                    (int)DAT_0048782c + tx) * 0x20 + 1 + (int)DAT_00487928) == '\x01')
+                break;
+            attempts++;
+        } while (attempts < 10);
+        if (attempts == 10) {
+            ent[0] = ent[2];
+            ent[1] = ent[3];
+        }
+    }
+
+    /* Terrain speed effect on turret rotation */
+    cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (int)DAT_0048782c +
+        ((ent[1] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (int)DAT_00487928);
+    *(unsigned char *)(ent + 0x28) = 0x14;
+
+    /* Charge weapon if on matching terrain */
+    if ((local_5e == (char)ent[0xb] || local_5e == -1) && !local_5d) {
+        int iVar12 = ent[8] + (unsigned int)DAT_00483754[1] * 0x200;
+        ent[8] = iVar12;
+        int iVar8 = *(int *)(idx * 0x40 + 0x28 + (int)DAT_0048780c);
+        if (iVar8 < iVar12) {
+            ent[8] = iVar8;
+            *(unsigned char *)((int)ent + 0xa1) = 1;
+        } else {
+            *(unsigned char *)((int)ent + 0xa1) = 2;
+        }
+        *(unsigned char *)((int)ent + 0xa2) = 10;
+    }
+
+    /* Turret rotation speed based on terrain */
+    int iVar8 = ent[6];
+    if (cVar6 == '\0') {
+        if (0x400 < iVar8) {
+            ent[6] = iVar8 - 0x80;
+            if (iVar8 - 0x80 < 0x400) ent[6] = 0x400;
+        }
+        if (ent[6] < 0x400) {
+            ent[6] += 0x80;
+            if (ent[6] > 0x400) ent[6] = 0x400;
+        }
+    } else {
+        if (0x400 < iVar8) {
+            ent[6] = iVar8 + 0x80;
+            if (ent[6] > 0x7ff) ent[6] = 0;
+        }
+        if (ent[6] < 0x400) {
+            ent[6] -= 0x80;
+            if (ent[6] < 0) ent[6] = 0;
+        }
+    }
+
+    /* If terrain type doesn't match entity type, skip weapon logic */
+    if ((local_5e != (char)ent[0xb]) && (local_5e != -1))
+        return;
+
+    /* Activation flags */
+    if (DAT_004892a5 == '\0' && DAT_004892a4 != '\0') {
+        DAT_004892a5 = '\x01';
+    }
+
+    /* Weapon selection logic (manual vs AI) */
+    if (*(char *)((int)ent + 0xdd) == '\0') {
+        /* Manual weapon selection — player controlled */
+        if (199 < ent[0x122] && 0xdb < ent[0x121]) {
+            /* Toggle weapon menu on button press (bit 0x20) */
+            if ((ent[0x2f] & 0x20U) == 0 && (*(unsigned char *)(ent + 0x2e) & 0x20) != 0 &&
+                *(char *)((int)ent + 0x9e) == '\0') {
+                *(unsigned char *)((int)ent + 0x9e) = 1;
+            } else if ((ent[0x2f] & 0x20U) == 0 && (*(unsigned char *)(ent + 0x2e) & 0x20) != 0 &&
+                *(char *)((int)ent + 0x9e) == '\x01') {
+                *(unsigned char *)((int)ent + 0x9e) = 0;
+            }
+        }
+
+        int bVar4 = 0;
+        if (*(char *)((int)ent + 0x9e) == '\x01') {
+            /* Weapon menu open — navigate with d-pad */
+            ent[0x30] = ent[0x2e];
+
+            /* Check underwater tile check for aiming */
+            if (cVar6 == '\0') {
+                cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (int)DAT_0048782c +
+                    (((ent[1] >> 0x12) - 1) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 0x18 + (int)DAT_00487928);
+            } else {
+                cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (int)DAT_0048782c +
+                    (((ent[1] >> 0x12) + 1) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 0x18 + (int)DAT_00487928);
+            }
+            if (cVar6 != '\0') {
+                *(unsigned char *)((int)ent + 0xc5) = 2;
+            }
+
+            /* Left button: cycle weapon backward */
+            if ((ent[0x2f] & 1U) == 0 && (ent[0x2e] & 1) != 0) {
+                char cVar6b = (char)ent[0xd];
+                *(char *)(ent + 0xd) = cVar6b - 1;
+                if ((char)(cVar6b - 1) < '\0') {
+                    *(char *)(ent + 0xd) = cVar6b + 5;
+                    if (ent[0xe] < (int)(char)(cVar6b + 5))
+                        *(char *)(ent + 0xd) = (char)ent[0xe];
+                }
+                char cVar2 = (char)ent[0xd];
+                if ((int)cVar2 / 6 != (int)cVar6b / 6) {
+                    *(char *)(ent + 0xd) = cVar2 + 6;
+                    if (ent[0xe] < (int)(char)(cVar2 + 6))
+                        *(char *)(ent + 0xd) = (char)ent[0xe];
+                }
+                bVar4 = 1;
+            }
+
+            /* Right button: cycle weapon forward */
+            if ((ent[0x2f] & 2U) == 0 && (*(unsigned char *)(ent + 0x2e) & 2) != 0) {
+                int group = (int)(char)ent[0xd] / 6;
+                char cVar6b = (char)ent[0xd] + 1;
+                *(char *)(ent + 0xd) = cVar6b;
+                if (ent[0xe] < (int)cVar6b)
+                    *(char *)(ent + 0xd) = (char)group * 6;
+                cVar6b = (char)ent[0xd];
+                if ((int)cVar6b / 6 != group)
+                    *(char *)(ent + 0xd) = cVar6b - 6;
+                bVar4 = 1;
+            }
+
+            /* Up button: cycle weapon group up */
+            if ((*(unsigned char *)(ent + 0x2f) & 4) == 0 && (*(unsigned char *)(ent + 0x2e) & 4) != 0) {
+                char cVar6b = (char)ent[0xd] - 6;
+                *(char *)(ent + 0xd) = cVar6b;
+                if (cVar6b < '\0') {
+                    int maxGrp = ent[0xe] / 6;
+                    short sVar7 = (char)(maxGrp + 1) * 6;
+                    cVar6b = (char)sVar7 + cVar6b;
+                    *(char *)(ent + 0xd) = cVar6b;
+                    if (ent[0xe] < (int)cVar6b)
+                        *(char *)(ent + 0xd) = cVar6b - 6;
+                }
+                bVar4 = 1;
+            }
+
+            /* Down button: cycle weapon group down */
+            if ((*(unsigned char *)(ent + 0x2f) & 0x40) == 0 && (*(unsigned char *)(ent + 0x2e) & 0x40) != 0) {
+                char cVar6b = (char)ent[0xd] + 6;
+                *(char *)(ent + 0xd) = cVar6b;
+                if (ent[0xe] < (int)(unsigned int)(unsigned char)cVar6b) {
+                    *(char *)(ent + 0xd) = cVar6b % 6;
+                }
+                bVar4 = 1;
+            }
+        } else {
+            /* Weapon menu closed — fire on release */
+            if ((ent[0x2f] & 1U) != 0 && (*(unsigned char *)(ent + 0x2e) & 1) == 0 &&
+                (*(unsigned char *)(ent + 0x30) & 1) == 0) {
+                char cVar6b = (char)ent[0xd] - 1;
+                *(char *)(ent + 0xd) = cVar6b;
+                if (cVar6b < '\0')
+                    *(char *)(ent + 0xd) = (char)ent[0xe];
+                bVar4 = 1;
+            }
+            if ((ent[0x2f] & 2U) != 0 && (*(unsigned char *)(ent + 0x2e) & 2) == 0 &&
+                (*(unsigned char *)(ent + 0x30) & 2) == 0) {
+                char cVar6b = (char)ent[0xd] + 1;
+                *(char *)(ent + 0xd) = cVar6b;
+                if (ent[0xe] < (int)cVar6b)
+                    *(unsigned char *)(ent + 0xd) = 0;
+                bVar4 = 1;
+            }
+            /* Clear held bits when released */
+            if ((ent[0x30] & 1U) != 0 && (*(unsigned char *)(ent + 0x2e) & 1) == 0)
+                ent[0x30] ^= 1;
+            if ((ent[0x30] & 2U) != 0 && (*(unsigned char *)(ent + 0x2e) & 2) == 0)
+                ent[0x30] ^= 2;
+        }
+
+        /* Fire button check */
+        if (((*(unsigned char *)(ent + 0x2f) & 8) != 0 && (*(unsigned char *)(ent + 0x2e) & 8) == 0)) {
+            unsigned int weapIdx = (unsigned int)*(unsigned char *)((char)ent[0xd] + 0x3c + (int)ent);
+            unsigned int uVar9 = weapIdx * 0x43;
+            if (*(char *)((int)DAT_00487abc + 0x7d + weapIdx * 0x218) != '\0') {
+                *(char *)((int)ent + 0x35) = *(char *)((int)ent + 0x35) + 1;
+            } else if (!bVar4) {
+                return;
+            }
+        } else if (!bVar4) {
+            return;
+        }
+
+        /* Set up weapon firing */
+        ent[0x29] = 0;
+        unsigned char *pbVar14 = (unsigned char *)((char)ent[0xd] + 0x3c + (int)ent);
+        *(unsigned char *)(ent + 0x32) = 0xfa;
+        if (*(unsigned char *)((int)DAT_00487abc + 0x7d + (unsigned int)*pbVar14 * 0x218) <
+            *(unsigned char *)((int)ent + 0x35)) {
+            *(unsigned char *)((int)ent + 0x35) = 0;
+        }
+        iVar8 = (unsigned int)*(unsigned char *)((int)ent + 0x35) + (unsigned int)*pbVar14 * 0x86;
+    } else {
+        /* AI weapon selection — pick random available weapon */
+        unsigned int uVar9 = ent[0xe];
+        if (uVar9 == 0) return;
+        if (0 < (int)uVar9) {
+            unsigned char local_50[80];
+            unsigned char *pbVar14 = (unsigned char *)(ent + 0xf);
+            unsigned char *pbVar15 = local_50;
+            unsigned int i;
+            for (i = uVar9 >> 2; i != 0; i--) {
+                *(unsigned int *)pbVar15 = *(unsigned int *)pbVar14;
+                pbVar14 += 4; pbVar15 += 4;
+            }
+            for (i = uVar9 & 3; i != 0; i--) {
+                *pbVar15 = *pbVar14;
+                pbVar14++; pbVar15++;
+            }
+
+            int iVar12 = 0;
+            iVar8 = 0;
+            if ((int)uVar9 < 1) return;
+            while (1) {
+                iVar12 = rand();
+                iVar12 = iVar12 % (int)uVar9;
+                if (*(char *)((int)DAT_00487abc + 0x7c + (unsigned int)local_50[iVar12] * 0x218) != '\0')
+                    break;
+                int iVar13 = uVar9 - 1;
+                unsigned int uVar11 = ent[0xe];
+                uVar9--;
+                iVar8++;
+                local_50[iVar12] = local_50[iVar13];
+                if ((int)uVar11 <= iVar8) return;
+            }
+
+            /* Find the weapon slot matching the random pick */
+            iVar8 = 0;
+            if (0 < ent[0xe]) {
+                do {
+                    if (*(unsigned char *)(iVar8 + 0x3c + (int)ent) == local_50[iVar12]) {
+                        *(char *)(ent + 0xd) = (char)iVar8;
+                        break;
+                    }
+                    iVar8++;
+                } while (iVar8 < ent[0xe]);
+            }
+        }
+
+        ent[0x29] = 0;
+        unsigned char *pbVar14 = (unsigned char *)((char)ent[0xd] + 0x3c + (int)ent);
+        iVar8 = rand();
+        uVar9 = iVar8 % (int)(*(unsigned char *)((int)DAT_00487abc + 0x7d +
+            (unsigned int)*pbVar14 * 0x218) + 1);
+        *(char *)((int)ent + 0x35) = (char)uVar9;
+        iVar8 = (uVar9 & 0xff) + (unsigned int)*pbVar14 * 0x86;
+    }
+
+    /* Apply weapon fire rate */
+    ent[0x25] = *(int *)((int)DAT_00487abc + 0xdc + iVar8 * 4) *
+        (unsigned int)*(unsigned char *)(ent + 0x27) * DAT_0048382c >> 0xc;
+}
 
 /* ===== FUN_00450080 — Tile Interaction / Terrain Destruction (00450080) ===== */
 static void FUN_00450080_impl(int *ent, char param_2)

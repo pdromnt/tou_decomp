@@ -17,6 +17,7 @@ LPDIRECTDRAW        lpDD            = NULL;  /* 00489EC8 */
 LPDIRECTDRAWSURFACE lpDDS_Primary   = NULL;  /* 00489ED8 */
 LPDIRECTDRAWSURFACE lpDDS_Back      = NULL;  /* 00489ECC */
 LPDIRECTDRAWSURFACE lpDDS_Offscreen = NULL;  /* 00489ED0 */
+LPDIRECTDRAWSURFACE DAT_00481d44    = NULL;  /* 00481D44 - offscreen surface 640x480 */
 
 /* ===== Init_DirectDraw (004610E0) ===== */
 /*

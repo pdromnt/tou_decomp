@@ -13,6 +13,11 @@ int   DAT_00487228[16] = {0};  /* per-player pickup counter */
 char  DAT_0048373d = 0;        /* friendly fire enabled flag */
 float DAT_0048385c = 0.0f;     /* weather/temperature threshold */
 
+/* ===== AoE / Explosion globals ===== */
+unsigned int DAT_00483840 = 0; /* fire color match R threshold */
+unsigned int DAT_00483844 = 0; /* fire color match G threshold */
+unsigned int DAT_00483848 = 0; /* fire color match B threshold */
+
 /* ===== Turret LOS / Targeting globals ===== */
 int    DAT_00481ed0 = 0;
 int    DAT_00481edc = 0;
@@ -76,11 +81,676 @@ int FUN_00410030(void)
 
     return 0;
 }
-void FUN_004357b0(int x, int y, int size, int p3, int p4, int p5, int p6, int p7, int p8,
-                  int p9, char p10, unsigned char p11)
+/* ===== FUN_004357b0 — AoE Tile Damage / Explosion Effects (004357b0) ===== */
+/* Applies area-of-effect damage to tiles, spawns fire/debris particles, and handles
+ * tile destruction. param_1/param_2 = tile x/y, param_3 = explosion size (sprite index),
+ * param_4 = replacement tile type, param_5 = mode (-1/0/1/2), param_6..param_9 = ray origin/dir,
+ * param_10 = damage mode (0=normal,1=count,2=scaled,3=special), param_11 = sound flag,
+ * param_12 = team/owner index. */
+void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, char param_5,
+                  int param_6, int param_7, int param_8, int param_9,
+                  char param_10, char param_11, unsigned char param_12)
 {
-    (void)x; (void)y; (void)size; (void)p3; (void)p4; (void)p5;
-    (void)p6; (void)p7; (void)p8; (void)p9; (void)p10; (void)p11;
+    /* Float constants from .rdata (overlapping doubles in original binary) */
+    static const double THRESH_0 = 0.2;   /* _DAT_004753f0 */
+    static const double THRESH_1 = 0.4;   /* _DAT_004753e0 */
+    static const double THRESH_2 = 0.6;   /* _DAT_00475680 */
+    static const double THRESH_3 = 1.1;   /* _DAT_00475700 */
+    static const double THRESH_4 = 1.3;   /* _DAT_004756f8 */
+    static const double DEBRIS_THRESH = 0.5;  /* _DAT_00475688 */
+    static const float  DEBRIS_MED = 1.0f;    /* _DAT_004753e8 */
+    static const float  DEBRIS_START = 0.0f;  /* _DAT_0047540c */
+
+    unsigned short uVar4 = 0;
+    int local_20 = 0;
+    int iVar6, iVar7, iVar8, iVar15, iVar16, iVar17;
+    unsigned int uVar10, uVar12;
+    char cVar13;
+    int local_4;
+    bool bVar18;
+
+    /* Section 1: Damage scaling (param_10 == 2) */
+    if (param_10 == '\x02') {
+        if ((float)THRESH_0 <= DAT_0048385c) {
+            if ((float)THRESH_1 <= DAT_0048385c) {
+                if ((float)THRESH_2 <= DAT_0048385c) {
+                    if ((float)THRESH_3 <= DAT_0048385c) {
+                        local_20 = 4;
+                        if ((float)THRESH_4 <= DAT_0048385c) {
+                            local_20 = 6;
+                        }
+                    } else {
+                        local_20 = 3;
+                    }
+                } else {
+                    local_20 = 2;
+                }
+            } else {
+                local_20 = 1;
+            }
+        } else {
+            local_20 = 0;
+        }
+    }
+
+    /* Section 2: Random special explosion type */
+    if (param_10 == '\0') {
+        iVar6 = rand();
+        if (iVar6 % 0x32 == 0) {
+            param_10 = -1;
+        }
+    }
+    if (DAT_00483836 == '\0') {
+        param_4 = 0;
+    }
+
+    /* Section 3: Directional tracing - trace ray from (param_7,param_6) toward (param_8,param_9) */
+    if ((param_6 != 0) || (param_7 != 0)) {
+        unsigned long long uVar19 = FUN_004257e0(param_6, param_7, param_8, param_9);
+        param_2 = 0;
+        iVar15 = *(int *)((int)DAT_00487ab0 + (int)uVar19 * 4) >> 1;
+        iVar7 = *(int *)((int)DAT_00487ab0 + 0x800 + (int)uVar19 * 4) >> 1;
+        iVar6 = param_7;
+        iVar17 = param_6;
+        do {
+            iVar17 = iVar17 + iVar15;
+            iVar6 = iVar6 + iVar7;
+            iVar16 = iVar17 >> 0x12;
+            iVar8 = iVar6 >> 0x12;
+            if ((0 < iVar16) && (iVar16 < (int)DAT_004879f0) &&
+                (0 < iVar8) && (iVar8 < (int)DAT_004879f4) &&
+                (*(char *)((unsigned int)*(unsigned char *)
+                    ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + (int)DAT_0048782c + iVar16)
+                    * 0x20 + 1 + (int)DAT_00487928) == '\x01')) {
+                break;
+            }
+            param_2 = param_2 + 1;
+        } while (param_2 < 0xc);
+        if (param_2 != 0xc) {
+            param_6 = iVar17 - iVar15;
+            param_7 = iVar6 - iVar7;
+        }
+        param_1 = param_6 >> 0x12;
+        param_2 = param_7 >> 0x12;
+    }
+
+    /* Section 4: Shadow sprite overlay (sprite 0x136, color degradation on footprint) */
+    if ((param_5 == '\x01') && (7 < param_3) &&
+        ((param_3 == 9 || ((param_3 < 0x13 || (param_3 < 0x17)))))) {
+        uVar10 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x136);
+        iVar7 = param_1 - (int)(uVar10 - 1) / 2;
+        iVar6 = param_2 - (int)(*(unsigned char *)((int)DAT_00489e88 + 0x136) - 1) / 2;
+        param_7 = *(int *)((int)DAT_00489234 + 0x4d8);
+        param_9 = 0;
+        iVar17 = (iVar6 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar7;
+        if (*(unsigned char *)((int)DAT_00489e88 + 0x136) != 0) {
+            do {
+                param_8 = 0;
+                if (uVar10 != 0) {
+                    iVar15 = param_9 + iVar6;
+                    iVar8 = iVar7;
+                    do {
+                        if ((6 < iVar8) && (iVar8 < (int)DAT_004879f0 - 6) &&
+                            (6 < iVar15) && (iVar15 < (int)DAT_004879f4 - 6)) {
+                            char *pcVar9 = (char *)((unsigned int)*(unsigned char *)
+                                ((int)DAT_0048782c + iVar17) * 0x20 + (int)DAT_00487928);
+                            if ((pcVar9[0xb] == '\0') && (pcVar9[4] == '\0') &&
+                                (*pcVar9 == '\0') &&
+                                (*(unsigned char *)((int)DAT_00489e94 + param_7) < 0xe6)) {
+                                int degradeIdx = (int)(0xff - (unsigned int)*(unsigned char *)
+                                    ((int)DAT_00489e94 + param_7)) >> 6;
+                                unsigned short remapped = *(unsigned short *)
+                                    ((int)DAT_00489230 +
+                                     (unsigned int)*(unsigned short *)
+                                         ((int)DAT_00481f50 + iVar17 * 2) * 2);
+                                *(unsigned short *)((int)DAT_00481f50 + iVar17 * 2) =
+                                    *(unsigned short *)
+                                        (*(int *)((int)DAT_00487704 + (degradeIdx & 0xff) * 4) +
+                                         (unsigned int)remapped * 2);
+                            }
+                        }
+                        param_7 = param_7 + 1;
+                        iVar17 = iVar17 + 1;
+                        param_8 = param_8 + 1;
+                        iVar8 = iVar8 + 1;
+                    } while (param_8 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x136));
+                }
+                uVar10 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x136);
+                iVar17 = iVar17 + (DAT_00487a00 - (int)uVar10);
+                param_9 = param_9 + 1;
+            } while (param_9 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x136));
+        }
+    }
+
+    /* Section 5: Tile type check and fire/debris spawn */
+    unsigned char bVar1 = *(unsigned char *)
+        ((param_2 << ((unsigned char)DAT_00487a18 & 0x1f)) + (int)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)bVar1 * 0x20 + 0x1a + (int)DAT_00487928) != '\0') {
+        int param_7_speed;
+        if (bVar1 == 0x1a) {
+            iVar6 = rand();
+            if (iVar6 % 0x14 < 10) {
+                uVar10 = rand();
+                uVar10 = uVar10 & 0x80000003;
+                if ((int)uVar10 < 0) {
+                    uVar10 = (uVar10 - 1 | 0xfffffffc) + 1;
+                }
+                cVar13 = (char)uVar10 + '\a';
+                param_7_speed = 0xfa;
+            } else if (iVar6 % 0x14 < 0xf) {
+                uVar10 = rand();
+                uVar10 = uVar10 & 0x80000003;
+                if ((int)uVar10 < 0) {
+                    uVar10 = (uVar10 - 1 | 0xfffffffc) + 1;
+                }
+                cVar13 = (char)uVar10 + '\r';
+                param_7_speed = 0xfa;
+            } else {
+                iVar6 = rand();
+                param_7_speed = 0xfa;
+                cVar13 = (char)(iVar6 % 3) + '\x11';
+            }
+        } else {
+            iVar6 = rand();
+            if (iVar6 % 0x14 < 0xf) {
+                iVar6 = rand();
+                cVar13 = (char)(iVar6 % 6) + '\x01';
+            } else {
+                iVar6 = rand();
+                cVar13 = (char)(iVar6 % 3) + '\x11';
+            }
+            param_7_speed = 0x96;
+        }
+
+        /* Spawn fire particle at center */
+        if ((DAT_00489250 < 2000) &&
+            ((*(unsigned char *)((param_1 >> 4) + (int)DAT_00487814 +
+                (param_2 >> 4) * DAT_004879f8) & 8) != 0)) {
+            iVar15 = param_1 << 0x12;
+            *(int *)(DAT_00489250 * 0x20 + (int)DAT_00481f34) = iVar15;
+            iVar8 = param_2 << 0x12;
+            *(int *)(DAT_00489250 * 0x20 + 4 + (int)DAT_00481f34) = iVar8;
+            *(int *)(DAT_00489250 * 0x20 + 8 + (int)DAT_00481f34) = 0;
+            *(int *)(DAT_00489250 * 0x20 + 0xc + (int)DAT_00481f34) = 0;
+            *(char *)(DAT_00489250 * 0x20 + 0x10 + (int)DAT_00481f34) = cVar13;
+            *(unsigned char *)(DAT_00489250 * 0x20 + 0x11 + (int)DAT_00481f34) = 0;
+            *(unsigned char *)(DAT_00489250 * 0x20 + 0x12 + (int)DAT_00481f34) = 0;
+            *(unsigned char *)(DAT_00489250 * 0x20 + 0x13 + (int)DAT_00481f34) = 1;
+            *(unsigned char *)(DAT_00489250 * 0x20 + 0x14 + (int)DAT_00481f34) = 0xff;
+            *(unsigned char *)(DAT_00489250 * 0x20 + 0x15 + (int)DAT_00481f34) = 0;
+            DAT_00489250 = DAT_00489250 + 1;
+            iVar6 = iVar15;
+            iVar17 = iVar8;
+
+            /* Play random fire sound */
+            iVar7 = rand();
+            FUN_0040f9b0(iVar7 % 7 + 0x65, iVar6, iVar17);
+
+            *(unsigned char *)(DAT_00489250 * 0x20 + -0xb + (int)DAT_00481f34) = 1;
+
+            /* Maybe spawn knockback explosion */
+            if (bVar1 == 0x1a) {
+                uVar10 = rand();
+                uVar10 = uVar10 & 0x8000000f;
+                bVar18 = (uVar10 == 0);
+                if ((int)uVar10 < 0) {
+                    bVar18 = ((uVar10 - 1 | 0xfffffff0) == 0xffffffff);
+                }
+                if (!bVar18) {
+                    FUN_00437cf0(iVar15, iVar8, 0x23, (unsigned int)param_12, 300);
+                }
+            } else {
+                uVar10 = rand();
+                uVar10 = uVar10 & 0x8000000f;
+                bVar18 = (uVar10 == 0);
+                if ((int)uVar10 < 0) {
+                    bVar18 = ((uVar10 - 1 | 0xfffffff0) == 0xffffffff);
+                }
+                if (!bVar18) {
+                    FUN_00437cf0(iVar15, iVar8, 0x14, (unsigned int)param_12, 200);
+                }
+            }
+        }
+
+        /* Spawn 8 debris particles radiating outward */
+        param_6 = 0;
+        do {
+            if (0x9c3 < DAT_00489248) break;
+            uVar10 = rand();
+            uVar10 = uVar10 & 0x800007ff;
+            if ((int)uVar10 < 0) {
+                uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
+            }
+            iVar6 = rand();
+            int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(ebase + 0x00) = param_1 << 0x12;
+            *(int *)(ebase + 0x08) = param_2 << 0x12;
+            *(int *)(ebase + 0x18) =
+                *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar6 % param_7_speed) >> 7;
+            *(int *)(ebase + 0x1c) =
+                *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar6 % param_7_speed) >> 7;
+            *(int *)(ebase + 0x04) = param_1 << 0x12;
+            *(int *)(ebase + 0x0c) = param_2 << 0x12;
+            *(int *)(ebase + 0x10) = 0;
+            *(int *)(ebase + 0x14) = 0;
+            *(unsigned char *)(ebase + 0x21) = 0;
+            iVar6 = rand();
+            *(short *)(ebase + 0x24) = (short)(iVar6 % 6);
+            *(unsigned char *)(ebase + 0x20) = 0x32;
+            *(unsigned char *)(ebase + 0x26) = 0;
+            *(unsigned char *)(ebase + 0x22) = param_12;
+            *(int *)(ebase + 0x28) = 0;
+            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x90);
+            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xCC);
+            *(int *)(ebase + 0x48) = 0;
+            *(int *)(ebase + 0x4c) = *(int *)((int)DAT_00487abc + 0xFC);
+            *(unsigned char *)(ebase + 0x54) = 0;
+            *(unsigned char *)(ebase + 0x40) = 2;
+            *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x00);
+            *(int *)(ebase + 0x3c) = 0;
+            *(unsigned char *)(ebase + 0x5c) = 0;
+            DAT_00489248 = DAT_00489248 + 1;
+
+            /* Set lifespan and gravity on newly incremented slot's trailing fields */
+            iVar6 = rand();
+            *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) = iVar6 % 100 + 0x78;
+            *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0x3e800;
+            iVar6 = rand();
+            *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
+                *(unsigned short *)((int)DAT_00487aa8 + 0x1ec + (iVar6 % 10) * 2) + 30000;
+
+            param_6 = param_6 + 0x100;
+        } while (param_6 < 0x800);
+
+        /* If param_11 == 1, randomize explosion size */
+        if (param_11 == '\x01') {
+            iVar6 = rand();
+            param_3 = iVar6 % 3 + 0x14;
+        }
+    }
+
+    /* Section 6: Main damage loop - iterate sprite (size+300) footprint */
+    iVar6 = param_3 + 300;
+    uVar10 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + iVar6);
+    param_9 = 0;
+    iVar7 = param_1 - (int)(uVar10 - 1) / 2;
+    iVar17 = param_2 - (int)(*(unsigned char *)((int)DAT_00489e88 + iVar6) - 1) / 2;
+    param_7 = *(int *)((int)DAT_00489234 + iVar6 * 4);
+    param_6 = (iVar17 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar7;
+
+    if (*(unsigned char *)((int)DAT_00489e88 + iVar6) != 0) {
+        do {
+            param_8 = 0;
+            if (uVar10 != 0) {
+                iVar8 = iVar17 + param_9;
+                iVar15 = iVar7;
+                do {
+                    /* Compute damage level from grayscale sprite data */
+                    int dmgLevel = (int)(0xff - (unsigned int)*(unsigned char *)
+                        ((int)DAT_00489e94 + param_7)) >> 5;
+                    cVar13 = (char)dmgLevel;
+                    dmgLevel = dmgLevel & 0xff;
+
+                    if (((-1 < iVar15) && (iVar15 < (int)DAT_004879f0)) &&
+                        ((-1 < iVar8) && (iVar8 < (int)DAT_004879f4))) {
+                        uVar10 = (unsigned int)*(unsigned char *)((int)DAT_0048782c + param_6);
+                        iVar16 = (int)DAT_00487928 + uVar10 * 0x20;
+
+                        /* Check if tile is destructible */
+                        if (((*(char *)(iVar16 + 0xc) == '\x01') && (param_10 != '\x03')) ||
+                            ((*(char *)(iVar16 + 0xd) == '\x01') && (param_10 == '\x03'))) {
+
+                            /* Team mode tile ownership */
+                            if (DAT_00483836 == '\x02') {
+                                param_4 = -(*(char *)(iVar16 + 0xe) != '\0') & 0x40;
+                            }
+
+                            /* Special handling for tile types 10 and 16 */
+                            if (((uVar10 == 10) || (uVar10 == 0x10)) && (param_5 != '\x02')) {
+                                if (cVar13 != '\0') {
+                                    cVar13 = '\x01';
+                                    dmgLevel = 1;
+                                }
+                                if (param_5 == -1) {
+                                    dmgLevel = 0;
+                                    cVar13 = (char)dmgLevel;
+                                }
+                            } else if ((param_5 == -1) && (cVar13 != '\0')) {
+                                dmgLevel = 1;
+                                cVar13 = (char)dmgLevel;
+                            }
+
+                            /* Color accumulation for mode 1/3 */
+                            if ((param_10 == '\x03') || (param_10 == '\x01')) {
+                                unsigned short uVar2 = *(unsigned short *)
+                                    ((int)DAT_00481f50 + param_6 * 2);
+                                unsigned short uVar5 =
+                                    (unsigned short)(unsigned char)((unsigned char)(uVar2 >> 10) << 3) +
+                                    (unsigned short)(unsigned char)((char)(uVar2 >> 5) << 3) +
+                                    (unsigned short)(unsigned char)((char)uVar2 << 3);
+                                if ((uVar4 < 100) && (uVar4 < uVar5)) {
+                                    DAT_00481e8c = uVar2;
+                                    uVar4 = uVar5;
+                                }
+                                cVar13 = (char)dmgLevel;
+                            }
+
+                            /* Apply damage if damage level > 0 */
+                            if (cVar13 != '\0') {
+                                if ((uVar10 == 6) && (param_10 == -1)) {
+                                    /* Fluid tile special handling */
+                                    if (cVar13 == '\a') {
+                                        *(unsigned short *)((int)DAT_00481f50 + param_6 * 2) = 0;
+                                        *(unsigned char *)((int)DAT_0048782c + param_6) = 0;
+                                    } else if ((param_4 == 0) && (DAT_00489258 < 5000)) {
+                                        *(int *)(DAT_00489258 * 0x20 + 0xc + (int)DAT_00489e7c) = 5;
+                                        uVar10 = rand();
+                                        uVar10 = uVar10 & 0x80000003;
+                                        if ((int)uVar10 < 0) {
+                                            uVar10 = (uVar10 - 1 | 0xfffffffc) + 1;
+                                        }
+                                        *(unsigned int *)(DAT_00489258 * 0x20 + 8 + (int)DAT_00489e7c) = uVar10;
+                                        *(int *)(DAT_00489258 * 0x20 + (int)DAT_00489e7c) = iVar15;
+                                        *(int *)(DAT_00489258 * 0x20 + 4 + (int)DAT_00489e7c) = iVar8;
+                                        *(unsigned char *)(DAT_00489258 * 0x20 + 0x10 + (int)DAT_00489e7c) = 0;
+                                        int *piVar11 = (int *)((int)DAT_00489e7c + DAT_00489258 * 0x20);
+                                        *(unsigned char *)
+                                            ((piVar11[1] << ((unsigned char)DAT_00487a18 & 0x1f)) +
+                                             (int)DAT_0048782c + *piVar11) = 0xb;
+                                        DAT_00489258 = DAT_00489258 + 1;
+                                    }
+                                } else {
+                                    /* Normal tile damage/destruction */
+                                    if (cVar13 == '\a') {
+                                        /* Max damage: destroy tile */
+                                        if (param_10 == '\x02') {
+                                            /* Scaled damage mode: may spawn wall crack debris */
+                                            uVar10 = iVar15 + iVar8;
+                                            uVar10 = uVar10 & 0x80000001;
+                                            bVar18 = (uVar10 == 0);
+                                            if ((int)uVar10 < 0) {
+                                                bVar18 = ((uVar10 - 1 | 0xfffffffe) == 0xffffffff);
+                                            }
+                                            if ((bVar18) && (DAT_00489248 < 0x9c4)) {
+                                                /* Spawn wall crack entity */
+                                                uVar10 = rand();
+                                                uVar10 = uVar10 & 0x800007ff;
+                                                if ((int)uVar10 < 0) {
+                                                    uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
+                                                }
+                                                iVar16 = rand();
+                                                int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                                *(int *)(ebase + 0x00) = iVar15 << 0x12;
+                                                *(int *)(ebase + 0x08) = iVar8 * 0x40000;
+                                                *(int *)(ebase + 0x18) =
+                                                    *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar16 % 2000) >> 10;
+                                                *(int *)(ebase + 0x1c) =
+                                                    *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar16 % 2000) >> 10;
+                                                *(int *)(ebase + 0x04) = iVar15 << 0x12;
+                                                *(int *)(ebase + 0x0c) = iVar8 * 0x40000;
+                                                *(int *)(ebase + 0x10) = 0;
+                                                *(int *)(ebase + 0x14) = 0;
+                                                *(unsigned char *)(ebase + 0x21) = 2;
+                                                iVar16 = rand();
+                                                *(short *)(ebase + 0x24) = (short)(iVar16 % 6);
+                                                *(unsigned char *)(ebase + 0x20) = 0;
+                                                *(unsigned char *)(ebase + 0x26) = 0;
+                                                *(unsigned char *)(ebase + 0x22) = param_12;
+                                                *(int *)(ebase + 0x28) = 0;
+                                                *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x4B8);
+                                                *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0x4F4);
+                                                *(int *)(ebase + 0x48) = 0;
+                                                *(int *)(ebase + 0x4c) = *(int *)((int)DAT_00487abc + 0x524);
+                                                *(unsigned char *)(ebase + 0x54) = 0;
+                                                *(unsigned char *)(ebase + 0x40) = 0;
+                                                *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x430);
+                                                *(int *)(ebase + 0x3c) = 0;
+                                                *(unsigned char *)(ebase + 0x5c) = 0;
+                                                DAT_00489248 = DAT_00489248 + 1;
+                                                iVar16 = rand();
+                                                *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) =
+                                                    iVar16 % 0x32 + 0x28;
+                                                *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0x7d000;
+                                                *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
+                                                    *(unsigned short *)
+                                                        ((int)DAT_00481f50 +
+                                                         ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2)
+                                                    + 30000;
+                                            }
+
+                                            /* Spawn fire debris particles based on local_20 */
+                                            if (((*(unsigned char *)((iVar15 >> 4) + (int)DAT_00487814 +
+                                                    (iVar8 >> 4) * DAT_004879f8) & 8) != 0) &&
+                                                (local_4 = 0, local_20 != 0)) {
+                                                do {
+                                                    if (0x9c3 < DAT_00489248) break;
+                                                    uVar10 = rand();
+                                                    uVar10 = uVar10 & 0x800007ff;
+                                                    if ((int)uVar10 < 0) {
+                                                        uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
+                                                    }
+                                                    iVar16 = rand();
+                                                    int eb2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                                    *(int *)(eb2 + 0x00) = iVar15 << 0x12;
+                                                    *(int *)(eb2 + 0x08) = iVar8 * 0x40000;
+                                                    *(int *)(eb2 + 0x18) =
+                                                        *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar16 % 2000) >> 10;
+                                                    *(int *)(eb2 + 0x1c) =
+                                                        *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar16 % 2000) >> 10;
+                                                    *(int *)(eb2 + 0x04) = iVar15 << 0x12;
+                                                    *(int *)(eb2 + 0x0c) = iVar8 * 0x40000;
+                                                    *(int *)(eb2 + 0x10) = 0;
+                                                    *(int *)(eb2 + 0x14) = 0;
+                                                    *(unsigned char *)(eb2 + 0x21) = 100;
+                                                    iVar16 = rand();
+                                                    *(short *)(eb2 + 0x24) = (short)(iVar16 % 6);
+                                                    *(unsigned char *)(eb2 + 0x20) = 0;
+                                                    *(unsigned char *)(eb2 + 0x26) = 0xff;
+                                                    *(unsigned char *)(eb2 + 0x22) = param_12;
+                                                    *(int *)(eb2 + 0x28) = 0;
+                                                    *(int *)(eb2 + 0x38) = *(int *)((int)DAT_00487abc + 0xD1E8);
+                                                    *(int *)(eb2 + 0x44) = *(int *)((int)DAT_00487abc + 0xD224);
+                                                    *(int *)(eb2 + 0x48) = 0;
+                                                    *(int *)(eb2 + 0x4c) = *(int *)((int)DAT_00487abc + 0xD254);
+                                                    *(unsigned char *)(eb2 + 0x54) = 0;
+                                                    *(unsigned char *)(eb2 + 0x40) = 0;
+                                                    *(int *)(eb2 + 0x34) = *(int *)((int)DAT_00487abc + 0xD160);
+                                                    *(int *)(eb2 + 0x3c) = 0;
+                                                    *(unsigned char *)(eb2 + 0x5c) = 0;
+                                                    DAT_00489248 = DAT_00489248 + 1;
+                                                    iVar16 = rand();
+                                                    *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) =
+                                                        iVar16 % 0x32 + 0x28;
+                                                    *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0;
+                                                    *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
+                                                        *(unsigned short *)
+                                                            ((int)DAT_00481f50 +
+                                                             ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2)
+                                                        + 30000;
+                                                    local_4 = local_4 + 1;
+                                                } while (local_4 < local_20);
+                                            }
+                                        }
+
+                                        /* Destroy tile: set pixel and tilemap */
+                                        if (param_4 != 0) {
+                                            *(unsigned short *)((int)DAT_00481f50 + param_6 * 2) = DAT_0048384c;
+                                        } else {
+                                            *(unsigned short *)((int)DAT_00481f50 + param_6 * 2) = 0;
+                                        }
+                                    } else {
+                                        /* Partial damage: darken tile via palette LUT */
+                                        unsigned short uVar2;
+                                        if (param_4 == 0) {
+                                            uVar2 = *(unsigned short *)
+                                                ((int)DAT_00489230 +
+                                                 (unsigned int)*(unsigned short *)
+                                                     ((int)DAT_00481f50 + param_6 * 2) * 2);
+                                            iVar16 = (int)DAT_004876a4[3 + dmgLevel];
+                                        } else {
+                                            uVar2 = *(unsigned short *)
+                                                ((int)DAT_00489230 +
+                                                 (unsigned int)*(unsigned short *)
+                                                     ((int)DAT_00481f50 + param_6 * 2) * 2);
+                                            iVar16 = (int)DAT_004876a4[28 + (dmgLevel >> 1)];
+                                        }
+                                        *(unsigned short *)((int)DAT_00481f50 + param_6 * 2) =
+                                            *(unsigned short *)(iVar16 + (unsigned int)uVar2 * 2);
+                                    }
+
+                                    /* Check if tile color is close to fill color / fire threshold */
+                                    {
+                                    unsigned short uVar2_c = *(unsigned short *)((int)DAT_00481f50 + param_6 * 2);
+                                    int doReplace = 0;
+                                    if (uVar2_c == 0) {
+                                        doReplace = 1;
+                                    } else if (param_4 != 0) {
+                                        /* Branchless abs: abs(x) = (x ^ (x>>31)) - (x>>31) */
+                                        unsigned int rVal = (unsigned int)(unsigned char)((unsigned char)(uVar2_c >> 10) << 3) - DAT_00483840;
+                                        int rSign = (int)rVal >> 0x1f;
+                                        int rAbs = (int)((rVal ^ rSign) - rSign);
+                                        unsigned int gVal = (unsigned int)(unsigned char)((char)(uVar2_c >> 5) << 3) - DAT_00483844;
+                                        int gSign = (int)gVal >> 0x1f;
+                                        int gAbs = (int)((gVal ^ gSign) - gSign);
+                                        unsigned int bVal = (unsigned int)(unsigned char)(*(char *)((int)DAT_00481f50 + param_6 * 2) << 3) - DAT_00483848;
+                                        int bSign = (int)bVal >> 0x1f;
+                                        int bAbs = (int)((bVal ^ bSign) - bSign);
+                                        if (rAbs < 0x11 && gAbs < 0x11 && bAbs < 0x11) {
+                                            doReplace = 1;
+                                        }
+                                    }
+                                    if (doReplace) {
+                                        /* Increment destroyed tile counter for modes 1 and 3 */
+                                        if (param_10 == '\x01') {
+                                            if (DAT_00481e8e < 0xc) {
+                                                DAT_00481e8e = DAT_00481e8e + 1;
+                                            }
+                                        } else if (param_10 == '\x03') {
+                                            DAT_00481e8e = DAT_00481e8e + 1;
+                                        }
+                                        /* Replace tile */
+                                        *(unsigned char *)((int)DAT_0048782c + param_6) = param_4;
+                                        if (param_4 == 0) {
+                                            *(unsigned short *)((int)DAT_00481f50 + param_6 * 2) = 0;
+                                        } else {
+                                            *(unsigned short *)((int)DAT_00481f50 + param_6 * 2) = DAT_0048384c;
+                                        }
+                                    } /* doReplace */
+                                    } /* uVar2_c scope */
+                                }
+                            }
+                        }
+                    }
+                    param_7 = param_7 + 1;
+                    param_6 = param_6 + 1;
+                    param_8 = param_8 + 1;
+                    iVar15 = iVar15 + 1;
+                } while (param_8 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e8c + iVar6));
+            }
+            uVar10 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + iVar6);
+            param_6 = param_6 + (DAT_00487a00 - (int)uVar10);
+            param_9 = param_9 + 1;
+        } while (param_9 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + iVar6));
+    }
+
+    /* Section 7: End debris - spawn additional small debris if param_5 == 1 */
+    if (param_5 != '\x01') {
+        return;
+    }
+
+    int spriteArea = (int)((unsigned int)*(unsigned char *)((int)DAT_00489e88 + iVar6) *
+                           (unsigned int)*(unsigned char *)((int)DAT_00489e8c + iVar6)) >> 7;
+    float debrisCount = (float)spriteArea;
+
+    if (DEBRIS_THRESH <= (double)spriteArea) {
+        goto LAB_00436b89;
+    } else {
+        uVar10 = rand();
+        uVar10 = uVar10 & 0x80000007;
+        bVar18 = (uVar10 == 0);
+        if ((int)uVar10 < 0) {
+            bVar18 = ((uVar10 - 1 | 0xfffffff8) == 0xffffffff);
+        }
+        if (!bVar18) goto LAB_00436b89;
+    }
+    debrisCount = 1.0f;
+    goto LAB_00436bc6;
+
+LAB_00436b89:
+    if ((DEBRIS_MED <= debrisCount) || (debrisCount < (float)DEBRIS_THRESH)) {
+        goto LAB_00436bc6;
+    }
+    uVar10 = rand();
+    uVar10 = uVar10 & 0x80000003;
+    bVar18 = (uVar10 == 0);
+    if ((int)uVar10 < 0) {
+        bVar18 = ((uVar10 - 1 | 0xfffffffc) == 0xffffffff);
+    }
+    if (!bVar18) goto LAB_00436bc6;
+    debrisCount = 1.0f;
+
+LAB_00436bc6:
+    param_6 = 0;
+    {
+        float fVar3 = DEBRIS_START;
+        while ((fVar3 < debrisCount) && (DAT_00489248 < 0x9c4)) {
+            uVar10 = rand();
+            uVar10 = uVar10 & 0x800007ff;
+            if ((int)uVar10 < 0) {
+                uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
+            }
+            uVar12 = rand();
+            uVar12 = uVar12 & 0x8000007f;
+            if ((int)uVar12 < 0) {
+                uVar12 = (uVar12 - 1 | 0xffffff80) + 1;
+            }
+            iVar6 = rand();
+            iVar17 = rand();
+            iVar7 = (iVar6 % 6 + -3) * 0x40000 + param_1 * 0x40000;
+            int eb3 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            *(int *)(eb3 + 0x00) = iVar7;
+            iVar6 = (iVar17 % 6 + -3) * 0x40000 + param_2 * 0x40000;
+            *(int *)(eb3 + 0x08) = iVar6;
+            *(int *)(eb3 + 0x18) =
+                (int)(*(int *)((int)DAT_00487ab0 + uVar10 * 4) * (int)(uVar12 & 0xff)) >> 8;
+            *(int *)(eb3 + 0x1c) =
+                (int)(*(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (int)(uVar12 & 0xff)) >> 8;
+            *(int *)(eb3 + 0x04) = iVar7;
+            *(int *)(eb3 + 0x0c) = iVar6;
+            *(int *)(eb3 + 0x10) = 0;
+            *(int *)(eb3 + 0x14) = 0;
+            *(unsigned char *)(eb3 + 0x21) = 2;
+            *(unsigned short *)(eb3 + 0x24) = 0;
+            *(unsigned char *)(eb3 + 0x20) = 5;
+            *(unsigned char *)(eb3 + 0x26) = 0xff;
+            *(unsigned char *)(eb3 + 0x22) = 0xff;
+            *(int *)(eb3 + 0x28) = 0;
+            *(int *)(eb3 + 0x38) = *(int *)((int)DAT_00487abc + 0x4B8);
+            *(int *)(eb3 + 0x44) = *(int *)((int)DAT_00487abc + 0x4F4);
+            *(int *)(eb3 + 0x48) = 0;
+            *(int *)(eb3 + 0x4c) = *(int *)((int)DAT_00487abc + 0x524);
+            *(unsigned char *)(eb3 + 0x54) = 0;
+            *(unsigned char *)(eb3 + 0x40) = 0;
+            *(int *)(eb3 + 0x34) = *(int *)((int)DAT_00487abc + 0x430);
+            *(int *)(eb3 + 0x3c) = 0;
+            *(unsigned char *)(eb3 + 0x5c) = 0;
+            DAT_00489248 = DAT_00489248 + 1;
+
+            iVar6 = rand();
+            *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
+                *(unsigned short *)((int)DAT_00487aa8 + 0x44 + (iVar6 % 6) * 2) + 30000;
+            uVar10 = rand();
+            uVar10 = uVar10 & 0x8000007f;
+            if ((int)uVar10 < 0) {
+                uVar10 = (uVar10 - 1 | 0xffffff80) + 1;
+            }
+            *(unsigned int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) = uVar10 + 0x80;
+
+            param_6 = param_6 + 1;
+            fVar3 = (float)param_6;
+        }
+    }
+    return;
 }
 /* ===== FUN_00451e70 — Building/Structure Damage from Fire Particles (00451E70) ===== */
 /* Checks fire particle against 9 categories of indexed entities (structures/buildings).
@@ -3594,11 +4264,313 @@ trap_render:
         FUN_00457c70(i);
     }
 }
-/* ===== FUN_00411ae0 / FUN_00412710 / FUN_00410f50 — Turret block movement stubs ===== */
-/* These handle complex turret block falling/movement physics. Stubbed for now. */
-static int FUN_00411ae0(int p1, int p2, int p3) { (void)p1; (void)p2; (void)p3; return 0; }
-static void FUN_00412710(int idx) { (void)idx; }
-static void FUN_00410f50(int idx) { (void)idx; }
+/* ===== Turret tile helpers ===== */
+
+/* FUN_00410f50 helper: restore tile type from property[0x17], set color based on passable */
+static inline void turret_restore_tile(int tileIdx, unsigned short color) {
+    int prop = (int)DAT_00487928 + (unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20;
+    if (*(char *)(prop + 4) != '\0') {
+        *(unsigned char *)((int)DAT_0048782c + tileIdx) = *(unsigned char *)(prop + 0x17);
+        if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20 + (int)DAT_00487928) == '\x01')
+            *(unsigned short *)((int)DAT_00481f50 + tileIdx * 2) = 0;
+        else
+            *(unsigned short *)((int)DAT_00481f50 + tileIdx * 2) = color;
+    }
+}
+
+/* FUN_00412710 helper (first half): set color to DAT_0048384c if property[4] != 0 */
+static inline void turret_color_tile(int tileIdx) {
+    if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+        *(unsigned short *)((int)DAT_00481f50 + tileIdx * 2) = DAT_0048384c;
+    }
+}
+
+/* FUN_00412710 helper (dirty flag): reset tile type from property[0x13] if property[4] != 0 */
+static inline void turret_dirty_tile(int tileIdx) {
+    int prop = (unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20 + (int)DAT_00487928;
+    if (*(char *)(prop + 4) != '\0') {
+        *(unsigned char *)((int)DAT_0048782c + tileIdx) = *(unsigned char *)(prop + 0x13);
+    }
+}
+
+/* FUN_00411ae0 helper: paint tile with team color if passable or property[4] != 0 */
+static inline void turret_paint_tile(int tileIdx, unsigned int team, unsigned short color) {
+    char *pcVar = (char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20 + (int)DAT_00487928);
+    if (*pcVar == '\x01' || pcVar[4] != '\0') {
+        *(unsigned short *)((int)DAT_00481f50 + tileIdx * 2) = color;
+        *(char *)((int)DAT_0048782c + tileIdx) =
+            *(char *)((team & 0xff) + 0x14 +
+                     (int)DAT_00487928 + (unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20) + '\x01';
+    }
+}
+
+/* ===== FUN_00410f50 — Turret Tile Reset (00410F50) ===== */
+/* Restores 3x3 turret tiles (+ border tiles based on orientation) to original state.
+ * Reads tile property offset, restores tile type from property[0x17],
+ * sets color to 0 if passable (property[0]==1) or DAT_0048384c otherwise. */
+static void FUN_00410f50(int param_1)
+{
+    int base = *(int *)(DAT_00481f48 + param_1 * 8);
+    int row = DAT_00487a00;
+
+    /* 9 core tiles: 3x3 grid */
+    turret_restore_tile(base,             DAT_0048384c);
+    turret_restore_tile(base + 1,         DAT_0048384c);
+    turret_restore_tile(base + 2,         DAT_0048384c);
+    turret_restore_tile(base + row,       DAT_0048384c);
+    turret_restore_tile(base + row + 1,   DAT_0048384c);
+    turret_restore_tile(base + row + 2,   DAT_0048384c);
+    turret_restore_tile(base + row * 2,     DAT_0048384c);
+    turret_restore_tile(base + row * 2 + 1, DAT_0048384c);
+    turret_restore_tile(base + row * 2 + 2, DAT_0048384c);
+
+    /* Border tiles depend on orientation byte [4] */
+    char orient = *(char *)(DAT_00481f48 + 4 + param_1 * 8);
+
+    if (orient == '\0') {
+        /* orientation 0: -1, -1+row, -row, -row+1, +2+row*3, +1+row*3 */
+        turret_restore_tile(base - 1,             DAT_0048384c);
+        turret_restore_tile(base - 1 + row,       DAT_0048384c);
+        turret_restore_tile(base - row,            DAT_0048384c);
+        turret_restore_tile(base - row + 1,        DAT_0048384c);
+        turret_restore_tile(base + 2 + row * 3,    DAT_0048384c);
+        turret_restore_tile(base + 1 + row * 3,    DAT_0048384c);
+    }
+    else if (orient == '\x01') {
+        /* orientation 1: +row*3, +1+row*3, +3+row, +3+row*2 */
+        turret_restore_tile(base + row * 3,         DAT_0048384c);
+        turret_restore_tile(base + 1 + row * 3,     DAT_0048384c);
+        turret_restore_tile(base + 3 + row,          DAT_0048384c);
+        turret_restore_tile(base + 3 + row * 2,      DAT_0048384c);
+    }
+    else if (orient == '\x02') {
+        /* orientation 2: -1+row, -row+1, -row+2, -1+row*2 */
+        turret_restore_tile(base - 1 + row,          DAT_0048384c);
+        turret_restore_tile(base - row + 1,           DAT_0048384c);
+        turret_restore_tile(base - row + 2,           DAT_0048384c);
+        turret_restore_tile(base - 1 + row * 2,       DAT_0048384c);
+    }
+    else {
+        /* orientation 3: -row, -row-1, -1, +3+row, +3+row*2, +3 */
+        turret_restore_tile(base - row,               DAT_0048384c);
+        turret_restore_tile(base - row - 1,           DAT_0048384c);
+        turret_restore_tile(base - 1,                 DAT_0048384c);
+        turret_restore_tile(base + 3 + row,           DAT_0048384c);
+        turret_restore_tile(base + 3 + row * 2,       DAT_0048384c);
+        turret_restore_tile(base + 3,                 DAT_0048384c);
+    }
+}
+
+/* ===== FUN_00412710 — Turret Fall/Restore (00412710) ===== */
+/* Checks if turret is suspended (fall_counter >= 8) and tile 2 rows above is empty.
+ * If so, resets fall counter and restores color on 3x3 core + border tiles.
+ * Then checks dirty flag [7] and resets tile types using property[0x13]. */
+static void FUN_00412710(int param_1)
+{
+    int base;
+    int row = DAT_00487a00;
+
+    /* Check: fall_counter >= 8 AND tile 2 rows above is passable (type == 0) */
+    if ((7 < *(unsigned char *)(DAT_00481f48 + 5 + param_1 * 8)) &&
+        (*(char *)((unsigned int)*(unsigned char *)(*(int *)(DAT_00481f48 + param_1 * 8) + row * -2 +
+                                  (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\0'))
+    {
+        *(unsigned char *)(DAT_00481f48 + 5 + param_1 * 8) = 0;
+        base = *(int *)(DAT_00481f48 + param_1 * 8);
+
+        /* 9 core tiles: set color to DAT_0048384c if property[4] != 0 */
+        turret_color_tile(base);
+        turret_color_tile(base + 1);
+        turret_color_tile(base + 2);
+        turret_color_tile(base + row);
+        turret_color_tile(base + row + 1);
+        turret_color_tile(base + row + 2);
+        turret_color_tile(base + row * 2);
+        turret_color_tile(base + row * 2 + 1);
+        turret_color_tile(base + 2 + row * 2);
+
+        /* Border tiles depend on orientation byte [4] */
+        char orient = *(char *)(DAT_00481f48 + 4 + param_1 * 8);
+
+        if (orient == '\0') {
+            turret_color_tile(base - 1);
+            turret_color_tile(base - 1 + row);
+            turret_color_tile(base - row);
+            turret_color_tile(base - row + 1);
+            turret_color_tile(base + 2 + row * 3);
+            turret_color_tile(base + 1 + row * 3);
+        }
+        else if (orient == '\x01') {
+            turret_color_tile(base + row * 3);
+            turret_color_tile(base + 1 + row * 3);
+            turret_color_tile(base + 3 + row);
+            turret_color_tile(base + 3 + row * 2);
+        }
+        else if (orient == '\x02') {
+            turret_color_tile(base - 1 + row);
+            turret_color_tile(base - row + 1);
+            turret_color_tile(base - row + 2);
+            turret_color_tile(base - 1 + row * 2);
+        }
+        else {
+            /* orientation 3 */
+            turret_color_tile(base - row);
+            turret_color_tile(base - row - 1);
+            turret_color_tile(base - 1);
+            turret_color_tile(base + 3 + row);
+            turret_color_tile(base + 3 + row * 2);
+            turret_color_tile(base + 3);
+        }
+    }
+
+    /* Dirty flag check: if [7] is set, reset tile types using property[0x13] */
+    if (*(char *)(DAT_00481f48 + 7 + param_1 * 8) != '\0') {
+        *(unsigned char *)(DAT_00481f48 + 7 + param_1 * 8) = 0;
+        base = *(int *)(DAT_00481f48 + param_1 * 8);
+
+        /* 9 core tiles: reset type from property[0x13] */
+        turret_dirty_tile(base);
+        turret_dirty_tile(base + 1);
+        turret_dirty_tile(base + 2);
+        turret_dirty_tile(base + row);
+        turret_dirty_tile(base + 1 + row);
+        turret_dirty_tile(base + 2 + row);
+        turret_dirty_tile(base + row * 2);
+        turret_dirty_tile(base + 1 + row * 2);
+        turret_dirty_tile(base + 2 + row * 2);
+
+        /* Border tiles depend on orientation byte [4] */
+        char orient = *(char *)(DAT_00481f48 + 4 + param_1 * 8);
+
+        if (orient == '\0') {
+            turret_dirty_tile(base - 1);
+            turret_dirty_tile(base - 1 + row);
+            turret_dirty_tile(base - row);
+            turret_dirty_tile(base - row + 1);
+            turret_dirty_tile(base + 2 + row * 3);
+            turret_dirty_tile(base + 1 + row * 3);
+        }
+        else if (orient == '\x01') {
+            turret_dirty_tile(base + row * 3);
+            turret_dirty_tile(base + 1 + row * 3);
+            turret_dirty_tile(base + 3 + row);
+            turret_dirty_tile(base + 3 + row * 2);
+        }
+        else if (orient == '\x02') {
+            turret_dirty_tile(base - 1 + row);
+            turret_dirty_tile(base - row + 1);
+            turret_dirty_tile(base - row + 2);
+            turret_dirty_tile(base - 1 + row * 2);
+        }
+        else {
+            /* orientation 3 */
+            turret_dirty_tile(base - row);
+            turret_dirty_tile(base - row - 1);
+            turret_dirty_tile(base - 1);
+            turret_dirty_tile(base + 3 + row);
+            turret_dirty_tile(base + 3 + row * 2);
+            turret_dirty_tile(base + 3);
+        }
+    }
+}
+
+/* ===== FUN_00411ae0 — Turret Block Movement (00411AE0) ===== */
+/* Tries to move a 3x3 turret block by param_1 tiles.
+ * 1. Checks if destination tile (row below, +1 col, + param_1 offset) is passable
+ * 2. Calls FUN_00410f50 to clear current position
+ * 3. Updates turret tile offset
+ * 4. Tracks fall counter; sets DAT_00480700 based on fall state
+ * 5. Paints new tiles using property[0x14 + team] + 1 as new tile type
+ * 6. Checks dirty flag and returns 1 if modified, 0 otherwise.
+ * Returns: 0 if can't move, 1 if moved successfully. */
+static int FUN_00411ae0(int param_1, unsigned int param_2, int param_3)
+{
+    int base;
+    int row = DAT_00487a00;
+
+    /* Check if destination tile is passable */
+    if (*(char *)((unsigned int)*(unsigned char *)(*(int *)(DAT_00481f48 + param_3 * 8) + row +
+                                  (int)DAT_0048782c + 1 + param_1) * 0x20 + (int)DAT_00487928) != '\x01') {
+        return 0;
+    }
+
+    /* Clear current position */
+    FUN_00410f50(param_3);
+
+    /* Update turret tile offset */
+    *(int *)(DAT_00481f48 + param_3 * 8) = *(int *)(DAT_00481f48 + param_3 * 8) + param_1;
+
+    base = *(int *)(DAT_00481f48 + param_3 * 8);
+
+    /* Check landing conditions: 3 rows below impassable, or 2 rows above empty, or large move */
+    if ((*(char *)((unsigned int)*(unsigned char *)(base + row * 3 + (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\x01') ||
+        (*(char *)((unsigned int)*(unsigned char *)(base + row * -2 + (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\0') ||
+        (9 < param_1)) {
+        *(unsigned char *)(DAT_00481f48 + 5 + param_3 * 8) = 0;
+    }
+    else {
+        *(char *)(DAT_00481f48 + 5 + param_3 * 8) = *(char *)(DAT_00481f48 + 5 + param_3 * 8) + '\x01';
+    }
+
+    /* Set DAT_00480700 based on fall counter */
+    if (*(unsigned char *)(DAT_00481f48 + 5 + param_3 * 8) < 8) {
+        DAT_00480700 = DAT_0048384c;
+    }
+    else {
+        DAT_00480700 = 0;
+        *(unsigned char *)(DAT_00481f48 + 5 + param_3 * 8) = 8;
+    }
+
+    base = *(int *)(DAT_00481f48 + param_3 * 8);
+
+    /* Paint 9 core tiles */
+    turret_paint_tile(base,               param_2, DAT_00480700);
+    turret_paint_tile(base + 1,           param_2, DAT_00480700);
+    turret_paint_tile(base + 2,           param_2, DAT_00480700);
+    turret_paint_tile(base + row,         param_2, DAT_00480700);
+    turret_paint_tile(base + row + 1,     param_2, DAT_00480700);
+    turret_paint_tile(base + row + 2,     param_2, DAT_00480700);
+    turret_paint_tile(base + row * 2,     param_2, DAT_00480700);
+    turret_paint_tile(base + row * 2 + 1, param_2, DAT_00480700);
+    turret_paint_tile(base + row * 2 + 2, param_2, DAT_00480700);
+
+    /* Border tiles depend on orientation byte [4] */
+    char orient = *(char *)(DAT_00481f48 + 4 + param_3 * 8);
+
+    if (orient == '\0') {
+        turret_paint_tile(base - 1,             param_2, DAT_00480700);
+        turret_paint_tile(base - 1 + row,       param_2, DAT_00480700);
+        turret_paint_tile(base - row,            param_2, DAT_00480700);
+        turret_paint_tile(base - row + 1,        param_2, DAT_00480700);
+        turret_paint_tile(base + 2 + row * 3,    param_2, DAT_00480700);
+        turret_paint_tile(base + 1 + row * 3,    param_2, DAT_00480700);
+    }
+    else if (orient == '\x01') {
+        turret_paint_tile(base + row * 3,         param_2, DAT_00480700);
+        turret_paint_tile(base + 1 + row * 3,     param_2, DAT_00480700);
+        turret_paint_tile(base + 3 + row,          param_2, DAT_00480700);
+        turret_paint_tile(base + 3 + row * 2,      param_2, DAT_00480700);
+    }
+    else if (orient == '\x02') {
+        turret_paint_tile(base - 1 + row,          param_2, DAT_00480700);
+        turret_paint_tile(base - row + 1,           param_2, DAT_00480700);
+        turret_paint_tile(base - row + 2,           param_2, DAT_00480700);
+        turret_paint_tile(base - 1 + row * 2,       param_2, DAT_00480700);
+    }
+    else {
+        /* orientation 3 */
+        turret_paint_tile(base - row,               param_2, DAT_00480700);
+        turret_paint_tile(base - row - 1,           param_2, DAT_00480700);
+        turret_paint_tile(base - 1,                 param_2, DAT_00480700);
+        turret_paint_tile(base + 3 + row,           param_2, DAT_00480700);
+        turret_paint_tile(base + 3 + row * 2,       param_2, DAT_00480700);
+        turret_paint_tile(base + 3,                 param_2, DAT_00480700);
+    }
+
+    /* Set dirty flag and return 1 */
+    *(unsigned char *)(DAT_00481f48 + 7 + param_3 * 8) = 1;
+    return 1;
+}
 
 /* ===== FUN_004133d0 — Turret_Block_Process (004133D0) ===== */
 /* Processes turret blocks (DAT_00481f48, stride 8, DAT_0048927c count).
@@ -4871,7 +5843,32 @@ void FUN_004104c0(int index)
         turret_modify_tile(base_pos + 3);
     }
 }
-void FUN_00460cf0(char a, int b) { (void)a; (void)b; /* entity config helper */ }
+/* ===== FUN_00460cf0 - Tile Replacement Helper (00460CF0) ===== */
+/* Scans the entire tilemap and replaces all tiles of type param_1 with param_2. */
+void FUN_00460cf0(char param_1, unsigned char param_2)
+{
+    int iVar1 = 0, iVar3 = 0;
+    int iVar2 = (int)DAT_004879f0;
+    int iVar4 = (int)DAT_0048782c;
+    if (0 < (int)DAT_004879f4) {
+        do {
+            int iVar5 = 0;
+            if (0 < iVar2) {
+                do {
+                    if (*(char *)(iVar4 + iVar1) == param_1) {
+                        *(unsigned char *)(iVar4 + iVar1) = param_2;
+                        iVar2 = (int)DAT_004879f0;
+                        iVar4 = (int)DAT_0048782c;
+                    }
+                    iVar1++;
+                    iVar5++;
+                } while (iVar5 < iVar2);
+            }
+            iVar1 += DAT_00487a00 - iVar2;
+            iVar3++;
+        } while (iVar3 < (int)DAT_004879f4);
+    }
+}
 
 /* FUN_0044dfb0 — Find spawn point for player.
  * The real function uses the level's spawn point system. This simplified version

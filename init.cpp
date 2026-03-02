@@ -512,7 +512,36 @@ void FUN_0041eae0(void)
     t[0x10E9] = 0x46;
     t[0x1109] = 0x47;
 }
-void FUN_004265e0(int index) { (void)index; } /* Key binding auto-assign - stub */
+/* ===== FUN_004265e0 — Key Binding Auto-Assign (004265E0) ===== */
+/* Searches for the next valid key binding for player 'index'.
+ * Scans from current position to 0x2f, then wraps from 0 to start.
+ * Checks per-player availability (g_ConfigBlob+0x4B6, stride 0x3c)
+ * and global availability (g_ConfigBlob+0x1804). */
+void FUN_004265e0(int index)
+{
+    unsigned int start = (unsigned int)(unsigned char)DAT_004836ce[index];
+    unsigned char *keyAvail = &g_ConfigBlob[0x4B6 + index * 0x3c];
+    unsigned char *globalAvail = &g_ConfigBlob[0x1804];
+
+    /* Search forward from current position to 0x2e */
+    for (unsigned int i = start; (int)i < 0x2f; i++) {
+        if (keyAvail[i] == 1 && globalAvail[i] == 1) {
+            DAT_004836ce[index] = (char)i;
+            return;
+        }
+    }
+
+    /* Wrap: search from 0 to start */
+    for (unsigned int i = 0; (int)i < (int)start; i++) {
+        if (keyAvail[i] == 1 && globalAvail[i] == 1) {
+            DAT_004836ce[index] = (char)i;
+            return;
+        }
+    }
+
+    /* No valid key found — sentinel */
+    DAT_004836ce[index] = 0x2f;
+}
 /* FUN_0045a060 moved to effects.cpp */
 /* FUN_0045b2a0 moved to effects.cpp */
 /* ===== FUN_0041fc10 - Init fire/smoke particle sprite table (0041FC10) ===== */
@@ -1530,7 +1559,49 @@ void FUN_00420be0(void)
 void FUN_0041e580(void) {}
 int  FUN_00414060(void) { return 1; }
 void FUN_00413f70(void) {}
-void FUN_0041e4a0(void) {}
+/* ===== FUN_0041e4a0 — Entity Config Defaults (0041E4A0) ===== */
+/* Zeroes two 80-byte config tables (DAT_00481c58, DAT_00481ca8)
+ * then sets specific byte defaults for entity properties. */
+void FUN_0041e4a0(void)
+{
+    /* Zero both tables (20 ints = 80 bytes each) */
+    memset(DAT_00481c58, 0, 80);
+    memset(DAT_00481ca8, 0, 80);
+
+    /* Set defaults in DAT_00481ca8 */
+    DAT_00481ca8[3]  = 0x32;
+    DAT_00481ca8[2]  = 1;
+    DAT_00481ca8[6]  = 0x46;
+    DAT_00481ca8[0xa]  = 0x14;
+    DAT_00481ca8[0xc]  = 10;
+    DAT_00481ca8[0xd]  = 10;
+    DAT_00481ca8[0xe]  = 0x32;
+    DAT_00481ca8[0xf]  = 0x32;
+    DAT_00481ca8[0x18] = 0x28;
+    DAT_00481ca8[0x19] = 0x1e;
+    DAT_00481ca8[0x1c] = 0x32;
+    DAT_00481ca8[0x1f] = 0x32;
+    DAT_00481ca8[0x29] = 100;
+    DAT_00481ca8[0x2a] = 0x78;
+    DAT_00481ca8[0x2b] = 0x50;
+
+    /* Set defaults in DAT_00481c58 */
+    DAT_00481c58[1]    = 0x32;
+    DAT_00481c58[5]    = 0x28;
+    DAT_00481c58[0xb]  = 0x14;
+    DAT_00481c58[0x11] = 0x32;
+    DAT_00481c58[0x12] = (char)0x96;
+    DAT_00481c58[0x14] = 0x1e;
+    DAT_00481c58[0x15] = (char)200;
+    DAT_00481c58[0x1d] = 0x46;
+    DAT_00481c58[0x23] = (char)0xa0;
+    DAT_00481c58[0x24] = 0x1e;
+    DAT_00481c58[0x25] = 0x23;
+    DAT_00481c58[0x26] = 0x19;
+    DAT_00481c58[0x27] = 0x23;
+    DAT_00481c58[0x28] = 0x28;
+    DAT_00481c58[0x2e] = (char)0x8c;
+}
 /* FUN_0045d7d0 moved to stubs.cpp */
 
 /* ===== FUN_00425fe0 - Main game/menu render loop (00425FE0) ===== */
@@ -3217,8 +3288,31 @@ hover_decay:
     }
 }
 
-int  FUN_0042fc40(void) { return 1; }
-void FUN_0042fc10(void) {}
+/* ===== FUN_0042fc40 — Create Offscreen Surface (0042FC40) ===== */
+/* Creates a 640x480 DDSCAPS_OFFSCREENPLAIN surface via IDirectDraw::CreateSurface.
+ * Result stored in DAT_00481d44. Returns 1 on success, 0 on failure. */
+int FUN_0042fc40(void)
+{
+    DDSURFACEDESC ddsd;
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(DDSURFACEDESC);         /* 0x6c */
+    ddsd.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH; /* 7 */
+    ddsd.dwHeight = 480;                          /* 0x1e0 */
+    ddsd.dwWidth = 640;                           /* 0x280 */
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN; /* 0x40 */
+
+    HRESULT hr = lpDD->CreateSurface(&ddsd, &DAT_00481d44, NULL);
+    return (hr == DD_OK) ? 1 : 0;
+}
+
+/* ===== FUN_0042fc10 — Release Offscreen Surface (0042FC10) ===== */
+void FUN_0042fc10(void)
+{
+    if (lpDD != NULL && DAT_00481d44 != NULL) {
+        DAT_00481d44->Release();
+        DAT_00481d44 = NULL;
+    }
+}
 void FUN_0041a8c0(void) {}
 /* ===== FUN_0041d740 - Compute end-game stats/awards (0041D740) ===== */
 /* Original: computes player/team awards ("Most valuable", "Most violent",
