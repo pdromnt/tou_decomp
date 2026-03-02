@@ -13,6 +13,25 @@ int   DAT_00487228[16] = {0};  /* per-player pickup counter */
 char  DAT_0048373d = 0;        /* friendly fire enabled flag */
 float DAT_0048385c = 0.0f;     /* weather/temperature threshold */
 
+/* ===== Turret LOS / Targeting globals ===== */
+int    DAT_00481ed0 = 0;
+int    DAT_00481edc = 0;
+int    DAT_00481ee0 = 0;
+int    DAT_00481ef4 = 0;
+int    DAT_00481ef8 = 0;
+int    DAT_00481efc = 0;
+int    DAT_00481f10 = 0;
+int    DAT_00481f00 = 0;
+int    DAT_00481f04 = 0;
+int    DAT_00481f08 = 0;
+int    DAT_00481f0c = 0;
+int    DAT_00481ee4 = 0;
+int    DAT_00481ee8 = 0;
+int    DAT_00481eec = 0;
+int    DAT_00481ef0 = 0;
+char   DAT_00481ed8 = 0;
+/* DAT_00489e90 already defined in memory.cpp */
+
 /* ===== Utility stubs (implement later) ===== */
 int FUN_00410030(void) { return 0; }  /* conditional entity spawn */
 void FUN_004357b0(int x, int y, int size, int p3, int p4, int p5, int p6, int p7, int p8,
@@ -1651,11 +1670,223 @@ void FUN_00454b00(void)
         i++;
     } while (i < DAT_0048924c);
 }
+/* ===== FUN_004599f0 — LOS Angle Calculation (004599F0) ===== */
+/* Computes firing angle from (src_x,src_y) to (dst_x,dst_y).
+ * Low gravity path: simple atan2 angle + euclidean distance.
+ * High gravity path: ballistic arc via bilinear LUT interpolation.
+ * Returns angle in [0..2047] or 0x801 if no valid trajectory.
+ * Side: 0=prefer low arc, 1=prefer high arc. */
+int FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y,
+                 int side, float range_sqrt, int gravity)
+{
+    if (gravity < 0x50) {
+        /* Low gravity: direct atan2 angle */
+        int angle = FUN_004257e0(src_x, src_y, dst_x, dst_y);
+        int dx = (src_x - dst_x) >> 0x12;
+        int dy = (src_y - dst_y) >> 0x12;
+        int dist_sq = dx * dx + dy * dy;
+        DAT_00481f10 = (int)sqrtf((float)dist_sq);
+        return angle;
+    }
+
+    /* High gravity: ballistic arc LUT lookup */
+    float range_sq = range_sqrt * range_sqrt;
+    float temp = (1024.0f / (float)gravity) * range_sq;
+    int dx = (dst_x - src_x) >> 0x12;
+    int dy = (dst_y - src_y) >> 0x12;
+    unsigned char neg_x = 0;
+
+    float idx_x_f = ((float)dx * 0.125f) / temp;
+    float idx_y_f = ((float)dy * 0.125f) / temp + 45.0f;
+
+    /* Absolute value of X index, track sign */
+    if (idx_x_f < 0.0f) {
+        idx_x_f = -idx_x_f;
+        neg_x = 1;
+    }
+
+    /* Truncate to integer indices */
+    int ix = (int)idx_x_f;
+    int iy = (int)idx_y_f;
+
+    /* Bounds check: ix in [0,44], iy in [0,89] */
+    if (ix < 0 || ix > 44 || iy < 0 || iy > 89)
+        return 0x801;
+
+    /* Fractional parts for bilinear interpolation */
+    float frac_x = 1.0f - (idx_x_f - (float)ix);
+    float frac_y = 1.0f - (idx_y_f - (float)iy);
+
+    /* LUT index arithmetic (from disassembly):
+     * row_stride = iy * 23 * 2 = iy * 46 (since ECX = iy*3*8 - iy = iy*23, then ESI = ix + ECX*2)
+     * base = side + (ix + iy * 46) * 4
+     * next_y_base = side + (ix + (iy+1) * 46) * 4 */
+    int row0 = ix + iy * 46;
+    int row1 = ix + (iy + 1) * 46;
+    int s = (int)((unsigned char)side);
+    int base0 = s + row0 * 4;
+    int base1 = s + row1 * 4;
+
+    unsigned short *lut = (unsigned short *)DAT_00489e90;
+
+    /* Read 4 velocity-X entries for bilinear interpolation */
+    float vx_00 = (float)(unsigned short)lut[base0];           /* (ix, iy) */
+    float vx_01 = (float)(unsigned short)lut[base0 + 4];       /* (ix, iy) + 4 */
+    float vx_10 = (float)(unsigned short)lut[base0 + 188];     /* (ix, iy) + 0xBC */
+    float vx_11 = (float)(unsigned short)lut[base1];            /* (ix, iy+1) */
+
+    /* Bilinear interpolation for X velocity */
+    float interp_vx = vx_11 * frac_x + vx_10 * frac_y;
+    interp_vx = interp_vx * frac_y;
+    float tmp2 = vx_01 * frac_x + vx_00 * frac_y;
+    interp_vx += tmp2 * frac_x;
+
+    /* Read 4 velocity-Y entries (offset by 190, 186, 6, 2 in word indices) */
+    float vy_00 = (float)(unsigned short)lut[base0 + 190];
+    float vy_01 = (float)(unsigned short)lut[base0 + 186];
+    float vy_10 = (float)(unsigned short)lut[base0 + 6];
+    float vy_11 = (float)(unsigned short)lut[base0 + 2];
+
+    float interp_vy = vy_00 * frac_x + vy_01 * frac_y;
+    interp_vy = interp_vy * frac_y;
+    float tmp3 = vy_10 * frac_x + vy_11 * frac_y;
+    interp_vy += tmp3 * frac_x;
+
+    DAT_00481f10 = (int)(interp_vy * 1024.0f);
+
+    if (neg_x) {
+        int a = (int)interp_vx;
+        return (0x800 - a) & 0x7ff;
+    }
+    return (int)interp_vx & 0x7ff;
+}
+
+/* ===== FUN_00459c70 — LOS Path Validation (00459C70) ===== */
+/* Ray-marches from (src_x,src_y) toward (dst_x,dst_y) at the given angle,
+ * checking that the path is clear of impassable tiles.
+ * Returns 1 if path is clear, 0 if blocked. */
+char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y,
+                  int angle, float range_sqrt, int gravity)
+{
+    /* Compute velocity components from angle using the sin/cos LUT */
+    int *math_lut = (int *)DAT_00487ab0;
+    int vx = math_lut[angle];                    /* cos component */
+    int vy = math_lut[angle + 0x200];            /* sin component (offset 0x800 bytes / 4) */
+
+    /* Compute step count based on gravity */
+    unsigned int steps;
+    if (gravity < 0x50) {
+        steps = (unsigned int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 3)) >> 2);
+    } else {
+        steps = (unsigned int)(DAT_00481f10 / (int)range_sqrt);
+    }
+
+    /* Ray-march along the trajectory */
+    int cur_x = src_x;
+    int cur_y = src_y;
+    int cur_vy = vy;
+    unsigned int remaining_dx = (unsigned int)(dst_x - src_x);
+
+    for (unsigned int step = 0; step < steps; step++) {
+        remaining_dx -= (unsigned int)vx;
+        cur_y += cur_vy;
+        cur_vy += gravity * 0x60;    /* gravity acceleration per step */
+        cur_x += vx;
+
+        /* Check if close enough to target (within ~5 pixels in fixed-point) */
+        unsigned int abs_remaining = remaining_dx;
+        if ((int)remaining_dx < 0) abs_remaining = -(int)remaining_dx;
+        unsigned int abs_dy = (unsigned int)(dst_y - cur_y);
+        if ((int)(dst_y - cur_y) < 0) abs_dy = -(int)(dst_y - cur_y);
+        if ((int)(abs_dy + abs_remaining) < 0x500000)
+            break;  /* close enough, path clear */
+
+        /* Bounds check: must be within map area with border */
+        if (cur_x < 0x1c0000 || (cur_x >> 0x12) >= (int)DAT_004879f0 ||
+            cur_y < 0x1c0000 || (cur_y >> 0x12) >= (int)DAT_004879f4)
+            return 0;  /* out of bounds */
+
+        /* Check tile passability: look up tile type at current position */
+        int tile_row = cur_y >> 0x12;
+        int tile_col = cur_x >> 0x12;
+        int cell_idx = (tile_row << ((unsigned char)DAT_00487a18 & 0x1f)) + tile_col;
+        unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + cell_idx);
+        char *ent_type = (char *)((unsigned int)tile_type * 0x20 + 2 + (int)DAT_00487928);
+        if (*ent_type == '\0')
+            return 0;  /* blocked by impassable tile */
+    }
+
+    return 1;  /* path is clear */
+}
+
+/* ===== FUN_00459e90 — Predictive Aim Helper (00459E90) ===== */
+/* Calls FUN_004599f0 twice with predicted target positions at two different
+ * lead times (mult1 and mult2), picks the one with better distance match.
+ * Updates the weapon's target angle at weapon index weap_idx. Returns 0 or 1. */
+int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
+{
+    int base = weap_idx * 0x40;
+
+    /* Predict target position at lead time mult1 */
+    DAT_00481ee8 = DAT_00481ef8 * DAT_00481efc * mult1 + DAT_00481ee0;
+    DAT_00481ee4 = DAT_00481efc * DAT_00481ef4 * mult1 + DAT_00481edc;
+
+    /* Compute angle to predicted position 1 */
+    DAT_00481f08 = FUN_004599f0(
+        *(int *)(base + (int)DAT_00481f28),
+        *(int *)(base + 4 + (int)DAT_00481f28),
+        DAT_00481ee4, DAT_00481ee8,
+        (int)(unsigned char)DAT_00481ed8, range_sqrt, DAT_00481ed0);
+    DAT_00481f00 = DAT_00481f10;
+
+    /* Predict target position at lead time mult2 */
+    DAT_00481eec = DAT_00481efc * DAT_00481ef4 * mult2 + DAT_00481edc;
+    DAT_00481ef0 = DAT_00481ef8 * DAT_00481efc * mult2 + DAT_00481ee0;
+
+    /* Compute angle to predicted position 2 */
+    DAT_00481f0c = FUN_004599f0(
+        *(int *)(base + (int)DAT_00481f28),
+        *(int *)(base + 4 + (int)DAT_00481f28),
+        DAT_00481eec, DAT_00481ef0,
+        (int)(unsigned char)DAT_00481ed8, range_sqrt, DAT_00481ed0);
+
+    /* Convert distances */
+    int dist1;
+    if (DAT_00481ed0 < 0x50) {
+        dist1 = (int)((DAT_00481f00 + (DAT_00481f00 >> 31 & 7)) >> 3);
+    } else {
+        dist1 = (int)((float)DAT_00481f00 / range_sqrt);
+    }
+    DAT_00481f00 = dist1;
+
+    if (DAT_00481ed0 < 0x50) {
+        DAT_00481f04 = (int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3);
+    } else {
+        DAT_00481f04 = (int)((float)DAT_00481f10 / range_sqrt);
+    }
+
+    /* Compare which prediction is closer to actual distance */
+    int err1 = dist1 * 4 - DAT_00481efc * mult1;
+    if (err1 < 0) err1 = DAT_00481efc * mult1 - dist1 * 4;
+
+    int err2 = DAT_00481f04 * 4 - DAT_00481efc * mult2;
+    if (err2 < 0) err2 = DAT_00481efc * mult2 - DAT_00481f04 * 4;
+
+    if (err2 <= err1) {
+        /* Second prediction is better */
+        *(int *)(base + 0xc + (int)DAT_00481f28) = DAT_00481f0c;
+        return 1;
+    }
+
+    /* First prediction is better */
+    *(int *)(base + 0xc + (int)DAT_00481f28) = DAT_00481f08;
+    return 0;
+}
+
 /* ===== FUN_00458010 — Turret_Targeting_LOS (00458010) ===== */
-/* Processes deployed weapons/projectiles in DAT_00481f28 (stride 0x40, count DAT_00489260).
- * SIMPLIFIED: real LOS functions (FUN_004599f0, FUN_00459c70, FUN_00459e90) are not
- * implemented, so target search always yields "no target" (0x801). Aim slewing,
- * shield regen, fire cooldown, and animation counters are fully implemented. */
+/* Processes deployed weapons in DAT_00481f28 (stride 0x40, count DAT_00489260).
+ * Full implementation: shield regen, target acquisition (player LOS + spatial grid),
+ * aim slewing, predictive aim, projectile spawning, muzzle flash particles. */
 void FUN_00458010(void)
 {
     int i = 0;
@@ -1669,12 +1900,11 @@ void FUN_00458010(void)
             /* === Shield type: regen health, compute animation frame === */
             int health = *(int *)(off + 0x10 + (int)DAT_00481f28);
             if (health > 0) {
-                health += 8000;
+                *(int *)(off + 0x10 + (int)DAT_00481f28) = health + 8000;
                 int max_health = *(int *)(off + 0x14 + (int)DAT_00481f28);
-                if (health > max_health) health = max_health;
-                *(int *)(off + 0x10 + (int)DAT_00481f28) = health;
+                if (*(int *)(off + 0x10 + (int)DAT_00481f28) > max_health)
+                    *(int *)(off + 0x10 + (int)DAT_00481f28) = max_health;
             }
-            /* animation frame = (95 - health*95/max) / 10, clamped [0,9] */
             int max_hp = *(int *)(off + 0x14 + (int)DAT_00481f28);
             int frame = 0x5f - (*(int *)(off + 0x10 + (int)DAT_00481f28) * 0x5f) / max_hp;
             frame = frame / 10;
@@ -1683,14 +1913,25 @@ void FUN_00458010(void)
             *(int *)(off + 8 + (int)DAT_00481f28) = frame;
         }
         else {
-            /* === Non-shield types === */
+            /* === Non-shield weapon types === */
+
+            /* Compute effective range sqrt: sqrt((range_config + 7) / 170.0) */
+            int range_cfg = *(int *)((unsigned int)type * 0x20 + 8 + (int)DAT_00487818) + 7;
+            float fRange = sqrtf((float)range_cfg * (1.0f / 170.0f));
+            int range_sq_thresh = range_cfg * range_cfg * 4;
+
+            /* Reload countdown */
             int reload = *(int *)(off + 0x14 + (int)DAT_00481f28);
             if (reload > 0) {
                 *(int *)(off + 0x14 + (int)DAT_00481f28) = reload - 1;
             }
+            /* Health overflow protection */
             if (*(int *)(off + 0x10 + (int)DAT_00481f28) > 1000000000) {
                 *(int *)(off + 0x10 + (int)DAT_00481f28) = 2000000000;
             }
+
+            /* Set gravity for this weapon type */
+            DAT_00481ed0 = -(int)((unsigned int)(*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x06')) & DAT_00483828;
 
             /* Increment animation counter */
             char *anim_ctr = (char *)(off + 0x23 + (int)DAT_00481f28);
@@ -1699,94 +1940,556 @@ void FUN_00458010(void)
             if (*(unsigned char *)(off + 0x23 + (int)DAT_00481f28) > 10) {
                 *(unsigned char *)(off + 0x23 + (int)DAT_00481f28) = 0;
 
-                /* SIMPLIFIED target search: always "no target found" */
-                /* The real code calls FUN_004599f0/FUN_00459c70 for LOS checks
-                 * against players, then falls through to projectile grid search.
-                 * Since those functions are unimplemented, we skip directly to
-                 * the "no target" path. */
+                /* ---- Target acquisition: scan players ---- */
+                int best_dist = 2000000000;
+                int best_target_idx = 0xfa;   /* sentinel = no target */
+                unsigned int best_side = 0;
 
+                if (DAT_00489240 > 0) {
+                    int p = 0;
+                    int p_off = 0;
+                    int player_base = DAT_00487810;
+                    do {
+                        /* Skip same-team players and dead/inactive players */
+                        if (*(char *)(off + 0x1d + (int)DAT_00481f28) != *(char *)(p_off + 0x2c + player_base) &&
+                            *(char *)(p_off + 0x24 + player_base) == '\0') {
+
+                            int src_x = *(int *)(off + (int)DAT_00481f28);
+                            int src_y = *(int *)(off + 4 + (int)DAT_00481f28);
+                            int tgt_x = *(int *)(p_off + player_base);
+                            int tgt_y = *(int *)(p_off + 4 + player_base);
+                            int ddx = (src_x - tgt_x) >> 0x12;
+                            int ddy = (src_y - tgt_y) >> 0x12;
+                            int dist = ddx * ddx + ddy * ddy;
+
+                            if (dist < range_sq_thresh && dist < best_dist) {
+                                /* Try low arc first */
+                                int angle = FUN_004599f0(src_x, src_y, tgt_x, tgt_y, 0, fRange, DAT_00481ed0);
+                                unsigned char side = 0;
+                                if (angle == 0x801 ||
+                                    FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle, fRange, DAT_00481ed0) == '\0') {
+                                    /* Try high arc */
+                                    angle = FUN_004599f0(src_x, src_y, tgt_x, tgt_y, 1, fRange, DAT_00481ed0);
+                                    if (angle == 0x801 ||
+                                        FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle, fRange, DAT_00481ed0) == '\0') {
+                                        goto next_player;
+                                    }
+                                    side = 1;
+                                }
+                                best_target_idx = p;
+                                best_side = (unsigned int)side;
+                                best_dist = dist;
+                            }
+                        }
+next_player:
+                        p++;
+                        p_off += 0x598;
+                    } while (p < DAT_00489240);
+
+                    if (best_target_idx != 0xfa) {
+                        /* Found a player target */
+                        *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrtf((float)best_dist);
+
+                        DAT_00481edc = *(int *)(DAT_00487810 + best_target_idx * 0x598);
+                        int tgt_off = DAT_00487810 + best_target_idx * 0x598;
+                        DAT_00481ee0 = *(int *)(tgt_off + 4);
+                        DAT_00481ef4 = *(int *)(tgt_off + 0x10);
+                        DAT_00481ef8 = *(int *)(tgt_off + 0x14);
+                        DAT_00481ed8 = (char)best_side;
+                        *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 1;
+
+                        int aim_angle = FUN_004599f0(
+                            *(int *)(off + (int)DAT_00481f28),
+                            *(int *)(off + 4 + (int)DAT_00481f28),
+                            DAT_00481edc, DAT_00481ee0,
+                            (int)(unsigned char)DAT_00481ed8, fRange, DAT_00481ed0);
+                        *(int *)(off + 0xc + (int)DAT_00481f28) = aim_angle;
+
+                        /* Predictive aim for non-type-3 weapons on low arc */
+                        if (*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x03' && DAT_00481ed8 == 0) {
+                            if ((int)DAT_00481ed0 < 0x50) {
+                                DAT_00481efc = (int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3);
+                            } else {
+                                DAT_00481efc = (int)((float)DAT_00481f10 / fRange);
+                            }
+                            int r = FUN_00459e90(3, 4, i, fRange);
+                            if (r == 0) {
+                                FUN_00459e90(1, 3, i, fRange);
+                            } else {
+                                FUN_00459e90(4, 8, i, fRange);
+                            }
+                        }
+                        goto aim_slew;
+                    }
+                }
+
+                /* No player target found - check tracking state */
                 char tracking = *(char *)(off + 0x21 + (int)DAT_00481f28);
                 if (tracking == '\0' || tracking == '\x01') {
-                    *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801; /* no target */
+                    *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
                 }
 
                 if (*(char *)(off + 0x1c + (int)DAT_00481f28) == '\x02') {
+                    /* Type 2: always reset to no-target */
                     *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
                     *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 0;
                 }
                 else {
-                    /* Increment sweep counter, every 4 sweeps do spatial grid search */
+                    /* ---- Spatial grid target search (every 4 sweeps) ---- */
                     char *sweep = (char *)(off + 0x22 + (int)DAT_00481f28);
                     *sweep = *sweep + 1;
                     if (*(unsigned char *)(off + 0x22 + (int)DAT_00481f28) > 3) {
                         *(unsigned char *)(off + 0x22 + (int)DAT_00481f28) = 0;
-                        /* SIMPLIFIED: spatial grid search skipped, set no target */
-                        *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
-                        *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 0;
-                    }
-                }
-            }
 
-            /* === Aim slewing: rotate current_aim toward target_aim === */
-            int target_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
-            if (target_aim != 0x801) {
-                int *aim_ptr = (int *)(off + 8 + (int)DAT_00481f28);
-                int cur = *aim_ptr;
-                if (target_aim != cur) {
-                    int turn_rate = (unsigned int)*(unsigned char *)((unsigned int)type * 0x20 + 0x10 + (int)DAT_00487818);
-                    int diff_fwd, diff_rev;
-                    int bVar22; /* true if target > cur */
+                        int grid_best = 0xfa;
+                        best_dist = 2000000000;
+                        best_side = 0;
+                        unsigned int team_idx = 0;
+                        int grid_offset = 0x1010;   /* start at team bucket 0, entry list */
 
-                    if (target_aim < cur) {
-                        diff_fwd = cur - target_aim;
-                        diff_rev = diff_fwd - 0x800;
-                        if (diff_rev < 0) diff_rev = (target_aim - cur) + 0x800;
-                        if (diff_fwd < 0) diff_fwd = target_aim - cur;
-                        bVar22 = 0;
-                    }
-                    else {
-                        diff_fwd = cur - target_aim;
-                        diff_rev = diff_fwd;
-                        if (diff_fwd < 0) {
-                            diff_fwd = target_aim - cur;
-                            diff_rev = target_aim - cur;
+                        do {
+                            if (team_idx != (unsigned int)*(unsigned char *)(off + 0x1d + (int)DAT_00481f28)) {
+                                int bucket_count = *(int *)(grid_offset - 4 + (int)DAT_00487aa4);
+                                if (bucket_count > 0) {
+                                    int entry_off = grid_offset;
+                                    for (int j = 0; j < bucket_count; j++) {
+                                        int proj_idx = *(int *)(entry_off + (int)DAT_00487aa4);
+                                        int proj_base = proj_idx * 0x40;
+                                        int src_x = *(int *)(off + (int)DAT_00481f28);
+                                        int src_y = *(int *)(off + 4 + (int)DAT_00481f28);
+                                        int tgt_x = *(int *)(proj_base + (int)DAT_00481f28);
+                                        int tgt_y = *(int *)(proj_base + 4 + (int)DAT_00481f28);
+                                        int ddx = (src_x - tgt_x) >> 0x12;
+                                        int ddy = (src_y - tgt_y) >> 0x12;
+                                        int dist = ddx * ddx + ddy * ddy;
+
+                                        if (dist < range_sq_thresh && dist < best_dist) {
+                                            int angle = FUN_004599f0(src_x, src_y, tgt_x, tgt_y, 0, fRange, DAT_00481ed0);
+                                            unsigned char side = 0;
+                                            if (angle == 0x801 ||
+                                                FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle, fRange, DAT_00481ed0) == '\0') {
+                                                angle = FUN_004599f0(src_x, src_y, tgt_x, tgt_y, 1, fRange, DAT_00481ed0);
+                                                if (angle == 0x801 ||
+                                                    FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle, fRange, DAT_00481ed0) == '\0') {
+                                                    goto next_grid_entry;
+                                                }
+                                                side = 1;
+                                            }
+                                            best_side = (unsigned int)side;
+                                            best_dist = dist;
+                                            grid_best = proj_idx;
+                                        }
+next_grid_entry:
+                                        entry_off += 4;
+                                    }
+                                }
+                            }
+                            grid_offset += 0x4000;
+                            team_idx++;
+                        } while (grid_offset < 0x11010);
+
+                        if (grid_best == 0xfa) {
+                            *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
+                            *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 0;
                         }
-                        diff_fwd = 0x800 - diff_fwd;
-                        bVar22 = 1;
-                    }
+                        else {
+                            *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrtf((float)best_dist);
+                            DAT_00481edc = *(int *)(grid_best * 0x40 + (int)DAT_00481f28);
+                            DAT_00481ee0 = *(int *)(grid_best * 0x40 + (int)DAT_00481f28 + 4);
+                            *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 2;
+                            DAT_00481ed8 = (char)best_side;
 
-                    if (diff_rev < diff_fwd) {
-                        *aim_ptr = cur + turn_rate;
-                    }
-                    else if (diff_fwd < diff_rev) {
-                        *aim_ptr = cur - turn_rate;
-                    }
-                    else if (diff_rev == 0x400 && diff_fwd == 0x400) {
-                        *aim_ptr = cur - turn_rate;
-                    }
-
-                    /* Clamp: if we overshot, snap to target */
-                    int new_aim = *(int *)(off + 8 + (int)DAT_00481f28);
-                    int new_target = *(int *)(off + 0xc + (int)DAT_00481f28);
-                    if ((new_target < new_aim && bVar22) ||
-                        (new_aim < new_target && !bVar22)) {
-                        *(int *)(off + 8 + (int)DAT_00481f28) = new_target;
+                            int aim_angle = FUN_004599f0(
+                                *(int *)(off + (int)DAT_00481f28),
+                                *(int *)(off + 4 + (int)DAT_00481f28),
+                                DAT_00481edc, DAT_00481ee0,
+                                (int)best_side, fRange, DAT_00481ed0);
+                            *(int *)(off + 0xc + (int)DAT_00481f28) = aim_angle;
+                        }
                     }
                 }
-                /* Wrap to 0-2047 */
-                *(unsigned int *)(off + 8 + (int)DAT_00481f28) =
-                    *(unsigned int *)(off + 8 + (int)DAT_00481f28) & 0x7ff;
-
-                /* Fire logic skipped in simplified version - requires FUN_004599f0 etc. */
             }
 
-            /* === Fire cooldown countdown === */
-            char cooldown = *(char *)(off + 0x1f + (int)DAT_00481f28);
-            if (cooldown != '\0') {
-                if (cooldown != (char)-1) {
-                    *(char *)(off + 0x1f + (int)DAT_00481f28) = cooldown - 1;
+aim_slew:
+            /* === Aim slewing: rotate current_aim toward target_aim === */
+            {
+                int target_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
+                if (target_aim != 0x801) {
+                    int *aim_ptr = (int *)(off + 8 + (int)DAT_00481f28);
+                    int cur = *aim_ptr;
+                    bool bVar22 = false;
+                    if (target_aim != cur) {
+                        int turn_rate = (unsigned int)*(unsigned char *)((unsigned int)type * 0x20 + 0x10 + (int)DAT_00487818);
+                        int diff_fwd, diff_rev;
+
+                        if (target_aim < cur) {
+                            diff_fwd = cur - target_aim;
+                            diff_rev = diff_fwd - 0x800;
+                            if (diff_rev < 0) diff_rev = (target_aim - cur) + 0x800;
+                            if (diff_fwd < 0) diff_fwd = target_aim - cur;
+                            bVar22 = false;
+                        }
+                        else {
+                            diff_fwd = cur - target_aim;
+                            diff_rev = diff_fwd;
+                            if (diff_fwd < 0) {
+                                diff_fwd = target_aim - cur;
+                                diff_rev = target_aim - cur;
+                            }
+                            diff_fwd = 0x800 - diff_fwd;
+                            bVar22 = true;
+                        }
+
+                        if (diff_rev < diff_fwd) {
+                            *aim_ptr = cur + turn_rate;
+                        }
+                        else if (diff_fwd < diff_rev) {
+                            *aim_ptr = cur - turn_rate;
+                        }
+                        else if (diff_rev == 0x400 && diff_fwd == 0x400) {
+                            *aim_ptr = cur - turn_rate;
+                        }
+
+                        /* Clamp: if we overshot, snap to target */
+                        int new_aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                        int new_target = *(int *)(off + 0xc + (int)DAT_00481f28);
+                        if ((new_target < new_aim && bVar22) ||
+                            (new_aim < new_target && !bVar22)) {
+                            *(int *)(off + 8 + (int)DAT_00481f28) = new_target;
+                        }
+                    }
+                    /* Wrap to 0-2047 */
+                    *(unsigned int *)(off + 8 + (int)DAT_00481f28) =
+                        *(unsigned int *)(off + 8 + (int)DAT_00481f28) & 0x7ff;
+
+                    /* === Fire condition check === */
+                    int cur_aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                    int tgt_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
+                    int diff_fwd2, diff_rev2;
+                    if (tgt_aim < cur_aim) {
+                        diff_fwd2 = cur_aim - tgt_aim;
+                        diff_rev2 = diff_fwd2 - 0x800;
+                        if (diff_rev2 < 0) diff_rev2 = (tgt_aim - cur_aim) + 0x800;
+                        if (diff_fwd2 < 0) diff_fwd2 = tgt_aim - cur_aim;
+                    } else {
+                        diff_fwd2 = cur_aim - tgt_aim;
+                        diff_rev2 = diff_fwd2;
+                        if (diff_fwd2 < 0) {
+                            diff_fwd2 = tgt_aim - cur_aim;
+                            diff_rev2 = tgt_aim - cur_aim;
+                        }
+                        diff_fwd2 = 0x800 - diff_fwd2;
+                    }
+
+                    unsigned char wtype = *(unsigned char *)(off + 0x1c + (int)DAT_00481f28);
+                    int wtype_base = (unsigned int)wtype * 0x20 + (int)DAT_00487818;
+                    unsigned int aim_tol = (unsigned int)*(unsigned char *)(wtype_base + 0x18);
+                    int half_dist = (unsigned int)(*(int *)(off + 0x18 + (int)DAT_00481f28) >> 1);
+
+                    if ((unsigned int)half_dist < *(unsigned int *)(wtype_base + 8) &&
+                        *(int *)(off + 0x14 + (int)DAT_00481f28) == 0 &&
+                        (((diff_rev2 < (int)aim_tol || diff_fwd2 < (int)aim_tol) &&
+                          *(char *)(off + 0x21 + (int)DAT_00481f28) == '\x01') ||
+                         (diff_rev2 == 0 && *(char *)(off + 0x21 + (int)DAT_00481f28) == '\x02')))
+                    {
+                        /* --- Compute muzzle offset from sin/cos LUT --- */
+                        int *math_lut = (int *)DAT_00487ab0;
+                        int aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                        int cos_val = math_lut[aim];
+                        int sin_val = math_lut[aim + 0x200]; /* +0x800 bytes / 4 = +0x200 ints */
+                        int muzzle_dx = (int)((float)cos_val * fRange);
+                        int muzzle_dy = (int)((float)sin_val * fRange);
+
+                        /* --- Spawn projectile based on weapon type --- */
+                        int *ent_types = (int *)DAT_00487abc;
+
+                        if (wtype == 0 || wtype == 1) {
+                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 3;
+                            if (DAT_00489248 < 0x9c4) {
+                                int e = DAT_00489248 * 0x80;
+                                int eb = (int)DAT_004892e8;
+                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28) + muzzle_dx;
+                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28) + muzzle_dy;
+                                *(int *)(e + 0x18 + eb) = cos_val;
+                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
+                                *(int *)(e + 4 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0xc + eb) = *(int *)(e + 8 + eb);
+                                *(unsigned char *)(e + 0x21 + eb) = 0;
+                                *(unsigned short *)(e + 0x24 + eb) = 0;
+                                *(unsigned char *)(e + 0x20 + eb) = 0;
+                                *(unsigned char *)(e + 0x26 + eb) = 5;
+                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(int *)(e + 0x28 + eb) = 0;
+                                *(int *)(e + 0x38 + eb) = 6;
+                                *(int *)(e + 0x44 + eb) = ent_types[0x35] << 1;
+                                *(int *)(e + 0x48 + eb) = 0;
+                                *(int *)(e + 0x4c + eb) = ent_types[0x41];
+                                *(unsigned char *)(e + 0x54 + eb) = 0;
+                                *(unsigned char *)(e + 0x40 + eb) = 4;
+                                *(int *)(e + 0x34 + eb) = ent_types[0];
+                                *(int *)(e + 0x3c + eb) = 0;
+                                DAT_00489248++;
+                            }
+                        }
+                        else if (wtype == 5) {
+                            /* Double-barrel: alternate left/right barrel */
+                            unsigned char *barrel = (unsigned char *)(off + 0x20 + (int)DAT_00481f28);
+                            unsigned int barrel_aim;
+                            if (*barrel == '\0') {
+                                *barrel = 1;
+                                barrel_aim = (*(int *)(off + 8 + (int)DAT_00481f28) + 0x200) & 0x7ff;
+                            } else {
+                                *barrel = 0;
+                                barrel_aim = (*(int *)(off + 8 + (int)DAT_00481f28) - 0x200) & 0x7ff;
+                            }
+                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 5;
+                            if (DAT_00489248 < 0x9c4) {
+                                int e = DAT_00489248 * 0x80;
+                                int eb = (int)DAT_004892e8;
+                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28) +
+                                    math_lut[barrel_aim] * 2 + muzzle_dx;
+                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28) +
+                                    math_lut[barrel_aim + 0x200] * 2 + muzzle_dy;
+                                *(int *)(e + 0x18 + eb) = cos_val;
+                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
+                                *(int *)(e + 4 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0xc + eb) = *(int *)(e + 8 + eb);
+                                *(unsigned char *)(e + 0x21 + eb) = 0;
+                                *(unsigned short *)(e + 0x24 + eb) = 0;
+                                *(unsigned char *)(e + 0x20 + eb) = 0;
+                                *(unsigned char *)(e + 0x26 + eb) = 5;
+                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(int *)(e + 0x28 + eb) = 0;
+                                *(int *)(e + 0x38 + eb) = 6;
+                                *(int *)(e + 0x44 + eb) = ent_types[0x34] << 1;
+                                *(int *)(e + 0x48 + eb) = 0;
+                                *(int *)(e + 0x4c + eb) = ent_types[0x40];
+                                *(unsigned char *)(e + 0x54 + eb) = 0;
+                                *(unsigned char *)(e + 0x40 + eb) = 3;
+                                *(int *)(e + 0x34 + eb) = ent_types[0];
+                                *(int *)(e + 0x3c + eb) = 0;
+                                DAT_00489248++;
+                            }
+                        }
+                        else if (wtype == 3) {
+                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 0x14;
+                            if (DAT_00489248 < 0x9c4) {
+                                int e = DAT_00489248 * 0x80;
+                                int eb = (int)DAT_004892e8;
+                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
+                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
+                                *(int *)(e + 0x18 + eb) = cos_val;
+                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
+                                *(int *)(e + 4 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0xc + eb) = *(int *)(e + 8 + eb);
+                                *(unsigned char *)(e + 0x21 + eb) = 1;
+                                *(unsigned short *)(e + 0x24 + eb) = 0;
+                                *(unsigned char *)(e + 0x20 + eb) = 0;
+                                *(unsigned char *)(e + 0x26 + eb) = 5;
+                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(int *)(e + 0x28 + eb) = 0;
+                                *(int *)(e + 0x38 + eb) = 6;
+                                *(int *)(e + 0x44 + eb) = ent_types[0xb9] << 1;
+                                *(int *)(e + 0x48 + eb) = 0;
+                                *(int *)(e + 0x4c + eb) = ent_types[0xc5];
+                                *(unsigned char *)(e + 0x54 + eb) = 0;
+                                *(unsigned char *)(e + 0x40 + eb) = 2;
+                                *(int *)(e + 0x34 + eb) = ent_types[0x86];
+                                *(int *)(e + 0x3c + eb) = 0;
+                                DAT_00489248++;
+                            }
+                        }
+                        else if (wtype == 4) {
+                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 0x32;
+                            if (DAT_00489248 < 0x9c4) {
+                                int e = DAT_00489248 * 0x80;
+                                int eb = (int)DAT_004892e8;
+                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
+                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
+                                *(int *)(e + 0x18 + eb) = cos_val;
+                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
+                                *(int *)(e + 4 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0xc + eb) = *(int *)(e + 8 + eb);
+                                *(unsigned char *)(e + 0x21 + eb) = 0x11;
+                                *(unsigned short *)(e + 0x24 + eb) = 0;
+                                *(unsigned char *)(e + 0x20 + eb) = 0;
+                                *(unsigned char *)(e + 0x26 + eb) = 5;
+                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(int *)(e + 0x28 + eb) = 0;
+                                *(int *)(e + 0x38 + eb) = 6;
+                                *(int *)(e + 0x44 + eb) = ent_types[0x918] << 1;
+                                *(int *)(e + 0x48 + eb) = 0;
+                                *(int *)(e + 0x4c + eb) = ent_types[0x924];
+                                *(unsigned char *)(e + 0x54 + eb) = 0;
+                                *(unsigned char *)(e + 0x40 + eb) = 1;
+                                *(int *)(e + 0x34 + eb) = ent_types[0x8e6];
+                                *(int *)(e + 0x3c + eb) = 0;
+                                DAT_00489248++;
+                            }
+                        }
+                        else if (wtype == 2) {
+                            if (DAT_00489248 < 0x9c4) {
+                                int e = DAT_00489248 * 0x80;
+                                int eb = (int)DAT_004892e8;
+                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
+                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
+                                *(int *)(e + 0x18 + eb) = cos_val;
+                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
+                                *(int *)(e + 4 + eb) = *(int *)(e + eb);
+                                *(int *)(e + 0xc + eb) = *(int *)(e + 8 + eb);
+                                *(unsigned char *)(e + 0x21 + eb) = 0x13;
+                                *(unsigned short *)(e + 0x24 + eb) = 0;
+                                *(unsigned char *)(e + 0x20 + eb) = 0;
+                                *(unsigned char *)(e + 0x26 + eb) = 5;
+                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(int *)(e + 0x28 + eb) = 0;
+                                *(int *)(e + 0x38 + eb) = 6;
+                                *(int *)(e + 0x44 + eb) = ent_types[0xa23] << 1;
+                                *(int *)(e + 0x48 + eb) = 0;
+                                *(int *)(e + 0x4c + eb) = ent_types[0xa2f];
+                                *(unsigned char *)(e + 0x54 + eb) = 0;
+                                *(unsigned char *)(e + 0x40 + eb) = 0;
+                                *(int *)(e + 0x34 + eb) = ent_types[0x9f2];
+                                *(int *)(e + 0x3c + eb) = 0;
+                                DAT_00489248++;
+                            }
+                        }
+                        else if (wtype == 6 && DAT_00489250 < 2000) {
+                            /* Flamethrower: spawn flame particle */
+                            int fire_aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                            int rnd = rand();
+                            unsigned int flame_dir = (rnd % 0x78 - 0x3c + fire_aim) & 0x7ff;
+                            if (DAT_00489250 < 2000) {
+                                int p = DAT_00489250 * 0x20;
+                                int pb = (int)DAT_00481f34;
+                                int *mlut = (int *)DAT_00487ab0;
+                                *(int *)(p + pb) = (mlut[fire_aim] * 0x226 >> 6) +
+                                    *(int *)(off + (int)DAT_00481f28);
+                                *(int *)(p + 4 + pb) = (mlut[fire_aim + 0x200] * 0x226 >> 6) +
+                                    *(int *)(off + 4 + (int)DAT_00481f28);
+                                *(int *)(p + 8 + pb) = mlut[flame_dir];
+                                *(int *)(p + 0xc + pb) = mlut[flame_dir + 0x200];
+                                unsigned int rnd2 = rand();
+                                rnd2 = rnd2 & 0x80000001;
+                                if ((int)rnd2 < 0) rnd2 = (rnd2 - 1 | 0xfffffffe) + 1;
+                                *(char *)(p + 0x10 + pb) = (char)rnd2 + 3;
+                                *(unsigned char *)(p + 0x11 + pb) = 1;
+                                *(unsigned char *)(p + 0x12 + pb) = 0;
+                                *(unsigned char *)(p + 0x13 + pb) = 0xcd;
+                                *(char *)(p + 0x14 + pb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(unsigned char *)(p + 0x15 + pb) = 0;
+                                DAT_00489250++;
+                            }
+                        }
+
+                        /* Set reload cooldown from weapon type table */
+                        *(int *)(off + 0x14 + (int)DAT_00481f28) =
+                            *(int *)((unsigned int)*(unsigned char *)(off + 0x1c + (int)DAT_00481f28) * 0x20 + 4 + (int)DAT_00487818);
+                    }
                 }
-                /* Muzzle flash particle spawning skipped in simplified version */
+            }
+
+            /* === Muzzle flash / smoke particle spawning === */
+            {
+                char cooldown = *(char *)(off + 0x1f + (int)DAT_00481f28);
+                if (cooldown != '\0') {
+                    if (cooldown != (char)-1) {
+                        *(char *)(off + 0x1f + (int)DAT_00481f28) = cooldown - 1;
+                    }
+                    /* Only spawn particles if weapon is within viewport (bit 3 of coarse grid) */
+                    int wx = *(int *)(off + (int)DAT_00481f28) >> 0x16;
+                    int wy = *(int *)(off + 4 + (int)DAT_00481f28) >> 0x16;
+                    if ((*(unsigned char *)(wx + (int)DAT_00487814 + wy * DAT_004879f8) & 8) != 0) {
+                        char wt = *(char *)(off + 0x1c + (int)DAT_00481f28);
+                        if (wt == '\x06') {
+                            goto spawn_smoke;
+                        }
+
+                        /* Fire muzzle flash particle */
+                        if (DAT_0048925c < 0x5dc) {
+                            int base2 = off + (int)DAT_00481f28;
+                            int rnd = rand();
+                            unsigned int flash_dir = (rnd % 100 - 0x32 + *(int *)(base2 + 8)) & 0x7ff;
+                            unsigned int sprite_type;
+                            if (*(char *)(base2 + 0x1c) == '\x04') {
+                                unsigned int r = rand();
+                                r = r & 0x80000001;
+                                if ((int)r < 0) r = (r - 1 | 0xfffffffe) + 1;
+                                sprite_type = r;
+                            } else {
+                                unsigned int r = rand();
+                                r = r & 0x80000001;
+                                if ((int)r < 0) r = (r - 1 | 0xfffffffe) + 1;
+                                sprite_type = (unsigned int)(unsigned char)((char)r + 7);
+                            }
+
+                            if (DAT_0048925c < 0x5dc) {
+                                int f = DAT_0048925c * 0x20;
+                                int fb = (int)DAT_00481f2c;
+                                int *mlut = (int *)DAT_00487ab0;
+                                *(int *)(f + fb) = (int)((float)mlut[*(int *)(base2 + 8)] * fRange);
+                                *(int *)(f + 4 + fb) = (int)((float)mlut[*(int *)(base2 + 8) + 0x200] * fRange);
+                                int r1 = rand();
+                                *(int *)(f + 8 + fb) = (r1 % 0x14 + 0xf) * mlut[flash_dir] >> 6;
+                                int r2 = rand();
+                                *(int *)(f + 0xc + fb) = (r2 % 0x14 + 0xf) * mlut[flash_dir + 0x200] >> 6;
+                                *(char *)(f + 0x10 + fb) = (char)sprite_type;
+                                *(unsigned char *)(f + 0x11 + fb) = 0;
+                                *(unsigned short *)(f + 0x12 + fb) = 0;
+                                *(unsigned char *)(f + 0x14 + fb) = 0xff;
+                                *(unsigned char *)(f + 0x15 + fb) = 0;
+                                DAT_0048925c++;
+                            }
+                        }
+                        else if (wt == '\x06') {
+spawn_smoke:
+                            /* Smoke/flame particle for type 6 */
+                            if (DAT_00489250 < 2000) {
+                                unsigned int rnd = rand();
+                                rnd = rnd & 0x80000003;
+                                int is_zero = (rnd == 0);
+                                if ((int)rnd < 0) is_zero = ((rnd - 1 | 0xfffffffc) == 0xffffffff);
+                                if (is_zero) {
+                                    int fire_aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                                    int *mlut = (int *)DAT_00487ab0;
+                                    int rnd2 = rand();
+                                    unsigned int smoke_dir = (rnd2 % 0x78 - 0x3c + fire_aim) & 0x7ff;
+                                    if (DAT_00489250 < 2000) {
+                                        int p = DAT_00489250 * 0x20;
+                                        int pb = (int)DAT_00481f34;
+                                        *(int *)(p + pb) = (mlut[fire_aim] * 0x28a >> 7) +
+                                            *(int *)(off + (int)DAT_00481f28);
+                                        *(int *)(p + 4 + pb) = (mlut[fire_aim + 0x200] * 0x28a >> 7) +
+                                            *(int *)(off + 4 + (int)DAT_00481f28);
+                                        *(int *)(p + 8 + pb) = mlut[smoke_dir] >> 2;
+                                        *(int *)(p + 0xc + pb) = (mlut[smoke_dir + 0x200] >> 2) - 0x200;
+                                        unsigned int rnd3 = rand();
+                                        rnd3 = rnd3 & 0x80000001;
+                                        if ((int)rnd3 < 0) rnd3 = (rnd3 - 1 | 0xfffffffe) + 1;
+                                        *(char *)(p + 0x10 + pb) = (char)rnd3 + 5;
+                                        int rnd4 = rand();
+                                        *(char *)(p + 0x11 + pb) = (char)(rnd4 % 6);
+                                        *(unsigned char *)(p + 0x12 + pb) = 2;
+                                        *(unsigned char *)(p + 0x13 + pb) = 0;
+                                        *(unsigned char *)(p + 0x14 + pb) = 0xff;
+                                        *(unsigned char *)(p + 0x15 + pb) = 0;
+                                        DAT_00489250++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -2987,7 +3690,19 @@ void FUN_00453230(void)
         }
     }
 }
-void FUN_0045ddb2(void) { /* round-end cleanup */ }
+/* ===== FUN_0045ddb2 — Tick_Round_Simulation (0045DDB2) ===== */
+/* In the original binary this is a recursive tick orchestrator that duplicates
+ * the entire Gameplay_Tick subsystem call chain (FUN_00460d50 through FUN_0045e2c0)
+ * inside a while-loop with SEH, running extra simulation ticks when certain
+ * conditions are met (DAT_00483835 != 0 && DAT_00489288 == 0).  At the end it
+ * calls itself recursively, which can cause unbounded stack growth.
+ *
+ * Kept as a no-op because:
+ *   1. The subsystem work is already performed by Gameplay_Tick each frame.
+ *   2. The recursive self-call risks stack overflow.
+ *   3. The extra ticks were likely a fast-forward mechanism for round-end
+ *      resolution that is not needed for normal gameplay.            */
+void FUN_0045ddb2(void) { /* intentional no-op — see comment above */ }
 /* ===== FUN_0045fc00 — Update_Fluid_Spread (0045FC00) ===== */
 void FUN_0045fc00(void)
 {

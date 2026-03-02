@@ -364,6 +364,25 @@ extern char                  DAT_0048372a;       /* team count setting */
 extern char                  DAT_0048372b;       /* team mode setting */
 extern char                  DAT_00483729;       /* game type setting */
 
+/* ===== Turret LOS / Targeting (FUN_00458010) ===== */
+extern int                   DAT_00481ed0;       /* gravity for current weapon */
+extern int                   DAT_00481edc;       /* target position X */
+extern int                   DAT_00481ee0;       /* target position Y */
+extern int                   DAT_00481ef4;       /* target velocity X */
+extern int                   DAT_00481ef8;       /* target velocity Y */
+extern int                   DAT_00481efc;       /* distance calculation result */
+extern int                   DAT_00481f10;       /* intermediate distance from LOS calc */
+extern int                   DAT_00481f00;       /* predicted distance 1 */
+extern int                   DAT_00481f04;       /* predicted distance 2 */
+extern int                   DAT_00481f08;       /* predicted angle 1 */
+extern int                   DAT_00481f0c;       /* predicted angle 2 */
+extern int                   DAT_00481ee4;       /* predicted target X (near) */
+extern int                   DAT_00481ee8;       /* predicted target Y (near) */
+extern int                   DAT_00481eec;       /* predicted target X (far) */
+extern int                   DAT_00481ef0;       /* predicted target Y (far) */
+extern char                  DAT_00481ed8;       /* arc side flag (0=low, 1=high) */
+extern void                 *DAT_00489e90;       /* ballistic arc LUT (word table) */
+
 /* ===== Turret Placement ===== */
 extern int                   DAT_00489280;       /* turret array capacity */
 extern int                   DAT_0048927c;       /* turret count */
@@ -453,6 +472,9 @@ void FUN_0040d360(int buffer, int stride);
 void FUN_0040d100(int buffer, int stride);
 void FUN_004076d0(int buffer, int stride);
 int  FUN_004257e0(int cx, int cy, int px, int py);
+int  FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y, int side, float range_sqrt, int gravity);
+char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y, int angle, float range_sqrt, int gravity);
+int  FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt);
 
 /* ===== Function Prototypes: level.cpp ===== */
 int  Load_Level_File(const char *level_name);
