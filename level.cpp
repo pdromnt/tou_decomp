@@ -56,7 +56,7 @@ int           DAT_00487810 = 0;       /* player data base address */
 int           DAT_00489240 = 0;       /* player count */
 int           DAT_00489244 = 0;       /* active player count */
 /* DAT_0048764a defined in init.cpp */
-int           DAT_0048227c = 0;       /* player config packed */
+unsigned char DAT_0048227c[82] = {0}; /* player config: [0]=total, [1]=human, [2..81]=CPU difficulty */
 
 static const char LEV_MAGIC[] = "TOU level file v1.4";
 #define LEV_MAGIC_LEN 19

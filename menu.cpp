@@ -26,12 +26,22 @@ int Menu_Init_And_Loop(void)
     DAT_00487824 = 0;
     FUN_0040e130();  /* Init/start menu music */
 
-    /* Resolution switch: if current mode != desired mode, try to change */
+    /* Clamp desired mode to valid range. The config (options.cfg) may reference
+     * modes enumerated by the original game's fullscreen DDraw init; our windowed
+     * mode decomp has fewer modes in the table. Out-of-range indices read garbage
+     * from the mode table, producing insane resolutions that hang the system. */
+    if (g_NumDisplayModes > 0 && (int)(unsigned int)DAT_00487640[2] >= g_NumDisplayModes) {
+        DAT_00487640[2] = 0;
+    }
+    /* Resolution switch: if current mode != desired mode, try to change.
+     * Original uses pointer arithmetic from &g_NumDisplayModes, but our decomp
+     * can't guarantee contiguous layout. Use direct array indexing instead. */
     if (DAT_00487640[1] != DAT_00487640[2]) {
+        int modeIdx = (unsigned int)DAT_00487640[2];
         DAT_00483724[1] = DAT_00487640[2];
         DAT_00487640[1] = DAT_00487640[2];
-        g_DisplayWidth  = *(int *)((char *)&g_NumDisplayModes + 4 + (unsigned int)DAT_00487640[2] * 4);
-        g_DisplayHeight = *(int *)((char *)&g_NumDisplayModes + 4 + 0x40 + (unsigned int)DAT_00487640[2] * 4);
+        g_DisplayWidth  = g_ModeWidths[modeIdx];
+        g_DisplayHeight = g_ModeHeights[modeIdx];
 
         Release_DirectDraw_Surfaces();
         iVar1 = Init_DirectDraw(g_DisplayWidth, g_DisplayHeight);
@@ -43,8 +53,9 @@ int Menu_Init_And_Loop(void)
             if (g_NumDisplayModes <= (int)(unsigned int)DAT_00487640[2]) {
                 DAT_00487640[2] = 0;
             }
-            g_DisplayWidth  = *(int *)((char *)&g_NumDisplayModes + 4 + (unsigned int)DAT_00487640[2] * 4);
-            g_DisplayHeight = *(int *)((char *)&g_NumDisplayModes + 4 + 0x40 + (unsigned int)DAT_00487640[2] * 4);
+            modeIdx = (unsigned int)DAT_00487640[2];
+            g_DisplayWidth  = g_ModeWidths[modeIdx];
+            g_DisplayHeight = g_ModeHeights[modeIdx];
             DAT_00483724[1] = DAT_00487640[2];
             DAT_00487640[1] = DAT_00487640[2];
             Release_DirectDraw_Surfaces();
@@ -96,7 +107,8 @@ int Load_Level_Resources(void)
 
     LOG("[LEVEL] Load_Level_Resources\n");
 
-    /* Set up flags for basic single-player local mode */
+    /* Set up flags for local mode.
+     * Team mode / player count come from config blob (options.cfg). */
     DAT_0048396d = 0;      /* not a generated map */
     DAT_00483960 = 0;      /* no swap file */
     DAT_004892e4 = 0;      /* no random mirror */
@@ -120,20 +132,30 @@ int Load_Level_Resources(void)
         }
     }
 
-    /* Set up player count for single-player testing */
+    /* Set up player count from config (DAT_0048227c: [0]=total, [1]=human) */
     if (DAT_00489240 == 0) {
-        DAT_00489240 = 1;   /* 1 player */
-        DAT_00489244 = 1;   /* 1 human */
+        DAT_00489244 = (int)DAT_0048227c[1];   /* human count */
+        DAT_00489240 = (int)DAT_0048227c[0];   /* total count */
+        if (DAT_00489240 < DAT_00489244) {
+            DAT_00489244 = DAT_00489240;
+        }
+        if (DAT_00489240 == 0) {
+            DAT_00489240 = 2;   /* default: 2 players */
+            DAT_00489244 = 1;   /* 1 human */
+        }
     }
+    LOG("[LEVEL] Player setup: %d total, %d human\n", DAT_00489240, DAT_00489244);
 
-    /* Allocate player data array (0x598 bytes per player) */
+    /* Allocate player data array (0x598 bytes per player, fixed 80 slots).
+     * Original binary allocates 80 * 0x598 = 0x1BF80 bytes in Init_Memory_Pools,
+     * regardless of actual player count. FUN_0041a8c0 clears all 80 slots. */
     if (DAT_00487810 == 0) {
-        void *player_mem = Mem_Alloc(DAT_00489240 * 0x598);
+        void *player_mem = Mem_Alloc(80 * 0x598);
         if (player_mem) {
             DAT_00487810 = (int)player_mem;
-            g_MemoryTracker += DAT_00489240 * 0x598;
-            LOG("[LEVEL] Allocated player data: %d players, %d bytes\n",
-                DAT_00489240, DAT_00489240 * 0x598);
+            g_MemoryTracker += 80 * 0x598;
+            LOG("[LEVEL] Allocated player data: 80 slots, %d bytes (0x1BF80)\n",
+                80 * 0x598);
         }
     }
 
@@ -148,9 +170,13 @@ int Load_Level_Resources(void)
     /* Set default ship type for player 0 (type 9 = random) */
     DAT_0048236e[0] = 9;
 
-    /* Mark player 0 as human */
+    /* Mark human/CPU flags and team assignments for all players */
     if (DAT_00487810 != 0) {
-        *(char *)(DAT_00487810 + 0x480) = 1;
+        for (int i = 0; i < DAT_00489240; i++) {
+            int poff = i * 0x598;
+            *(char *)(DAT_00487810 + poff + 0x480) = (i < DAT_00489244) ? 1 : 0;
+            *(char *)(DAT_00487810 + poff + 0x2C) = g_ConfigBlob[0x3C6 + i]; /* team */
+        }
     }
 
     /* FUN_0041b010() - Ship/player init */
@@ -567,38 +593,12 @@ after_team:
         DAT_00483835 = 0;
     }
 
-    /* Part 5: Entity table tuning based on team mode */
+    /* Part 5: Entity table tuning based on turret mode
+     * DAT_00483836 == 2: turrets DISABLED → stronger entities (compensate)
+     * DAT_00483836 != 2: turrets ENABLED → weaker entities + extended range init */
     if (DAT_00487928) {
         if (DAT_00483836 == 2) {
-            /* Non-team mode entity params */
-            *(char *)((int)DAT_00487928 + 0x1ee) = 0;
-            *(char *)((int)DAT_00487928 + 0x20e) = 0;
-            *(char *)((int)DAT_00487928 + 0x26e) = 0;
-            *(char *)((int)DAT_00487928 + 0x22e) = 0;
-            *(char *)((int)DAT_00487928 + 0x24e) = 0;
-            *(char *)((int)DAT_00487928 + 0x80f) = 1;
-            *(char *)((int)DAT_00487928 + 0x82f) = 1;
-            *(char *)((int)DAT_00487928 + 0x84f) = 1;
-            *(char *)((int)DAT_00487928 + 0x86f) = 1;
-            *(char *)((int)DAT_00487928 + 0x88f) = 1;
-            *(char *)((int)DAT_00487928 + 0x8af) = 1;
-            *(char *)((int)DAT_00487928 + 0x8cf) = 1;
-            *(char *)((int)DAT_00487928 + 0x8ef) = 1;
-            *(char *)((int)DAT_00487928 + 0x812) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x832) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x852) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x872) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x892) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x8b2) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x8d2) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x8f2) = 0xc;
-            /* Extended entity range loop */
-            for (int j = 0xc80; j < 0xe80; j += 0x20) {
-                *(char *)((int)DAT_00487928 + j + 0xf) = 1;
-                *(char *)((int)DAT_00487928 + j + 0x12) = 0xc;
-            }
-        } else {
-            /* Team mode entity params */
+            /* Turrets disabled: higher entity spawn thresholds and stats */
             *(char *)((int)DAT_00487928 + 0x1ee) = 0x40;
             *(char *)((int)DAT_00487928 + 0x20e) = 0x40;
             *(char *)((int)DAT_00487928 + 0x26e) = 0x40;
@@ -620,6 +620,34 @@ after_team:
             *(char *)((int)DAT_00487928 + 0x8b2) = 0x11;
             *(char *)((int)DAT_00487928 + 0x8d2) = 0x11;
             *(char *)((int)DAT_00487928 + 0x8f2) = 0x11;
+        } else {
+            /* Turrets enabled: lower entity stats + extended entity range init */
+            *(char *)((int)DAT_00487928 + 0x1ee) = 0;
+            *(char *)((int)DAT_00487928 + 0x20e) = 0;
+            *(char *)((int)DAT_00487928 + 0x26e) = 0;
+            *(char *)((int)DAT_00487928 + 0x22e) = 0;
+            *(char *)((int)DAT_00487928 + 0x24e) = 0;
+            *(char *)((int)DAT_00487928 + 0x80f) = 1;
+            *(char *)((int)DAT_00487928 + 0x82f) = 1;
+            *(char *)((int)DAT_00487928 + 0x84f) = 1;
+            *(char *)((int)DAT_00487928 + 0x86f) = 1;
+            *(char *)((int)DAT_00487928 + 0x88f) = 1;
+            *(char *)((int)DAT_00487928 + 0x8af) = 1;
+            *(char *)((int)DAT_00487928 + 0x8cf) = 1;
+            *(char *)((int)DAT_00487928 + 0x8ef) = 1;
+            *(char *)((int)DAT_00487928 + 0x812) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x832) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x852) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x872) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x892) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x8b2) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x8d2) = 0xc;
+            *(char *)((int)DAT_00487928 + 0x8f2) = 0xc;
+            /* Extended entity range: tiles 100-115 fire rate and damage */
+            for (int j = 0xc80; j < 0xe80; j += 0x20) {
+                *(char *)((int)DAT_00487928 + j + 0xf) = 1;
+                *(char *)((int)DAT_00487928 + j + 0x12) = 0xc;
+            }
         }
     }
 
@@ -1191,7 +1219,7 @@ void FUN_0041b010(void)
      * Original uses hardcoded address bounds (0x4822CE - &DAT_0048227c = 0x52),
      * iterating 80 - DAT_00489244 times. We bound by DAT_00489240 for safety. */
     if (DAT_00489244 < 0x50) {
-        char *src = (char *)((char *)&DAT_0048227c + DAT_00489244 + 2);
+        char *src = (char *)(DAT_0048227c + DAT_00489244 + 2);
         int off = DAT_00489244 * 0x598;
         int ai_count = 80 - DAT_00489244;  /* max AI player slots */
         int k = 0;

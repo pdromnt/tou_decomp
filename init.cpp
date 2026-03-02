@@ -31,9 +31,12 @@ int g_DisplayWidth  = 0;    /* 00489238 */
 int g_DisplayHeight = 0;    /* 0048923C */
 int g_NumDisplayModes = 10; /* 00483C00 */
 
-/* Resolution tables (filled in System_Init_Check) */
-int g_ModeWidths[10];    /* 00483C04 */
-int g_ModeHeights[10];   /* 00483C44 */
+/* Resolution tables (filled in System_Init_Check).
+ * Original binary: 16-entry arrays at 0x483C04 (widths) and 0x483C44 (heights),
+ * contiguous after g_NumDisplayModes. Code uses pointer arithmetic from
+ * &g_NumDisplayModes, so we must keep them contiguous and 16 entries each. */
+int g_ModeWidths[16];    /* 00483C04 */
+int g_ModeHeights[16];   /* 00483C44 */
 
 /* Misc init globals */
 int          g_SoundEnabled = 0;     /* 00487649 */
@@ -41,6 +44,9 @@ DWORD        g_FrameTimer   = 0;     /* 004877F4 */
 unsigned char DAT_004877b1  = 0;
 unsigned char DAT_004877a4  = 0;
 DWORD        DAT_004892b8   = 0;
+char         DAT_00483731   = 0;     /* sky/fade color mode */
+char         DAT_00483739   = 0;     /* game mode preset index */
+char         DAT_00489299   = 0;     /* sub-state 2 flag */
 
 /* Config globals (004207c0 area) */
 unsigned char g_ConfigBlob[6408]; /* 00481F58 - raw config data */
@@ -613,7 +619,94 @@ void FUN_0041fc10(void) {
     t[52] = 8; *(unsigned short *)(t + 53) = 0x11; /* type 0x1A */
 }
 void FUN_0041fe70(void) {}  /* Entity AI function pointers - not needed for intro rendering */
-void FUN_0041f900(void) {}
+/* ===== FUN_0041f900 - Weapon/Projectile Type Table Init (0041F900) ===== */
+/* Populates DAT_00487818 with definitions for 8 weapon types (0x20 bytes each).
+ * Per-type layout:
+ *   +0x00 (int): sprite count / base ID
+ *   +0x04 (int): projectile speed
+ *   +0x08 (int): range / spread
+ *   +0x0C (int): sprite base index (used by renderer FUN_0040a870)
+ *   +0x10 (byte): turn rate
+ *   +0x14 (int): frame pointer (from entity type table DAT_00487abc)
+ *   +0x18 (byte): config byte
+ * Called from System_Init_Check after loadtime.dat is loaded. */
+void FUN_0041f900(void)
+{
+    int *w = (int *)DAT_00487818;
+    unsigned char *wb = (unsigned char *)DAT_00487818;
+
+    /* Weapon type 0: basic bullet */
+    w[0] = 400;
+    w[1] = 0x0f;
+    w[2] = 0x70;
+    w[3] = 0x34bc;
+    wb[0x10] = 0x18;
+    w[5] = *(int *)((int)DAT_00487abc + 0x88);
+    wb[0x18] = 0x10;
+
+    /* Weapon type 1: heavy shot */
+    w[8] = 400;
+    w[9] = 0x1e;
+    w[10] = 0x134;
+    w[11] = 13000;
+    wb[0x30] = 0x20;
+    w[13] = *(int *)((int)DAT_00487abc + 0x88);
+    wb[0x38] = 0x10;
+
+    /* Weapon type 2: guided missile */
+    w[16] = 0x197;
+    w[17] = 0x50;
+    w[18] = 0x76;
+    w[19] = 0x30d4;
+    wb[0x50] = 0x1c;
+    w[21] = *(int *)((int)DAT_00487abc + 0x2850);
+    wb[0x58] = 0x10;
+
+    /* Weapon type 3: slow homing */
+    w[24] = 0x197;
+    w[25] = 0x5a;
+    w[26] = 0xb6;
+    w[27] = 11000;
+    wb[0x70] = 3;
+    w[29] = *(int *)((int)DAT_00487abc + 0x2a8);
+    wb[0x78] = 0x60;
+
+    /* Weapon type 4: spread shot */
+    w[32] = 0x197;
+    w[33] = 0xa0;
+    w[34] = 0x8c;
+    w[35] = 0x2cec;
+    wb[0x90] = 0x0c;
+    w[37] = *(int *)((int)DAT_00487abc + 0x2424);
+    wb[0x98] = 0x10;
+
+    /* Weapon type 5: rapid fire */
+    w[40] = 400;
+    w[41] = 5;
+    w[42] = 0x62;
+    w[43] = 14000;
+    wb[0xB0] = 0x20;
+    w[45] = *(int *)((int)DAT_00487abc + 0x88);
+    wb[0xB8] = 0x10;
+
+    /* Weapon type 6: laser */
+    w[48] = 0x197;
+    w[49] = 3;
+    w[50] = 0x48;
+    w[51] = 12000;
+    wb[0xD0] = 0x14;
+    w[53] = 0;
+    wb[0xD8] = 0x20;
+
+    /* Weapon type 7: special/bomb */
+    w[56] = 0x1a4;
+    w[57] = 0;
+    w[58] = 0;
+    w[59] = 0x465b;
+    wb[0xF0] = 0;
+    w[61] = 0;
+    wb[0xF8] = 0;
+}
 void FUN_00422a10(void) {}
 /* ===== FUN_0042d8b0 - Session/UI init (0042D8B0) ===== */
 /* Initializes game state for menu, allocates and fills the key name table
@@ -3118,6 +3211,7 @@ void FUN_0042a470(void)
         return;
 
     case 0xFE: /* Exit - save options and shutdown */
+        Sync_Config_To_Blob();
         Save_Options_Config();
         g_GameState = 0xFE;
         DAT_004877b1 = 0;
@@ -3700,7 +3794,399 @@ void FUN_0042fc10(void)
         DAT_00481d44 = NULL;
     }
 }
-void FUN_0041a8c0(void) {}
+/* ===== FUN_0045c300 — Game Mode Presets (0045C300) ===== */
+/* Applies preset config overrides based on DAT_00483739 (game mode index 1-6).
+ * Called from FUN_0041a8c0 during session init for local (non-network) games. */
+void FUN_0045c300(void)
+{
+    switch (DAT_00483739) {
+    case 1: /* Deathmatch */
+        DAT_0048373a = 3;
+        DAT_00483741 = 3;
+        DAT_0048373e = 1;
+        DAT_00483745 = 1;
+        DAT_0048373d = 1;
+        DAT_00483747 = 1;
+        ((unsigned char *)&DAT_00483750)[3] = 1;
+        DAT_00483754[2] = 1;
+        DAT_00483754[3] = 1;
+        DAT_00483734 = 0;
+        DAT_00483735 = 0;
+        DAT_00483738 = 0;
+        DAT_0048373b = 0;
+        DAT_0048373c = 0;
+        DAT_0048373f = 5;
+        DAT_00483740 = 9;
+        DAT_00483744 = 2;
+        ((unsigned char *)&DAT_0048374c)[3] = 0x14;
+        ((unsigned char *)&DAT_00483750)[0] = 0x14;
+        ((unsigned char *)&DAT_00483748)[0] = 0x14;
+        ((unsigned char *)&DAT_00483748)[1] = 4;
+        ((unsigned char *)&DAT_00483748)[2] = 0x14;
+        ((unsigned char *)&DAT_00483748)[3] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[0] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[1] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[2] = 0x14;
+        ((unsigned char *)&DAT_00483750)[1] = 0x14;
+        ((unsigned char *)&DAT_00483750)[2] = 0x14;
+        DAT_00483754[0] = 2;
+        DAT_00483754[1] = 0x14;
+        return;
+
+    case 2: { /* Survival */
+        /* Reset ship availability for all players: clear 60 bytes, enable 2 ships */
+        for (int i = 0; i < 64; i++) {
+            DAT_004836ce[i] = 0x29;
+            memset(&g_ConfigBlob[0x4B6 + i * 0x3C], 0, 60);
+            g_ConfigBlob[0x4DF + i * 0x3C] = 1;
+            g_ConfigBlob[0x4E0 + i * 0x3C] = 1;
+        }
+        if (DAT_0048373a < 0x32) {
+            DAT_0048373a = 0x32;
+        }
+        DAT_0048373c = 1;
+        DAT_0048373e = 1;
+        DAT_00483745 = 1;
+        DAT_0048373d = 1;
+        ((unsigned char *)&DAT_00483758)[2] = 1;
+        DAT_0048373f = 0;
+        DAT_00483740 = 0;
+        DAT_00483744 = 2;
+        ((unsigned char *)&DAT_0048374c)[3] = 0x32;
+        ((unsigned char *)&DAT_00483750)[0] = 0x32;
+        DAT_00483754[1] = 0x0f;
+        ((unsigned char *)&DAT_00483748)[2] = 10;
+        ((unsigned char *)&DAT_0048374c)[1] = 0x14;
+        ((unsigned char *)&DAT_00483750)[1] = 7;
+        return;
+    }
+
+    case 3: /* Cooperative */
+        DAT_0048373a = 200;
+        DAT_0048373b = 1;
+        DAT_0048373c = 0;
+        DAT_0048373e = 0;
+        DAT_0048373f = 0;
+        DAT_00483740 = 0;
+        DAT_00483744 = 4;
+        DAT_00483745 = 0;
+        DAT_00483754[0] = 3;
+        ((unsigned char *)&DAT_0048374c)[3] = 0xFF;
+        ((unsigned char *)&DAT_00483750)[0] = 0xFF;
+        DAT_00483754[1] = 0x28;
+        ((unsigned char *)&DAT_00483748)[2] = 0x3C;
+        ((unsigned char *)&DAT_00483750)[1] = 3;
+        ((unsigned char *)&DAT_00483750)[2] = 0;
+        ((unsigned char *)&DAT_00483758)[2] = 2;
+        return;
+
+    case 4: /* CTF / Flag */
+        DAT_0048373a = 1;
+        DAT_0048373e = 1;
+        DAT_0048373d = 1;
+        DAT_0048373b = 0;
+        DAT_0048373c = 0;
+        DAT_0048373f = 3;
+        DAT_00483740 = 7;
+        DAT_00483741 = 3;
+        DAT_00483744 = 0;
+        DAT_00483745 = 0;
+        ((unsigned char *)&DAT_0048374c)[3] = 0x14;
+        ((unsigned char *)&DAT_00483750)[0] = 0x28;
+        DAT_00483754[1] = 0x1E;
+        ((unsigned char *)&DAT_00483748)[2] = 0x10;
+        ((unsigned char *)&DAT_00483750)[1] = 0x0E;
+        ((unsigned char *)&DAT_00483750)[2] = 0x0E;
+        ((unsigned char *)&DAT_00483758)[2] = 2;
+        return;
+
+    case 5: { /* Ship select (difficulty) */
+        DAT_0048373f = 3;
+        ((unsigned char *)&DAT_0048374c)[3] = 0x14;
+        ((unsigned char *)&DAT_00483750)[0] = 0x14;
+        ((unsigned char *)&DAT_00483748)[2] = 0x14;
+        ((unsigned char *)&DAT_00483748)[3] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[0] = 0x14;
+        ((unsigned char *)&DAT_00483750)[1] = 0x14;
+        DAT_00483754[0] = 3;
+        DAT_00483754[1] = 0x14;
+        DAT_00483734 = 0;
+        DAT_00483735 = 0;
+        DAT_0048373c = 0;
+        DAT_0048373a = 0x32;
+        DAT_0048373b = 0;
+        DAT_0048373e = 0;
+        DAT_00483740 = 0;
+        DAT_00483741 = 0;
+        DAT_00483744 = 2;
+        DAT_00483745 = 1;
+        DAT_0048373d = 1;
+        DAT_0048372d = 0;
+        DAT_00483747 = 1;
+        ((unsigned char *)&DAT_00483748)[0] = 0;
+        ((unsigned char *)&DAT_00483748)[1] = 0;
+        ((unsigned char *)&DAT_0048374c)[1] = 0;
+        ((unsigned char *)&DAT_0048374c)[2] = 0x1E;
+        ((unsigned char *)&DAT_00483750)[3] = 0;
+        DAT_00483754[2] = 1;
+        DAT_00483754[3] = 1;
+        DAT_004892e5 = 1;
+        /* Clear ship type table (64 bytes at blob offset 0x416) */
+        memset(&g_ConfigBlob[0x416], 0, 64);
+        /* Clear ship enable flags (60 bytes at blob offset 0x1804) */
+        memset(&g_ConfigBlob[0x1804], 0, 60);
+        ((unsigned char *)&DAT_00483758)[2] = 0;
+        return;
+    }
+
+    case 6: /* Last man standing */
+        DAT_00483734 = 0;
+        DAT_00483735 = 0;
+        DAT_00483738 = 0;
+        if (DAT_0048373a < 0x0F) {
+            DAT_0048373a = 0x0F;
+        }
+        ((unsigned char *)&DAT_0048374c)[3] = 0x1E;
+        ((unsigned char *)&DAT_00483750)[0] = 0x1E;
+        DAT_0048373b = 0;
+        DAT_0048373c = 1;
+        DAT_0048373e = 0;
+        DAT_0048373f = 0;
+        DAT_00483740 = 0;
+        DAT_00483741 = 0;
+        DAT_00483744 = 3;
+        DAT_00483745 = 1;
+        DAT_0048373d = 1;
+        ((unsigned char *)&DAT_00483748)[0] = 0x14;
+        ((unsigned char *)&DAT_00483748)[1] = 4;
+        ((unsigned char *)&DAT_00483748)[2] = 0x14;
+        ((unsigned char *)&DAT_00483748)[3] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[0] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[1] = 0x14;
+        ((unsigned char *)&DAT_0048374c)[2] = 0x14;
+        ((unsigned char *)&DAT_00483750)[1] = 0x0E;
+        ((unsigned char *)&DAT_00483750)[2] = 0x14;
+        ((unsigned char *)&DAT_00483750)[3] = 1;
+        DAT_00483754[0] = 1;
+        DAT_00483754[1] = 10;
+        DAT_00483754[2] = 1;
+        DAT_00483754[3] = 1;
+        break;
+    }
+}
+
+/* ===== FUN_0045ba50 — Tournament Mode Presets (0045BA50) ===== */
+/* Stub: only used in network/tournament mode (DAT_0048764a != 0). */
+void FUN_0045ba50(void) {}
+
+/* ===== FUN_0041a8c0 — Session/Level Init (0041A8C0) ===== */
+/* Called at the start of each game round. Sets up player counts, key bindings,
+ * team assignments, ship type availability, team color LUTs, entity density,
+ * and stat arrays. Core multiplayer initialization function. */
+void FUN_0041a8c0(void)
+{
+    int i, j;
+
+    /* 1. Set sub-state flags */
+    DAT_00489299 = 1;
+    /* Original sets desired display mode from config:
+     *   DAT_00487640[2] = DAT_00483724[1];
+     * This triggers a resolution switch in Menu_Init_And_Loop. The original
+     * game runs fullscreen and supports runtime resolution changes. Our windowed
+     * decomp allocates Software_Buffer for 640x480 at init and can't resize it,
+     * so switching to e.g. 800x600 causes a buffer overflow in rendering.
+     * Skip the mode change; keep current mode. */
+    /* DAT_00487640[2] = DAT_00483724[1]; */
+    *(char *)&DAT_0048693c = 0;   /* clear level index low byte */
+    DAT_00487640[0] = 0;
+    DAT_004892b8 = timeGetTime();
+
+    /* 2. Sky/fade color switch */
+    switch (DAT_00483731) {
+    case 0:  DAT_00483820 = 0;      break;
+    case 1:  DAT_00483820 = 0x2108; break;
+    case 2:  DAT_00483820 = 0x014A; break;
+    case 3:  DAT_00483820 = 0x7FFF; break;
+    }
+    if (DAT_00483732 != DAT_00483731) {
+        DAT_00483732 = DAT_00483731;
+        FUN_0045adc0();
+    }
+
+    /* 3. Reload config from options.cfg */
+    Load_Options_Config();
+    Sync_Config_From_Blob();
+    DAT_004892e5 = 0;
+
+    /* 4. Apply game mode presets */
+    if (DAT_0048764a == '\0') {
+        FUN_0045c300();
+    } else {
+        FUN_0045ba50();
+        /* DAT_00487640[2] = DAT_00483724[1]; — disabled, see step 1 comment */
+    }
+
+    /* 5. Clear per-team stat counters (4 entries each) */
+    for (i = 0; i < 4; i++) {
+        ((unsigned char *)&DAT_0048693c)[i + 1] = 0;
+        DAT_00486944[i] = 0;
+        DAT_00486954[i] = 0;
+    }
+
+    /* 6. Clear 8 per-player stat arrays (80 entries each) + player ship fields.
+     * Original loops all 80 slots unconditionally — player data buffer is
+     * always allocated as 80 * 0x598 in Init_Memory_Pools.
+     * In our decomp, allocation happens in Load_Level_Resources (called AFTER
+     * FUN_0041a8c0 on the first case 4 call), so we guard player writes. */
+    for (i = 0; i < 80; i++) {
+        DAT_00486968[i] = 0;
+        DAT_00486aa8[i] = 0;
+        DAT_00486be8[i] = 0;
+        DAT_00486d28[i] = 0;
+        DAT_00486e68[i] = 0;
+        DAT_00486fa8[i] = 0;
+        DAT_004870e8[i] = 0;
+        DAT_00487228[i] = 0;
+        if (DAT_00487810 != 0) {
+            int poff = i * 0x598;
+            *(char *)(poff + 0x34 + DAT_00487810) = 0;
+            *(char *)(poff + 0x35 + DAT_00487810) = 0;
+        }
+    }
+    DAT_00486964 = 0;
+
+    /* 7. Generate team color palette LUTs (palettes 6, 7, 8 of DAT_004878f0).
+     * Each LUT = 256 entries of RGB565: first 128 fade from black to team color,
+     * next 128 fade from team color to white. */
+    for (i = 0; i < 3; i++) {
+        unsigned short team_color = DAT_00483838[i];
+        unsigned int r5 = (unsigned char)(((unsigned char)(team_color >> 5)) << 3);
+        unsigned int g5 = (unsigned char)(((unsigned char)(team_color >> 10)) << 3);
+        unsigned int b5 = (unsigned char)(((unsigned char)team_color) << 3);
+        unsigned short *lut = (unsigned short *)DAT_004878f0[6 + i];
+
+        /* First half: fade black → team color (128 entries) */
+        int accR = 0, accG = 0, accB = 0;
+        for (j = 0; j < 128; j++) {
+            int cR = (accR + ((accR >> 31) & 0x7F)) >> 7;
+            int cG = (accG + ((accG >> 31) & 0x7F)) >> 7;
+            int cB = (accB + ((accB >> 31) & 0x7F)) >> 7;
+            if (cR > 255) cR = 255;
+            if (cG > 255) cG = 255;
+            if (cB > 255) cB = 255;
+            lut[j] = (unsigned short)((cB >> 3) + (((cR & 0x1F8) * 0x20 + (cG & 0x3FF8)) * 4));
+            accR += g5;
+            accG += r5;
+            accB += b5;
+        }
+
+        /* Second half: fade team color → white (128 entries) */
+        int fadeR = 0, fadeG = 0, fadeB = 0;
+        for (j = 128; j < 256; j++) {
+            int cR = ((fadeR + ((fadeR >> 31) & 0x7F)) >> 7) + (int)g5;
+            int cG = ((fadeG + ((fadeG >> 31) & 0x7F)) >> 7) + (int)r5;
+            int cB = ((fadeB + ((fadeB >> 31) & 0x7F)) >> 7) + (int)b5;
+            if (cR > 255) cR = 255;
+            if (cG > 255) cG = 255;
+            if (cB > 255) cB = 255;
+            lut[j] = (unsigned short)((cB >> 3) + (((cR & 0x1F8) * 0x20 + (cG & 0x3FF8)) * 4));
+            fadeR += (255 - (int)r5);
+            fadeG += (255 - (int)g5);
+            fadeB += (255 - (int)b5);
+        }
+    }
+
+    /* 8. Compute fire rate scale from DAT_00483750 byte 1 */
+    DAT_0048382c = (unsigned int)((unsigned char *)&DAT_00483750)[1] << 1;
+
+    /* 9. Compute entity density factors from LUT indexed by DAT_00483758 bytes */
+    {
+        float density_lut[6] = { 0.15f, 0.4f, 0.7f, 1.0f, 1.5f, 4.0f };
+        float weather_lut[6] = { 0.05f, 0.3f, 0.6f, 1.0f, 1.5f, 3.0f };
+        int d_idx = DAT_00483758 & 0xFF;
+        int w_idx = (DAT_00483758 >> 8) & 0xFF;
+        if (d_idx > 5) d_idx = 5;
+        if (w_idx > 5) w_idx = 5;
+        DAT_00483854 = density_lut[d_idx];
+        DAT_0048385c = weather_lut[w_idx];
+        DAT_00483858 = (float)(1.0 / (double)DAT_00483854);
+    }
+
+    /* 10. Compute starting health from DAT_0048374c byte 3 */
+    DAT_00483830 = (unsigned int)((unsigned char *)&DAT_0048374c)[3] * 500;
+
+    /* 11. Extract player counts from config */
+    DAT_00489244 = (int)DAT_0048227c[1];  /* human count */
+    DAT_00489240 = (int)DAT_0048227c[0];  /* total count */
+    if (DAT_00489240 < DAT_00489244) {
+        DAT_00489244 = DAT_00489240;
+    }
+
+    /* Steps 12-14 write to player data (DAT_00487810).
+     * In the original, DAT_00487810 is allocated in Init_Memory_Pools (80 * 0x598)
+     * and is always valid here. Guard kept for safety in our decomp. */
+    if (DAT_00487810 != 0) {
+        /* 12. Copy key bindings from config blob to player data (+0xAC..+0xB2).
+         * Key binding block: 8 bytes per player at blob offset 0x186A.
+         * Maps to player offsets +0xAC..+0xB2 in a remapped order. */
+        for (i = 0; i < (int)DAT_00489244; i++) {
+            int poff = i * 0x598;
+            unsigned char *kb = &g_ConfigBlob[0x186A + i * 8];
+            *(unsigned char *)(DAT_00487810 + poff + 0xAC) = kb[2];
+            *(unsigned char *)(DAT_00487810 + poff + 0xAD) = kb[3];
+            *(unsigned char *)(DAT_00487810 + poff + 0xAE) = kb[0];
+            *(unsigned char *)(DAT_00487810 + poff + 0xAF) = kb[4];
+            *(unsigned char *)(DAT_00487810 + poff + 0xB0) = kb[5];
+            *(unsigned char *)(DAT_00487810 + poff + 0xB1) = kb[6];
+            *(unsigned char *)(DAT_00487810 + poff + 0xB2) = kb[1];
+        }
+
+        /* 13. Assign team index and human flag per player */
+        for (i = 0; i < (int)DAT_00489240; i++) {
+            int poff = i * 0x598;
+            *(unsigned char *)(DAT_00487810 + poff + 0x2C) = g_ConfigBlob[0x3C6 + i];
+            *(unsigned char *)(DAT_00487810 + poff + 0x480) = g_ConfigBlob[0x376 + i];
+        }
+
+        /* 14. Build per-player ship type availability list.
+         * For each player, iterate 47 possible ship types.
+         * If globally enabled (blob[0x1804+type]) AND per-player enabled,
+         * add to available list at player data +0x3C. */
+        for (i = 0; i < (int)DAT_00489240; i++) {
+            int poff = i * 0x598;
+            int count = 0;
+            unsigned char *ship_avail = &g_ConfigBlob[0x4B6 + i * 0x3C];
+
+            for (j = 0; j < 0x2F; j++) {
+                if (g_ConfigBlob[0x1804 + j] != 0 && ship_avail[j] != 0) {
+                    *(char *)(DAT_00487810 + poff + 0x3C + count) = (char)j;
+                    count++;
+                }
+            }
+
+            *(int *)(DAT_00487810 + poff + 0x38) = count - 1;
+            *(char *)(DAT_00487810 + poff + 0x34) = 100;
+
+            int max_idx = *(int *)(DAT_00487810 + poff + 0x38);
+            if (max_idx != -1) {
+                for (j = 0; j < max_idx + 1; j++) {
+                    if (*(char *)(DAT_00487810 + poff + 0x3C + j) == DAT_004836ce[i]) {
+                        *(char *)(DAT_00487810 + poff + 0x34) = (char)j;
+                    }
+                }
+            }
+
+            if (*(char *)(DAT_00487810 + poff + 0x34) == 100) {
+                *(char *)(DAT_00487810 + poff + 0x34) = 0;
+            }
+
+            if (*(int *)(DAT_00487810 + poff + 0x38) == -1) {
+                *(int *)(DAT_00487810 + poff + 0x38) = 0;
+                *(char *)(DAT_00487810 + poff + 0x3C) = 0x32;
+            }
+        }
+    }
+}
 /* ===== FUN_0041d740 - Compute end-game stats/awards (0041D740) ===== */
 /* Computes player and team awards at end of round.
  * Player awards: Most valuable, Most violent, Survivor, Most moving,
@@ -3736,9 +4222,10 @@ void FUN_0041d740(void)
     unsigned char saved_cfg_72d = DAT_0048372d;
 
     Load_Options_Config();
+    Sync_Config_From_Blob();
 
     if (DAT_0048764a == 0) {
-        /* Not tournament mode - compute awards */
+        /* Not tournament mode - restore pre-load values */
         DAT_00483820 = (unsigned short)saved_cfg_820;
         DAT_00483732 = saved_cfg_732;
         DAT_00483724[1] = saved_cfg_725;
@@ -4190,6 +4677,7 @@ void Init_Game_Config(void)
      * For now, enough to pass System_Init_Check. */
 
     Load_Options_Config();
+    Sync_Config_From_Blob();
 }
 
 /* ===== Load_Options_Config (0042F360) ===== */
@@ -4213,6 +4701,165 @@ void Save_Options_Config(void)
         fwrite(g_ConfigBlob, 1, 6408, fp);
         fclose(fp);
     }
+}
+
+/* ===== Sync_Config_From_Blob ===== */
+/* In the original binary, config globals at 0x00481F58-0x0048385F are
+ * aliases into the config blob memory. Our decomp defines them as separate
+ * variables, so we must sync after loading the blob from options.cfg. */
+void Sync_Config_From_Blob(void)
+{
+    /* Sound / display config */
+    DAT_0048371f      = (char)g_ConfigBlob[0x17C7];
+    memcpy(DAT_00483720, &g_ConfigBlob[0x17C8], 8);
+    memcpy(DAT_00483724, &g_ConfigBlob[0x17CC], 4);
+
+    /* Game type / team / particles */
+    DAT_00483729      = (char)g_ConfigBlob[0x17D1];
+    DAT_0048372a      = (char)g_ConfigBlob[0x17D2];
+    DAT_0048372b      = (char)g_ConfigBlob[0x17D3];
+    DAT_0048372c      = (char)g_ConfigBlob[0x17D4];
+    DAT_0048372d      = (char)g_ConfigBlob[0x17D5];
+
+    /* Misc config */
+    DAT_00483731      = (char)g_ConfigBlob[0x17D9];
+    DAT_00483732      = (char)g_ConfigBlob[0x17DA];
+    DAT_00483734      = (char)g_ConfigBlob[0x17DC];
+    DAT_00483735      = (char)g_ConfigBlob[0x17DD];
+    DAT_00483736      = (char)g_ConfigBlob[0x17DE];
+    DAT_00483737      = (char)g_ConfigBlob[0x17DF];
+    DAT_00483738      = (char)g_ConfigBlob[0x17E0];
+    DAT_00483739      = (char)g_ConfigBlob[0x17E1];
+    DAT_0048373a      = (short)g_ConfigBlob[0x17E2];  /* single byte; 0x17E3 is DAT_0048373b */
+    DAT_0048373b      = (char)g_ConfigBlob[0x17E3];
+    DAT_0048373c      = (char)g_ConfigBlob[0x17E4];
+    DAT_0048373d      = (char)g_ConfigBlob[0x17E5];
+    DAT_0048373e      = (char)g_ConfigBlob[0x17E6];
+    DAT_0048373f      = (char)g_ConfigBlob[0x17E7];
+    DAT_00483740      = (char)g_ConfigBlob[0x17E8];
+    DAT_00483741      = (char)g_ConfigBlob[0x17E9];
+    DAT_00483744      = (char)g_ConfigBlob[0x17EC];
+    DAT_00483745      = (char)g_ConfigBlob[0x17ED];
+    DAT_00483746      = (short)g_ConfigBlob[0x17EE];  /* single byte; 0x17EF is DAT_00483747 */
+    DAT_00483747      = (char)g_ConfigBlob[0x17EF];
+    DAT_00483748      = *(int *)&g_ConfigBlob[0x17F0];
+    DAT_0048374c      = *(int *)&g_ConfigBlob[0x17F4];
+    DAT_00483750      = *(int *)&g_ConfigBlob[0x17F8];
+    memcpy(DAT_00483754, &g_ConfigBlob[0x17FC], 4);
+    DAT_00483758      = *(int *)&g_ConfigBlob[0x1800];
+
+    /* Ship-taken flags */
+    memcpy(DAT_0048378e, &g_ConfigBlob[0x1836], 9);
+
+    /* Key bindings */
+    DAT_004837ba      = g_ConfigBlob[0x1862];
+    DAT_004837bb      = g_ConfigBlob[0x1863];
+
+    /* Rendering / scaling constants */
+    DAT_00483820      = *(unsigned short *)&g_ConfigBlob[0x18C8];
+    DAT_00483824      = *(int *)&g_ConfigBlob[0x18CC];
+    DAT_00483828      = *(int *)&g_ConfigBlob[0x18D0];
+    DAT_0048382c      = *(int *)&g_ConfigBlob[0x18D4];
+    DAT_00483830      = *(int *)&g_ConfigBlob[0x18D8];
+    DAT_00483834      = g_ConfigBlob[0x18DC];
+    DAT_00483835      = g_ConfigBlob[0x18DD];
+    DAT_00483836      = (char)g_ConfigBlob[0x18DE];
+
+    /* Team color palette */
+    memcpy(DAT_00483838, &g_ConfigBlob[0x18E0], 8);
+
+    /* Fire color thresholds */
+    DAT_00483840      = *(unsigned int *)&g_ConfigBlob[0x18E8];
+    DAT_00483844      = *(unsigned int *)&g_ConfigBlob[0x18EC];
+    DAT_00483848      = *(unsigned int *)&g_ConfigBlob[0x18F0];
+
+    /* Tile / entity colors */
+    DAT_0048384c      = *(unsigned short *)&g_ConfigBlob[0x18F4];
+    DAT_0048384e      = *(unsigned short *)&g_ConfigBlob[0x18F6];
+    DAT_00483850      = *(unsigned short *)&g_ConfigBlob[0x18F8];
+
+    /* Entity density factors */
+    DAT_00483854      = *(float *)&g_ConfigBlob[0x18FC];
+    DAT_00483858      = *(float *)&g_ConfigBlob[0x1900];
+
+    /* Weather threshold */
+    DAT_0048385c      = *(float *)&g_ConfigBlob[0x1904];
+
+    /* Player config: total count, human count, per-CPU difficulty */
+    memcpy(DAT_0048227c, &g_ConfigBlob[0x324], 82);
+}
+
+/* ===== Sync_Config_To_Blob ===== */
+/* Reverse of Sync_Config_From_Blob: copies separate globals back into
+ * g_ConfigBlob before Save_Options_Config writes it to disk. */
+void Sync_Config_To_Blob(void)
+{
+    g_ConfigBlob[0x17C7]                          = (unsigned char)DAT_0048371f;
+    memcpy(&g_ConfigBlob[0x17C8], DAT_00483720, 8);
+    memcpy(&g_ConfigBlob[0x17CC], DAT_00483724, 4);
+
+    g_ConfigBlob[0x17D1]                          = (unsigned char)DAT_00483729;
+    g_ConfigBlob[0x17D2]                          = (unsigned char)DAT_0048372a;
+    g_ConfigBlob[0x17D3]                          = (unsigned char)DAT_0048372b;
+    g_ConfigBlob[0x17D4]                          = (unsigned char)DAT_0048372c;
+    g_ConfigBlob[0x17D5]                          = (unsigned char)DAT_0048372d;
+
+    g_ConfigBlob[0x17D9]                          = (unsigned char)DAT_00483731;
+    g_ConfigBlob[0x17DA]                          = (unsigned char)DAT_00483732;
+    g_ConfigBlob[0x17DC]                          = (unsigned char)DAT_00483734;
+    g_ConfigBlob[0x17DD]                          = (unsigned char)DAT_00483735;
+    g_ConfigBlob[0x17DE]                          = (unsigned char)DAT_00483736;
+    g_ConfigBlob[0x17DF]                          = (unsigned char)DAT_00483737;
+    g_ConfigBlob[0x17E0]                          = (unsigned char)DAT_00483738;
+    g_ConfigBlob[0x17E1]                          = (unsigned char)DAT_00483739;
+    g_ConfigBlob[0x17E2]                          = (unsigned char)DAT_0048373a;
+    g_ConfigBlob[0x17E3]                          = (unsigned char)DAT_0048373b;
+    g_ConfigBlob[0x17E4]                          = (unsigned char)DAT_0048373c;
+    g_ConfigBlob[0x17E5]                          = (unsigned char)DAT_0048373d;
+    g_ConfigBlob[0x17E6]                          = (unsigned char)DAT_0048373e;
+    g_ConfigBlob[0x17E7]                          = (unsigned char)DAT_0048373f;
+    g_ConfigBlob[0x17E8]                          = (unsigned char)DAT_00483740;
+    g_ConfigBlob[0x17E9]                          = (unsigned char)DAT_00483741;
+    g_ConfigBlob[0x17EC]                          = (unsigned char)DAT_00483744;
+    g_ConfigBlob[0x17ED]                          = (unsigned char)DAT_00483745;
+    g_ConfigBlob[0x17EE]                          = (unsigned char)DAT_00483746;
+    g_ConfigBlob[0x17EF]                          = (unsigned char)DAT_00483747;
+    *(int *)&g_ConfigBlob[0x17F0]                 = DAT_00483748;
+    *(int *)&g_ConfigBlob[0x17F4]                 = DAT_0048374c;
+    *(int *)&g_ConfigBlob[0x17F8]                 = DAT_00483750;
+    memcpy(&g_ConfigBlob[0x17FC], DAT_00483754, 4);
+    *(int *)&g_ConfigBlob[0x1800]                 = DAT_00483758;
+
+    memcpy(&g_ConfigBlob[0x1836], DAT_0048378e, 9);
+
+    g_ConfigBlob[0x1862]                          = DAT_004837ba;
+    g_ConfigBlob[0x1863]                          = DAT_004837bb;
+
+    *(unsigned short *)&g_ConfigBlob[0x18C8]      = DAT_00483820;
+    *(int *)&g_ConfigBlob[0x18CC]                 = DAT_00483824;
+    *(int *)&g_ConfigBlob[0x18D0]                 = DAT_00483828;
+    *(int *)&g_ConfigBlob[0x18D4]                 = DAT_0048382c;
+    *(int *)&g_ConfigBlob[0x18D8]                 = DAT_00483830;
+    g_ConfigBlob[0x18DC]                          = DAT_00483834;
+    g_ConfigBlob[0x18DD]                          = DAT_00483835;
+    g_ConfigBlob[0x18DE]                          = (unsigned char)DAT_00483836;
+
+    memcpy(&g_ConfigBlob[0x18E0], DAT_00483838, 8);
+
+    *(unsigned int *)&g_ConfigBlob[0x18E8]        = DAT_00483840;
+    *(unsigned int *)&g_ConfigBlob[0x18EC]        = DAT_00483844;
+    *(unsigned int *)&g_ConfigBlob[0x18F0]        = DAT_00483848;
+
+    *(unsigned short *)&g_ConfigBlob[0x18F4]      = DAT_0048384c;
+    *(unsigned short *)&g_ConfigBlob[0x18F6]      = DAT_0048384e;
+    *(unsigned short *)&g_ConfigBlob[0x18F8]      = DAT_00483850;
+
+    *(float *)&g_ConfigBlob[0x18FC]               = DAT_00483854;
+    *(float *)&g_ConfigBlob[0x1900]               = DAT_00483858;
+
+    *(float *)&g_ConfigBlob[0x1904]               = DAT_0048385c;
+
+    memcpy(&g_ConfigBlob[0x324], DAT_0048227c, 82);
 }
 
 /* ===== Init_Math_Tables (00425780) ===== */

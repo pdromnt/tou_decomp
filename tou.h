@@ -130,8 +130,8 @@ extern int                   DAT_004877e8;
 extern int                   g_DisplayWidth;    /* 00489238 */
 extern int                   g_DisplayHeight;   /* 0048923C */
 extern int                   g_NumDisplayModes; /* 00483C00 */
-extern int                   g_ModeWidths[10];  /* 00483C04 */
-extern int                   g_ModeHeights[10]; /* 00483C44 */
+extern int                   g_ModeWidths[16];  /* 00483C04 */
+extern int                   g_ModeHeights[16]; /* 00483C44 */
 
 /* ===== Config (init.cpp) ===== */
 extern unsigned char         g_ConfigBlob[];    /* 00481F58 - raw 6408-byte config data */
@@ -175,7 +175,6 @@ extern void                 *DAT_00487818;      /* projectile type table (0x140 
 extern void                 *DAT_00487aa8;      /* ammo/sound data table */
 extern int                   DAT_0048784c;      /* entity-to-entity link count */
 extern void                 *DAT_0048781c;      /* entity link table base */
-extern int                   DAT_00487228[16];   /* per-player pickup counter */
 extern char                  DAT_0048373d;       /* friendly fire enabled flag */
 extern void                 *DAT_00487ab8;      /* tile edge sprite table */
 extern void                 *DAT_004876a0;      /* spawn point array (0xc00, stride 0xc) */
@@ -332,7 +331,7 @@ extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
 extern int                   DAT_0048764a;      /* network/multiplayer flag */
 extern int                   DAT_0048764b;      /* result flag (tournament) */
-extern int                   DAT_0048227c;      /* player config packed value */
+extern unsigned char         DAT_0048227c[82];  /* player config: [0]=total, [1]=human, [2..81]=CPU difficulty */
 extern void                 *DAT_00487928;      /* entity type table (0x10000 bytes) */
 
 /* ===== End-Game Award System (init.cpp / FUN_0041d740) ===== */
@@ -374,11 +373,17 @@ extern unsigned char         DAT_004837ba;       /* Pause key scan code */
 extern unsigned char         DAT_004837bb;       /* Camera cycle key scan code */
 
 /* ===== Entity Behavior (entity.cpp) ===== */
-extern int  DAT_00486fa8[16];       /* per-player distance traveled */
-extern int  DAT_00486be8[16];       /* per-player damage received stats */
-extern int  DAT_00486e68[16];       /* per-player damage dealt stats */
-extern int  DAT_004870e8[16];       /* per-player explosion stats */
-extern int  DAT_00486d28[16];       /* per-player building stats */
+extern int  DAT_00486944[4];       /* per-team stat counters A */
+extern int  DAT_00486954[4];       /* per-team stat counters B */
+extern int  DAT_00486964;          /* team stat counter total */
+extern int  DAT_00486968[80];      /* per-player kills stat array */
+extern int  DAT_00486aa8[80];      /* per-player deaths stat array */
+extern int  DAT_00486be8[80];      /* per-player damage received stats */
+extern int  DAT_00486d28[80];      /* per-player building stats */
+extern int  DAT_00486e68[80];      /* per-player damage dealt stats */
+extern int  DAT_00486fa8[80];      /* per-player distance traveled */
+extern int  DAT_004870e8[80];      /* per-player explosion stats */
+extern int  DAT_00487228[80];      /* per-player pickup counter */
 extern char DAT_00483747;           /* weapon auto-release mode flag */
 extern char DAT_00483745;           /* detonation mode flag */
 
@@ -391,6 +396,7 @@ extern char                  DAT_0048373e;       /* activation guard flag */
 extern int                   DAT_004892a8;       /* difficulty constant 1 (round length) */
 extern int                   DAT_004892ac;       /* difficulty constant 2 */
 extern char                  DAT_00483740;       /* difficulty setting 1 (from config blob) */
+extern char                  DAT_00483741;       /* difficulty sub-setting (byte after 00483740) */
 extern char                  DAT_0048373f;       /* difficulty setting 2 */
 extern int                   DAT_00483748;       /* stat scaling packed (from config blob) */
 extern int                   DAT_0048374c;       /* speed scaling packed (from config blob) */
@@ -402,6 +408,11 @@ extern int                   DAT_0048382c;       /* game scaling constant 3 (fir
 extern char                  DAT_0048372a;       /* team count setting */
 extern char                  DAT_0048372b;       /* team mode setting */
 extern char                  DAT_00483729;       /* game type setting */
+extern char                  DAT_00483731;       /* sky/fade color mode */
+extern char                  DAT_00483739;       /* game mode preset index */
+extern float                 DAT_00483854;       /* entity density scale factor */
+extern float                 DAT_00483858;       /* inverse density factor (1.0/density) */
+extern char                  DAT_00489299;       /* sub-state 2 flag */
 
 /* ===== Turret LOS / Targeting (FUN_00458010) ===== */
 extern int                   DAT_00481ed0;       /* gravity for current weapon */
@@ -453,6 +464,9 @@ int  System_Init_Check(void);
 int  Init_DirectInput(void);
 void Init_Game_Config(void);
 void Init_Math_Tables(int *buffer, unsigned int count);
+void FUN_0041a8c0(void);          /* session/level init */
+void FUN_0045c300(void);          /* game mode presets (local) */
+void FUN_0045ba50(void);          /* game mode presets (tournament) */
 
 /* ===== Function Prototypes: memory.cpp ===== */
 void  Init_Memory_Pools(void);
@@ -608,6 +622,8 @@ int  FUN_0044dfb0(int player);  /* find spawn point for player */
 /* ===== Function Prototypes: init.cpp (config) ===== */
 void Load_Options_Config(void);
 void Save_Options_Config(void);
+void Sync_Config_From_Blob(void);
+void Sync_Config_To_Blob(void);
 
 /* ===== Utility functions (init.cpp) ===== */
 void FUN_004644af(char *dest, const unsigned char *format, ...);
@@ -646,7 +662,6 @@ int  FUN_0042fdf0(int y);
 void FUN_0042fcb0(void);
 int  FUN_0042fc40(void);
 void FUN_0042fc10(void);
-void FUN_0041a8c0(void);
 void FUN_0041d740(void);
 
 /* ===== AI / Pathfinding Globals (entity.cpp) ===== */

@@ -11,11 +11,16 @@
 #include <stdlib.h>
 
 /* ===== Globals defined in this module ===== */
-int  DAT_00486fa8[16] = {0};   /* per-player distance traveled */
-int  DAT_00486be8[16] = {0};   /* per-player damage received stats */
-int  DAT_00486e68[16] = {0};   /* per-player damage dealt stats */
-int  DAT_004870e8[16] = {0};   /* per-player explosion stats */
-int  DAT_00486d28[16] = {0};   /* per-player building stats */
+int  DAT_00486944[4]  = {0};   /* per-team stat counters A */
+int  DAT_00486954[4]  = {0};   /* per-team stat counters B */
+int  DAT_00486964     = 0;     /* team stat counter total */
+int  DAT_00486968[80] = {0};   /* per-player kills stat array */
+int  DAT_00486aa8[80] = {0};   /* per-player deaths stat array */
+int  DAT_00486be8[80] = {0};   /* per-player damage received stats */
+int  DAT_00486d28[80] = {0};   /* per-player building stats */
+int  DAT_00486e68[80] = {0};   /* per-player damage dealt stats */
+int  DAT_00486fa8[80] = {0};   /* per-player distance traveled */
+int  DAT_004870e8[80] = {0};   /* per-player explosion stats */
 char DAT_00483747 = '\0';      /* weapon auto-release mode flag */
 char DAT_00483745 = '\0';      /* detonation mode flag */
 

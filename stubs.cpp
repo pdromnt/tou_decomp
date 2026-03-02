@@ -9,8 +9,11 @@
 /* ===== Globals defined in this module ===== */
 /* DAT_00487aa8 and DAT_0048781c already defined in memory.cpp */
 int   DAT_0048784c = 0;        /* entity-to-entity link count */
-int   DAT_00487228[16] = {0};  /* per-player pickup counter */
+int   DAT_00487228[80] = {0};  /* per-player pickup counter */
 char  DAT_0048373d = 0;        /* friendly fire enabled flag */
+char  DAT_00483741 = 0;        /* difficulty sub-setting */
+float DAT_00483854 = 0.0f;     /* entity density scale factor */
+float DAT_00483858 = 0.0f;     /* inverse density factor (1.0/density) */
 float DAT_0048385c = 0.0f;     /* weather/temperature threshold */
 
 /* ===== AoE / Explosion globals ===== */
@@ -2786,7 +2789,8 @@ char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y,
     if (gravity < 0x50) {
         steps = (unsigned int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 3)) >> 2);
     } else {
-        steps = (unsigned int)(DAT_00481f10 / (int)range_sqrt);
+        int half_val = (DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3;
+        steps = (unsigned int)((float)half_val * range_sqrt / (float)gravity);
     }
 
     /* Ray-march along the trajectory */
