@@ -49,6 +49,8 @@ __declspec(dllimport) void __stdcall FSOUND_Stream_Stop(FSOUND_STREAM *stream);
 __declspec(dllimport) void __stdcall FSOUND_Stream_Close(FSOUND_STREAM *stream);
 
 // Channel control
+__declspec(dllimport) int __stdcall FSOUND_PlaySoundEx(int channel, FSOUND_SAMPLE *sptr, void *dsp, int startpaused);
+__declspec(dllimport) int __stdcall FSOUND_SetVolume(int channel, int vol);
 __declspec(dllimport) int __stdcall FSOUND_SetPaused(int channel, int paused);
 __declspec(dllimport) int __stdcall FSOUND_SetPan(int channel, int pan);
 __declspec(dllimport) int __stdcall FSOUND_SetVolumeAbsolute(int channel, int vol);

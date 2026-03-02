@@ -33,14 +33,352 @@ char   DAT_00481ed8 = 0;
 /* DAT_00489e90 already defined in memory.cpp */
 
 /* ===== Utility stubs (implement later) ===== */
-int FUN_00410030(void) { return 0; }  /* conditional entity spawn */
+/* ===== FUN_00410030 — Spawn Random Debris Particle from Top (00410030) ===== */
+int FUN_00410030(void)
+{
+    if (DAT_00489248 >= 0x9c4) return 0;
+
+    int iVar1 = rand();
+    int iVar2 = (iVar1 % (DAT_004879f0 - 0x12) + 9) * 0x40000;
+    int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+
+    *(int *)(base + 0x00) = iVar2;
+    *(int *)(base + 0x08) = 0x380000;
+    iVar1 = rand();
+    *(int *)(base + 0x18) = (0xfa - iVar1 % 500) * 0x200;
+    iVar1 = rand();
+    *(int *)(base + 0x1c) = (iVar1 % 100 + 0x32) * 0x200;
+    *(int *)(base + 0x04) = iVar2;
+    *(int *)(base + 0x0c) = 0x380000;
+    *(int *)(base + 0x10) = 0;
+    *(int *)(base + 0x14) = 0;
+    *(unsigned char *)(base + 0x21) = 0x1d;
+    *(unsigned short *)(base + 0x24) = 0;
+    *(unsigned char *)(base + 0x20) = 0;
+    *(unsigned char *)(base + 0x26) = 0;
+    *(unsigned char *)(base + 0x22) = 0xff;
+    *(int *)(base + 0x28) = 0;
+    *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0x3d40);
+    *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0x3d7c);
+    *(int *)(base + 0x48) = 0;
+    *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0x3dac);
+    *(unsigned char *)(base + 0x54) = 0;
+    *(unsigned char *)(base + 0x40) = 0;
+    *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0x3cb8);
+    *(int *)(base + 0x3c) = 0;
+    *(unsigned char *)(base + 0x5c) = 0;
+
+    DAT_00489248++;
+
+    /* Set type/subtype bytes on the newly incremented slot */
+    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
+    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0;
+
+    return 0;
+}
 void FUN_004357b0(int x, int y, int size, int p3, int p4, int p5, int p6, int p7, int p8,
                   int p9, char p10, unsigned char p11)
 {
     (void)x; (void)y; (void)size; (void)p3; (void)p4; (void)p5;
     (void)p6; (void)p7; (void)p8; (void)p9; (void)p10; (void)p11;
 }
-void FUN_00451e70(int particle_idx, int damage) { (void)particle_idx; (void)damage; }
+/* ===== FUN_00451e70 — Building/Structure Damage from Fire Particles (00451E70) ===== */
+/* Checks fire particle against 9 categories of indexed entities (structures/buildings).
+ * Each category has different hitbox sizes and health thresholds.
+ * param_1 = fire particle index, param_2 = damage amount */
+void FUN_00451e70(int param_1, int param_2)
+{
+    int *piVar3, *piVar4, *piVar5;
+    int iVar6;
+    unsigned int local_8;
+
+    int pbase = (int)DAT_00481f34;
+    int ebase = (int)DAT_004892e8;
+    int *linkBase = (int *)DAT_0048781c;
+
+    /* Category 0: DAT_00487834[0], offset +0x0000, hitbox 0x200000 x (0x140000 to 0x240000), health 0x19000 */
+    local_8 = 0;
+    if (DAT_00487834[0] != 0) {
+        int *pIdx = linkBase;
+        do {
+            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
+            if ((((char)piVar3[0x17] == '\0') ||
+                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar3[8] != -6))
+            {
+                piVar4 = (int *)(param_1 * 0x20 + pbase);
+                iVar6 = *piVar4;
+                if ((iVar6 - 0x200000 < *piVar3) && (*piVar3 < iVar6 + 0x200000)) {
+                    iVar6 = piVar4[1];
+                    if ((iVar6 - 0x140000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x240000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x19000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[0]);
+    }
+
+    /* Category 1: DAT_00487834[1], offset +0x1000, hitbox 0x200000 x 0x200000, health 1 */
+    local_8 = 0;
+    if (DAT_00487834[1] != 0) {
+        int *pIdx = linkBase + 0x1000;
+        do {
+            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
+            if ((((char)piVar3[0x17] == '\0') ||
+                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar3[8] != -6))
+            {
+                piVar4 = (int *)(param_1 * 0x20 + pbase);
+                iVar6 = *piVar4;
+                if ((iVar6 - 0x200000 < *piVar3) && (*piVar3 < iVar6 + 0x200000)) {
+                    iVar6 = piVar4[1];
+                    if ((iVar6 - 0x200000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x200000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 1) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[1]);
+    }
+
+    /* Category 2: DAT_00487834[2], offset +0x2000, hitbox 0x240000 x (0x140000 to 0x300000), health 0x2ee000 */
+    local_8 = 0;
+    if (DAT_00487834[2] != 0) {
+        int *pIdx = linkBase + 0x2000;
+        do {
+            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
+            if ((((char)piVar3[0x17] == '\0') ||
+                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar3[8] != -6))
+            {
+                piVar4 = (int *)(param_1 * 0x20 + pbase);
+                iVar6 = *piVar4;
+                if ((iVar6 - 0x240000 < *piVar3) && (*piVar3 < iVar6 + 0x240000)) {
+                    iVar6 = piVar4[1];
+                    if ((iVar6 - 0x140000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x300000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x2ee000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[2]);
+    }
+
+    /* Category 3: DAT_00487834[3] (=DAT_00487840), offset +0x3000, hitbox 0x240000 x (0x140000 to 0x2c0000), health 0xfa000 */
+    local_8 = 0;
+    if (DAT_00487834[3] != 0) {
+        int *pIdx = linkBase + 0x3000;
+        do {
+            iVar6 = *pIdx;
+            piVar4 = (int *)(iVar6 * 0x80 + ebase);
+            if (((*(char *)(iVar6 * 0x80 + 0x5c + ebase) == '\0') ||
+                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar4[8] != -6))
+            {
+                piVar5 = (int *)(pbase + param_1 * 0x20);
+                int iVar2 = *piVar5;
+                if ((iVar2 - 0x240000 < *piVar4) && (*piVar4 < iVar2 + 0x240000)) {
+                    iVar2 = piVar5[1];
+                    if ((iVar2 - 0x140000 < piVar4[2]) && (piVar4[2] < iVar2 + 0x2c0000)) {
+                        iVar6 = iVar6 * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0xfa000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[3]);
+    }
+
+    /* Category 4: DAT_00487834[4], offset +0x4000, hitbox 0x240000 x 0x1c0000, health 0x7d000 */
+    local_8 = 0;
+    if (DAT_00487834[4] != 0) {
+        int *pIdx = linkBase + 0x4000;
+        do {
+            iVar6 = (*pIdx) * 0x80;
+            piVar4 = (int *)(iVar6 + ebase);
+            if (((*(char *)(iVar6 + 0x5c + ebase) == '\0') ||
+                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar4[8] != -6))
+            {
+                piVar5 = (int *)(pbase + param_1 * 0x20);
+                iVar6 = *piVar5;
+                if ((iVar6 - 0x240000 < *piVar4) && (*piVar4 < iVar6 + 0x240000)) {
+                    iVar6 = piVar5[1];
+                    if ((iVar6 - 0x1c0000 < piVar4[2]) && (piVar4[2] < iVar6 + 0x1c0000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x7d000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[4]);
+    }
+
+    /* Category 5: DAT_00487834[5], offset +0x5000, hitbox 0x2c0000 x 0x2c0000, health 0xfa000 */
+    local_8 = 0;
+    if (DAT_00487834[5] != 0) {
+        int *pIdx = linkBase + 0x5000;
+        do {
+            iVar6 = *pIdx;
+            piVar4 = (int *)(iVar6 * 0x80 + ebase);
+            if (((*(char *)(iVar6 * 0x80 + 0x5c + ebase) == '\0') ||
+                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar4[8] != -6))
+            {
+                piVar5 = (int *)(pbase + param_1 * 0x20);
+                int iVar2 = *piVar5;
+                if ((iVar2 - 0x2c0000 < *piVar4) && (*piVar4 < iVar2 + 0x2c0000)) {
+                    iVar2 = piVar5[1];
+                    if ((iVar2 - 0x2c0000 < piVar4[2]) && (piVar4[2] < iVar2 + 0x2c0000)) {
+                        iVar6 = iVar6 * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0xfa000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[5]);
+    }
+
+    /* Category 6: DAT_00487834[6] (=DAT_0048784c), offset +0x6000, hitbox 0x200000 x 0x200000, health varies by subtype */
+    local_8 = 0;
+    if (DAT_00487834[6] != 0) {
+        int *pIdx = linkBase + 0x6000;
+        do {
+            piVar4 = (int *)((*pIdx) * 0x80 + ebase);
+            if ((((char)piVar4[0x17] == '\0') ||
+                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar4[8] != -6))
+            {
+                piVar5 = (int *)(pbase + param_1 * 0x20);
+                iVar6 = *piVar5;
+                if ((iVar6 - 0x200000 < *piVar4) && (*piVar4 < iVar6 + 0x200000)) {
+                    iVar6 = piVar5[1];
+                    if ((iVar6 - 0x200000 < piVar4[2]) && (piVar4[2] < iVar6 + 0x200000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        char cVar1 = *(char *)(iVar6 + 0x40 + ebase);
+                        if (cVar1 == '\0') {
+                            if (*(int *)(iVar6 + 0x28 + ebase) < 12800000) return;
+                            *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                            return;
+                        }
+                        if (cVar1 != '\x01') return;
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x70800) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[6]);
+    }
+
+    /* Category 7: DAT_00487834[7], offset +0x7000, hitbox 0x280000 x 0x300000, health 0x465000 */
+    local_8 = 0;
+    if (DAT_00487834[7] != 0) {
+        int *pIdx = linkBase + 0x7000;
+        do {
+            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
+            if ((((char)piVar3[0x17] == '\0') ||
+                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               (((char)piVar3[8] != -6 && ((char)piVar3[8] != -5))))
+            {
+                piVar4 = (int *)(param_1 * 0x20 + pbase);
+                iVar6 = *piVar4;
+                if ((iVar6 - 0x280000 < *piVar3) && (*piVar3 < iVar6 + 0x280000)) {
+                    iVar6 = piVar4[1];
+                    if ((iVar6 - 0x300000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x300000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x465000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+        } while (local_8 < (unsigned int)DAT_00487834[7]);
+    }
+
+    /* Category 8: DAT_00487834[8], offset +0x8000, hitbox 0x240000 x 0x240000, health 0xfa000 */
+    local_8 = 0;
+    if (DAT_00487834[8] == 0) return;
+    {
+        int *pIdx = linkBase + 0x8000;
+        do {
+            iVar6 = (*pIdx) * 0x80;
+            piVar4 = (int *)(iVar6 + ebase);
+            if (((*(char *)(iVar6 + 0x5c + ebase) == '\0') ||
+                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
+               ((char)piVar4[8] != -6))
+            {
+                piVar5 = (int *)(pbase + param_1 * 0x20);
+                iVar6 = *piVar5;
+                if ((iVar6 - 0x240000 < *piVar4) && (*piVar4 < iVar6 + 0x240000)) {
+                    iVar6 = piVar5[1];
+                    if ((iVar6 - 0x240000 < piVar4[2]) && (piVar4[2] < iVar6 + 0x240000)) {
+                        iVar6 = (*pIdx) * 0x80;
+                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
+                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
+                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
+                        if (*(int *)(iVar6 + 0x28 + ebase) < 0xfa000) return;
+                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
+                        return;
+                    }
+                }
+            }
+            local_8++;
+            pIdx++;
+            if (DAT_00487834[8] <= (int)local_8) return;
+        } while (1);
+    }
+}
 
 /* ===== FUN_0045d7d0 - Intro particle/entity reset ===== */
 void FUN_0045d7d0(void)
@@ -3938,9 +4276,93 @@ void FUN_0045fc00(void)
  * Params: x, y (fixed-point position), radius, palette_id, owner (-1 = environmental) */
 void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
 {
-    (void)x; (void)y; (void)radius; (void)palette_id; (void)owner;
-    /* TODO: push nearby players away from (x,y) using atan2+LUT.
-     * For now, stub — explosions won't push players but entities still die correctly. */
+    if (owner == -1) {
+        owner = radius;
+    }
+
+    int iVar6 = 0;
+    int local_4 = 0;
+
+    if (0 < DAT_00489240) {
+        do {
+            int iVar2 = *(int *)(iVar6 + (int)DAT_00487810);
+            if ((iVar2 - 0xf00000 < x) && (x < iVar2 + 0xf00000)) {
+                int iVar5 = *(int *)(iVar6 + 4 + (int)DAT_00487810);
+                if ((iVar5 - 0xf00000 < y) && (y < iVar5 + 0xf00000)) {
+                    int dx = (x - iVar2) >> 0x12;
+                    iVar5 = (y - iVar5) >> 0x12;
+                    iVar2 = iVar5 * iVar5 + dx * dx;
+                    iVar2 = (int)(iVar2 + (iVar2 >> 0x1f & 0xfU)) >> 4;
+                    if (iVar2 < 7) iVar2 = 7;
+
+                    /* Apply knockback velocity */
+                    int *pVelX = (int *)(iVar6 + 0x10 + (int)DAT_00487810);
+                    *pVelX = *pVelX + (dx * radius * -0x800) / iVar2;
+                    *(int *)(iVar6 + 0x14 + (int)DAT_00487810) =
+                        *(int *)(iVar6 + 0x14 + (int)DAT_00487810) + (iVar5 * radius * -0x800) / iVar2;
+
+                    int base = (int)DAT_00487810;
+                    if (palette_id < 0x50) {
+                        /* Owner is a player — check team for friendly fire */
+                        if (*(char *)((int)DAT_00487810 + 0x2c + palette_id * 0x598) !=
+                            *(char *)(iVar6 + 0x2c + (int)DAT_00487810))
+                        {
+                            int iVar3 = (owner << 0xf) / iVar2;
+                            DAT_00486e68[palette_id] += (int)(iVar3 + (iVar3 >> 0x1f & 0x1fffU)) >> 0xd;
+                        }
+                        if ((*(char *)((int)DAT_00487810 + 0x2c + palette_id * 0x598) !=
+                             *(char *)(iVar6 + 0x2c + (int)DAT_00487810)) ||
+                            (DAT_0048373d != '\0'))
+                        {
+                            int *pHP = (int *)(iVar6 + 0x20 + (int)DAT_00487810);
+                            *pHP = *pHP - (owner << 0xf) / iVar2;
+                            base = (int)DAT_00487810;
+                        }
+                    }
+                    else {
+                        int *pHP = (int *)(iVar6 + 0x20 + (int)DAT_00487810);
+                        *pHP = *pHP - (owner << 0xf) / iVar2;
+                        base = (int)DAT_00487810;
+                    }
+
+                    /* Track damage received */
+                    iVar2 = (owner << 0xf) / iVar2;
+                    DAT_00486be8[local_4] += ((int)(iVar2 + (iVar2 >> 0x1f & 0x1fffU)) >> 0xd);
+
+                    /* Record kill attribution */
+                    char cVar4 = (char)palette_id;
+                    if (palette_id < 0x50) {
+                        if ((*(char *)(base + 0x2c + palette_id * 0x598) !=
+                             *(char *)(iVar6 + 0x2c + base)) ||
+                            (DAT_0048373d != '\0'))
+                        {
+                            *(char *)(iVar6 + 0x4a1 + base) = cVar4;
+                            base = (int)DAT_00487810;
+                        }
+                    }
+                    else if (palette_id < 100) {
+                        *(char *)(iVar6 + 0x4a1 + base) = cVar4 + 0x14;
+                        base = (int)DAT_00487810;
+                    }
+                    else if (palette_id < 0x78) {
+                        *(char *)(iVar6 + 0x4a1 + base) = cVar4;
+                        base = (int)DAT_00487810;
+                    }
+                    else if (palette_id < 0x8c) {
+                        *(char *)(iVar6 + 0x4a1 + base) = cVar4 - 0x14;
+                        base = (int)DAT_00487810;
+                    }
+                    else {
+                        *(unsigned char *)(iVar6 + 0x4a1 + base) = 0xff;
+                        base = (int)DAT_00487810;
+                    }
+                    *(unsigned char *)(iVar6 + 0x4a2 + base) = 0x6e;
+                }
+            }
+            local_4++;
+            iVar6 += 0x598;
+        } while (local_4 < DAT_00489240);
+    }
 }
 
 /* ===== FUN_0045e2c0 — Process_Entity_Deaths (0045E2C0) ===== */

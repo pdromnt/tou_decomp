@@ -361,6 +361,7 @@ extern int                   DAT_00483750;       /* misc config packed */
 extern char                  DAT_00483836;       /* team mode (0=none, 2=teams) */
 extern int                   DAT_00483824;       /* game scaling constant 1 */
 extern int                   DAT_00483828;       /* game scaling constant 2 */
+extern int                   DAT_0048382c;       /* game scaling constant 3 (fire rate scale) */
 extern char                  DAT_0048372a;       /* team count setting */
 extern char                  DAT_0048372b;       /* team mode setting */
 extern char                  DAT_00483729;       /* game type setting */
@@ -393,6 +394,13 @@ extern int                   DAT_00489284;       /* turret init counter */
 /* ===== Trooper Spawn Placement ===== */
 extern int                   DAT_004892c8;       /* trooper spawn point count */
 extern int                   DAT_004892cc;       /* trooper spawn flag */
+
+/* ===== Positional Sound System ===== */
+extern char                  DAT_0048371f;       /* sound effects enabled flag */
+extern int                   DAT_00487840;       /* indexed entity count (for proximity scan) */
+
+/* ===== Wall Particle System ===== */
+void FUN_0044f630(int x, int y);                 /* wall particle impulse */
 
 /* ===== Debug Logging ===== */
 void Log(const char *format, ...);
@@ -516,6 +524,18 @@ void FUN_004609e0(void);        /* physics step 1 */
 void FUN_00460660(void);        /* half-rate physics */
 void FUN_00460ac0(void);        /* collision */
 void FUN_00413720(void);        /* entity logic */
+/* ===== Terrain/Collision Globals ===== */
+extern void                 *DAT_004876b8;      /* color degradation palette LUT */
+extern unsigned short        DAT_00481e8c;      /* tile explosion color accumulator */
+extern unsigned short        DAT_00481e8e;      /* tile explosion count accumulator */
+extern void                 *DAT_00487880;      /* sprite bounding data table */
+extern char                  DAT_0048373b;      /* shared lives mode flag */
+extern char                  DAT_00483744;      /* respawn delay mode */
+
+/* ===== Sub-functions ===== */
+void FUN_0040fd70(float param1, int snd, int x, int y);   /* positional sound variant */
+int  FUN_00450dd0(int x, int y);                           /* collision passability check */
+
 void FUN_00454340(void);        /* projectile update */
 void FUN_0044b0b0(void);        /* Entity_Behavior_Loop (entity.cpp) */
 void FUN_0044e510(int *ent);    /* Boundary_Clamp (entity.cpp) */
