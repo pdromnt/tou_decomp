@@ -294,35 +294,126 @@ static void FUN_0044bfa0(int *ent, int player_idx)
             int gy = ent[1] >> 0x16;
             if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
                 if ((((unsigned char *)DAT_00487814)[gy * DAT_004879f8 + gx] & 0x08) != 0) {
-                    /* COMPAT: Original creates complex entity particles (DAT_004892e8) for
-                     * type 0 ships, requiring entity type definitions and Entity_Debris_Animation.
-                     * We create simple fire particles (DAT_00481f34) for all exhaust types,
-                     * which use the existing particle update/render pipeline. */
-                    if (DAT_00489250 < 2000) {
-                        unsigned int rev = (heading - 0x400) & 0x7FF;    /* reverse heading */
-                        int r = rand();
-                        unsigned int spread = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
+                    /* Exhaust type from config byte at +0x2D:
+                     *   0 = complex emitter (DAT_004892e8, stride 0x80) — big thruster
+                     *   1 = fire type A (sprite 5 or 6)
+                     *   2 = fire type B (sprite 3 or 4) */
+                    char exhaust_type = *(char *)((int)DAT_0048780c + cfg_off + 0x2D);
 
-                        int *part = (int *)((int)DAT_00481f34 + DAT_00489250 * 0x20);
+                    if (exhaust_type == '\0') {
+                        /* Type 0: Complex emitter particles in DAT_004892e8 (stride 0x80).
+                         * Spawns TWO emitter entities processed by Entity_Debris_Animation.
+                         * First emitter at heading+0x200, second at computed offset. */
+                        if (DAT_00489248 < 0xA28 && DAT_004892e8 != NULL) {
+                            unsigned int uVar6 = (heading + 0x200) & 0x7FF;
+                            unsigned int uVar7 = (heading - 0x400) & 0x7FF;
+                            int r = rand();
+                            unsigned int uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
+                            int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
 
-                        /* Position: behind the ship (reverse heading * 8) */
-                        part[0] = ent[0] + lut[rev] * 8;
-                        part[1] = ent[1] + lut[(rev + 0x200) & 0x7FF] * 8;
+                            /* Position: slightly behind ship at reverse+side angle */
+                            *(int *)(base + 0x00) = ent[0] + (lut[uVar6] + lut[uVar7] * 2) * 2;
+                            *(int *)(base + 0x08) = ent[1] + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
+                            /* Velocity: spread-based */
+                            *(int *)(base + 0x18) = (lut[uVar3] * 0x14 >> 5) + ent[4];
+                            *(int *)(base + 0x1C) = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                            /* Previous position = current */
+                            *(int *)(base + 0x04) = *(int *)(base + 0x00);
+                            *(int *)(base + 0x0C) = *(int *)(base + 0x08);
+                            *(int *)(base + 0x10) = 0;
+                            *(int *)(base + 0x14) = 0;
+                            /* Behavior/type fields */
+                            *(unsigned char *)(base + 0x21) = 0x67;
+                            *(short *)(base + 0x24) = (short)(rand() % 6);
+                            *(unsigned char *)(base + 0x20) = 0;
+                            *(unsigned char *)(base + 0x26) = 0xFE;
+                            *(unsigned char *)(base + 0x22) = (unsigned char)player_idx;
+                            *(int *)(base + 0x28) = 0;
+                            /* Sprite/animation data from entity type table */
+                            *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);
+                            *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);
+                            *(int *)(base + 0x3C) = 0;
+                            *(unsigned char *)(base + 0x40) = 0;
+                            *(int *)(base + 0x44) = 0x2800;
+                            *(int *)(base + 0x48) = 0;
+                            *(unsigned char *)(base + 0x54) = 0;
+                            *(unsigned char *)(base + 0x5C) = 1;
+                            *(unsigned char *)(base + 0x64) = 0x72;
+                            *(unsigned char *)(base + 0x65) = 0x7F;
+                            *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                            DAT_00489248++;
 
-                        /* Velocity: ship velocity + random backwards spread */
-                        part[2] = (lut[spread] * 0x14 >> 5) + ent[4];
-                        part[3] = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                            /* Second emitter particle at different angle */
+                            if (DAT_00489248 < 0xA28) {
+                                unsigned int uVar6b = (heading + 0x200) & 0x7FF;
+                                unsigned int uVar7b = (heading - 0x400) & 0x7FF;
+                                r = rand();
+                                uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
+                                base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
 
-                        /* Particle properties */
-                        int r2 = rand();
-                        int spr_type = (r2 & 1) + 5;  /* sprite 5 or 6 (fire) */
-                        *(unsigned char *)((int)part + 0x10) = (unsigned char)spr_type;
-                        *(unsigned char *)((int)part + 0x11) = 4;     /* start frame */
-                        *(unsigned char *)((int)part + 0x12) = 0;     /* sub-frame */
-                        *(unsigned char *)((int)part + 0x13) = 0xC5;  /* fire behavior */
-                        *(unsigned char *)((int)part + 0x14) = 0xFF;  /* no owner */
-                        *(unsigned char *)((int)part + 0x15) = 0;     /* color palette 0 */
-                        DAT_00489250++;
+                                *(int *)(base + 0x00) = ent[0] + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
+                                *(int *)(base + 0x08) = ent[1] + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
+                                *(int *)(base + 0x18) = (lut[uVar3] * 0x14 >> 5) + ent[4];
+                                *(int *)(base + 0x1C) = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                                *(int *)(base + 0x04) = *(int *)(base + 0x00);
+                                *(int *)(base + 0x0C) = *(int *)(base + 0x08);
+                                *(int *)(base + 0x10) = 0;
+                                *(int *)(base + 0x14) = 0;
+                                *(unsigned char *)(base + 0x21) = 0x67;
+                                *(short *)(base + 0x24) = (short)(rand() % 6);
+                                *(unsigned char *)(base + 0x20) = 0;
+                                *(unsigned char *)(base + 0x26) = 0xFE;
+                                *(unsigned char *)(base + 0x22) = (unsigned char)player_idx;
+                                *(int *)(base + 0x28) = 0;
+                                *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);
+                                *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);
+                                *(int *)(base + 0x3C) = 0;
+                                *(unsigned char *)(base + 0x40) = 0;
+                                *(int *)(base + 0x44) = 0x2800;
+                                *(int *)(base + 0x48) = 0;
+                                *(unsigned char *)(base + 0x54) = 0;
+                                *(unsigned char *)(base + 0x5C) = 1;
+                                *(unsigned char *)(base + 0x64) = 0x72;
+                                *(unsigned char *)(base + 0x65) = 0x7F;
+                                *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                                DAT_00489248++;
+                            }
+                        }
+                    } else {
+                        /* Types 1 & 2: Simple fire particles in DAT_00481f34 (stride 0x20).
+                         * Type 1 uses sprite 5 or 6, Type 2 uses sprite 3 or 4. */
+                        if (DAT_00489250 < 2000) {
+                            unsigned int rev = (heading - 0x400) & 0x7FF;
+                            int r = rand();
+                            unsigned int spread = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
+
+                            int *part = (int *)((int)DAT_00481f34 + DAT_00489250 * 0x20);
+
+                            /* Position: behind the ship */
+                            part[0] = ent[0] + lut[rev] * 8;
+                            part[1] = ent[1] + lut[(rev + 0x200) & 0x7FF] * 8;
+
+                            /* Velocity: ship velocity + random backwards spread */
+                            part[2] = (lut[spread] * 0x14 >> 5) + ent[4];
+                            part[3] = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+
+                            /* Sprite type depends on exhaust_type:
+                             * type 1 → sprite 5 or 6, type 2 → sprite 3 or 4 */
+                            int r2 = rand();
+                            char spr_type;
+                            if (exhaust_type == '\x01') {
+                                spr_type = (char)((r2 & 1) + 5);
+                            } else {
+                                spr_type = (char)((r2 & 1) + 3);
+                            }
+                            *(char *)((int)part + 0x10) = spr_type;
+                            *(unsigned char *)((int)part + 0x11) = 4;     /* start frame */
+                            *(unsigned char *)((int)part + 0x12) = 0;     /* sub-frame */
+                            *(unsigned char *)((int)part + 0x13) = 0xC5;  /* fire behavior */
+                            *(unsigned char *)((int)part + 0x14) = 0xFF;  /* no owner */
+                            *(unsigned char *)((int)part + 0x15) = 0;     /* color palette 0 */
+                            DAT_00489250++;
+                        }
                     }
                 }
             }
@@ -408,9 +499,17 @@ static void FUN_0044e1c0(int *ent)
     else if (tile == 0x18) ent[4] -= 0x8C00;
     else if (tile == 0x19) ent[4] += 0x8C00;
 
-    /* Apply velocity drag (original uses float multiply; approximate with 63/64) */
-    ent[4] = (int)((double)ent[4] * 0.96875);
-    ent[5] = (int)((double)ent[5] * 0.96875);
+    /* Apply velocity drag — config-based formula from original (0x0044e2c2):
+     * drag_int = 1000 - ((byte)g_ConfigBlob[0x1A10] * (byte)g_ConfigBlob[0x17F1]) / 10
+     * drag = drag_int * 0.001
+     * Typical values: drag ≈ 0.99-0.997 (lose 0.3-1% per tick) */
+    {
+        int drag_product = (unsigned char)g_ConfigBlob[0x1A10] * (unsigned char)g_ConfigBlob[0x17F1];
+        int drag_int = 1000 - drag_product / 10;
+        double drag = (double)drag_int * 0.001;
+        ent[4] = (int)((double)ent[4] * drag);
+        ent[5] = (int)((double)ent[5] * drag);
+    }
 
     /* Speed cap */
     int vx_scaled = ent[4] >> 8;

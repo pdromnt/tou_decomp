@@ -266,34 +266,62 @@ static void Render_Game_World(unsigned short *buffer, int stride)
      *   DAT_00483960 == 0 → direct blit, sky comes from tiled sprite fill above */
     if (DAT_00483960 != 0 && DAT_00489ea0 != NULL) {
         /* Per-level sky compositing (FUN_0040c0a0):
-         * For each pixel, if tile == 0, substitute from sky image buffer */
+         * Uses parallax scrolling — sky scrolls slower than the map.
+         * Formula: sky_pos = viewport_pos * (sky_size - vp_size) / (map_size - vp_size)
+         * If sky is bigger than map in either axis, do simple rect copy instead. */
         unsigned short *sky = (unsigned short *)DAT_00489ea0;
         int sky_w = DAT_00487a0c;
         int sky_h = DAT_00487a10;
-        for (int y = 0; y < vp_h; y++) {
-            unsigned short *s = src + ((vp_top + y) << shift) + vp_left;
-            unsigned short *d = buffer + (DAT_004806e8 + y) * stride + DAT_004806ec;
-            int sky_y = (vp_top + y) % sky_h;
-            for (int x = 0; x < vp_w; x++) {
-                if (s[x] != 0) {
-                    d[x] = s[x];
-                } else {
-                    int sky_x = (vp_left + x) % sky_w;
-                    d[x] = sky[sky_y * sky_w + sky_x];
+
+        float ratio_x = (sky_w > vp_w) ? (float)(DAT_004879f0 - vp_w) / (float)(sky_w - vp_w) : 0.0f;
+        float ratio_y = (sky_h > vp_h) ? (float)(DAT_004879f4 - vp_h) / (float)(sky_h - vp_h) : 0.0f;
+
+        if (ratio_x < 1.0f || ratio_y < 1.0f) {
+            /* Sky bigger than map: simple rect copy from sky buffer (no parallax needed) */
+            int tile_src = (vp_left << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
+            unsigned short *sky_src = (unsigned short *)((int)DAT_00481f50 + tile_src * 2);
+            unsigned short *dst = buffer + (DAT_004806e8 * stride + DAT_004806ec);
+            int sky_stride = DAT_00487a00;
+            for (int y = 0; y < vp_h; y++) {
+                memcpy(dst, sky_src, vp_w * 2);
+                dst += stride;
+                sky_src += sky_stride;
+            }
+        } else {
+            /* Parallax compositing: compute sky start offset from viewport position */
+            int sky_x_start = (int)((float)vp_left / ratio_x);
+            int sky_y_start = (int)((float)vp_top / ratio_y);
+            int sky_offset = sky_y_start * sky_w + sky_x_start;
+            int tile_stride = DAT_00487a00;
+
+            unsigned short *tile_row = src + (vp_top << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
+            unsigned short *dst_row = buffer + (DAT_004806e8 * stride + DAT_004806ec);
+            int sky_row_offset = sky_offset;
+
+            for (int y = 0; y < vp_h; y++) {
+                int sky_col = sky_row_offset;
+                for (int x = 0; x < vp_w; x++) {
+                    unsigned short tile_px = tile_row[x];
+                    if (tile_px == 0) {
+                        dst_row[x] = sky[sky_col];
+                    } else {
+                        dst_row[x] = tile_px;
+                    }
+                    sky_col++;
                 }
+                dst_row += stride;
+                tile_row += tile_stride;
+                sky_row_offset += sky_w;
             }
         }
     } else {
-        /* Standard blit: tiled sprite sky already fills the buffer,
-         * skip transparent pixels to let it show through */
+        /* Standard blit: copy ALL level pixels unconditionally (matching original).
+         * The tiled sprite sky fill above provides the background; level data
+         * overwrites it completely, including zero (black/empty) pixels. */
         for (int y = 0; y < vp_h; y++) {
             unsigned short *s = src + ((vp_top + y) << shift) + vp_left;
             unsigned short *d = buffer + (DAT_004806e8 + y) * stride + DAT_004806ec;
-            for (int x = 0; x < vp_w; x++) {
-                if (s[x] != 0) {
-                    d[x] = s[x];
-                }
-            }
+            memcpy(d, s, vp_w * 2);
         }
     }
 
@@ -361,6 +389,44 @@ void Render_Frame(void)
     if (g_GameState != 0) {
         Render_Game_View_To(g_ScratchBuffer);
         FUN_004076d0((int)g_ScratchBuffer, 640);
+    }
+
+    /* Pause overlay: darken screen + draw menu options when paused */
+    if (g_GameState == 0 && g_SubState == 1) {
+        /* Darken the screen by 50% (shift each channel right by 1) */
+        for (int i = 0; i < 640 * 480; i++) {
+            unsigned short px = g_ScratchBuffer[i];
+            g_ScratchBuffer[i] = ((px >> 1) & 0x7BEF);  /* halve R, G, B */
+        }
+
+        /* Draw pause menu text using the font system.
+         * Font 0 = large, Font 2 = medium.
+         * Color 0 = golden (headings), Color 1 = white (info), Color 2 = cyan (clickable). */
+        const char *title = "PAUSED";
+        const char *opt0 = "Continue";
+        const char *opt1 = "Skip Level";
+        const char *opt2 = "Exit to Menu";
+
+        int cx = 260;  /* approximate center for large font */
+        int cy_title = 160;
+        int cy_opt0 = 220;
+        int cy_opt1 = 250;
+        int cy_opt2 = 280;
+
+        /* Title in golden (font 0, color 0) */
+        Draw_Text_To_Buffer(title, 0, 0,
+            g_ScratchBuffer + cy_title * 640 + cx, 640, 0, 0, 0);
+
+        /* Menu options: highlighted option uses color 0 (golden), others use color 1 (white) */
+        Draw_Text_To_Buffer(opt0, 2, (g_PauseSelection == 0) ? 0 : 1,
+            g_ScratchBuffer + cy_opt0 * 640 + cx, 640,
+            (g_PauseSelection == 0) ? 80 : 0, 0, 0);
+        Draw_Text_To_Buffer(opt1, 2, (g_PauseSelection == 1) ? 0 : 1,
+            g_ScratchBuffer + cy_opt1 * 640 + cx, 640,
+            (g_PauseSelection == 1) ? 80 : 0, 0, 0);
+        Draw_Text_To_Buffer(opt2, 2, (g_PauseSelection == 2) ? 0 : 1,
+            g_ScratchBuffer + cy_opt2 * 640 + cx, 640,
+            (g_PauseSelection == 2) ? 80 : 0, 0, 0);
     }
 
     /* 3. Lock the offscreen surface */

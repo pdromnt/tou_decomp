@@ -715,15 +715,35 @@ void FUN_0040c280(int param_1, int param_2, int param_3, unsigned char param_4,
         }
     }
     else {
-        /* Blended mode (param_7 != 0) - simplified for now */
+        /* Blended mode (param_7 != 0) */
         int blend_idx = (param_7 < 0x1C) ? 0x1C : (int)param_7;
         if (param_4 == 0) {
+            /* Path 3: blend only (no palette) */
             for (int row = 0; row < draw_h; row++) {
                 for (int col = 0; col < draw_w; col++) {
                     unsigned short pixel = ((unsigned short *)DAT_00487ab4)[src_idx];
                     if (pixel != 0) {
                         unsigned short remap = ((unsigned short *)DAT_00489230)[(int)pixel];
                         *dst = ((short *)DAT_004876a4[blend_idx])[(int)remap];
+                    }
+                    dst++;
+                    src_idx++;
+                }
+                src_idx += src_skip;
+                dst += dst_skip;
+            }
+        } else {
+            /* Path 4: blend + palette (double LUT lookup) — matches original 0040C280.
+             * First applies blend/darkness, then palette color remap. Used for
+             * troopers/entities in dark tile areas (both palette and darkness non-zero). */
+            for (int row = 0; row < draw_h; row++) {
+                for (int col = 0; col < draw_w; col++) {
+                    unsigned short pixel = ((unsigned short *)DAT_00487ab4)[src_idx];
+                    if (pixel != 0) {
+                        unsigned short remap1 = ((unsigned short *)DAT_00489230)[(int)pixel];
+                        unsigned short dark = ((unsigned short *)DAT_004876a4[blend_idx])[(int)remap1];
+                        unsigned short remap2 = ((unsigned short *)DAT_00489230)[(int)dark];
+                        *dst = ((short *)DAT_004876a4[param_4])[(int)remap2];
                     }
                     dst++;
                     src_idx++;
@@ -931,8 +951,11 @@ void FUN_0040c940(unsigned int param_1, unsigned int param_2, unsigned int param
 
 /* ===== FUN_0040dbd0 - Static entity renderer (0040DBD0) ===== */
 /*
- * Renders static entities like turrets/decorations.
- * Array: DAT_00489e98, stride 0x10, count DAT_00489274.
+ * NOTE: This is DEAD CODE in the original binary.
+ * DAT_00489e98 (stride 0x10, count DAT_00489274) is allocated but never populated
+ * — the spawning loop in FUN_0041bfe0 has condition "i < 0" (always false).
+ * DAT_00489274 is always 0, so this renderer never executes.
+ * Real turret/effect rendering uses FUN_0040d930 (DAT_00487780/DAT_00489264).
  */
 void FUN_0040dbd0(int param_1, unsigned int param_2)
 {

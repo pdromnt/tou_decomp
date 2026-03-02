@@ -84,6 +84,7 @@ extern unsigned char         g_SubState;        /* 00489296 */
 extern unsigned char         g_NeedsRedraw;     /* 00489297 */
 extern unsigned char         g_SurfaceReady;    /* 00489298 */
 extern unsigned char         g_SubState2;       /* 00489299 */
+extern int                   g_PauseSelection;  /* pause menu: 0=Continue, 1=Skip, 2=Exit */
 
 /* ===== Timing (winmain.cpp) ===== */
 extern DWORD                 g_TimerStart;      /* 004892B0 */

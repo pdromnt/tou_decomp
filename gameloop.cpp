@@ -26,6 +26,9 @@ short DAT_00483746 = 25;             /* tick rate: ticks per second (default 25 
 char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
 char  DAT_0048373e = 0;              /* activation guard flag */
 
+/* Pause menu state */
+int g_PauseSelection = 0;            /* 0=Continue, 1=Skip level, 2=Exit to menu */
+
 /* ===== Input_Update (00462560) - Mouse polling via DirectInput ===== */
 void Input_Update(void)
 {
@@ -476,21 +479,61 @@ void Game_Update_Render(void)
 
     /* ---- Input processing ---- */
     if (g_ProcessInput != 0) {
-        /* ESC key (scan 0x01) */
+        /* ESC key (scan 0x01) — toggles pause menu */
         static unsigned char esc_prev = 0;
         if ((g_KeyboardState[0x01] & 0x80) && !esc_prev) {
-            if (g_SubState == 0 || g_SubState == 4) {
-                /* Active gameplay or level preview: end round → return to menu.
-                 * Original: ESC sets g_SubState=100 which accumulates scores
-                 * then transitions to g_GameState=2 (RETURN_TO_MENU).
-                 * Simplified: go directly to state 5 (GAME_OVER) which
-                 * routes through state 3 → state 1 (back to main menu). */
-                LOG("[GAME] ESC pressed (substate=%d) → state 5 (GAME_OVER)\n", g_SubState);
+            if (g_SubState == 0) {
+                /* Active gameplay → pause */
+                LOG("[GAME] ESC → pause\n");
+                g_SubState = 1;
+                g_PauseSelection = 0;
+            } else if (g_SubState == 1) {
+                /* Paused → resume (ESC acts as "Continue") */
+                LOG("[GAME] ESC → resume\n");
+                g_SubState = 0;
+            } else if (g_SubState == 4) {
+                /* Level preview → exit to menu */
+                LOG("[GAME] ESC (level preview) → exit\n");
                 g_GameState = 5;
                 return;
             }
         }
         esc_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
+
+        /* Pause menu navigation (when SubState == 1) */
+        if (g_SubState == 1) {
+            /* Up arrow (scan 0xC8) */
+            static unsigned char up_prev = 0;
+            if ((g_KeyboardState[0xC8] & 0x80) && !up_prev) {
+                if (g_PauseSelection > 0) g_PauseSelection--;
+            }
+            up_prev = (g_KeyboardState[0xC8] & 0x80) ? 1 : 0;
+
+            /* Down arrow (scan 0xD0) */
+            static unsigned char dn_prev = 0;
+            if ((g_KeyboardState[0xD0] & 0x80) && !dn_prev) {
+                if (g_PauseSelection < 2) g_PauseSelection++;
+            }
+            dn_prev = (g_KeyboardState[0xD0] & 0x80) ? 1 : 0;
+
+            /* Enter (scan 0x1C) — select pause menu option */
+            static unsigned char enter_pause_prev = 0;
+            if ((g_KeyboardState[0x1C] & 0x80) && !enter_pause_prev) {
+                if (g_PauseSelection == 0) {
+                    /* Continue */
+                    g_SubState = 0;
+                } else if (g_PauseSelection == 1) {
+                    /* Skip level → advance to next level (simplified: end round) */
+                    g_GameState = 5;
+                    return;
+                } else if (g_PauseSelection == 2) {
+                    /* Exit to menu */
+                    g_GameState = 5;
+                    return;
+                }
+            }
+            enter_pause_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
+        }
 
         /* Enter key (scan 0x1C) - start gameplay from level preview.
          * Original binary: substate 4 shows a camera-pan level preview and waits for Enter.
@@ -624,4 +667,18 @@ void Free_Game_Resources(void)
     DAT_00487820 = NULL;
 
     FUN_0041bad0();    /* free per-player visibility buffers */
+
+    /* Reset all gameplay entity/subsystem counters so they don't carry over
+     * to the next level or persist in the menu (e.g. fluid bubbles). */
+    DAT_00489248 = 0;   /* emitter/complex particle count */
+    DAT_00489250 = 0;   /* fire particle count */
+    DAT_00489258 = 0;   /* fluid source count */
+    DAT_00489268 = 0;   /* bullet count */
+    DAT_0048926c = 0;   /* item/pickup count */
+    DAT_00489270 = 0;   /* trap/door count */
+    DAT_00489274 = 0;   /* turret/static entity count */
+    DAT_004892d8 = 0;   /* spawner/emitter def count */
+    DAT_0048924c = 0;   /* trooper count */
+    DAT_00489254 = 0;   /* edge entity count */
+    DAT_004892a8 = 0;   /* round timer */
 }
