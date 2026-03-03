@@ -1992,6 +1992,13 @@ int FUN_00414060(void)
         return 0; /* no levels found */
     }
 
+    /* If round count is still the default (1) and we have multiple levels,
+     * set it to the actual level count so all levels play through. Once the
+     * user saves via the menu, their preference persists in options.cfg. */
+    if (g_ConfigBlob[0] == 1 && DAT_00485088 > 1) {
+        g_ConfigBlob[0] = (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
+    }
+
     /* DAT_00481f5c is g_ConfigBlob + 4; scan up to 0x48227c */
     unsigned int *pIdx = (unsigned int *)&g_ConfigBlob[4];
     unsigned int *pEnd = (unsigned int *)&g_ConfigBlob[0x48227c - 0x481F58];
@@ -4075,7 +4082,11 @@ void FUN_0041a8c0(void)
         FUN_0045adc0();
     }
 
-    /* 3. Reload config from options.cfg */
+    /* 3. Save current config (preserves menu changes), then reload.
+     * Original at 0x0041a946 does: Sync_Config_To_Blob → Save → Load → Sync_From.
+     * Without the save, in-memory level list changes are lost on reload. */
+    Sync_Config_To_Blob();
+    Save_Options_Config();
     Load_Options_Config();
     Sync_Config_From_Blob();
     DAT_004892e5 = 0;
@@ -4714,8 +4725,15 @@ void Init_Game_Config(void)
     g_ConfigBlob[2] = 1;     /* 00481F5A */
     g_ConfigBlob[3] = 0x32;  /* 00481F5B = 50 */
 
-    /* Clear 800 bytes starting at offset 4 */
-    memset(&g_ConfigBlob[4], 0, 800);
+    /* Initialize level indirection table (200 ints at offset 4) to sequential order.
+     * Original zeros this, relying on options.cfg for saved level order.
+     * Sequential default ensures levels play in scanned order without options.cfg. */
+    {
+        int *levelOrder = (int *)&g_ConfigBlob[4];
+        for (int i = 0; i < 200; i++) {
+            levelOrder[i] = i;
+        }
+    }
 
     /* Team color palette (X1R5G5B5) - used by FUN_004236f0 sprite variant generator.
      * NOTE: palette[3] is overwritten to 0x7FF0 (gold) by FUN_0042d8b0 before

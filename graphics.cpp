@@ -617,11 +617,33 @@ void Render_Game_View_To(unsigned short *frame)
                 break;
             }
 
-            /* Level/map name */
+            /* Level/map name: look up from level name array.
+             * cfgPtr points to an int in the indirection table (g_ConfigBlob[4..]).
+             * Dereference to get the actual level index, then look up name. */
             case 0x08: {
-                int levelIdx = cfgPtr ? (int)*cfgPtr : 0;
-                sprintf(valBuf, "Level %d", levelIdx);
-                str = valBuf;
+                int levelIdx = cfgPtr ? *(int *)cfgPtr : 0;
+                if (levelIdx >= 0 && levelIdx < DAT_00485088 &&
+                    DAT_00485090[levelIdx] != NULL) {
+                    const char *name = (const char *)DAT_00485090[levelIdx];
+                    if (DAT_00485ea0[levelIdx] == '\x02') {
+                        sprintf(valBuf, "GG: %s", name);
+                        str = valBuf;
+                    } else {
+                        str = name;
+                    }
+                } else {
+                    sprintf(valBuf, "<%d>", levelIdx);
+                    str = valBuf;
+                }
+                /* Center text at x=320 by calculating pixel width */
+                if (str) {
+                    int fontBase = (item->font_idx & 0xFF) * 256;
+                    int textW = 0;
+                    for (const char *p = str; *p; p++)
+                        textW += Font_Char_Table[fontBase + (unsigned char)*p].width;
+                    item->x = 320 - textW / 2;
+                    if (item->x < 0) item->x = 0;
+                }
                 break;
             }
 

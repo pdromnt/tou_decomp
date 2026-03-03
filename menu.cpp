@@ -166,9 +166,13 @@ int Load_Level_Resources(void)
     }
 
     DAT_00486938 = levelName;
-    DAT_0048693c = levelIdx;
+    /* NOTE: Do NOT write to DAT_0048693c here. The original binary uses it as
+     * a read-only slot index in this function. The low byte is the round counter
+     * managed by the round-end state machine; bytes 1+ hold per-player scores.
+     * Writing levelIdx as a full int would clobber score data AND corrupt the
+     * slot counter if the indirection table reorders levels. */
     LOG("[LEVEL] Selected level: '%s' (index %d, slot %d)\n",
-        levelName, levelIdx, DAT_0048693c & 0xFF);
+        levelName, levelIdx, (int)(unsigned char)DAT_0048693c);
 
     result = Load_Level_File(levelName);
     if (result == 0) {
@@ -235,13 +239,14 @@ int Load_Level_Resources(void)
     FUN_0041b010();
     LOG("[LEVEL] FUN_0041b010 (ship init) complete\n");
 
-    /* FUN_004249c0() - Ship sprite loading */
+    /* FUN_004249c0() - Ship sprite loading (fatal on failure in original) */
     result = FUN_004249c0();
-    if (result == 0) {
-        LOG("[LEVEL] WARNING: FUN_004249c0 (ship sprites) failed - continuing without ships\n");
-    } else {
-        LOG("[LEVEL] FUN_004249c0 (ship sprites) loaded OK\n");
+    if (result != 1) {
+        LOG("[LEVEL] FATAL: FUN_004249c0 (ship sprites) failed\n");
+        sprintf(DAT_00489d7c, "Could not load ships!");
+        return 0;
     }
+    LOG("[LEVEL] FUN_004249c0 (ship sprites) loaded OK\n");
 
     /* Clear extended entity state (matches original loop) */
     if (DAT_004892e8) {
@@ -250,10 +255,11 @@ int Load_Level_Resources(void)
         }
     }
 
-    /* Player stat scaling: scale ship damage/health/speed, configure entity table */
+    /* Player stat scaling: scale ship damage/health/speed, configure entity table.
+     * Original calls this BEFORE FUN_0041bfe0 (entity spawning). */
     FUN_0041a370();
 
-    /* Allocate wall segment array (not in Init_Memory_Pools) */
+    /* Allocate wall segment array if not already allocated */
     if (!DAT_00489e80) {
         DAT_00489e80 = Mem_Alloc(16 * 0x20);
         if (DAT_00489e80) {
@@ -263,25 +269,19 @@ int Load_Level_Resources(void)
 
     /* Entity spawning - populates all entity arrays from level data */
     FUN_0041bfe0();
+
+    /* Check for entity spawning errors (original checks DAT_00489d7c after FUN_0041bfe0) */
+    if (DAT_00489d7c[0] != '\0') {
+        LOG("[LEVEL] Entity spawning error: %s\n", DAT_00489d7c);
+        return 0;
+    }
     LOG("[LEVEL] Entity spawning: %d entities, %d troopers, %d projectiles, %d debris, %d decor, %d spawns\n",
         DAT_00489248, DAT_0048924c, DAT_00489260, DAT_00489268, DAT_004892d8, DAT_004892d4);
 
     /* Edge detection: find walkable tiles adjacent to solid */
     FUN_0041d2e0();
 
-    /* Player spawn init: find spawn positions for all players */
-    FUN_0041aea0();
-
-    /* Difficulty constants: map config indices to tick limits */
-    FUN_0041bed0();
-
-    /* Team initialization: count active teams */
-    FUN_00451500();
-
-    /* Visibility map: full rebuild for init */
-    FUN_00449040('\x01');
-
-    /* Allocate large game state buffer if needed (original does this) */
+    /* Allocate large game state buffer if needed */
     if (!DAT_00487aa4) {
         DAT_00487aa4 = Mem_Alloc(0x14000);  /* 4 * 0x4000 + overhead */
         if (DAT_00487aa4) {
@@ -289,12 +289,24 @@ int Load_Level_Resources(void)
         }
     }
 
-    /* Clear game state buffer (matches original 0x10000 byte clear) */
+    /* Clear game state buffer (original clears before FUN_0041aea0) */
     if (DAT_00487aa4) {
         memset(DAT_00487aa4, 0, 0x10000);
     }
 
+    /* Player spawn init: find spawn positions for all players */
+    FUN_0041aea0();
+
+    /* Difficulty constants: map config indices to tick limits */
+    FUN_0041bed0();
+
     g_SurfaceReady = 2;
+
+    /* Team initialization: count active teams */
+    FUN_00451500();
+
+    /* Visibility map: full rebuild for init */
+    FUN_00449040('\x01');
 
     LOG("[LEVEL] Load_Level_Resources complete: %ux%u map, stride=%d, %d entities\n",
         DAT_004879f0, DAT_004879f4, DAT_00487a00, DAT_00489278);

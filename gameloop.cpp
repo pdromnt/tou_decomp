@@ -707,12 +707,21 @@ int Init_New_Game(void)
 void Free_Game_Resources(void)
 {
     Mem_Free(DAT_00481f50);    /* background RGB565 pixels */
+    DAT_00481f50 = NULL;
+    DAT_0048782c = NULL;       /* tilemap is part of DAT_00481f50 combined alloc */
+
     Mem_Free(DAT_00487814);    /* coarse grid buffer */
+    DAT_00487814 = NULL;
+
     Mem_Free(DAT_00489ea4);    /* shadow grid 1 */
+    DAT_00489ea4 = NULL;
+
     Mem_Free(DAT_00489ea8);    /* shadow grid 2 */
+    DAT_00489ea8 = NULL;
 
     if (DAT_00483960 == '\x01') {
         Mem_Free(DAT_00489ea0);    /* swap/heightmap (only if swap-file enabled) */
+        DAT_00489ea0 = NULL;
     }
 
     if (DAT_00487820 != NULL) {
