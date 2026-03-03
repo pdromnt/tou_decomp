@@ -488,6 +488,12 @@ int FUN_00422fc0(void)
 
     fclose(f);
     LOG("[FX] Loaded explode.gfx: %d bytes of pixel data\n", pixel_offset);
+    /* Dump sprite descriptors for debugging */
+    for (int i = 0; i < 20; i++) {
+        unsigned char *d = (unsigned char *)DAT_00481f20 + i * 8;
+        LOG("[FX] Sprite %d: w=%d h=%d frames=%d offset=%d\n",
+            i, d[4], d[5], d[6], *(int *)d);
+    }
     return 1;
 }
 
@@ -512,6 +518,9 @@ int FUN_00422fc0(void)
 void FUN_0040d100(int buffer, int stride)
 {
     if (DAT_00489250 <= 0) return;
+
+    /* (diagnostics moved to stubs.cpp emitter/physics functions) */
+
 
     int i = 0;
     int offset = 0;
@@ -1080,10 +1089,14 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                     if (DAT_004806e0 <= py && py + 2 < DAT_004806d4 && sprite_idx != 130000) {
                         unsigned short *dst = (unsigned short *)(param_1 + 2 +
                             (((py - DAT_004806e0 + DAT_004806e8) * param_2 - DAT_004806dc + px + DAT_004806ec) * 2));
-                        *dst = DAT_0048384e;
-                        *(dst + (param_2 - 1)) = DAT_0048384e;
-                        *(dst + param_2 * 1 + 1) = DAT_00483850;
-                        *(dst + param_2 * 1 + param_2) = DAT_00483850;
+                        /* Original writes raw 16-bit values (no X1R5G5B5→RGB565 conversion).
+                         * Values come from Load_Level_File / config blob. */
+                        unsigned short cA = DAT_0048384e;
+                        unsigned short cB = DAT_00483850;
+                        *dst = cA;
+                        *(dst + (param_2 - 1)) = cA;
+                        *(dst + param_2 * 1 + 1) = cB;
+                        *(dst + param_2 * 1 + param_2) = cB;
                         ent_base = (int)DAT_004892e8;
                     }
                 }
@@ -1159,7 +1172,10 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                 }
             }
         } else {
-            /* Pixel dot rendering (sprite_idx >= 30000) */
+            /* Pixel dot rendering (sprite_idx >= 30000)
+             * Color trick: entity[0x4C] = palette[idx] + 30000; the renderer
+             * adds (short)0x8AD0 which makes 30000+0x8AD0=0x10000 → wraps to 0
+             * in 16-bit, yielding the raw palette value (X1R5G5B5 format). */
             int px = *(int *)(ent_base + ent_off) >> 0x12;
             if (DAT_004806dc <= px && px + 1 < DAT_004806d0) {
                 int py = *(int *)(ent_base + 8 + ent_off) >> 0x12;
@@ -1174,6 +1190,18 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                     if (((char *)DAT_00487928)[(unsigned int)tile * 0x20 + 4] != '\0') {
                         unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)color];
                         color = ((unsigned short *)DAT_004876a4[28])[remap]; /* DAT_00487714 = palette[28] */
+                    }
+
+                    /* Convert X1R5G5B5 → RGB565 for exhaust types (0x65, 0x67).
+                     * Their colors come from DAT_00487aa8 (pal.col) which is X1R5G5B5.
+                     * Other types (0x66 bubbles, etc.) sample colors from the level
+                     * background (DAT_00481f50) which is already RGB565 in our decomp. */
+                    unsigned char dot_type = *(unsigned char *)(ent_base + 0x21 + ent_off);
+                    if (dot_type == 0x65 || dot_type == 0x67) {
+                        unsigned short r5 = (color >> 10) & 0x1F;
+                        unsigned short g5 = (color >> 5) & 0x1F;
+                        unsigned short b5 = color & 0x1F;
+                        color = (r5 << 11) | (g5 << 6) | b5;
                     }
 
                     /* Shape patterns based on entry[0x24] */
@@ -1734,10 +1762,11 @@ void FUN_0040d360(int param_1, int param_2)
 
 /* ===== FUN_004075f0 - Entity renderer (004075F0) ===== */
 /*
- * Iterates active entities (DAT_00489248 count, DAT_004892e8 array)
- * and calls FUN_0040c280 to render each entity's current sprite frame.
- * Entity struct is 0x80 bytes, position at +0/+8 (fixed point >> 18).
- * Sprite index: entity[0x48] + entity[0x4C].
+ * Renders entities from DAT_004892e8 array (stride 0x80, count DAT_00489248).
+ * NOTE: This function is only called from FUN_004076d0 which is menu/intro only.
+ * During gameplay, entity rendering happens through FUN_0040bb60 in
+ * Render_Game_World (graphics.cpp). Types 0x65/0x67 (exhaust) are rendered
+ * as pixel dots in FUN_0040bb60's sprite_idx >= 30000 branch.
  */
 void FUN_004075f0(int buffer, int stride)
 {
@@ -1748,6 +1777,7 @@ void FUN_004075f0(int buffer, int stride)
 
     for (int i = 0; i < count; i++) {
         int *ent = (int *)(ent_base + i * 0x80);
+        unsigned char ent_type = *((unsigned char *)(ent_base + i * 0x80 + 0x21));
 
         /* Get pixel position from 18-bit fixed point */
         int px = ent[0] >> 0x12;
@@ -1759,8 +1789,37 @@ void FUN_004075f0(int buffer, int stride)
         if (py + 7 <= DAT_004806e0) continue;
         if (py - 7 >= DAT_004806d4) continue;
 
+        /* Exhaust/flame types (0x65, 0x67): pixel dots with palette color.
+         * sprite_idx >= 30000 means they can't use FUN_0040c280; draw inline. */
+        if (ent_type == 0x67 || ent_type == 0x65) {
+            /* Read X1R5G5B5 color from entity[0x4C] offset trick */
+            unsigned short x1r5 = (unsigned short)(*(short *)(ent_base + i * 0x80 + 0x4C) + (short)0x8AD0);
+            /* Convert X1R5G5B5 → RGB565 */
+            unsigned short r5 = (x1r5 >> 10) & 0x1F;
+            unsigned short g5 = (x1r5 >> 5) & 0x1F;
+            unsigned short b5 = x1r5 & 0x1F;
+            unsigned short color = (r5 << 11) | (g5 << 6) | b5;
+            if (color == 0) continue;
+
+            int sx = px - DAT_004806dc;
+            int sy = py - DAT_004806e0;
+            if (sx >= 0 && sx + 1 < DAT_004806d8 &&
+                sy >= 0 && sy + 1 < DAT_004806e4) {
+                unsigned short *dst = (unsigned short *)(buffer + (sy * stride + sx) * 2);
+                dst[0] = color;
+                dst[1] = color;
+                dst[stride] = color;
+                dst[stride + 1] = color;
+            }
+            continue;
+        }
+
         /* Compute sprite index: animation base + current frame offset */
         int sprite_idx = ent[0x4C / 4] + ent[0x48 / 4];
+
+        /* Bounds check: some entity types store non-sprite data in 0x4C.
+         * The sprite arrays (DAT_00489e8c/e88) are only 20000 entries. */
+        if (sprite_idx < 0 || sprite_idx >= 20000) continue;
 
         /* Get sprite dimensions for centering */
         int sw = (int)((unsigned char *)DAT_00489e8c)[sprite_idx];

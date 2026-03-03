@@ -314,10 +314,15 @@ static void Gameplay_Tick(void)
     FUN_0045e1f0();
 
     /* Wait until at least one tick interval has elapsed.
-     * Original used a pure busy-wait; we yield CPU to avoid 100% usage. */
+     * Original used a pure busy-wait (100% CPU). We use Sleep(0) which
+     * yields the current time-slice but returns as soon as the thread
+     * can run again — near-microsecond precision with timeBeginPeriod(1)
+     * active, without burning 100% CPU. Sleep(1) was too coarse even
+     * with 1ms timer resolution, causing ~1-2ms timing overshoot per
+     * frame that accumulated into uneven frame spacing. */
     now = timeGetTime();
     while ((now - g_TimerAux * tick_interval) - g_TimerStart < tick_interval) {
-        Sleep(1);
+        Sleep(0);
         now = timeGetTime();
     }
 
@@ -327,6 +332,16 @@ static void Gameplay_Tick(void)
     if (catch_up > 9) {
         g_TimerStart += (catch_up - 9) * tick_interval;
         catch_up = 9;
+    }
+
+    /* Debug: log first few ticks */
+    {
+        static int dbg_frame = 0;
+        if (dbg_frame < 3) {
+            LOG("TICK: frame=%d catch_up=%d f2c=%d f34=%d\n",
+                dbg_frame, catch_up, DAT_0048925c, DAT_00489250);
+        }
+        dbg_frame++;
     }
 
     /* Execute each tick */
@@ -643,16 +658,12 @@ void Game_Update_Render(void)
     /* ---- Rendering ---- */
     Render_Frame();
 
-    /* ---- Frame rate limiter (~60fps) ---- */
-    {
-        static DWORD lastFrame = 0;
-        DWORD end = timeGetTime();
-        if (lastFrame != 0) {
-            DWORD elapsed = end - lastFrame;
-            if (elapsed < 16) Sleep(16 - elapsed);
-        }
-        lastFrame = timeGetTime();
-    }
+    /* NOTE: No additional frame rate limiter here.
+     * The original FUN_00461710 has NO separate frame limiter —
+     * Gameplay_Tick (FUN_0045daa0) already regulates frame pacing
+     * via its built-in busy-wait timing loop. Adding a second
+     * Sleep-based limiter here caused timing interference that
+     * produced uneven frame spacing (jittery motion). */
 }
 
 /* ===== Handle_Menu_State (004611D0) ===== */

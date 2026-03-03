@@ -4767,9 +4767,12 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                             *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
                             DAT_00489248++;
 
-                            /* Second emitter particle at different angle */
+                            /* Second emitter particle on the OPPOSITE side.
+                             * Original uses (int)((double)heading + 1536.0) & 0x7FF
+                             * = heading + 0x600 (270° offset, i.e. left side).
+                             * First emitter is at heading + 0x200 (right side). */
                             if (DAT_00489248 < 0xA28) {
-                                unsigned int uVar6b = (heading + 0x200) & 0x7FF;
+                                unsigned int uVar6b = (heading + 0x600) & 0x7FF;
                                 unsigned int uVar7b = (heading - 0x400) & 0x7FF;
                                 r = rand();
                                 uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;

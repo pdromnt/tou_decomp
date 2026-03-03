@@ -720,16 +720,18 @@ after_team:
     DAT_00483824 = (unsigned int)DAT_00483860[0x107] * (DAT_00483748 & 0xFF) * 0x17;
     DAT_00483828 = DAT_00483824 / 3;
 
-    /* Re-apply DAT_00483828 from config blob.  In the original, FUN_0041a8c0
-     * (session init, not yet implemented) re-syncs the config after level
-     * loading, which resets DAT_00483828 to the blob value (normally 0).
-     * Without this, the computed value (1533) persists, forcing the ballistic
-     * LUT path in turret aiming instead of the correct direct-atan2 path. */
-    DAT_00483828 = *(int *)&g_ConfigBlob[0x18D0];
+    /* NOTE: Do NOT override DAT_00483828 from config blob here.
+     * In the original, FUN_0041a8c0 calls Load_Options_Config (blob reload)
+     * but does NOT call Sync_Config_From_Blob, so the computed gravity value
+     * persists.  Our FUN_0041a8c0 does Sync_To → Save → Load → Sync_From
+     * which round-trips the value correctly.
+     * DAT_00483828 provides upward buoyancy for f2c particles (bubbles)
+     * and gravity for entity/projectile physics. */
 
-    LOG("[INIT] Stat scaling: turrets=%d, troopers=%d, team_mode=%d, dmg_scale=%d, grav=%d\n",
+    LOG("[INIT] Stat scaling: turrets=%d, troopers=%d, team_mode=%d, dmg_scale=%d, grav=%d, lev_byte=0x%02X\n",
         (int)(unsigned char)DAT_00483834, (int)(unsigned char)DAT_00483835,
-        (int)(unsigned char)DAT_00483836, DAT_00483824, DAT_00483828);
+        (int)(unsigned char)DAT_00483836, DAT_00483824, DAT_00483828,
+        (int)DAT_00483860[0x107]);
 }
 
 /* ===== FUN_0041d2e0 - Edge Detection (0041D2E0) ===== */

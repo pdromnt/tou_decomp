@@ -1750,6 +1750,8 @@ void FUN_00454340(void)
             }
             break;
         }
+        default:
+            break;
         } /* end switch */
 
         /* Self-removal: if source tile is destroyed (type '\0') and emitter is not type 2/3 */
@@ -1930,23 +1932,152 @@ void FUN_00434310(void)
             }
         }
 
-        /* Lifetime countdown */
-        int lifetime = *(int *)(ebase + 0x28);
-        if (lifetime > 0) {
-            lifetime--;
-            *(int *)(ebase + 0x28) = lifetime;
-            if (lifetime <= 0) {
-                should_remove = 1;
+        /* === Exhaust / flame particle types (0x65, 0x67 ONLY) ===
+         * Original behavior function at 0x00430480 handles ONLY types 0x65 and 0x67.
+         *
+         * For state != 0x0A:
+         *   1. Position integration: pos += vel (done above)
+         *   2. Gravity: type 0x67 + sub_type!=5 only
+         *   3. Damping + jitter: sub_type==5 only
+         *   4. Boundary checks (early return with removal)
+         *   5. Type 0x67: palette fading
+         *   6. Type 0x65: water buoyancy (vel_y -= 0x800), tile currents,
+         *      surface removal (tile property check), conditional lifetime */
+        if (ent_type == 0x67 || ent_type == 0x65) {
+            unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
+
+            /* Apply gravity for types other than 0x65, and only when sub_type != 5 */
+            if (ent_type != 0x65 && sub_type != 5) {
+                *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
             }
-        } else if (ent_state == 5 || ent_type == 2 || ent_type >= 0x6C) {
-            /* Debris with no lifetime — expire immediately */
-            should_remove = 1;
+
+            /* Velocity damping + jitter: ONLY for sub_type == 5 (original: 0x430534) */
+            if (sub_type == 5) {
+                /* Velocity damping: multiply by ~0.985 (double at 0x004756d0) */
+                double vx = (double)*(int *)(ebase + 0x18);
+                double vy = (double)*(int *)(ebase + 0x1C);
+                *(int *)(ebase + 0x18) = (int)(vx * 0.985);
+                *(int *)(ebase + 0x1C) = (int)(vy * 0.985);
+
+                /* Random position jitter: (128 - rand()%256) << 12 on each axis */
+                int jx = (128 - (rand() & 0xFF)) << 12;
+                int jy = (128 - (rand() & 0xFF)) << 12;
+                *(int *)(ebase + 0x00) += jx;
+                *(int *)(ebase + 0x08) += jy;
+            }
+
+            /* Palette-based fading lifetime (type 0x67 only in original):
+             * entity[0x3C] = frame counter (counts up each tick)
+             * entity[0x5C] = frame threshold for palette step
+             * entity[0x65] = current palette index (higher = brighter/earlier)
+             * entity[0x64] = minimum palette index (death threshold)
+             * entity[0x4C] = palette[entity[0x65]] + 30000 (color+lifetime value) */
+            if (ent_type == 0x67) {
+                int frame_cnt = *(int *)(ebase + 0x3C) + 1;
+                *(int *)(ebase + 0x3C) = frame_cnt;
+                unsigned char threshold = *(unsigned char *)(ebase + 0x5C);
+                if (threshold > 0 && frame_cnt >= (int)threshold) {
+                    /* Reset counter and step palette index down */
+                    *(int *)(ebase + 0x3C) = 0;
+                    unsigned char pal_idx = *(unsigned char *)(ebase + 0x65);
+                    unsigned char min_idx = *(unsigned char *)(ebase + 0x64);
+                    if (pal_idx > min_idx) {
+                        pal_idx--;
+                        *(unsigned char *)(ebase + 0x65) = pal_idx;
+                        /* Recompute entity[0x4C] from palette */
+                        if (DAT_00487aa8 != NULL) {
+                            unsigned short *pal = (unsigned short *)DAT_00487aa8;
+                            *(int *)(ebase + 0x4C) = (int)pal[pal_idx] + 30000;
+                        }
+                    } else {
+                        should_remove = 1;
+                    }
+                }
+            }
+
+            /* Boundary removal */
+            int bx = *(int *)(ebase + 0x00);
+            int by = *(int *)(ebase + 0x08);
+            if (bx < 0) { *(int *)(ebase + 0x00) = 0; *(int *)(ebase + 0x04) = 0; should_remove = 1; }
+            if (by < 0) { *(int *)(ebase + 0x08) = 0; *(int *)(ebase + 0x0C) = 0; should_remove = 1; }
+            if (bx >> 0x12 >= (int)DAT_004879f0) should_remove = 1;
+            if (by >> 0x12 >= (int)DAT_004879f4) should_remove = 1;
+
+            /* === Water buoyancy + currents for type 0x65 (original: 0x4308e3-0x4309e2) ===
+             * After boundary checks pass, apply upward buoyancy, tile-based water
+             * currents, and remove when entity leaves water (tile property check).
+             * entity[0x28] is a conditional countdown (only on water + visible). */
+            if (ent_type == 0x65 && !should_remove) {
+                /* Base buoyancy: vel_y -= 0x800 (upward force every tick) */
+                int cur_vy = *(int *)(ebase + 0x1C) - 0x800;
+                *(int *)(ebase + 0x1C) = cur_vy;
+
+                /* Read tile index at entity pixel position */
+                int px = *(int *)(ebase + 0x00) >> 0x12;
+                int py = *(int *)(ebase + 0x08) >> 0x12;
+                int tile_off = (py << ((unsigned char)DAT_00487a18 & 0x1F)) + px;
+                unsigned char tile_idx = *(unsigned char *)((int)DAT_0048782c + tile_off);
+
+                /* Tile-based water currents (0x4308fd-0x430985) */
+                switch (tile_idx) {
+                    case 0x40: cur_vy -= 0x600; *(int *)(ebase + 0x1C) = cur_vy; break;
+                    case 0x41: cur_vy += 0x600; *(int *)(ebase + 0x1C) = cur_vy; break;
+                    case 0x42: *(int *)(ebase + 0x18) -= 0x600; break;
+                    case 0x43: *(int *)(ebase + 0x18) += 0x600; break;
+                    case 0x44: cur_vy -= 0xC00; *(int *)(ebase + 0x1C) = cur_vy; break;
+                    case 0x45: cur_vy += 0xC00; *(int *)(ebase + 0x1C) = cur_vy; break;
+                    case 0x46: *(int *)(ebase + 0x18) -= 0xC00; break;
+                    case 0x47: *(int *)(ebase + 0x18) += 0xC00; break;
+                }
+
+                /* Surface check: entity_table[tile*0x20 + 4] == 0 means not water → remove */
+                unsigned char water_flag = *(unsigned char *)((int)DAT_00487928 + (unsigned int)tile_idx * 0x20 + 4);
+                if (water_flag == 0) {
+                    should_remove = 1;
+                } else {
+                    /* Visibility check: DAT_00481f50 per-pixel map, 16-bit entries */
+                    if (DAT_00481f50 != NULL) {
+                        unsigned short vis = *(unsigned short *)((int)DAT_00481f50 + tile_off * 2);
+                        if (vis == 0) {
+                            should_remove = 1;
+                        }
+                    }
+                    /* Conditional lifetime: decrement entity[0x28] only on water+visible.
+                     * When it reaches 1 → remove (prevents lingering in deep water). */
+                    if (!should_remove) {
+                        int life = *(int *)(ebase + 0x28);
+                        if (life > 0) {
+                            life--;
+                            *(int *)(ebase + 0x28) = life;
+                        }
+                        if (*(int *)(ebase + 0x28) == 1) {
+                            should_remove = 1;
+                        }
+                    }
+                }
+            }
         }
 
-        /* Projectiles with zero lifetime: check if they have velocity.
-         * If no velocity and no lifetime, they should have been initialized wrong
-         * — give them a default lifetime. */
-        if (ent_type == 0 && lifetime == 0 &&
+        /* Lifetime countdown (offset 0x28 — for projectiles and debris).
+         * Excluded for types 0x65/0x67 — their callbacks handle removal:
+         *   0x65 uses entity[0x28] as conditional countdown in the water handler above.
+         *   0x67 uses palette fading for removal. */
+        if (ent_type != 0x65 && ent_type != 0x67) {
+            int lifetime = *(int *)(ebase + 0x28);
+            if (lifetime > 0) {
+                lifetime--;
+                *(int *)(ebase + 0x28) = lifetime;
+                if (lifetime <= 0) {
+                    should_remove = 1;
+                }
+            } else if (ent_state == 5 || ent_type == 2 || ent_type >= 0x6C) {
+                /* Debris with no lifetime — expire immediately */
+                should_remove = 1;
+            }
+        }
+
+        /* Projectiles with zero lifetime and zero velocity — remove */
+        if (ent_type == 0 && *(int *)(ebase + 0x28) == 0 &&
             *(int *)(ebase + 0x18) == 0 && *(int *)(ebase + 0x1C) == 0) {
             should_remove = 1;
         }
@@ -1967,12 +2098,12 @@ void FUN_00434310(void)
 /* ===== FUN_004527e0 — Update_Projectiles (004527E0) ===== */
 /* Updates particles in DAT_00481f34 (stride 0x20, DAT_00489250 count).
  * Each particle has: +0x00 pos_x, +0x04 pos_y, +0x08 vel_x, +0x0C vel_y,
- * +0x10 type, +0x11 frame, +0x12 sub_frame, +0x13 behavior, +0x14 owner.
+ * +0x10 type, +0x11 frame, +0x12 sub_frame, +0x13 behavior, +0x14 owner, +0x15 color.
  * Moves particles, advances animation, handles wall collision/ricochet,
- * applies damage to nearby entities. Expired particles are removed. */
+ * entity proximity deflection, damage to players/turrets/vehicles.
+ * Expired particles are removed by swap-with-last. */
 void FUN_004527e0(void)
 {
-    int shift = (unsigned char)DAT_00487a18 & 0x1F;
     int i = 0;
 
     while (i < DAT_00489250) {
@@ -1986,110 +2117,348 @@ void FUN_004527e0(void)
         part[0] = new_x;
         part[1] = new_y;
 
-        /* Determine team for collision purposes */
-        unsigned char owner = *(unsigned char *)(part + 5);  /* +0x14 */
+        /* Determine owner team for collision filtering */
+        unsigned char owner_byte = *(unsigned char *)(part + 5);  /* +0x14 */
+        unsigned int owner_team;
+        if (owner_byte < 0x50) {
+            owner_team = (unsigned int)*(unsigned char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598);
+        } else if (owner_byte >= 0x78 && owner_byte <= 0x8B) {
+            owner_team = owner_byte - 0x78;
+        } else {
+            owner_team = 0xFB;
+        }
 
         /* Advance animation sub-frame */
         unsigned char behavior = *(unsigned char *)((int)part + 0x13);
         unsigned char sub_frame = *(unsigned char *)((int)part + 0x12) + 1;
         *(unsigned char *)((int)part + 0x12) = sub_frame;
 
-        int frame_limit = (behavior < 200 && behavior != 0xC4) ? 5 : 9;
-        if (sub_frame > (unsigned char)frame_limit) {
-            *(unsigned char *)((int)part + 0x12) = 0;
-            *(unsigned char *)((int)part + 0x11) = *(unsigned char *)((int)part + 0x11) + 1;
+        if (behavior < 200 && behavior != 0xC4) {
+            if (sub_frame > 4) {
+                *(unsigned char *)((int)part + 0x12) = 0;
+                *(unsigned char *)((int)part + 0x11) = *(unsigned char *)((int)part + 0x11) + 1;
+            }
+        } else {
+            if (sub_frame > 8) {
+                *(unsigned char *)((int)part + 0x12) = 0;
+                *(unsigned char *)((int)part + 0x11) = *(unsigned char *)((int)part + 0x11) + 1;
+            }
         }
 
         /* Check if animation has completed (particle expired) */
         unsigned char part_type = *(unsigned char *)(part + 4);  /* +0x10 */
-        unsigned char max_frame = DAT_00481f20 ?
-            *(unsigned char *)((int)DAT_00481f20 + 6 + (unsigned int)part_type * 8) : 10;
+        unsigned char max_frame = *(unsigned char *)((int)DAT_00481f20 + 6 + (unsigned int)part_type * 8);
 
         if (*(unsigned char *)((int)part + 0x11) >= max_frame) {
             goto remove_particle;
         }
 
-        /* For bullet-type particles (behavior >= 0xC4): check bounds */
-        if (behavior >= 0xC4) {
+        /* For non-bullet particles (behavior < 0xC4): skip to end-of-frame check */
+        if (behavior < 0xC4) {
+            goto check_end_frame;
+        }
+
+        /* ---- Bullet-type particles (behavior >= 0xC4) ---- */
+        {
             int tx = new_x >> 0x12;
             int ty = new_y >> 0x12;
+            /* Bounds check */
             if (tx < 0 || ty < 0 || tx >= (int)DAT_004879f0 || ty >= (int)DAT_004879f4) {
                 goto remove_particle;
             }
 
-            /* Check tile walkability — bounce off walls */
-            unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (ty << shift) + tx);
-            if (*(char *)((unsigned int)tile * 0x20 + 2 + (int)DAT_00487928) == '\0' &&
-                *(char *)((unsigned int)tile * 0x20 + 10 + (int)DAT_00487928) == '\0') {
-                /* Hit non-passable tile — ricochet or expire */
-                if (behavior == 0xC9 || behavior == 0xC4) {
-                    /* These types expire on wall hit */
-                    goto remove_particle;
+            /* Entity proximity deflection */
+            if (DAT_00489288 == '\0' && DAT_0048784c != 0) {
+                int *link_ptr = (int *)((int)DAT_0048781c + 0x18000);
+                for (unsigned int ei = 0; ei < (unsigned int)DAT_0048784c; ei++) {
+                    int eidx = *link_ptr;
+                    int *ent = (int *)(eidx * 0x80 + (int)DAT_004892e8);
+                    /* Check team differs */
+                    unsigned char ent_owner = *(unsigned char *)((int)ent + 0x22);
+                    unsigned char ent_team = *(unsigned char *)(DAT_00487810 + 0x2C + (unsigned int)ent_owner * 0x598);
+                    if (ent_team != (unsigned char)owner_team) {
+                        /* Proximity check: ±0x12C0000 in each axis */
+                        if (new_x - 0x12C0000 < ent[0] && ent[0] < new_x + 0x12C0000 &&
+                            new_y - 0x12C0000 < ent[2] && ent[2] < new_y + 0x12C0000) {
+                            /* Deflect velocity toward/away from entity */
+                            int angle = FUN_004257e0(ent[0], *(int *)(eidx * 0x80 + 8 + (int)DAT_004892e8),
+                                                     new_x, new_y);
+                            if (*(char *)(eidx * 0x80 + 0x40 + (int)DAT_004892e8) == '\0') {
+                                /* Attract: subtract LUT/2 from velocity */
+                                part[2] -= *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
+                                part[3] -= *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
+                            } else {
+                                /* Repel: add LUT/4 to velocity */
+                                part[2] += *(int *)((int)DAT_00487ab0 + angle * 4) >> 2;
+                                part[3] += *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 2;
+                            }
+                            break;
+                        }
+                    }
+                    link_ptr++;
                 }
-                /* Ricochet: reverse velocity, restore position */
-                int angle = FUN_004257e0(0, 0, part[2], part[3]);
-                int new_angle;
-                if (rand() & 1) {
-                    new_angle = (angle + 0x200) & 0x7FF;
-                } else {
-                    new_angle = (angle - 0x200) & 0x7FF;
-                }
-                part[0] = old_x;
-                part[1] = old_y;
-                int *lut = (int *)DAT_00487ab0;
-                part[2] = lut[new_angle] * 0x14 >> 6;
-                part[3] = lut[(new_angle + 0x200) & 0x7FF] * 0x14 >> 6;
             }
 
-            /* Simplified damage: check player collision via coarse grid */
-            if (*(unsigned char *)((int)part + 0x12) < 2 && behavior >= 0xC4) {
-                int gx = part[0] >> 0x16;
-                int gy = part[1] >> 0x16;
-                if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
-                    unsigned char grid_byte = *(unsigned char *)((int)DAT_00487814 + gx + gy * DAT_004879f8);
+            /* Re-read position after deflection */
+            new_y = part[1];
+            new_x = part[0];
 
-                    /* Calculate base damage */
-                    int base_damage = 0x5000;  /* default */
-                    unsigned char ptype = *(unsigned char *)(part + 4);
-                    if (ptype == 5 || ptype == 6) base_damage = 0x2800;
-                    else if (ptype == 3 || ptype == 4) base_damage = 0x3C00;
-                    else if (ptype == 1 || ptype == 2) base_damage = 0x7800;
-                    if (behavior == 0xCD) base_damage = 0x8DC00;
+            /* Read tile at current position */
+            unsigned char tile = *(unsigned char *)((int)DAT_0048782c +
+                ((new_y >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1F)) + (new_x >> 0x12));
 
-                    /* Check player presence */
-                    if ((grid_byte & 1) && DAT_00489240 > 0) {
-                        int poff = 0;
-                        for (int p = 0; p < DAT_00489240; p++) {
-                            if (*(int *)(poff + 0x20 + DAT_00487810) > 0 && p != (int)owner) {
-                                /* Simple AABB check */
-                                int px = *(int *)(poff + DAT_00487810);
-                                int py = *(int *)(poff + 4 + DAT_00487810);
-                                int range = 0x40000 * 2;  /* ~2 tiles */
-                                if (part[0] > px - range && part[0] < px + range &&
-                                    part[1] > py - range && part[1] < py + range) {
+            /* Tile+4 check: certain tile types destroy non-0xCD particles */
+            if (behavior != (unsigned char)0xCD) {
+                if (*(char *)((unsigned int)tile * 0x20 + 4 + (int)DAT_00487928) == '\x01') {
+                    goto remove_particle;
+                }
+            }
+
+            /* Wall collision (skip for behavior 0xC4) */
+            if (behavior != (unsigned char)0xC4) {
+                if (*(char *)((unsigned int)tile * 0x20 + 2 + (int)DAT_00487928) == '\0' &&
+                    *(char *)((unsigned int)tile * 0x20 + 10 + (int)DAT_00487928) == '\0') {
+                    /* Non-passable tile hit */
+                    /* 25% chance: spawn wall-hit explosion */
+                    unsigned int rval = rand();
+                    rval = rval & 0x80000003;
+                    if ((int)rval < 0) rval = (rval - 1 | 0xFFFFFFFC) + 1;
+                    if (rval == 0) {
+                        char beh = *(char *)((int)part + 0x13);
+                        if (beh == (char)0xC6 || beh == (char)0xC8 ||
+                            beh == (char)0xCD || beh == (char)0xC9) {
+                            if (tile != 0x0A && tile != 0x10) {
+                                /* Calculate explosion level from particle type and frame */
+                                char ptype_c = (char)*(unsigned char *)(part + 4);
+                                int explevel;
+                                if (ptype_c == 5 || ptype_c == 6) {
+                                    explevel = (0x16 - (unsigned int)*(unsigned char *)((int)part + 0x11));
+                                    explevel = (explevel + (explevel >> 31 & 0xF)) >> 4;
+                                } else if (ptype_c == 3 || ptype_c == 4) {
+                                    explevel = (int)(0x16 - (unsigned int)*(unsigned char *)((int)part + 0x11)) / 0xC;
+                                } else if (ptype_c == 1 || ptype_c == 2) {
+                                    explevel = (0x16 - (unsigned int)*(unsigned char *)((int)part + 0x11));
+                                    explevel = (explevel + (explevel >> 31 & 7)) >> 3;
+                                } else {
+                                    explevel = 3;
+                                }
+                                if (explevel < 0) explevel = 0;
+                                else if (explevel > 7) explevel = 7;
+                                if (beh == (char)0xCD) explevel = 6;
+                                /* param5: -1 for non-water tiles, 1 for water(tile==0xC) */
+                                char p5 = (tile != 0x0C) ? (char)-1 : (char)1;
+                                FUN_004357b0(new_x >> 0x12, new_y >> 0x12, explevel, 0, p5,
+                                             0, 0, 0, 0, -1, '\0', *(unsigned char *)(part + 5));
+                            }
+                        }
+                    }
+
+                    /* Behavior 0xC9 (bubbles): convert to 0xC4 instead of ricochet */
+                    if (behavior == (unsigned char)0xC9) {
+                        *(unsigned char *)((int)part + 0x13) = 0xC4;
+                    } else {
+                        /* Ricochet: reverse velocity direction, restore old position */
+                        int angle = FUN_004257e0(0, 0, part[2], part[3]);
+                        unsigned int rval2 = rand();
+                        rval2 = rval2 & 0x80000001;
+                        int btest = 0;
+                        if ((int)rval2 < 0) btest = ((rval2 - 1) | 0xFFFFFFFE) == 0xFFFFFFFF ? 1 : 0;
+                        else btest = (rval2 == 0) ? 1 : 0;
+                        unsigned int new_angle;
+                        if (btest) {
+                            new_angle = (angle + 0x200);
+                        } else {
+                            new_angle = (angle - 0x200);
+                        }
+                        part[0] = old_x;
+                        part[1] = old_y;
+                        new_angle &= 0x7FF;
+                        int *lut = (int *)DAT_00487ab0;
+                        part[2] = lut[new_angle] * 0x14 >> 6;
+                        part[3] = lut[(new_angle + 0x200) & 0x7FF] * 0x14 >> 6;
+                    }
+                }
+            }
+
+            /* Damage section: only on first 2 sub-frames, and behavior > 0xC6 or == 0xC4 */
+            unsigned char cur_sub = *(unsigned char *)((int)part + 0x12);
+            unsigned char cur_beh = *(unsigned char *)((int)part + 0x13);
+            if (cur_sub < 2 && (cur_beh > 0xC6 || cur_beh == 0xC4)) {
+                int p_y = part[1];
+                int p_x = part[0];
+                unsigned char grid_byte = *(unsigned char *)(
+                    (p_x >> 0x16) + (int)DAT_00487814 + (p_y >> 0x16) * DAT_004879f8);
+
+                /* Calculate base damage = multiplier * 0x1400 */
+                int dmg_mult = 4; /* default */
+                if (cur_beh == 0xCD) {
+                    dmg_mult = 0x6E;
+                } else {
+                    unsigned char ptype2 = *(unsigned char *)(part + 4);
+                    if (ptype2 >= 0x11) {
+                        dmg_mult = 10;
+                    } else if (ptype2 == 5 || ptype2 == 6) {
+                        dmg_mult = 2;
+                    } else if (ptype2 == 3 || ptype2 == 4) {
+                        dmg_mult = 3;
+                    } else if (ptype2 == 1 || ptype2 == 2) {
+                        dmg_mult = 6;
+                    }
+                }
+                int base_damage = dmg_mult * 0x1400;
+
+                /* Turret owner range 0x78-0x8B with CD behavior: quarter damage */
+                if (owner_byte >= 0x78 && owner_byte < 0x8C && cur_beh == 0xCD) {
+                    base_damage = base_damage >> 2;
+                }
+
+                /* 0xC4 and 0xC9 behaviors: double damage */
+                if (cur_beh == 0xC4 || cur_beh == 0xC9) {
+                    base_damage = base_damage * 2;
+                }
+
+                /* Destructible tiles (type >= 0xF0): damage tile health */
+                if (tile >= 0xF0) {
+                    int *tile_hp = (int *)((unsigned int)tile * 0x20 - 0x1DF4 + (int)DAT_00489e80);
+                    *tile_hp -= base_damage;
+                }
+
+                /* Player collision */
+                if ((grid_byte & 1) == 1 && DAT_00489240 > 0) {
+                    int poff = 0;
+                    int *stat_ptr = &DAT_00486be8[0];
+                    for (int p = 0; p < DAT_00489240; p++) {
+                        if (*(int *)(poff + 0x20 + DAT_00487810) > 0 &&
+                            p != (int)(unsigned int)owner_byte) {
+                            /* AABB check using sprite descriptor dimensions */
+                            int desc_base = (int)DAT_00481f20 + (unsigned int)*(unsigned char *)(part + 4) * 8;
+                            unsigned int hw = (unsigned int)(*(unsigned char *)(desc_base + 4) & 0xFE);
+                            int player_x = *(int *)(poff + DAT_00487810);
+                            if (player_x - (int)(hw * 0x20000) < p_x &&
+                                p_x < player_x + (int)(hw * 0x20000)) {
+                                int player_y = *(int *)(poff + 4 + DAT_00487810);
+                                unsigned int hh = (unsigned int)(*(unsigned char *)(desc_base + 5) & 0xFE);
+                                if (player_y - (int)(hh * 0x20000) < p_y &&
+                                    p_y < player_y + (int)(hh * 0x20000)) {
+                                    /* Hit! */
                                     *(unsigned char *)(poff + 0xA3 + DAT_00487810) = 1;
-                                    DAT_00486be8[p] += base_damage >> 0xD;
+                                    int dmg_score = base_damage >> 0xD;
+                                    *stat_ptr += dmg_score;
 
-                                    /* Apply damage (check team) */
-                                    if (owner < 0x50) {
-                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner * 0x598) !=
+                                    /* Track damage dealt by owner */
+                                    if (owner_byte < 0x50) {
+                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598) !=
+                                            *(char *)(poff + 0x2C + DAT_00487810)) {
+                                            DAT_00486e68[owner_byte] += dmg_score;
+                                        }
+                                        /* Apply damage (check team + friendly fire) */
+                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598) !=
                                             *(char *)(poff + 0x2C + DAT_00487810) || DAT_0048373d != '\0') {
                                             *(int *)(poff + 0x20 + DAT_00487810) -= base_damage;
                                         }
                                     } else {
                                         *(int *)(poff + 0x20 + DAT_00487810) -= base_damage;
                                     }
+
+                                    /* Record last attacker */
+                                    if (owner_byte < 0x50) {
+                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598) !=
+                                            *(char *)(poff + 0x2C + DAT_00487810) || DAT_0048373d != '\0') {
+                                            *(unsigned char *)(poff + 0x4A1 + DAT_00487810) = owner_byte;
+                                        }
+                                    } else if (owner_byte < 0x8C) {
+                                        *(unsigned char *)(poff + 0x4A1 + DAT_00487810) = owner_byte - 0x14;
+                                    } else {
+                                        *(unsigned char *)(poff + 0x4A1 + DAT_00487810) = 0xFF;
+                                    }
+
+                                    /* Set damage type indicator */
+                                    *(unsigned char *)(poff + 0x4A2 + DAT_00487810) = 0x6E;
+
+                                    /* Reduce armor if present */
+                                    unsigned char armor = *(unsigned char *)(poff + 0xC6 + DAT_00487810);
+                                    if (armor != 0) {
+                                        int new_armor = (unsigned int)armor - dmg_score - 1;
+                                        if (new_armor < 0) new_armor = 0;
+                                        *(unsigned char *)(poff + 0xC6 + DAT_00487810) = (unsigned char)new_armor;
+                                    }
                                 }
                             }
-                            poff += 0x598;
                         }
+                        poff += 0x598;
+                        stat_ptr++;
+                    }
+                }
+
+                /* Turret collision (tile+10 == 1 means turret zone) */
+                {
+                    unsigned char tile2 = *(unsigned char *)((int)DAT_0048782c +
+                        ((part[1] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1F)) + (part[0] >> 0x12));
+                    if (*(char *)((unsigned int)tile2 * 0x20 + 10 + (int)DAT_00487928) == '\x01') {
+                        if (DAT_00489260 > 0) {
+                            int toff = 0;
+                            int turret_base = (int)DAT_00481f28;
+                            for (int t = 0; t < DAT_00489260; t++) {
+                                unsigned char turret_team = *(unsigned char *)(toff + 0x1D + turret_base);
+                                if (owner_team != (unsigned int)turret_team) {
+                                    int desc_base2 = (int)DAT_00481f20 + (unsigned int)*(unsigned char *)(part + 4) * 8;
+                                    unsigned int thw = (unsigned int)(*(unsigned char *)(desc_base2 + 4) & 0xFE);
+                                    int turret_x = *(int *)(toff + turret_base);
+                                    if (turret_x - (int)(thw * 0x20000) < p_x &&
+                                        p_x < turret_x + (int)(thw * 0x20000)) {
+                                        int turret_y = *(int *)(toff + 4 + turret_base);
+                                        unsigned int thh = (unsigned int)(*(unsigned char *)(desc_base2 + 5) & 0xFE);
+                                        if (turret_y - (int)(thh * 0x20000) < p_y &&
+                                            p_y < turret_y + (int)(thh * 0x20000)) {
+                                            *(unsigned char *)(toff + 0x1E + turret_base) = 1;
+                                            *(int *)(toff + 0x10 + (int)DAT_00481f28) -= base_damage;
+                                            turret_base = (int)DAT_00481f28;
+                                        }
+                                    }
+                                }
+                                toff += 0x40;
+                            }
+                        }
+                    }
+                }
+
+                /* Building collision (grid_byte bit 1) */
+                if ((grid_byte & 2) == 2) {
+                    FUN_00451e70(i, base_damage);
+                }
+
+                /* Vehicle collision (grid_byte bit 2) */
+                if ((grid_byte & 4) == 4 && DAT_0048924c > 0) {
+                    int voff = 0;
+                    int veh_base = (int)DAT_00487884;
+                    for (int v = 0; v < DAT_0048924c; v++) {
+                        unsigned char veh_team = *(unsigned char *)(voff + 0x1C + veh_base);
+                        if (owner_team != (unsigned int)veh_team) {
+                            int desc_base3 = (int)DAT_00481f20 + (unsigned int)*(unsigned char *)(part + 4) * 8;
+                            unsigned int vhw = (unsigned int)(*(unsigned char *)(desc_base3 + 4) & 0xFE);
+                            int veh_x = *(int *)(voff + veh_base);
+                            if (veh_x - (int)(vhw * 0x20000) < p_x &&
+                                p_x < veh_x + (int)(vhw * 0x20000)) {
+                                int veh_y = *(int *)(voff + 8 + veh_base);
+                                unsigned int vhh = (unsigned int)(*(unsigned char *)(desc_base3 + 5) & 0xFE);
+                                if (veh_y - (int)(vhh * 0x20000) < p_y &&
+                                    p_y < veh_y + (int)(vhh * 0x20000)) {
+                                    *(unsigned char *)(voff + 0x2C + veh_base) = 1;
+                                    *(int *)(voff + 0x28 + (int)DAT_00487884) -= base_damage;
+                                    veh_base = (int)DAT_00487884;
+                                }
+                            }
+                        }
+                        voff += 0x40;
                     }
                 }
             }
         }
 
-        /* Check max frame again after all processing */
-        if (*(unsigned char *)((int)part + 0x11) >= max_frame) {
+check_end_frame:
+        /* Final expiry check */
+        if (*(unsigned char *)((int)part + 0x11) >=
+            *(unsigned char *)((int)DAT_00481f20 + 6 + (unsigned int)*(unsigned char *)(part + 4) * 8)) {
             goto remove_particle;
         }
 
@@ -2111,7 +2480,7 @@ remove_particle:
         *(unsigned char *)(part + 5) = *(unsigned char *)((int)DAT_00481f34 + last + 0x14);
         *(unsigned char *)((int)part + 0x15) = *(unsigned char *)((int)DAT_00481f34 + last + 0x15);
         if (i >= DAT_00489250) break;
-        /* Don't increment i — re-check this slot */
+        /* Don't increment i — re-check swapped-in entry */
     }
 }
 /* ===== FUN_00455a20 — Turret_Step_Up (00455A20) ===== */
@@ -3738,6 +4107,11 @@ void FUN_00453cd0(void)
         {
             unsigned char stype = (unsigned char)p[4]; /* byte at +0x10 */
             if (stype > 0x0b && stype < 0x12) {
+                /* Velocity damping for heavy fire (types 0x0F-0x11): vel *= 0.99 per tick */
+                if (stype > 0x0e) {
+                    p[2] = (unsigned int)(int)((double)(int)p[2] * 0.99);
+                    p[3] = (unsigned int)(int)((double)(int)p[3] * 0.99);
+                }
                 unsigned int pi2 = 0;
                 if (DAT_00489240 > 0) {
                     int poff = 0;

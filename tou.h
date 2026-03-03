@@ -172,7 +172,8 @@ extern void                 *DAT_00487830;      /* debris/particle array (32 byt
 extern void                 *DAT_00481f2c;      /* edge record array (32 bytes each) */
 extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
-extern void                 *DAT_00487aa8;      /* ammo/sound data table */
+extern void                 *DAT_00487aa8;      /* particle color palette (256 x RGB555, from pal.col) */
+extern void                 *DAT_00481f4c;      /* ship color palette (256 x RGB555, from shipal.col) */
 extern int                   DAT_0048784c;      /* entity-to-entity link count */
 extern void                 *DAT_0048781c;      /* entity link table base */
 extern char                  DAT_0048373d;       /* friendly fire enabled flag */
@@ -639,6 +640,7 @@ void FUN_0041f900(void);
 void FUN_00422a10(void);
 void FUN_0042d8b0(void);  /* Full implementation in init.cpp */
 int  FUN_00422740(void);
+int  FUN_004252d0(void);    /* Load pal.col + shipal.col color palettes */
 void FUN_00420be0(void);
 void FUN_0041e580(void);
 int  FUN_00414060(void);

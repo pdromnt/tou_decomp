@@ -1625,6 +1625,65 @@ static int FUN_004254b0(void)
     return 1;
 }
 
+/* ===== FUN_004252d0 - Load color palettes (004252d0) ===== */
+/* Loads pal.col → DAT_00487aa8 and shipal.col → DAT_00481f4c.
+ * Both files are 768-byte VGA palettes (256 entries × 3 bytes, 6-bit per channel 0-63).
+ * Each entry is converted to X1R5G5B5 (15-bit) and stored as unsigned short.
+ * Total: 256 entries × 2 bytes = 0x200 bytes per palette buffer. */
+int FUN_004252d0(void)
+{
+    unsigned char buf[0x300];  /* 768 bytes = 256 RGB triplets */
+
+    /* --- Load pal.col → DAT_00487aa8 (particle/effect palette) --- */
+    FILE *f = fopen("data\\pal.col", "rb");
+    if (!f) {
+        LOG("[LOAD] ERROR: Could not open data\\pal.col\n");
+        return 0;
+    }
+    fread(buf, 1, 0x300, f);
+    fclose(f);
+
+    {
+        unsigned short *dst = (unsigned short *)DAT_00487aa8;
+        for (int i = 0; i < 256; i++) {
+            unsigned int R = buf[i * 3];      /* 0-63 */
+            unsigned int G = buf[i * 3 + 1];  /* 0-63 */
+            unsigned int B = buf[i * 3 + 2];  /* 0-63 */
+            /* VGA 6-bit → X1R5G5B5:
+             * Original asm: pixel = ((B<<2)>>3) + ((G<<4)&0xFFE0) + ((R<<9)&0xFC00)
+             * Equivalent to: (R>>1)<<10 | (G>>1)<<5 | (B>>1) */
+            dst[i] = (unsigned short)(((B << 2) >> 3) +
+                                      ((G << 4) & 0xFFE0) +
+                                      ((R << 9) & 0xFC00));
+        }
+    }
+    LOG("[LOAD] pal.col: 256 palette entries loaded into DAT_00487aa8\n");
+
+    /* --- Load shipal.col → DAT_00481f4c (ship palette) --- */
+    f = fopen("data\\shipal.col", "rb");
+    if (!f) {
+        LOG("[LOAD] ERROR: Could not open data\\shipal.col\n");
+        return 0;
+    }
+    fread(buf, 1, 0x300, f);
+    fclose(f);
+
+    {
+        unsigned short *dst = (unsigned short *)DAT_00481f4c;
+        for (int i = 0; i < 256; i++) {
+            unsigned int R = buf[i * 3];
+            unsigned int G = buf[i * 3 + 1];
+            unsigned int B = buf[i * 3 + 2];
+            dst[i] = (unsigned short)(((B << 2) >> 3) +
+                                      ((G << 4) & 0xFFE0) +
+                                      ((R << 9) & 0xFC00));
+        }
+    }
+    LOG("[LOAD] shipal.col: 256 palette entries loaded into DAT_00481f4c\n");
+
+    return 1;
+}
+
 /* ===== FUN_00422740 - Master data loader (00422740) ===== */
 int FUN_00422740(void)
 {
@@ -1643,13 +1702,14 @@ int FUN_00422740(void)
     /* Load sprites from all3.gfx */
     if (FUN_00423150() != 1) return 0;
 
+    /* Load color palettes (pal.col → DAT_00487aa8, shipal.col → DAT_00481f4c) */
+    if (FUN_004252d0() != 1) return 0;
+
     /* Load explosion sprites */
     if (FUN_00422fc0() != 1) return 0;
 
     /* Load entity type definitions from loadtime.dat */
     FUN_004254b0();
-
-    /* TODO: Load palettes (pal_col, shipal_col) - not critical for intro entities */
 
     /* Load ballistic arc lookup table from taulu2.tau */
     {
@@ -4130,12 +4190,14 @@ void FUN_0041a8c0(void)
 
     /* 7. Generate team color palette LUTs (palettes 6, 7, 8 of DAT_004878f0).
      * Each LUT = 256 entries of RGB565: first 128 fade from black to team color,
-     * next 128 fade from team color to white. */
+     * next 128 fade from team color to white.
+     * Source colors are X1R5G5B5; we extract channels then pack as RGB565. */
     for (i = 0; i < 3; i++) {
         unsigned short team_color = DAT_00483838[i];
-        unsigned int r5 = (unsigned char)(((unsigned char)(team_color >> 5)) << 3);
-        unsigned int g5 = (unsigned char)(((unsigned char)(team_color >> 10)) << 3);
-        unsigned int b5 = (unsigned char)(((unsigned char)team_color) << 3);
+        /* Extract 8-bit channels from X1R5G5B5 source palette */
+        unsigned int tc_g = (unsigned char)(((unsigned char)(team_color >> 5)) << 3);
+        unsigned int tc_r = (unsigned char)(((unsigned char)(team_color >> 10)) << 3);
+        unsigned int tc_b = (unsigned char)(((unsigned char)team_color) << 3);
         unsigned short *lut = (unsigned short *)DAT_004878f0[6 + i];
 
         /* First half: fade black → team color (128 entries) */
@@ -4147,25 +4209,25 @@ void FUN_0041a8c0(void)
             if (cR > 255) cR = 255;
             if (cG > 255) cG = 255;
             if (cB > 255) cB = 255;
-            lut[j] = (unsigned short)((cB >> 3) + (((cR & 0x1F8) * 0x20 + (cG & 0x3FF8)) * 4));
-            accR += g5;
-            accG += r5;
-            accB += b5;
+            lut[j] = (unsigned short)(((cR & 0xF8) << 8) | ((cG & 0xFC) << 3) | (cB >> 3));
+            accR += tc_r;
+            accG += tc_g;
+            accB += tc_b;
         }
 
         /* Second half: fade team color → white (128 entries) */
         int fadeR = 0, fadeG = 0, fadeB = 0;
         for (j = 128; j < 256; j++) {
-            int cR = ((fadeR + ((fadeR >> 31) & 0x7F)) >> 7) + (int)g5;
-            int cG = ((fadeG + ((fadeG >> 31) & 0x7F)) >> 7) + (int)r5;
-            int cB = ((fadeB + ((fadeB >> 31) & 0x7F)) >> 7) + (int)b5;
+            int cR = ((fadeR + ((fadeR >> 31) & 0x7F)) >> 7) + (int)tc_r;
+            int cG = ((fadeG + ((fadeG >> 31) & 0x7F)) >> 7) + (int)tc_g;
+            int cB = ((fadeB + ((fadeB >> 31) & 0x7F)) >> 7) + (int)tc_b;
             if (cR > 255) cR = 255;
             if (cG > 255) cG = 255;
             if (cB > 255) cB = 255;
-            lut[j] = (unsigned short)((cB >> 3) + (((cR & 0x1F8) * 0x20 + (cG & 0x3FF8)) * 4));
-            fadeR += (255 - (int)r5);
-            fadeG += (255 - (int)g5);
-            fadeB += (255 - (int)b5);
+            lut[j] = (unsigned short)(((cR & 0xF8) << 8) | ((cG & 0xFC) << 3) | (cB >> 3));
+            fadeR += (255 - (int)tc_r);
+            fadeG += (255 - (int)tc_g);
+            fadeB += (255 - (int)tc_b);
         }
     }
 
