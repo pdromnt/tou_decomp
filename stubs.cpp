@@ -1832,13 +1832,28 @@ void FUN_00434310(void)
 
         /* === Entity behavior (inline replacement for callback at +0x34) === */
 
+        /* Entity category flags */
+        int is_projectile = (ent_type == 0 || ent_type == 1 || ent_type == 0x11 || ent_type == 0x13);
+        int is_debris = (ent_type == 2 || ent_type >= 0x6C || ent_state == 5);
+
+        /* Apply projectile gravity BEFORE position integration.
+         * Original callback at 0x438010 (addr 0x4386e3):
+         *   imul edx, [DAT_00483828]   ; edx = entity[+0x38] * gravity_constant
+         *   add  edi, edx              ; vy += gravity (applied FIRST)
+         *   add  ecx, eax              ; pos_x += vx
+         *   ... pos_y += vy            ; uses updated vy
+         * entity[+0x38] = 6 for all turret projectiles (set at spawn). */
+        if (is_projectile && !is_debris) {
+            *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
+        }
+
         /* Position integration: pos += vel */
         *(int *)(ebase + 0x00) += *(int *)(ebase + 0x18);
         *(int *)(ebase + 0x08) += *(int *)(ebase + 0x1C);
 
-        /* Apply gravity for debris entities */
-        if (ent_type == 2 || ent_type >= 0x6C || ent_state == 5) {
-            *(int *)(ebase + 0x1C) += DAT_00483824;  /* gravity */
+        /* Apply gravity + drag for debris entities (AFTER position update) */
+        if (is_debris) {
+            *(int *)(ebase + 0x1C) += DAT_00483824;  /* debris gravity */
             /* Apply drag */
             *(int *)(ebase + 0x18) = (int)((double)*(int *)(ebase + 0x18) * 0.97);
             *(int *)(ebase + 0x1C) = (int)((double)*(int *)(ebase + 0x1C) * 0.97);
@@ -1853,18 +1868,64 @@ void FUN_00434310(void)
             should_remove = 1;
         }
 
-        /* Wall collision for non-debris entities (projectiles) */
-        if (!should_remove && ent_type == 0 && ent_state != 5) {
+        /* Wall collision for projectile entities (types from turret spawn):
+         *   0x00 = basic bullet (wtype 0,1,5)
+         *   0x01 = homing missile (wtype 3)
+         *   0x11 = spread shot (wtype 4)
+         *   0x13 = guided missile (wtype 2)
+         * Debris entities (type 2, >=0x6C, state 5) are excluded. */
+        if (!should_remove && is_projectile && !is_debris) {
+            /* Wall collision for projectiles */
             int tx = pos_x >> 0x12;
             int ty = pos_y >> 0x12;
             if (tx > 0 && ty > 0 && tx < (int)DAT_004879f0 && ty < (int)DAT_004879f4) {
                 int tile_off = (ty << shift) + tx;
                 unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_off);
-                /* Check tile passability (field +3 in tile table = 0 means solid) */
-                if (*(char *)((unsigned int)tile * 0x20 + 3 + (int)DAT_00487928) == '\0') {
-                    /* Hit wall: apply damage to tile and expire */
+                unsigned char pass2 = *(unsigned char *)((unsigned int)tile * 0x20 + 2 + (int)DAT_00487928);
+                unsigned char pass10 = *(unsigned char *)((unsigned int)tile * 0x20 + 10 + (int)DAT_00487928);
+                /* Check tile passability: offset +2 = walkable, +10 = flyable */
+                if (pass2 == 0 && pass10 == 0) {
+                    /* Hit solid wall: apply damage to tile and expire */
                     FUN_00451e70(i, 0x5000);
                     should_remove = 1;
+                }
+            } else {
+            }
+
+            /* Player collision for projectiles */
+            if (!should_remove) {
+                int gx = pos_x >> 0x16;
+                int gy = pos_y >> 0x16;
+                if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
+                    unsigned char grid_byte = *(unsigned char *)((int)DAT_00487814 + gx + gy * DAT_004879f8);
+                    if ((grid_byte & 1) && DAT_00489240 > 0) {
+                        /* A player is nearby — check AABB overlap */
+                        /* Entity +0x22 stores (team + 0x78) for turret projectiles */
+                        unsigned char raw_team = *(unsigned char *)(ebase + 0x22);
+                        unsigned char proj_team = (raw_team >= 0x78) ? (raw_team - 0x78) : 0xFF;
+                        for (int p = 0; p < DAT_00489240; p++) {
+                            int poff = p * 0x598;
+                            int player_health = *(int *)(poff + 0x20 + DAT_00487810);
+                            if (player_health <= 0) continue;
+
+                            int px = *(int *)(poff + DAT_00487810);
+                            int py = *(int *)(poff + 4 + DAT_00487810);
+
+                            /* AABB: ~2 tiles range */
+                            int range = 0x80000;
+                            if (pos_x - range < px && px < pos_x + range &&
+                                pos_y - range < py && py < pos_y + range) {
+                                /* Check team — only damage enemies */
+                                unsigned char player_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
+                                if (proj_team != player_team || DAT_0048373d != 0) {
+                                    /* Apply damage */
+                                    *(int *)(poff + 0x20 + DAT_00487810) -= 0x5000;
+                                    should_remove = 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2779,10 +2840,14 @@ int FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y,
 char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y,
                   int angle, float range_sqrt, int gravity)
 {
-    /* Compute velocity components from angle using the sin/cos LUT */
+    /* Compute velocity components from angle using the sin/cos LUT.
+     * Original scales by range_sqrt * 9.2 (double constant at 0x00475828).
+     * This scaling + gravity*96 preserves the same arc shape as the entity
+     * physics (velocity * fRange * 2.3, gravity * 6 * DAT_00483828) since
+     * 9.2 = 4*2.3 and 96 = 4²*6, keeping g/v² constant. */
     int *math_lut = (int *)DAT_00487ab0;
-    int vx = math_lut[angle];                    /* cos component */
-    int vy = math_lut[angle + 0x200];            /* sin component (offset 0x800 bytes / 4) */
+    int vx = (int)((double)math_lut[angle] * (double)range_sqrt * 9.2);
+    int vy = (int)((double)math_lut[angle + 0x200] * (double)range_sqrt * 9.2);
 
     /* Compute step count based on gravity */
     unsigned int steps;
@@ -2839,7 +2904,10 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 {
     int base = weap_idx * 0x40;
 
-    /* Predict target position at lead time mult1 */
+    /* Predict target position at lead time mult1.
+     * Uses 32-bit arithmetic matching the original binary — overflow wraps,
+     * and FUN_004599f0 returns 0x801 for out-of-range predicted positions.
+     * The caller's fallback (restoring direct_aim on 0x801) handles this. */
     DAT_00481ee8 = DAT_00481ef8 * DAT_00481efc * mult1 + DAT_00481ee0;
     DAT_00481ee4 = DAT_00481efc * DAT_00481ef4 * mult1 + DAT_00481edc;
 
@@ -2981,11 +3049,12 @@ void FUN_00458010(void)
                                 if (angle == 0x801 ||
                                     FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle, fRange, DAT_00481ed0) == '\0') {
                                     /* Try high arc */
-                                    angle = FUN_004599f0(src_x, src_y, tgt_x, tgt_y, 1, fRange, DAT_00481ed0);
-                                    if (angle == 0x801 ||
-                                        FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle, fRange, DAT_00481ed0) == '\0') {
+                                    int angle_hi = FUN_004599f0(src_x, src_y, tgt_x, tgt_y, 1, fRange, DAT_00481ed0);
+                                    if (angle_hi == 0x801 ||
+                                        FUN_00459c70(src_x, src_y, tgt_x, tgt_y, angle_hi, fRange, DAT_00481ed0) == '\0') {
                                         goto next_player;
                                     }
+                                    angle = angle_hi;
                                     side = 1;
                                 }
                                 best_target_idx = p;
@@ -3017,18 +3086,39 @@ next_player:
                             (int)(unsigned char)DAT_00481ed8, fRange, DAT_00481ed0);
                         *(int *)(off + 0xc + (int)DAT_00481f28) = aim_angle;
 
-                        /* Predictive aim for non-type-3 weapons on low arc */
+                        /* Predictive aim for non-type-3 weapons on low arc.
+                         * The original 32-bit prediction overflows for large
+                         * velocity*efc products (gravity>=0x50 makes efc huge).
+                         * We guard against overflow AND fall back to direct aim
+                         * if prediction returns 0x801 (LUT out-of-bounds). */
                         if (*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x03' && DAT_00481ed8 == 0) {
                             if ((int)DAT_00481ed0 < 0x50) {
                                 DAT_00481efc = (int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3);
                             } else {
                                 DAT_00481efc = (int)((float)DAT_00481f10 / fRange);
                             }
-                            int r = FUN_00459e90(3, 4, i, fRange);
-                            if (r == 0) {
-                                FUN_00459e90(1, 3, i, fRange);
-                            } else {
-                                FUN_00459e90(4, 8, i, fRange);
+
+                            int direct_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
+
+                            /* Check if velocity*efc*8 fits in 32-bit */
+                            long long vx_check = (long long)DAT_00481ef4 * DAT_00481efc;
+                            long long vy_check = (long long)DAT_00481ef8 * DAT_00481efc;
+                            const long long SAFE_LIMIT = 0x7FFFFFFFLL / 8;
+                            if (vx_check > -SAFE_LIMIT && vx_check < SAFE_LIMIT &&
+                                vy_check > -SAFE_LIMIT && vy_check < SAFE_LIMIT) {
+                                /* Safe to predict */
+                                int r = FUN_00459e90(3, 4, i, fRange);
+                                if (r == 0) {
+                                    FUN_00459e90(1, 3, i, fRange);
+                                } else {
+                                    FUN_00459e90(4, 8, i, fRange);
+                                }
+                            }
+
+                            /* If prediction produced 0x801 (LUT out-of-bounds for
+                             * predicted position), restore the valid direct aim */
+                            if (*(int *)(off + 0xc + (int)DAT_00481f28) == 0x801) {
+                                *(int *)(off + 0xc + (int)DAT_00481f28) = direct_aim;
                             }
                         }
                         goto aim_slew;
@@ -3222,8 +3312,10 @@ aim_slew:
                                 int eb = (int)DAT_004892e8;
                                 *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28) + muzzle_dx;
                                 *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28) + muzzle_dy;
-                                *(int *)(e + 0x18 + eb) = cos_val;
-                                *(int *)(e + 0x1c + eb) = sin_val;
+                                /* Velocity: scale by fRange * 2.3 (double at 0x4757f0) to match
+                                 * ballistic trajectory computed by FUN_004599f0/FUN_00459c70. */
+                                *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
+                                *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
                                 *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
                                 *(int *)(e + 4 + eb) = *(int *)(e + eb);
@@ -3264,8 +3356,8 @@ aim_slew:
                                     math_lut[barrel_aim] * 2 + muzzle_dx;
                                 *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28) +
                                     math_lut[barrel_aim + 0x200] * 2 + muzzle_dy;
-                                *(int *)(e + 0x18 + eb) = cos_val;
-                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
+                                *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
                                 *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
                                 *(int *)(e + 4 + eb) = *(int *)(e + eb);
@@ -3294,8 +3386,8 @@ aim_slew:
                                 int eb = (int)DAT_004892e8;
                                 *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
                                 *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
-                                *(int *)(e + 0x18 + eb) = cos_val;
-                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
+                                *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
                                 *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
                                 *(int *)(e + 4 + eb) = *(int *)(e + eb);
@@ -3324,8 +3416,8 @@ aim_slew:
                                 int eb = (int)DAT_004892e8;
                                 *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
                                 *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
-                                *(int *)(e + 0x18 + eb) = cos_val;
-                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
+                                *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
                                 *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
                                 *(int *)(e + 4 + eb) = *(int *)(e + eb);
@@ -3353,8 +3445,8 @@ aim_slew:
                                 int eb = (int)DAT_004892e8;
                                 *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
                                 *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
-                                *(int *)(e + 0x18 + eb) = cos_val;
-                                *(int *)(e + 0x1c + eb) = sin_val;
+                                *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
+                                *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
                                 *(int *)(e + 0x14 + eb) = *(int *)(e + 8 + eb);
                                 *(int *)(e + 4 + eb) = *(int *)(e + eb);

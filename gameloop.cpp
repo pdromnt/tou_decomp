@@ -483,8 +483,21 @@ void Game_Update_Render(void)
         static DWORD key_cooldown = 0;  /* DAT_00489ee8: key repeat timer */
         DWORD now_input = timeGetTime();
 
-        /* State 4: Level preview — Enter starts gameplay, ESC/F10 exits */
+        /* State 4: Level preview — Enter starts gameplay, F10 exits to menu.
+         * Original checks F10 and Enter in state 4 at 0x004617FF.
+         * ESC is NOT handled in state 4 within Game_Update_Render (original
+         * skips ESC for states 3 and 4). */
         if (g_SubState == 4) {
+            /* F10 (scan 0x44): exit to menu from level preview */
+            static unsigned char f10_4_prev = 0;
+            if ((g_KeyboardState[0x44] & 0x80) && !f10_4_prev && now_input >= key_cooldown) {
+                g_GameState = 5;  /* Game over → menu via FUN_0041d740 scoreboard path */
+                key_cooldown = now_input + 500;
+                return;
+            }
+            f10_4_prev = (g_KeyboardState[0x44] & 0x80) ? 1 : 0;
+
+            /* Enter (scan 0x1C): start gameplay */
             static unsigned char enter4_prev = 0;
             if ((g_KeyboardState[0x1C] & 0x80) && !enter4_prev && now_input >= key_cooldown) {
                 g_SubState = 0;
@@ -496,14 +509,6 @@ void Game_Update_Render(void)
             }
             enter4_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
 
-            /* ESC in state 4: exit to menu */
-            static unsigned char esc4_prev = 0;
-            if ((g_KeyboardState[0x01] & 0x80) && !esc4_prev) {
-                g_GameState = 5;
-                return;
-            }
-            esc4_prev = (g_KeyboardState[0x01] & 0x80) ? 1 : 0;
-
             /* COMPAT: Auto-start gameplay (level preview camera not implemented) */
             g_SubState = 0;
             g_TimerStart = timeGetTime();
@@ -514,27 +519,47 @@ void Game_Update_Render(void)
         /* State 2: ESC pause menu — F10/Enter/ESC (matching original FUN_00461710).
          * Original sprite 0x37 panel shows: "F10 Exit to menu / Enter Next level / Esc Back to the game" */
         if (g_SubState == 2) {
-            /* F10 (scan 0x44): exit to menu — sets round counter to max, forcing game-over */
+            /* F10 (scan 0x44): exit to menu.
+             * Original sets level index to max rounds → substate 100 → increment
+             * overshoots → substate 3 detects all rounds done → g_GameState=5. */
             static unsigned char f10_prev = 0;
             if ((g_KeyboardState[0x44] & 0x80) && !f10_prev && now_input >= key_cooldown) {
-                g_GameState = 5;
+                *(unsigned char *)&DAT_0048693c = g_ConfigBlob[0]; /* set to max rounds */
+                g_SubState = 100;
+                DAT_004892a5 = 0;
                 key_cooldown = now_input + 500;
                 g_NeedsRedraw = 1;
-                return;
             }
             f10_prev = (g_KeyboardState[0x44] & 0x80) ? 1 : 0;
 
-            /* Enter (scan 0x1C): next level / skip level */
+            /* Enter (scan 0x1C): skip to next level.
+             * Original sets g_SubState=100 → level index increments → substate 3
+             * → g_GameState=2 (menu reload with next level). */
             static unsigned char enter2_prev = 0;
             if ((g_KeyboardState[0x1C] & 0x80) && !enter2_prev && now_input >= key_cooldown) {
-                /* Original: sets g_SubState=100 → state 3 transition (next round).
-                 * Our decomp maps this to exit for now (full state machine not implemented). */
-                g_GameState = 5;
+                g_SubState = 100;
+                DAT_004892a5 = 0;
                 key_cooldown = now_input + 500;
                 g_NeedsRedraw = 1;
-                return;
             }
             enter2_prev = (g_KeyboardState[0x1C] & 0x80) ? 1 : 0;
+        }
+
+        /* P key (configurable, default scan 0x19) — toggle pause.
+         * Original at 0x004618FB: toggles g_SubState between 0 and 1.
+         * Only works when g_SubState < 2 (not during ESC-menu or transitions). */
+        if (g_SubState < 2) {
+            static unsigned char pause_prev = 0;
+            unsigned char pause_key = DAT_004837ba;  /* configurable pause key */
+            if ((g_KeyboardState[pause_key] & 0x80) && !pause_prev && now_input >= key_cooldown) {
+                g_SubState = (g_SubState == 0) ? 1 : 0;
+                key_cooldown = now_input + 500;
+                g_NeedsRedraw = 1;
+                g_TimerStart = timeGetTime();
+                g_TimerAux = 0;
+                g_FrameTimer = timeGetTime();
+            }
+            pause_prev = (g_KeyboardState[pause_key] & 0x80) ? 1 : 0;
         }
 
         /* ESC key (scan 0x01) — toggle between active (0) and ESC menu (2).
@@ -559,6 +584,35 @@ void Game_Update_Render(void)
             g_GameState = 0xFE;
             return;
         }
+    }
+
+    /* ---- Round-end state machine (substates 100/101 → 3) ---- */
+    /* Original at 0x00461a10 / 0x00461a2d in Game_Update_Render.
+     * Substate 100 = skip level (Enter), substate 101 = natural round end.
+     * Both increment DAT_0048693c (level slot index) and transition to 3.
+     * Substate 3 checks if all rounds are done → menu reload or game over. */
+    if (g_SubState == 100 || g_SubState == 101) {
+        DAT_00487640[0] = 0;
+        DAT_004892a5 = 0;
+
+        /* Advance to next level slot */
+        g_SubState = 3;
+        (*(unsigned char *)&DAT_0048693c)++;
+
+        LOG("[GAME] Round end: level slot now %d / %d rounds\n",
+            (int)(unsigned char)DAT_0048693c, (int)g_ConfigBlob[0]);
+    }
+
+    if (g_SubState == 3) {
+        g_SubState = 0;
+        if ((unsigned char)DAT_0048693c >= g_ConfigBlob[0]) {
+            /* All rounds completed → game over / scoreboard path */
+            g_GameState = 5;
+        } else {
+            /* More rounds to play → reload menu with next level */
+            g_GameState = 2;
+        }
+        return;
     }
 
     /* ---- Game logic update ---- */

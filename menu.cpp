@@ -98,12 +98,14 @@ int Menu_Init_And_Loop(void)
 /* Loads level file, initializes entity arrays, and prepares the game world.
  * Returns 1 on success, 0 on failure.
  *
- * Phase 6a: Loads real .lev files (hardcoded to "minibase" for testing).
- * Heavy subsystems (ships, particles, AI, pathfinding) are still stubbed
- * pending further decompilation. */
+ * Level selection uses the indirection table at g_ConfigBlob[4..0x323]
+ * (200 ints mapping slot index → actual level index in DAT_00485090).
+ * DAT_0048693c holds the current slot, masked to 0xFF. */
 int Load_Level_Resources(void)
 {
     int result;
+    int levelIdx = 0;
+    char *levelName;
 
     LOG("[LEVEL] Load_Level_Resources\n");
 
@@ -116,9 +118,59 @@ int Load_Level_Resources(void)
     DAT_0048764a = 0;      /* not network mode */
     DAT_00489d7c[0] = '\0'; /* clear error buffer */
 
-    /* Phase 6a: Hardcode "minibase" for initial testing.
-     * TODO: Read level name from config (DAT_00486938 / level list). */
-    result = Load_Level_File("minibase");
+    /* Random mirror: g_ConfigBlob[1] enables X-flip randomization */
+    if (g_ConfigBlob[1] == 1) {
+        DAT_004892e4 = (char)(rand() & 1);
+    }
+
+    /* Select level from indirection table.
+     * g_ConfigBlob[4..0x323] = 200 ints mapping slot → level index.
+     * DAT_0048693c & 0xFF = current slot number. */
+    levelName = DAT_00486938;  /* fallback: previously set name (if any) */
+
+    if (DAT_0048764a == '\0') {
+        /* Local mode: look up level from indirection table */
+        int *levelOrder = (int *)&g_ConfigBlob[4]; /* DAT_00481f5c */
+        levelIdx = levelOrder[DAT_0048693c & 0xFF];
+
+        /* Bounds check against available levels */
+        if (levelIdx < 0 || levelIdx >= DAT_00485088) {
+            LOG("[LEVEL] WARNING: level index %d out of range (0-%d), clamping\n",
+                levelIdx, DAT_00485088 - 1);
+            levelIdx = 0;
+        }
+
+        if (DAT_00485ea0[levelIdx] == '\x02') {
+            /* GG theme (type 2): procedural level generation.
+             * FUN_004143e0 generates a random level from GG theme assets.
+             * Not yet decompiled — fall back to first available .lev level. */
+            LOG("[LEVEL] GG theme '%s' selected (index %d) — not yet implemented\n",
+                (char *)DAT_00485090[levelIdx], levelIdx);
+
+            /* Try to find a regular .lev level as fallback */
+            if (DAT_0048508c > 0) {
+                levelIdx = 0;
+                LOG("[LEVEL] Falling back to first .lev level\n");
+            } else {
+                LOG("[LEVEL] ERROR: No .lev levels available for fallback\n");
+                return 0;
+            }
+        }
+
+        levelName = (char *)DAT_00485090[levelIdx];
+    }
+
+    if (!levelName || levelName[0] == '\0') {
+        LOG("[LEVEL] ERROR: No level name available\n");
+        return 0;
+    }
+
+    DAT_00486938 = levelName;
+    DAT_0048693c = levelIdx;
+    LOG("[LEVEL] Selected level: '%s' (index %d, slot %d)\n",
+        levelName, levelIdx, DAT_0048693c & 0xFF);
+
+    result = Load_Level_File(levelName);
     if (result == 0) {
         LOG("[LEVEL] Load_Level_File FAILED: %s\n", DAT_00489d7c);
         return 0;
@@ -127,7 +179,7 @@ int Load_Level_Resources(void)
     /* Load per-level sky image (.SWP) if sky rendering is enabled.
      * The level config blob sets DAT_00483960=1 for levels with sky. */
     if (DAT_00483960 == '\x01') {
-        if (!Load_SWP_Sky("minibase")) {
+        if (!Load_SWP_Sky(levelName)) {
             LOG("[LEVEL] WARNING: Sky enabled but no SWP file, falling back to tiled sprite\n");
         }
     }
@@ -656,9 +708,16 @@ after_team:
     DAT_00483824 = (unsigned int)DAT_00483860[0x107] * (DAT_00483748 & 0xFF) * 0x17;
     DAT_00483828 = DAT_00483824 / 3;
 
-    LOG("[INIT] Stat scaling: turrets=%d, troopers=%d, team_mode=%d, dmg_scale=%d\n",
+    /* Re-apply DAT_00483828 from config blob.  In the original, FUN_0041a8c0
+     * (session init, not yet implemented) re-syncs the config after level
+     * loading, which resets DAT_00483828 to the blob value (normally 0).
+     * Without this, the computed value (1533) persists, forcing the ballistic
+     * LUT path in turret aiming instead of the correct direct-atan2 path. */
+    DAT_00483828 = *(int *)&g_ConfigBlob[0x18D0];
+
+    LOG("[INIT] Stat scaling: turrets=%d, troopers=%d, team_mode=%d, dmg_scale=%d, grav=%d\n",
         (int)(unsigned char)DAT_00483834, (int)(unsigned char)DAT_00483835,
-        (int)(unsigned char)DAT_00483836, DAT_00483824);
+        (int)(unsigned char)DAT_00483836, DAT_00483824, DAT_00483828);
 }
 
 /* ===== FUN_0041d2e0 - Edge Detection (0041D2E0) ===== */

@@ -265,8 +265,12 @@ MAIN_LOOP:
 
                 /* No messages pending - run game logic */
                 if (g_bIsActive == 0) {
-                    /* App is inactive - wait for messages */
-                    WaitMessage();
+                    /* App is inactive - yield CPU then set paused.
+                     * Original uses Sleep(0), not WaitMessage().
+                     * WaitMessage() blocks until a message arrives, preventing
+                     * the game loop from running. Sleep(0) yields but keeps
+                     * the loop spinning so the game can react when focus returns. */
+                    Sleep(0);
                     g_SubState     = 1;
                     g_NeedsRedraw  = 1;
                     g_SurfaceReady = 2;

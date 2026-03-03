@@ -13,13 +13,28 @@ SoundEntry     *g_SoundTable   = NULL;   /* 00487874 */
 FSOUND_STREAM  *g_MusicStream  = NULL;   /* 004806F8 */
 int             g_MusicChannel = -1;     /* 004806FC */
 
-/* ===== Init_Sound_Hardware (0040E530) ===== */
+/* ===== Init_Sound_Hardware (0040DF60) ===== */
+/* Original at 0040DF60 (was mislabeled as 0040E530).
+ * Clears music globals, checks FMOD version == 3.5, sets output/driver/mixer,
+ * inits FMOD with sample rate 44100 and max channels from config. */
 int Init_Sound_Hardware(void)
 {
     unsigned int outputType;
 
-    if (FSOUND_GetVersion() < 3.50f) {
-        LOG("[SND] FMOD version too old\n");
+    /* Load FMOD DLL at runtime (workaround for 64-bit toolchain) */
+    if (!FMOD_LoadLibrary()) {
+        LOG("[SND] Failed to load fmod.dll\n");
+        return 0;
+    }
+
+    /* Clear music state */
+    g_MusicStream  = NULL;   /* DAT_004806f8 */
+    g_MusicChannel = 0;      /* DAT_004806fc */
+
+    float ver = FSOUND_GetVersion();
+    LOG("[SND] FMOD version: %.2f\n", ver);
+    if (ver != 3.5f) {
+        LOG("[SND] FMOD version mismatch (expected 3.5, got %.2f)\n", ver);
         return 0;
     }
 
@@ -29,20 +44,25 @@ int Init_Sound_Hardware(void)
     case 1:  outputType = FSOUND_OUTPUT_DSOUND;   break;
     case 2:  outputType = FSOUND_OUTPUT_A3D;      break;
     case 3:  outputType = FSOUND_OUTPUT_NOSOUND;  break;
-    default: outputType = FSOUND_OUTPUT_NOSOUND;  break;
+    default: goto skip_output;
     }
-
     FSOUND_SetOutput(outputType);
+skip_output:
     FSOUND_SetDriver(0);
     FSOUND_SetMixer(FSOUND_MIXER_QUALITY_AUTODETECT);
 
-    if (FSOUND_Init(44100, 32, FSOUND_INIT_GLOBALFOCUS)) {
-        LOG("[SND] FMOD initialized OK\n");
+    /* Max channels from DAT_00483724[0] (blob offset 0x17CC) */
+    int maxChannels = DAT_00483724[0] & 0xFF;
+    if (maxChannels == 0) maxChannels = 32;  /* safety fallback */
+
+    if (FSOUND_Init(44100, maxChannels, FSOUND_INIT_GLOBALFOCUS)) {
+        LOG("[SND] FMOD initialized OK (output=%d, channels=%d)\n",
+            outputType, maxChannels);
         Load_Game_Sounds();
         return 1;
     }
 
-    LOG("[SND] FMOD init failed\n");
+    LOG("[SND] FMOD init failed (error=%d)\n", FSOUND_GetError());
     FSOUND_Close();
     return 0;
 }

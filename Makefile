@@ -2,11 +2,10 @@ CXX = g++
 CC = gcc
 CXXFLAGS = -c -I. -D_WIN32 -m32
 CFLAGS = -c -I. -D_WIN32 -m32
-LDFLAGS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32 -L. -lfmod
+LDFLAGS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32
 
 SRCS = winmain.cpp sound.cpp assets.cpp gameloop.cpp memory.cpp init.cpp graphics.cpp intro.cpp menu.cpp level.cpp math.cpp stubs.cpp utils.cpp effects.cpp entity.cpp
-LIBS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32
-OBJS = $(SRCS:.cpp=.o) stb_image_impl.o
+OBJS = $(SRCS:.cpp=.o) stb_image_impl.o fmod_loader.o
 TARGET = tou_decomp.exe
 
 all: $(TARGET)
@@ -19,6 +18,9 @@ $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 stb_image_impl.o: stb_image_impl.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+fmod_loader.o: fmod_loader.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 ifeq ($(OS),Windows_NT)

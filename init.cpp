@@ -1650,7 +1650,21 @@ int FUN_00422740(void)
     FUN_004254b0();
 
     /* TODO: Load palettes (pal_col, shipal_col) - not critical for intro entities */
-    /* TODO: Load taulu2.tau raw data into DAT_00489e90 */
+
+    /* Load ballistic arc lookup table from taulu2.tau */
+    {
+        FILE *f = fopen("data\\taulu2.tau", "rb");
+        if (f) {
+            fread(DAT_00489e90, 1, 0x82D0, f);
+            fclose(f);
+            unsigned short *lut_check = (unsigned short *)DAT_00489e90;
+            LOG("[LOAD] taulu2.tau: loaded 0x82D0 bytes, first words: %04X %04X %04X %04X\n",
+                lut_check[0], lut_check[1], lut_check[2], lut_check[3]);
+        } else {
+            LOG("[LOAD] WARNING: Could not open data\\taulu2.tau\n");
+        }
+    }
+
     /* TODO: FUN_00422900 - load names.dat */
 
     return 1;
@@ -1897,37 +1911,37 @@ int FUN_00414060(void)
             /* Skip directories */
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
 
-            /* Build path: "levels\<filename>" */
-            strcpy(pathbuf, "levels\\");
-            strcat(pathbuf, fd.cFileName);
-
-            /* Append ".LEV" extension for the data file path */
+            /* Strip ".lev" extension to get the level title (original uses
+             * MFC CFileFind::GetFileTitle which returns name without extension).
+             * Load_Level_File appends ".lev" when building the file path. */
             {
-                /* Find end of pathbuf, replace extension with ".LEV" */
-                char levpath[512];
-                strcpy(levpath, pathbuf);
-                /* Try to find last '.' */
-                char *dot = strrchr(levpath, '.');
-                if (dot) strcpy(dot, ".LEV");
+                char title[256];
+                strcpy(title, fd.cFileName);
+                char *dot = strrchr(title, '.');
+                if (dot) *dot = '\0';
+
+                /* Build full path: "levels\<title>.LEV" for header validation */
+                strcpy(pathbuf, "levels\\");
+                strcat(pathbuf, title);
+                strcat(pathbuf, ".LEV");
 
                 /* Open file and read header */
-                FILE *fp = fopen(levpath, "rb");
-                if (!fp) fp = fopen(pathbuf, "rb");
+                FILE *fp = fopen(pathbuf, "rb");
                 if (fp) {
                     size_t nread = fread(header, 1, 0x400, fp);
                     fclose(fp);
 
                     if (nread >= 0x400) {
-                        /* Copy tile type table from header offset 0x3a (988 bytes) */
-                        memcpy(DAT_00483860, header + 0x3a, 0x39c);
+                        /* Copy tile type table from header offset 0x22 (924 bytes) */
+                        memcpy(DAT_00483860, header + 0x22, 0x39c);
 
                         /* Format level count for debug */
                         FUN_004644af(DAT_00487f70, (const unsigned char *)"%d", DAT_00485088);
 
                         /* Validate header signature */
                         if (FUN_00420f80(header) == 1) {
-                            /* Register this level: name from CFileFind, tile data, extra data */
-                            FUN_00413d40(fd.cFileName, (const char *)DAT_00483860, (const char *)&DAT_00483860[0x100]);
+                            /* Register level with stripped name (no extension) */
+                            FUN_00413d40(title, (const char *)DAT_00483860, (const char *)&DAT_00483860[0x100]);
                         }
                     }
                 }
@@ -2095,8 +2109,13 @@ void FUN_00425fe0(void)
 {
     /* ---- One-shot init when DAT_004877b1 is set (by Game_State_Manager case 0x03) ---- */
     if (DAT_004877b1 != 0) {
-        FUN_0042a470();  /* Build menu page layout based on DAT_004877a4 */
-        DAT_004877b1 = 0;
+        /* Build menu page layout. Some pages (e.g. stubbed scoreboard 0x13)
+         * redirect by setting DAT_004877a4 to a new page and DAT_004877b1 = 1.
+         * Loop until the page is fully built (no more redirects). */
+        do {
+            DAT_004877b1 = 0;
+            FUN_0042a470();  /* Build menu page layout based on DAT_004877a4 */
+        } while (DAT_004877b1 != 0);
 
         /* If FUN_0042a470 set g_GameState to 0x04 (start game), just return.
          * The main loop will dispatch to Game_State_Manager case 0x04. */
@@ -4671,6 +4690,12 @@ void Init_Game_Config(void)
 
     /* Tick rate: 60 ticks/sec (0x3C). Offset 0x17EE in config blob = DAT_00483746. */
     g_ConfigBlob[0x17EE] = 0x3C;  /* DAT_00483746 = 60 */
+
+    /* Sound/SFX enabled by default */
+    g_ConfigBlob[0x17C7] = 1;   /* DAT_0048371f - SFX enable */
+
+    /* Default key bindings (in case options.cfg doesn't exist) */
+    g_ConfigBlob[0x1862] = 0x19;  /* DAT_004837ba - Pause key = P */
 
     /* TODO: Full config initialization (entity defaults, key bindings, etc.)
      * See DECOMP_PLAN.md Phase 2 for details.
