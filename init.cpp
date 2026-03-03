@@ -2951,7 +2951,8 @@ void FUN_0042a470(void)
         FUN_0042fcf0();
         if (g_MenuStrings && g_MenuStrings[0x71])
             FUN_004644af(g_MenuStrings[0x71],
-                (const unsigned char *)"You have %d levels and %d GG themes");
+                (const unsigned char *)"You have %d levels and %d GG themes",
+                DAT_0048508c, DAT_00486484);
         FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
         FUN_00430200(0, 100, 0x5d, 2, 2, 1, 0xc, 1, 0xff);         /* randomize */
         FUN_0042fdf0(0x7e);
@@ -3690,10 +3691,52 @@ void FUN_00426650(void)
     /* TODO: Phase 3 - scrollbar for pages with many items
      * Requires DAT_004877d8 != 0 which we don't set yet. */
 
-    /* Page-specific dynamic content rendering */
-    /* TODO: Phase 3 - pages 0x14 (scores), 0x12 (players),
-     * 0x1a (key bindings), 0x11 (levels) populate items dynamically
-     * based on scroll position and data tables. */
+    /* Page-specific dynamic content: scrollable lists are repopulated each frame.
+     * Static items were created by FUN_0042a470; DAT_004877ac saves that count.
+     * We reset DAT_004877a8 back to DAT_004877ac and re-add dynamic items. */
+
+    /* Page 0x11: Level list (scrollable) */
+    if (DAT_004877a4 == 0x11 && DAT_004877b0 != 0) {
+        int numLevels = g_ConfigBlob[0] & 0xFF;  /* active level slot count */
+        int visible = 15;   /* max 15 items visible at once */
+        int scrollOff = 0;
+
+        if (numLevels < 16) {
+            visible = numLevels;
+            scrollOff = 0;
+        } else {
+            /* Calculate scroll offset from DAT_004877d4 (0.0 to 1.0) */
+            scrollOff = (int)(DAT_004877d4 * (float)(numLevels - 15));
+            if (scrollOff < 0) scrollOff = 0;
+            if (scrollOff > numLevels - 15) scrollOff = numLevels - 15;
+        }
+
+        /* Reset dynamic item count back to static items */
+        DAT_004877a8 = DAT_004877ac;
+
+        if (visible > 0) {
+            int *levelOrder = (int *)&g_ConfigBlob[4]; /* DAT_00481f5c */
+            int yPos = 0x8C;  /* first level entry Y position */
+
+            for (int i = 0; i < visible; i++) {
+                /* Type 8 = level cycling item, font 1, color 2, clickable, render mode 1 */
+                FUN_00430200(0, yPos, 0, 2, 1, 1, 8, 1, 0xff);
+                /* Link to indirection table entry (address of the int slot) */
+                FUN_0042fc90((int)(uintptr_t)&levelOrder[scrollOff + i]);
+
+                /* Set x-position and width on the just-created item */
+                if (g_GameViewData && DAT_004877a8 > 0) {
+                    MenuItem *items = (MenuItem *)g_GameViewData;
+                    items[DAT_004877a8 - 1].x = 0xAA;
+                    items[DAT_004877a8 - 1].width = 300;
+                }
+                yPos += 0x10;
+            }
+        }
+    }
+
+    /* TODO: Pages 0x12 (players), 0x1A (key bindings), 0x14 (scores)
+     * also need dynamic list population. */
 
     /* Click sound effect */
     /* Original: plays FMOD sound when any mouse button pressed,
