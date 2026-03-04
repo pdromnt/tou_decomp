@@ -6395,29 +6395,74 @@ void FUN_00460cf0(char param_1, unsigned char param_2)
 }
 
 /* FUN_0044dfb0 — Find spawn point for player.
- * The real function uses the level's spawn point system. This simplified version
- * picks a position from the entity spawn point array (DAT_004876a0) or
- * falls back to map center. Sets player position in fixed-point 14.18 format. */
+ * Picks a random spawn point matching the player's team (or neutral team 3),
+ * adds a random offset radius, validates 16x16 tile walkability grid, and
+ * sets player position in fixed-point 14.18 format. Returns 1 on success, 0 on fail. */
 int FUN_0044dfb0(int player)
 {
     int poff = player * 0x598;
+    int iVar7, iVar6;
+    unsigned char valid_points[256];
+    int num_valid = 0;
 
-    /* Try to use spawn points populated by entity spawning */
+    /* Phase 1: Build list of spawn points matching player's team */
     if (DAT_004892d4 > 0 && DAT_004876a0 != NULL) {
-        /* Pick a spawn point (round-robin by player index) */
-        int sp_idx = player % DAT_004892d4;
-        int sp_x = *(int *)((char *)DAT_004876a0 + sp_idx * 0xc);
-        int sp_y = *(int *)((char *)DAT_004876a0 + sp_idx * 0xc + 4);
-        /* Convert tile coords to fixed-point 14.18 */
-        *(int *)(DAT_00487810 + poff) = sp_x << 18;
-        *(int *)(DAT_00487810 + poff + 4) = sp_y << 18;
-        return 1;
+        char team = *(char *)(poff + 0x2C + DAT_00487810);
+        char *sp_team = (char *)((int)DAT_004876a0 + 8); /* +8 = team field */
+        for (int i = 0; i < DAT_004892d4; i++) {
+            if (*sp_team == team || *sp_team == '\x03') { /* team match or neutral */
+                valid_points[num_valid] = (unsigned char)i;
+                num_valid++;
+            }
+            sp_team += 0xC; /* spawn point stride = 12 bytes */
+        }
+
+        /* Phase 2: Pick random spawn point with radius offset */
+        if (num_valid != 0 && *(unsigned char *)(poff + 0x26 + DAT_00487810) < 0xFB) {
+            int radius = 8; /* spawn radius (original computes via ftol, ~8 tiles) */
+            unsigned char sp = valid_points[rand() % num_valid];
+
+            /* Random position within radius around chosen spawn point */
+            iVar7 = (rand() % (radius * 2) +
+                     *(int *)((unsigned int)sp * 0xC + (int)DAT_004876a0)) - radius + 7;
+            iVar6 = (rand() % (radius * 2) +
+                     *(int *)((unsigned int)sp * 0xC + 4 + (int)DAT_004876a0)) - radius + 7;
+
+            /* Clamp to map bounds */
+            if (iVar7 < 10) iVar7 = 10;
+            if (iVar6 < 10) iVar6 = 10;
+            if (iVar7 > (int)DAT_004879f0 - 10) iVar7 = (int)DAT_004879f0 - 10;
+            if (iVar6 > (int)DAT_004879f4 - 10) iVar6 = (int)DAT_004879f4 - 10;
+
+            goto validate;
+        }
     }
 
-    /* Fallback: center of map */
-    int cx = (int)(DAT_004879f0 / 2);
-    int cy = (int)(DAT_004879f4 / 2);
-    *(int *)(DAT_00487810 + poff) = cx << 18;
-    *(int *)(DAT_00487810 + poff + 4) = cy << 18;
-    return 1;
+    /* Fallback: fully random position within map */
+    iVar7 = rand() % ((int)DAT_004879f0 - 0x14) + 10;
+    iVar6 = rand() % ((int)DAT_004879f4 - 0x14) + 10;
+
+validate:
+    /* Phase 3: Validate 16x16 tile grid for passability */
+    if (iVar7 > 0xD && iVar7 < (int)DAT_004879f0 - 0xE &&
+        iVar6 > 0xD && iVar6 < (int)DAT_004879f4 - 0xE) {
+        int tile_off = ((iVar6 - 8) << ((unsigned char)DAT_00487a18 & 0x1F)) + (iVar7 - 8);
+        for (int row = 0; row < 16; row++) {
+            int off = tile_off;
+            for (int col = 0; col < 16; col++) {
+                unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + off);
+                if (*(char *)((unsigned int)tile_type * 0x20 + 1 + (int)DAT_00487928) == '\0') {
+                    return 0; /* impassable tile found */
+                }
+                off++;
+            }
+            tile_off += DAT_00487a00; /* next row */
+        }
+
+        /* All tiles passable — set entity position (fixed-point << 18) */
+        *(int *)(DAT_00487810 + poff) = iVar7 << 0x12;
+        *(int *)(DAT_00487810 + poff + 4) = iVar6 << 0x12;
+        return 1;
+    }
+    return 0; /* out of bounds */
 }
