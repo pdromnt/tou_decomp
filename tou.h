@@ -539,6 +539,9 @@ int  FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt);
 
 /* ===== Function Prototypes: level.cpp ===== */
 int  Load_Level_File(const char *level_name);
+void FUN_00421310(void);             /* per-level water color computation + LUT rebuild */
+void FUN_0045af70(void);             /* build 8 water color LUT tables */
+void Assign_Water_Tile_Colors(void); /* set DAT_0048384c on all water tiles in DAT_00481f50 */
 int  Load_SWP_Sky(const char *level_name);
 int  Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                      unsigned char *file_buf);

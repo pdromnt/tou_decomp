@@ -134,6 +134,199 @@ static const unsigned char tile_remap[34] = {
 };
 
 
+/* ===== Assign_Water_Tile_Colors — partial FUN_00417460 (00417460) ===== */
+/* The original FUN_00417460 assigns colors to ALL tiles (texture sampling for
+ * non-water, flat DAT_0048384c for water). We implement only the water part:
+ * iterate all tiles, set DAT_00481f50 to DAT_0048384c where property[4] != 0.
+ * Must be called AFTER tile map is fully set up (water fill, turrets, waves). */
+void Assign_Water_Tile_Colors(void)
+{
+    if (!DAT_0048782c || !DAT_00481f50 || !DAT_00487928) return;
+
+    int width = (int)DAT_004879f0;
+    int height = (int)DAT_004879f4;
+    int row_stride = (int)DAT_00487a00;
+
+    for (int y = 0; y < height; y++) {
+        int row_off = y * row_stride;
+        for (int x = 0; x < width; x++) {
+            int tile_off = row_off + x;
+            unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + tile_off);
+            char water_prop = *(char *)((unsigned int)tile_type * 0x20 + 4 + (int)DAT_00487928);
+            if (water_prop != 0) {
+                *(unsigned short *)((int)DAT_00481f50 + tile_off * 2) = DAT_0048384c;
+            }
+        }
+    }
+
+    LOG("[LEVEL] Water tile colors assigned: fill=0x%04X across %dx%d map\n",
+        (unsigned int)DAT_0048384c, width, height);
+}
+
+/* ===== FUN_0045af70 — Build_Water_Color_LUTs (0045AF70) ===== */
+/* Builds 8 color lookup tables for water tinting:
+ *   DAT_004876a4[28..31]: strong blend (step 30 per iteration, 1-4 passes)
+ *   DAT_004876a4[48..51]: subtle blend (step 10 per iteration, 1-4 passes)
+ * Each table: 4096 entries of unsigned short, indexed by 4-bit R:G:B (from
+ * the master remap table DAT_00489230). For each source pixel, converges
+ * toward the water base color (DAT_00483840/44/48). */
+void FUN_0045af70(void)
+{
+    int tbl, r4, g4, b4;
+
+    /* First set: strong blend (step 0x1e = 30) at DAT_004876a4[28..31] */
+    for (tbl = 0; tbl < 4; tbl++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[28 + tbl];
+        if (!lut) continue;
+        int r_chunk = 0;
+        for (int r_idx = 0; r_idx < 16; r_idx++) {
+            int r_init = (int)((double)r_idx * 17.0);
+            for (g4 = 0; g4 < 16; g4++) {
+                int g_init = (int)((double)g4 * 17.0);
+                for (b4 = 0; b4 < 16; b4++) {
+                    int b_init = (int)((double)b4 * 17.0);
+
+                    int r = r_init, g = g_init, b = b_init;
+                    /* Converge toward water color with (tbl+1) passes */
+                    for (int n = tbl + 1; n > 0; n--) {
+                        if (r > (int)DAT_00483840) {
+                            r -= 0x1e;
+                            if (r < (int)DAT_00483840) r = (int)DAT_00483840;
+                        } else if (r < (int)DAT_00483840) {
+                            r += 0x1e;
+                            if (r > (int)DAT_00483840) r = (int)DAT_00483840;
+                        }
+                        if (g > (int)DAT_00483844) {
+                            g -= 0x1e;
+                            if (g < (int)DAT_00483844) g = (int)DAT_00483844;
+                        } else if (g < (int)DAT_00483844) {
+                            g += 0x1e;
+                            if (g > (int)DAT_00483844) g = (int)DAT_00483844;
+                        }
+                        if (b > (int)DAT_00483848) {
+                            b -= 0x1e;
+                            if (b < (int)DAT_00483848) b = (int)DAT_00483848;
+                        } else if (b < (int)DAT_00483848) {
+                            b += 0x1e;
+                            if (b > (int)DAT_00483848) b = (int)DAT_00483848;
+                        }
+                    }
+                    if (r > 255) r = 255; else if (r < 0) r = 0;
+                    if (g > 255) g = 255; else if (g < 0) g = 0;
+                    if (b > 255) b = 255; else if (b < 0) b = 0;
+
+                    int idx = (r_chunk + g4) * 16 + b4;
+                    lut[idx] = (unsigned short)(
+                        ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                    );
+                }
+            }
+            r_chunk += 16;
+        }
+    }
+
+    /* Second set: subtle blend (step 10) at DAT_004876a4[48..51] */
+    for (tbl = 0; tbl < 4; tbl++) {
+        unsigned short *lut = (unsigned short *)DAT_004876a4[48 + tbl];
+        if (!lut) continue;
+        int r_chunk = 0;
+        for (int r_idx = 0; r_idx < 16; r_idx++) {
+            int r_init = (int)((double)r_idx * 17.0);
+            for (g4 = 0; g4 < 16; g4++) {
+                int g_init = (int)((double)g4 * 17.0);
+                for (b4 = 0; b4 < 16; b4++) {
+                    int b_init = (int)((double)b4 * 17.0);
+
+                    int r = r_init, g = g_init, b = b_init;
+                    for (int n = tbl + 1; n > 0; n--) {
+                        if (r > (int)DAT_00483840) {
+                            r -= 10;
+                            if (r < (int)DAT_00483840) r = (int)DAT_00483840;
+                        } else if (r < (int)DAT_00483840) {
+                            r += 10;
+                            if (r > (int)DAT_00483840) r = (int)DAT_00483840;
+                        }
+                        if (g > (int)DAT_00483844) {
+                            g -= 10;
+                            if (g < (int)DAT_00483844) g = (int)DAT_00483844;
+                        } else if (g < (int)DAT_00483844) {
+                            g += 10;
+                            if (g > (int)DAT_00483844) g = (int)DAT_00483844;
+                        }
+                        if (b > (int)DAT_00483848) {
+                            b -= 10;
+                            if (b < (int)DAT_00483848) b = (int)DAT_00483848;
+                        } else if (b < (int)DAT_00483848) {
+                            b += 10;
+                            if (b > (int)DAT_00483848) b = (int)DAT_00483848;
+                        }
+                    }
+                    if (r > 255) r = 255; else if (r < 0) r = 0;
+                    if (g > 255) g = 255; else if (g < 0) g = 0;
+                    if (b > 255) b = 255; else if (b < 0) b = 0;
+
+                    int idx = (r_chunk + g4) * 16 + b4;
+                    lut[idx] = (unsigned short)(
+                        ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                    );
+                }
+            }
+            r_chunk += 16;
+        }
+    }
+}
+
+/* ===== FUN_00421310 — Compute_Water_Colors (00421310) ===== */
+/* Reads R,G,B from level config blob (DAT_00483860 offsets 0x103-0x105),
+ * computes base/lighter/darker water colors, then rebuilds the water
+ * color LUT tables via FUN_0045af70. Called from Load_Level_File. */
+void FUN_00421310(void)
+{
+    /* Extract R,G,B from level config blob */
+    DAT_00483840 = (unsigned int)DAT_00483860[0x103];
+    DAT_00483844 = (unsigned int)DAT_00483860[0x104];
+    DAT_00483848 = (unsigned int)DAT_00483860[0x105];
+
+    /* Base water fill color (RGB565) */
+    DAT_0048384c = (unsigned short)(
+        ((DAT_00483840 & 0xF8) << 8) |
+        ((DAT_00483844 & 0xFC) << 3) |
+        (DAT_00483848 >> 3)
+    );
+
+    /* Lighter bubble color (each channel +20, clamped to 255) */
+    {
+        unsigned int r = DAT_00483840 + 0x14;
+        unsigned int g = DAT_00483844 + 0x14;
+        unsigned int b = DAT_00483848 + 0x14;
+        if (r > 0xFF) r = 0xFF;
+        if (g > 0xFF) g = 0xFF;
+        if (b > 0xFF) b = 0xFF;
+        DAT_0048384e = (unsigned short)(
+            ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+        );
+    }
+
+    /* Darker bubble color (each channel -20, clamped to 0) */
+    {
+        int r = (int)DAT_00483840 - 0x14;
+        int g = (int)DAT_00483844 - 0x14;
+        int b = (int)DAT_00483848 - 0x14;
+        if (r < 0) r = 0;
+        if (g < 0) g = 0;
+        if (b < 0) b = 0;
+        DAT_00483850 = (unsigned short)(
+            ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+        );
+    }
+
+    LOG("[LEVEL] Water colors: R=%d G=%d B=%d, fill=0x%04X, light=0x%04X, dark=0x%04X\n",
+        DAT_00483840, DAT_00483844, DAT_00483848,
+        (unsigned int)DAT_0048384c, (unsigned int)DAT_0048384e, (unsigned int)DAT_00483850);
+
+    FUN_0045af70();
+}
+
 /* ===== Load_Level_File (00421060) ===== */
 /* Opens a .lev file, verifies the header, extracts tile type table,
  * then delegates to Load_Image_Data for JPEG/entities/tilemap.
@@ -225,6 +418,22 @@ int Load_Level_File(const char *level_name)
         if (DAT_00489d7c[0] == '\0') {
             sprintf(DAT_00489d7c, "Could not load level \"%s\"", level_name);
         }
+    }
+
+    /* Compute per-level water colors + build LUTs.
+     * FUN_00421310 reads R,G,B from level data (DAT_00483860[0x103-0x105]),
+     * computes base/lighter/darker fill colors (DAT_0048384c/4e/50),
+     * and rebuilds the 8 water color LUT tables via FUN_0045af70.
+     * Without this, the wave renderer paints surface tiles with stale
+     * colors from the config blob, creating a visible two-layer effect. */
+    if (result) {
+        LOG("[LEVEL] Pre-water: R=%d G=%d B=%d, fill=0x%04X (from config blob)\n",
+            DAT_00483840, DAT_00483844, DAT_00483848, (unsigned int)DAT_0048384c);
+        LOG("[LEVEL] Level data water bytes: [0x103]=0x%02X [0x104]=0x%02X [0x105]=0x%02X\n",
+            (unsigned int)DAT_00483860[0x103],
+            (unsigned int)DAT_00483860[0x104],
+            (unsigned int)DAT_00483860[0x105]);
+        FUN_00421310();
     }
 
     return result;

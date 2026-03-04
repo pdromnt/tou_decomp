@@ -79,6 +79,9 @@ int Menu_Init_And_Loop(void)
             FUN_0041bc50();
         }
 
+        /* Assign water tile colors (partial FUN_00417460) */
+        Assign_Water_Tile_Colors();
+
         /* Set up menu display sub-state */
         g_SubState = 0;
         if (g_SubState2 == 0) {

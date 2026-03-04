@@ -1836,7 +1836,7 @@ void FUN_00434310(void)
 
         /* Entity category flags */
         int is_projectile = (ent_type == 0 || ent_type == 1 || ent_type == 0x11 || ent_type == 0x13);
-        int is_debris = (ent_type == 2 || ent_type >= 0x6C || ent_state == 5);
+        int is_debris = (ent_type == 2 || ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
 
         /* Apply projectile gravity BEFORE position integration.
          * Original callback at 0x438010 (addr 0x4386e3):

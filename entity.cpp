@@ -5490,9 +5490,23 @@ void FUN_0044b0b0(void)
             /* Boundary clamp */
             FUN_0044e510((int *)ent);
 
-            /* Entity type-specific behaviors (stubs) */
+            /* Entity type-specific behaviors */
             if (ent[0x29] != 0) {
-                /* Various entity-type checks — all stubbed for now */
+                char anim_type = *(char *)((char)ent[0xD] + 0x3C + (int)ent);
+                if (anim_type == 0x17 && *(char *)((int)ent + 0x35) == '\x01' &&
+                    ent[0x29] % 5 == 0) {
+                    FUN_00401000_impl(i);
+                }
+                if (anim_type == 0x0A) {
+                    FUN_0044d930_impl((int *)ent);
+                }
+                if (anim_type == 0x0D && (ent[0x29] & 7) == 0) {
+                    FUN_0044d9f0_impl((int *)ent);
+                }
+                if (anim_type == 0x12 && *(char *)((int)ent + 0xC6) == '\0' &&
+                    ent[0x29] % 0x19 == 0) {
+                    FUN_0044dbb0_impl((int *)ent, i);
+                }
             }
 
             /* Hazard damage at low health */
@@ -5564,6 +5578,12 @@ void FUN_0044b0b0(void)
         int shift = (unsigned char)DAT_00487a18 & 0x1F;
         unsigned short tile_val = *(unsigned char *)((int)DAT_0048782c + (ty << shift) + tx);
 
+        /* Animation-type 0x0C entity behavior (uses tile data) */
+        if (ent[0x29] != 0 &&
+            *(char *)((char)ent[0xD] + 0x3C + (int)ent) == 0x0C) {
+            FUN_0044ed90_impl((int *)ent, i, (unsigned int)tile_val);
+        }
+
         /* Tile pickup interaction (stub) */
 
         /* Check if tile is walkable — clear underwater flag if so */
@@ -5577,10 +5597,28 @@ void FUN_0044b0b0(void)
             FUN_00450630((int *)ent, i);
         }
 
-        /* Lava/pit death check */
-        if (ent[8] < 1 || ent[1] < 0x80001 ||
-            (int)ent[1] >= (int)((DAT_004879f4 - 2) * 0x40000)) {
-            if ((char)ent[9] == '\0') {
+        /* Lava/pit death check + terrain weapon interaction */
+        {
+            int do_lava = 1;
+            if ((int)ent[8] >= 1 && (int)ent[1] >= 0x80001 &&
+                (int)ent[1] < (int)((DAT_004879f4 - 2) * 0x40000)) {
+                /* In bounds with health: check tile enclosure for weapon selection */
+                int ty2 = (int)ent[1] >> 0x12;
+                int tx2 = (int)ent[0] >> 0x12;
+                int sh2 = (unsigned char)DAT_00487a18 & 0x1F;
+                unsigned char cur_walk = *(unsigned char *)((unsigned int)tile_val * 0x20 + 0x18 + (int)DAT_00487928);
+                unsigned char below_idx = *(unsigned char *)((int)DAT_0048782c + ((ty2 + 1) << sh2) + tx2);
+                unsigned char above_idx = *(unsigned char *)((int)DAT_0048782c + ((ty2 - 1) << sh2) + tx2);
+                unsigned char below_walk = *(unsigned char *)((unsigned int)below_idx * 0x20 + 0x18 + (int)DAT_00487928);
+                unsigned char above_walk = *(unsigned char *)((unsigned int)above_idx * 0x20 + 0x18 + (int)DAT_00487928);
+                if (!((cur_walk == 0 && below_walk == 0 && above_walk == 0) ||
+                      (*(char *)((unsigned int)tile_val * 0x20 + 1 + (int)DAT_00487928) != '\x01' &&
+                       cur_walk == 0))) {
+                    FUN_0044f900_impl((int *)ent, i);
+                    do_lava = 0;
+                }
+            }
+            if (do_lava && (char)ent[9] == '\0') {
                 if (tile_val == 4 || tile_val == 0x15) {
                     FUN_00450080_impl((int *)ent, (tile_val == 4) ? '\0' : '\x01');
                 }
@@ -5611,6 +5649,15 @@ void FUN_0044b0b0(void)
         } else {
             if ((char)ent[9] == '\x01') {
                 ent[8] = 0;
+            }
+        }
+
+        /* Water splash on water entry/exit (FUN_0044f840) */
+        if ((char)ent[9] == '\0' && *(unsigned char *)((int)ent + 0x49E) == 0) {
+            char *tile_rec = (char *)((unsigned int)tile_val * 0x20 + (int)DAT_00487928);
+            if ((tile_rec[4] == '\x01' && *(char *)((int)ent + 0x49D) == '\0') ||
+                (*tile_rec == '\x01' && *(char *)((int)ent + 0x49D) == '\x01')) {
+                FUN_0044f840_impl((int *)ent);
             }
         }
 
