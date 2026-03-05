@@ -492,14 +492,9 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
         /* Only draw HUD if player is alive (status field +0xD0 == 0) */
         if (*(int *)(DAT_00487810 + poff + 0xD0) == 0) {
-            /* Minimap/radar — guarded by config byte at address 0x00483743.
-             * DAT_00483740 is declared as char; byte 3 is at (&DAT_00483740 + 3).
-             * TODO: declare DAT_00483743 properly when config sync covers it. */
-            {
-                unsigned char minimap_flag = *((unsigned char *)&DAT_00483740 + 3);
-                if (minimap_flag != 0 && DAT_00489230 != NULL) {
-                    FUN_004090e0((int)buffer, stride, (unsigned int)pidx);
-                }
+            /* Minimap/radar — guarded by config flag DAT_00483743 (blob 0x17EB) */
+            if (DAT_00483743 != 0 && DAT_00489230 != NULL) {
+                FUN_004090e0((int)buffer, stride, (unsigned int)pidx);
             }
 
             /* Weapon selection grid (if player pressed weapon select key) */
@@ -536,8 +531,8 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                 int weapon_slot = *(char *)(DAT_00487810 + poff + 0x34);
                 if (weapon_slot >= 0 && weapon_slot < 64) {
                     int weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + weapon_slot);
-                    int icon_x = DAT_004806ec + DAT_004806d8 - 0x1E;
-                    int icon_y = DAT_004806e8 + DAT_004806e4 - 0x1E;
+                    int icon_x = DAT_004806ec + DAT_004806d8 - 0x12;
+                    int icon_y = DAT_004806e8 + 0x12;
                     FUN_0040aaf0((int)buffer, stride, icon_x, icon_y, weapon_type, 0);
 
                     /* Ammo dots around weapon icon */
@@ -549,8 +544,10 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                 }
             }
 
-            /* Shield/energy bar — guarded by config byte at address 0x00483742.
-             * Stubbed in FUN_0040b580 (returns immediately) until shield data wired. */
+            /* Shield/energy bar — guarded by config flag DAT_00483742 (blob 0x17EA) */
+            if (DAT_00483742 != 0 && DAT_00489230 != NULL) {
+                FUN_0040b580((int)buffer, stride, pidx);
+            }
 
             /* Frag count text */
             if (*(char *)(DAT_00487810 + poff + 0xCB) != 0) {

@@ -397,8 +397,10 @@ extern char                  DAT_0048373e;       /* activation guard flag */
 /* ===== Difficulty / Team Config ===== */
 extern int                   DAT_004892a8;       /* difficulty constant 1 (round length) */
 extern int                   DAT_004892ac;       /* difficulty constant 2 */
-extern char                  DAT_00483740;       /* difficulty setting 1 (from config blob) */
-extern char                  DAT_00483741;       /* difficulty sub-setting (byte after 00483740) */
+extern char                  DAT_00483740;       /* difficulty setting 1 (from config blob, offset 0x17E8) */
+extern char                  DAT_00483741;       /* difficulty sub-setting (0x17E9) */
+extern char                  DAT_00483742;       /* shield/energy bar enable flag (0x17EA) */
+extern char                  DAT_00483743;       /* minimap/radar enable flag (0x17EB) */
 extern char                  DAT_0048373f;       /* difficulty setting 2 */
 extern int                   DAT_00483748;       /* stat scaling packed (from config blob) */
 extern int                   DAT_0048374c;       /* speed scaling packed (from config blob) */
@@ -545,7 +547,7 @@ void FUN_00409280(int buffer, int stride);                     /* timer display 
 void FUN_00408f90(unsigned int palette, unsigned short *dest, int stride); /* minimap dot */
 void FUN_004090e0(int buffer, int stride, unsigned int player_idx); /* minimap/radar */
 void FUN_0040b860(int buffer, int stride, int player_idx);     /* health bar */
-void FUN_0040b580(int buffer, int stride);                     /* shield/energy bar */
+void FUN_0040b580(int buffer, int stride, int player_idx);     /* shield/energy bar */
 void FUN_0040aaf0(int buffer, int stride, int x, int y, int weapon, char state); /* weapon icon */
 void FUN_0040a710(int buffer, int stride, int x, int y, int loaded, int total);  /* ammo dots */
 void FUN_0040a9e0(int buffer, int stride, int player_idx);     /* weapon grid */

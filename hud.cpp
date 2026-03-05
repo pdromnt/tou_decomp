@@ -289,15 +289,63 @@ void FUN_0040b860(int param_1, int param_2, int param_3)
 }
 
 /* ===== FUN_0040b580 - Shield/energy bar (0040B580) ===== */
-/* Same structure as health bar but fixed blue color, positioned 13px further left.
- * Uses DAT_004876a4[0] (edge) and DAT_004876a4[3] (fill) LUTs.
- * Only drawn when shield system is enabled (DAT_00483740 byte 2). */
-void FUN_0040b580(int param_1, int param_2)
+/* Same structure as health bar but fixed color, positioned 7 pixels further left.
+ * Uses DAT_004876a4[1] (edge) and DAT_004876a4[3] (fill) LUTs.
+ * Only drawn when shield system is enabled (DAT_00483742 != 0 in caller).
+ * Bar height = player[+0x98] / DAT_00483830 * (viewport_height - 50). */
+void FUN_0040b580(int param_1, int param_2, int param_3)
 {
-    /* Shield bar is gated by DAT_00483740 byte 2 in the caller.
-     * Original uses __ftol() on FPU result — shield value scaled to pixels.
-     * Shield data source not yet wired; stub returns immediately. */
-    return;
+    int shield_val = *(int *)(DAT_00487810 + param_3 * 0x598 + 0x98);
+    if (DAT_00483830 == 0) return;
+
+    int bar_h = (int)((double)shield_val / (double)DAT_00483830 * (double)(DAT_004806e4 - 50));
+    if (bar_h <= 0) return;
+
+    /* Clamp to viewport bounds */
+    int max_bar = DAT_004806e4 - 18;
+    if (max_bar <= 0) return;
+    if (bar_h > max_bar) bar_h = max_bar;
+
+    /* Validate LUT pointers */
+    unsigned short *edge_lut = (unsigned short *)DAT_004876a4[1];
+    unsigned short *fill_lut = (unsigned short *)DAT_004876a4[3];
+    unsigned short *remap = (unsigned short *)DAT_00489230;
+    if (!edge_lut || !fill_lut || !remap) return;
+
+    /* Bottom cap: 4 pixels wide */
+    {
+        int base_x = DAT_004806d8 + DAT_004806ec;
+        int base_y = DAT_004806e8 + DAT_004806e4 - 9;
+        unsigned short *p = (unsigned short *)(param_1 + (base_y * param_2 + base_x) * 2 - 0x1a);
+        p[0] = edge_lut[(unsigned int)remap[p[0]]];
+        p[1] = edge_lut[(unsigned int)remap[p[1]]];
+        p[2] = edge_lut[(unsigned int)remap[p[2]]];
+        p[3] = edge_lut[(unsigned int)remap[p[3]]];
+    }
+
+    /* Bar body: 6 pixels wide [edge, fill, fill, fill, fill, edge] growing upward */
+    for (int i = 0; i < bar_h; i++) {
+        int row_y = DAT_004806e8 + DAT_004806e4 - 10 - i;
+        int row_x = DAT_004806d8 + DAT_004806ec;
+        unsigned short *p = (unsigned short *)(param_1 + (row_y * param_2 + row_x) * 2 - 0x1c);
+        p[0] = edge_lut[(unsigned int)remap[p[0]]];
+        p[1] = fill_lut[(unsigned int)remap[p[1]]];
+        p[2] = fill_lut[(unsigned int)remap[p[2]]];
+        p[3] = fill_lut[(unsigned int)remap[p[3]]];
+        p[4] = fill_lut[(unsigned int)remap[p[4]]];
+        p[5] = edge_lut[(unsigned int)remap[p[5]]];
+    }
+
+    /* Top cap: 4 pixels wide */
+    {
+        int cap_y = DAT_004806e8 + DAT_004806e4 - 10 - bar_h;
+        int cap_x = DAT_004806d8 + DAT_004806ec;
+        unsigned short *p = (unsigned short *)(param_1 + (cap_y * param_2 + cap_x) * 2 - 0x1a);
+        p[0] = edge_lut[(unsigned int)remap[p[0]]];
+        p[1] = edge_lut[(unsigned int)remap[p[1]]];
+        p[2] = edge_lut[(unsigned int)remap[p[2]]];
+        p[3] = edge_lut[(unsigned int)remap[p[3]]];
+    }
 }
 
 /* ===== FUN_0040aaf0 - Weapon icon sprite (0040AAF0) ===== */

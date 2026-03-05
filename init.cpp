@@ -4969,6 +4969,8 @@ void Sync_Config_From_Blob(void)
     DAT_0048373f      = (char)g_ConfigBlob[0x17E7];
     DAT_00483740      = (char)g_ConfigBlob[0x17E8];
     DAT_00483741      = (char)g_ConfigBlob[0x17E9];
+    DAT_00483742      = (char)g_ConfigBlob[0x17EA];
+    DAT_00483743      = (char)g_ConfigBlob[0x17EB];
     DAT_00483744      = (char)g_ConfigBlob[0x17EC];
     DAT_00483745      = (char)g_ConfigBlob[0x17ED];
     DAT_00483746      = (short)g_ConfigBlob[0x17EE];  /* single byte; 0x17EF is DAT_00483747 */
@@ -5051,6 +5053,8 @@ void Sync_Config_To_Blob(void)
     g_ConfigBlob[0x17E7]                          = (unsigned char)DAT_0048373f;
     g_ConfigBlob[0x17E8]                          = (unsigned char)DAT_00483740;
     g_ConfigBlob[0x17E9]                          = (unsigned char)DAT_00483741;
+    g_ConfigBlob[0x17EA]                          = (unsigned char)DAT_00483742;
+    g_ConfigBlob[0x17EB]                          = (unsigned char)DAT_00483743;
     g_ConfigBlob[0x17EC]                          = (unsigned char)DAT_00483744;
     g_ConfigBlob[0x17ED]                          = (unsigned char)DAT_00483745;
     g_ConfigBlob[0x17EE]                          = (unsigned char)DAT_00483746;
