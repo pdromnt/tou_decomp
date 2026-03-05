@@ -85,7 +85,8 @@ extern unsigned char         g_SubState;        /* 00489296 */
 extern unsigned char         g_NeedsRedraw;     /* 00489297 */
 extern unsigned char         g_SurfaceReady;    /* 00489298 */
 extern unsigned char         g_SubState2;       /* 00489299 */
-/* g_PauseSelection removed — original binary has no visible pause menu selection */
+extern DWORD                 DAT_00489ee8;      /* Key repeat cooldown timestamp */
+extern unsigned int          DAT_00489eec;      /* Last pressed key scan code */
 
 /* ===== Timing (winmain.cpp) ===== */
 extern DWORD                 g_TimerStart;      /* 004892B0 */
@@ -235,7 +236,7 @@ extern unsigned char         DAT_004877bc;      /* input flag */
 extern unsigned char         DAT_004877bd;      /* input flag */
 extern unsigned char         DAT_004877c4;      /* render flag */
 extern unsigned char         DAT_004877c9;      /* frame sub-index */
-extern unsigned char         DAT_004877cc;      /* render flag */
+extern int                   DAT_004877cc;      /* scroll/hover decay counter */
 extern unsigned char         DAT_004877e5;      /* input event trigger */
 extern unsigned char         DAT_004877ec;      /* input accumulator */
 extern int                   DAT_00487824;      /* menu display state */

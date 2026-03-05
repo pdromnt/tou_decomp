@@ -60,7 +60,15 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
         PostQuitMessage(0);
     }
     else if (uMsg == WM_ACTIVATEAPP) {              /* 0x1C */
-        g_bIsActive = (int)wParam;
+        /* COMPAT: Always stay active in windowed mode.
+         * Original ran DDSCL_EXCLUSIVE fullscreen where the window always
+         * had foreground — WM_ACTIVATEAPP(0) never fired during normal play.
+         * In windowed DDSCL_NORMAL mode, DDraw surface operations during
+         * state transitions trigger spurious WM_ACTIVATEAPP(0), which sets
+         * g_bIsActive=0 and freezes the game loop in the inactive pause path.
+         * Since we can't distinguish spurious from real deactivation, always
+         * stay active — matching the original fullscreen behavior. */
+        g_bIsActive = 1;
     }
     else if (uMsg == WM_SETCURSOR) {                /* 0x20 */
         /* Hide cursor unconditionally — matches original binary exactly.
@@ -256,46 +264,64 @@ MAIN_LOOP:
          * Until it's decompiled, start at intro init instead. */
         g_GameState = 0x96;
 
+        /* COMPAT: Time-limited message pump.
+         * Original uses PeekMessage(PM_NOREMOVE) + GetMessage, processing
+         * ONE message per iteration.  In exclusive fullscreen mode this is
+         * fine because very few window messages arrive.  In windowed mode,
+         * mouse movement continuously generates WM_MOUSEMOVE + WM_SETCURSOR
+         * messages — the drain loop never finishes and game logic starves,
+         * making the cursor appear frozen.
+         *
+         * Fix: process messages for at most 4ms per iteration, then always
+         * run game logic.  This guarantees ~60fps even under message flood,
+         * matching the original's effective behavior in fullscreen. */
         while (1) {
-            /* Inner loop: check for messages with PeekMessage (PM_NOREMOVE) */
-            while (1) {
-                bVar = PeekMessageA(&msg, NULL, 0, 0, 0); /* PM_NOREMOVE */
-                if (bVar != 0)
-                    break;
-
-                /* No messages pending - run game logic */
-                if (g_bIsActive == 0) {
-                    /* App is inactive - yield CPU then set paused.
-                     * Original uses Sleep(0), not WaitMessage().
-                     * WaitMessage() blocks until a message arrives, preventing
-                     * the game loop from running. Sleep(0) yields but keeps
-                     * the loop spinning so the game can react when focus returns. */
-                    Sleep(0);
-                    g_SubState     = 1;
-                    g_NeedsRedraw  = 1;
-                    g_SurfaceReady = 2;
-                    g_TimerStart   = timeGetTime();
-                    g_TimerAux     = 0;
-                } else {
-                    /* App is active - run game */
-                    if (g_GameState == 0x01) {
-                        Input_Update();
+            /* 1. Process pending messages (time-limited) */
+            {
+                DWORD msg_deadline = timeGetTime() + 4;
+                while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
+                    if (msg.message == WM_QUIT) {
+                        timeEndPeriod(1);
+                        return (int)msg.wParam;
                     }
-                    g_ProcessInput = 1;
-                    if (g_GameState == 0x00) {
-                        Game_Update_Render();
-                    } else {
-                        Game_State_Manager();
-                    }
+                    TranslateMessage(&msg);
+                    DispatchMessageA(&msg);
+                    if (timeGetTime() >= msg_deadline)
+                        break;  /* Bail — game logic needs to run */
                 }
             }
 
-            /* Message available - retrieve and dispatch */
-            bVar = GetMessageA(&msg, NULL, 0, 0);
-            if (bVar == 0)
-                break; /* WM_QUIT */
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
+            /* 2. Run one game tick */
+            if (g_bIsActive == 0) {
+                /* Original: pause game when WM_ACTIVATEAPP(0) fires.
+                 * COMPAT: WM_ACTIVATEAPP handler now always sets g_bIsActive=1,
+                 * so this path is only reached if g_bIsActive is explicitly
+                 * cleared elsewhere. Kept for correctness. */
+                Sleep(0);
+                g_SubState     = 1;
+                g_NeedsRedraw  = 1;
+                g_SurfaceReady = 2;
+                g_TimerStart   = timeGetTime();
+                g_TimerAux     = 0;
+            } else {
+                /* App is active - run game */
+                /* COMPAT: Sync cursor from Windows position for windowed mode.
+                 * Must run for ALL game states (menu can be at g_GameState 0 or 1).
+                 * Overrides DirectInput relative deltas with absolute Win32 coords. */
+                {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    ScreenToClient(hWnd_Main, &pt);
+                    g_MouseDeltaX = pt.x << 18;
+                    g_MouseDeltaY = pt.y << 18;
+                }
+                g_ProcessInput = 1;
+                if (g_GameState == 0x00) {
+                    Game_Update_Render();
+                } else {
+                    Game_State_Manager();
+                }
+            }
         }
 
         timeEndPeriod(1);

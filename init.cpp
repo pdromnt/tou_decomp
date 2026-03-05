@@ -86,7 +86,7 @@ unsigned char DAT_004877bc   = 0;
 unsigned char DAT_004877bd   = 0;
 unsigned char DAT_004877c4   = 0;
 unsigned char DAT_004877c9   = 0;  /* byte after g_FrameIndex */
-unsigned char DAT_004877cc   = 0;
+int           DAT_004877cc   = 0;
 unsigned char DAT_004877ec   = 0;
 int           DAT_00487824   = 0;
 unsigned char DAT_00483724[4] = {0};
@@ -2176,17 +2176,21 @@ void FUN_00425fe0(void)
 {
     /* ---- One-shot init when DAT_004877b1 is set (by Game_State_Manager case 0x03) ---- */
     if (DAT_004877b1 != 0) {
-        /* Build menu page layout. Some pages (e.g. stubbed scoreboard 0x13)
-         * redirect by setting DAT_004877a4 to a new page and DAT_004877b1 = 1.
-         * Loop until the page is fully built (no more redirects). */
-        do {
-            DAT_004877b1 = 0;
-            FUN_0042a470();  /* Build menu page layout based on DAT_004877a4 */
-        } while (DAT_004877b1 != 0);
+        /* Build menu page layout based on DAT_004877a4.
+         * Original calls FUN_0042a470 once then clears DAT_004877b1.
+         * COMPAT: Stub pages (0x13, 0x14, 0x15) redirect by setting
+         * DAT_004877a4 and DAT_004877b1=1 without building items.
+         * Re-run FUN_0042a470 once for the redirect target. */
+        FUN_0042a470();
+        if (DAT_004877b1 != 0) {
+            FUN_0042a470();
+        }
+        DAT_004877b1 = 0;
 
         /* If FUN_0042a470 set g_GameState to 0x04 (start game), just return.
          * The main loop will dispatch to Game_State_Manager case 0x04. */
         if (g_GameState == 0x04) {
+            DAT_004877b1 = 0;
             return;
         }
 
@@ -2199,6 +2203,27 @@ void FUN_00425fe0(void)
             g_GameState = 0xFE;  /* Fatal render error → shutdown */
             return;
         }
+
+        /* COMPAT: Reset input state for clean menu entry.
+         * On initial session entry, FUN_0042d8b0 resets all these variables.
+         * On F10 return (case 5 → case 3), they're never reset — carry stale
+         * values from the previous menu/gameplay session.  Clear everything
+         * that FUN_0042d8b0 clears so the menu starts in a known state. */
+        DAT_004877bd = 0;
+        DAT_004877e5 = 0;
+        g_MouseButtons = 0;
+        g_InputMode    = 0;
+        DAT_004877e8   = 0;
+        DAT_004877ec   = 0;
+
+        /* COMPAT: Force window to foreground after all DDraw/rendering.
+         * SetForegroundWindow alone can fail on modern Windows if focus was
+         * lost during DDraw operations. The TOPMOST/NOTOPMOST trick reliably
+         * brings the window to front without making it permanently on top. */
+        SetWindowPos(hWnd_Main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        SetWindowPos(hWnd_Main, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        SetForegroundWindow(hWnd_Main);
+        SetFocus(hWnd_Main);
     }
 
     /* ---- Reset per-frame click state ---- */
@@ -2215,47 +2240,72 @@ void FUN_00425fe0(void)
         }
     }
 
+    /* COMPAT: Acquire the DirectInput mouse device.
+     * In the original fullscreen game, the mouse stayed acquired because the
+     * fullscreen window always had foreground (DISCL_FOREGROUND). In windowed
+     * mode, the mouse can lose acquisition during DDraw surface recreation
+     * (state transitions via case 0x03). Input_Update's error recovery calls
+     * Acquire() on DIERR_NOTACQUIRED, but the device may still be unacquired
+     * when FUN_00425fe0 runs. Explicitly acquire here so DirectInput mouse
+     * events are available for Input_Update on subsequent frames. */
+    if (lpDI_Mouse != NULL) {
+        lpDI_Mouse->Acquire();
+    }
+
     /* ---- F12 (scan 0x58): immediate exit ---- */
     if ((g_KeyboardState[0x58] & 0x80) != 0) {
         DAT_004877b1 = 1;
         DAT_004877a4 = 0xFE;
     }
 
-    /* COMPAT: Sync game cursor from Windows cursor position.
+    /* COMPAT: Sync game cursor and mouse buttons from Windows for windowed mode.
      * Original used exclusive fullscreen with hidden system cursor;
      * the game rendered its own cursor sprite at (g_MouseDeltaX>>18, g_MouseDeltaY>>18).
      * In windowed mode, DirectInput reports relative deltas which desync from the
-     * visible Windows cursor. Override with absolute position so hover/click works. */
+     * visible Windows cursor, and DirectInput mouse device can lose acquisition
+     * during state transitions (DDraw surface recreation, etc.), causing
+     * g_MouseButtons to become stale. Use Win32 API for both position and buttons. */
     {
         POINT pt;
         GetCursorPos(&pt);
         ScreenToClient(hWnd_Main, &pt);
         g_MouseDeltaX = pt.x << 18;
         g_MouseDeltaY = pt.y << 18;
+        g_MouseButtons = 0;
+        if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
+        if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g_MouseButtons |= 2;
     }
 
     /* ---- Input processing (normal mode, g_InputMode == 0) ---- */
     if (g_InputMode == 0) {
+        /* Arrow key viewport movement (time-based speed) */
+        {
+            int spd = (int)DAT_004877f0;
+            if (spd == 0) spd = 1;
+            if ((g_KeyboardState[0xC8] & 0x80) != 0) g_MouseDeltaY -= spd;  /* Up */
+            if ((g_KeyboardState[0xD0] & 0x80) != 0) g_MouseDeltaY += spd;  /* Down */
+            if ((g_KeyboardState[0xCB] & 0x80) != 0) g_MouseDeltaX -= spd;  /* Left */
+            if ((g_KeyboardState[0xCD] & 0x80) != 0) g_MouseDeltaX += spd;  /* Right */
+        }
+
         /* Primary click: Right Ctrl (0x9D) OR Left Mouse Button */
         if (((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
             (DAT_004877bd & 1) == 0) {
             DAT_004877bc |= 1;
             DAT_004877bd |= 1;
         }
-        if ((g_KeyboardState[0x9D] & 0x80) == 0 && (g_MouseButtons & 1) == 0 &&
-            (DAT_004877bd & 1) != 0) {
-            DAT_004877bd ^= 1;
-        }
 
-        /* Secondary click: Right Mouse Button */
+        /* Secondary click: Right Shift (0x36) OR Right Mouse Button */
         if (((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
             (DAT_004877bd & 2) == 0) {
             DAT_004877bc |= 2;
             DAT_004877bd |= 2;
         }
-        if ((g_KeyboardState[0x36] & 0x80) == 0 && (g_MouseButtons & 2) == 0 &&
-            (DAT_004877bd & 2) != 0) {
-            DAT_004877bd ^= 2;
+
+        /* Middle button: scan 0x30 (B key) */
+        if ((g_KeyboardState[0x30] & 0x80) != 0 && (DAT_004877bd & 4) == 0) {
+            DAT_004877bc |= 4;
+            DAT_004877bd |= 4;
         }
 
         /* ESC (scan 0x01): Navigate back or center view */
@@ -2272,11 +2322,40 @@ void FUN_00425fe0(void)
             }
             DAT_004877bd |= 8;
         }
+
+        /* Page 0x1C: any click navigates back */
+        if (DAT_004877a4 == 0x1C && DAT_004877bc != 0) {
+            DAT_004877b1 = 1;
+            DAT_004877a4 = DAT_004877c9;
+        }
+
+        /* Button release: primary (RCtrl) + DAT_004877e5 conditional.
+         * Original only marks input as processed when BOTH RCtrl and LMB
+         * are released, creating a button-up signal for FUN_00426650. */
+        if ((g_KeyboardState[0x9D] & 0x80) == 0) {
+            if ((g_MouseButtons & 1) == 0) {
+                DAT_004877e5 = 1;
+            }
+            if ((g_MouseButtons & 1) == 0 && (DAT_004877bd & 1) != 0) {
+                DAT_004877bd ^= 1;
+            }
+        }
+
+        /* Button release: secondary (RShift + RMB) */
+        if ((g_KeyboardState[0x36] & 0x80) == 0 && (g_MouseButtons & 2) == 0 &&
+            (DAT_004877bd & 2) != 0) {
+            DAT_004877bd ^= 2;
+        }
+
+        /* Button release: ESC */
         if ((g_KeyboardState[0x01] & 0x80) == 0 && (DAT_004877bd & 8) != 0) {
             DAT_004877bd ^= 8;
         }
 
-        DAT_004877e5 = 1;  /* Mark input as processed */
+        /* Button release: middle (0x30) */
+        if ((g_KeyboardState[0x30] & 0x80) == 0 && (DAT_004877bd & 4) != 0) {
+            DAT_004877bd ^= 4;
+        }
     }
 
     /* ---- Clamp viewport position ---- */
@@ -2284,6 +2363,10 @@ void FUN_00425fe0(void)
     else if (g_MouseDeltaX > 0x9c40000) g_MouseDeltaX = 0x9c40000;
     if (g_MouseDeltaY < 0x3c0000) g_MouseDeltaY = 0x3c0000;
     else if (g_MouseDeltaY > 0x7440000) g_MouseDeltaY = 0x7440000;
+
+    /* ---- Scroll/hover decay ---- */
+    DAT_004877cc += (int)DAT_004877f0 * -0x40000;
+    if (DAT_004877cc < 0) DAT_004877cc = 0;
 
     /* ---- Main game/menu logic tick ---- */
     FUN_00426650();
@@ -3825,7 +3908,6 @@ void FUN_00426650(void)
         MenuItem *items = (MenuItem *)g_GameViewData;
         int cursor_x = g_MouseDeltaX >> 18;
         int cursor_y = g_MouseDeltaY >> 18;
-
         for (int i = 0; i < DAT_004877a8; i++) {
             MenuItem *item = &items[i];
 
@@ -3878,6 +3960,7 @@ void FUN_00426650(void)
                 }
             }
         }
+
     }
 
 hover_decay:

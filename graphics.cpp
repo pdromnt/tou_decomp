@@ -594,8 +594,9 @@ void Render_Frame(void)
         }
     } while (hr == DDERR_WASSTILLDRAWING);
 
-    if (hr != DD_OK)
+    if (hr != DD_OK) {
         return;
+    }
 
     /* 4. Convert scratch buffer (RGB565) to surface (32bpp ARGB) */
     int pitchBytes = ddsd.lPitch;
