@@ -483,6 +483,112 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         }
     }
 
+    /* ---- HUD elements (per-player, only when alive) ---- */
+    /* Original FUN_00407720 draws these after entity renderers + spawn shield,
+     * inside the per-player viewport loop, gated by player_data[0xD0] == 0. */
+    if (DAT_00487808 > 0 && DAT_00487810 != 0) {
+        int pidx = DAT_004877f8[0];
+        int poff = pidx * 0x598;
+
+        /* Only draw HUD if player is alive (status field +0xD0 == 0) */
+        if (*(int *)(DAT_00487810 + poff + 0xD0) == 0) {
+            /* Minimap/radar — guarded by config byte at address 0x00483743.
+             * DAT_00483740 is declared as char; byte 3 is at (&DAT_00483740 + 3).
+             * TODO: declare DAT_00483743 properly when config sync covers it. */
+            {
+                unsigned char minimap_flag = *((unsigned char *)&DAT_00483740 + 3);
+                if (minimap_flag != 0 && DAT_00489230 != NULL) {
+                    FUN_004090e0((int)buffer, stride, (unsigned int)pidx);
+                }
+            }
+
+            /* Weapon selection grid (if player pressed weapon select key) */
+            if (*(char *)(DAT_00487810 + poff + 0x9E) == 1) {
+                FUN_0040a9e0((int)buffer, stride, pidx);
+            }
+
+            /* Health bar (if health > 0 and LUT system initialized) */
+            if (*(int *)(DAT_00487810 + poff + 0x20) > 0 && DAT_00489230 != NULL) {
+                FUN_0040b860((int)buffer, stride, pidx);
+            }
+
+            /* Player/weapon name text */
+            if (*(char *)(DAT_00487810 + poff + 0xC8) != 0 && DAT_00487abc != NULL) {
+                int weapon_slot = *(char *)(DAT_00487810 + poff + 0x34);
+                if (weapon_slot >= 0 && weapon_slot < 64) {
+                    int weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + weapon_slot);
+                    char *name_tex = (char *)DAT_00487abc + weapon_type * 0x218 + 4 +
+                                     *(char *)(DAT_00487810 + poff + 0x35) * 0x14;
+                    int font = (DAT_004806d8 > 255) ? 2 : 1;
+                    Draw_Text_To_Buffer(name_tex, font, 0,
+                        buffer + (DAT_004806e8 + 3) * stride + DAT_004806ec + 4,
+                        stride, 0, DAT_004806d8 - 0x26, 0x14);
+                }
+            }
+
+            /* Pickup/powerup text */
+            if (*(char *)(DAT_00487810 + poff + 0xC9) != 0) {
+                FUN_0040aca0((int)buffer, stride, pidx);
+            }
+
+            /* Weapon icon + ammo dots — only if weapon data is initialized */
+            if (DAT_00487abc != NULL && DAT_00487ab4 != NULL) {
+                int weapon_slot = *(char *)(DAT_00487810 + poff + 0x34);
+                if (weapon_slot >= 0 && weapon_slot < 64) {
+                    int weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + weapon_slot);
+                    int icon_x = DAT_004806ec + DAT_004806d8 - 0x1E;
+                    int icon_y = DAT_004806e8 + DAT_004806e4 - 0x1E;
+                    FUN_0040aaf0((int)buffer, stride, icon_x, icon_y, weapon_type, 0);
+
+                    /* Ammo dots around weapon icon */
+                    if (DAT_00487ab0 != NULL) {
+                        int ammo_loaded = *(unsigned char *)(DAT_00487810 + poff + 0x35);
+                        int ammo_total = 8;  /* TODO: read actual capacity from weapon data */
+                        FUN_0040a710((int)buffer, stride, icon_x, icon_y, ammo_loaded, ammo_total);
+                    }
+                }
+            }
+
+            /* Shield/energy bar — guarded by config byte at address 0x00483742.
+             * Stubbed in FUN_0040b580 (returns immediately) until shield data wired. */
+
+            /* Frag count text */
+            if (*(char *)(DAT_00487810 + poff + 0xCB) != 0) {
+                char frag_buf[100];
+                FUN_004644af(frag_buf, (const unsigned char *)"Frags: %d",
+                             *(int *)(DAT_00487810 + poff + 0x28));
+                Draw_Text_To_Buffer(frag_buf, 1, 1,
+                    buffer + (DAT_004806e8 + 0x32) * stride + DAT_004806ec + 4,
+                    stride, 0, DAT_004806d8 - 0x0C, 0);
+            }
+
+            /* Lives display / "You are dead!" */
+            if (*(char *)(DAT_00487810 + poff + 0xCC) != 0) {
+                char lives_buf[32];
+                if (*(int *)(DAT_00487810 + poff + 0x28) == 0) {
+                    strcpy(lives_buf, "You are dead!");
+                } else {
+                    FUN_004644af(lives_buf, (const unsigned char *)"Lives: %d",
+                                 *(int *)(DAT_00487810 + poff + 0x28));
+                }
+                Draw_Text_To_Buffer(lives_buf, 1, 5,
+                    buffer + (DAT_004806e8 + 0x41) * stride + DAT_004806ec + 4,
+                    stride, 0, DAT_004806d8 - 0x0C, 0);
+            }
+        }
+
+        /* Team status text (outside alive-check, always if team game active) */
+        if (DAT_004892a4 != 0 && DAT_0048764a == 0) {
+            int team = *(char *)(DAT_00487810 + poff + 0x2C);
+            FUN_004094f0((int)buffer, stride, team);
+        }
+
+        /* Timer display */
+        if (DAT_004892a8 != 0 && (DAT_004892a8 < 0x762 || DAT_0048764a != 0)) {
+            FUN_00409280((int)buffer, stride);
+        }
+    }
+
     /* ---- Pause / overlay states (end of FUN_00407720) ---- */
     if (g_SubState != 0) {
         if (g_SubState == 1) {

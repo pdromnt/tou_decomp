@@ -538,6 +538,18 @@ int  FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y, int side, float ra
 char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y, int angle, float range_sqrt, int gravity);
 int  FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt);
 
+/* ===== Function Prototypes: hud.cpp ===== */
+void FUN_0040aca0(int buffer, int stride, int player_idx);     /* pickup text */
+void FUN_004094f0(int buffer, int stride, int team);           /* team status text */
+void FUN_00409280(int buffer, int stride);                     /* timer display */
+void FUN_00408f90(unsigned int palette, unsigned short *dest, int stride); /* minimap dot */
+void FUN_004090e0(int buffer, int stride, unsigned int player_idx); /* minimap/radar */
+void FUN_0040b860(int buffer, int stride, int player_idx);     /* health bar */
+void FUN_0040b580(int buffer, int stride);                     /* shield/energy bar */
+void FUN_0040aaf0(int buffer, int stride, int x, int y, int weapon, char state); /* weapon icon */
+void FUN_0040a710(int buffer, int stride, int x, int y, int loaded, int total);  /* ammo dots */
+void FUN_0040a9e0(int buffer, int stride, int player_idx);     /* weapon grid */
+
 /* ===== Function Prototypes: level.cpp ===== */
 int  Load_Level_File(const char *level_name);
 void FUN_00421310(void);             /* per-level water color computation + LUT rebuild */
