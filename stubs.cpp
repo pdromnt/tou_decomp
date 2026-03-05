@@ -10,6 +10,9 @@
 /* DAT_00487aa8 and DAT_0048781c already defined in memory.cpp */
 int   DAT_0048784c = 0;        /* entity-to-entity link count */
 int   DAT_00487228[80] = {0};  /* per-player pickup counter */
+char  DAT_0048372e = 0;        /* fog of war ray resolution (config 0x17D6) */
+char  DAT_0048372f = 0;        /* fog of war sub-option (config 0x17D7) */
+char  DAT_00483730 = 0;        /* fog of war wobble enable (config 0x17D8) */
 char  DAT_0048373d = 0;        /* friendly fire enabled flag */
 char  DAT_00483741 = 0;        /* difficulty sub-setting */
 char  DAT_00483742 = 0;        /* shield/energy bar enable flag (config 0x17EA) */
@@ -3054,9 +3057,12 @@ void FUN_00454b00(void)
                                 /* Floor turret: extended lifetime */
                                 int rnd = rand();
                                 unsigned int life_val = rnd % 0x50 + 0x28;
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                                    (life_val >> 3) + 30000 +
-                                    ((life_val & 0x1fffff8) * 0x20 + (life_val & 0x3ffffff8)) * 4;
+                                {
+                                    /* Grayscale particle color: original X1R5G5B5 (*0x421), converted to RGB565 (*0x841) */
+                                    unsigned int gray5 = life_val >> 3;
+                                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                        ((gray5 << 11) | (gray5 << 6) | gray5) + 30000;
+                                }
                                 *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3c) = 0x1b5800;
                                 *(short *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x5c) = 6;
                             } else {

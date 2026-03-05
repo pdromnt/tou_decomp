@@ -1232,7 +1232,7 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         *(dst + param_2) = color;
                         break;
                     case 6:
-                        *dst = 0x6739;
+                        *dst = 0xCE59; /* gray: X1R5G5B5 0x6739 → RGB565 */
                         *(dst + 1) = color;
                         *(dst + param_2) = color;
                         *(dst + param_2 + 1) = color;

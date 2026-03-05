@@ -179,9 +179,9 @@ void FUN_0044f630(int x, int y, int velX, int velY, float scale,
  * If different sound, stop old one first. Uses spatial audio like FUN_0040f9b0.
  * param_1: entity index (as float, cast to int), param_2: sound ID,
  * param_3: world x, param_4: world y */
-void FUN_0040fd70(float param_1, int param_2, int param_3, int param_4)
+void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol_override, int param6)
 {
-    int iVar6 = (int)param_1 * 0x598;
+    int iVar6 = entity_idx * 0x598;
 
     /* If same sound already assigned to this entity, just refresh timer */
     if (param_2 == *(int *)(iVar6 + 0x4b0 + (int)DAT_00487810)) {
@@ -228,8 +228,10 @@ void FUN_0040fd70(float param_1, int param_2, int param_3, int param_4)
         } while (count != 0);
 
         if (iVar8 != 0xff) {
-            /* Volume from inverse distance */
-            int vol = (int)(1.0f / minDist) * 2;
+            /* Volume: table volume scaled by inverse distance
+             * Boosted ×4 for modern Windows audio stack */
+            int vol_byte = (int)*(unsigned char *)((int)g_SoundTable + param_2 * 8 + 4);
+            int vol = (int)((float)vol_byte / minDist) * 8;
 
             /* Pan from angle to nearest listener */
             int angle = FUN_004257e0(
@@ -1870,6 +1872,24 @@ static void FUN_0044ca40_impl(int *ent, int idx)
     if (weapon_type > 8) speed = 800;
     if (DAT_004892e5 != '\0') speed = 0xFA;
 
+    /* Compute sprite/palette index based on weapon type */
+    int *sprIdx = NULL;
+    if ((char)ent[0x23] == '\0') {
+        unsigned int r = rand() & 0x80000003;
+        if ((int)r < 0) r = (r - 1 | 0xfffffffc) + 1;
+        sprIdx = (int *)(r + 0x5a);
+    }
+    if ((char)ent[0x23] == '\x01') {
+        sprIdx = (int *)(rand() % 5 + 0x66);
+    }
+    if ((char)ent[0x23] == '\x02') {
+        sprIdx = (int *)(rand() % 3 + 0x79);
+    }
+    if (2 < weapon_type) {
+        sprIdx = NULL;
+    }
+
+
     /* Spawn primary projectile (straight ahead) */
     if ((*(char *)((int)ent + 0x8D) == '\0' || *(char *)((int)ent + 0x8D) == '\x02') &&
         DAT_00489248 < 0xA28) {
@@ -1916,15 +1936,132 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
         DAT_00489248++;
 
-        /* Set origin position in next entity slot header */
+        /* Set origin position */
         *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
         *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+
+        /* Set palette color for pixel dot rendering (sprite_idx >= 30000) */
+        if (sprIdx != NULL) {
+            *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+                (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
+        }
+
+        /* Weapon type 8 + ship flag 'd': set special damage type */
+        if (weapon_type == 8 && *(char *)(idx * 0x40 + 0x33 + (int)DAT_0048780c) == 'd') {
+            *(unsigned char *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x60) = 0x19;
+        }
+
+        /* Difficulty mode: set energy field */
+        if (DAT_004892e5 != '\0') {
+            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x3C) = 0x1d4c000;
+        }
+    }
+
+    /* Spawn side projectiles (fire mode 1 or 2) */
+    if ((*(char *)((int)ent + 0x8D) == '\x01' || *(char *)((int)ent + 0x8D) == '\x02') &&
+        DAT_00489248 < 0xA28) {
+
+        int shipStatOff = idx * 0x40;
+        int *lut2 = (int *)DAT_00487ab0;
+
+        /* Left side projectile: heading + 0x200 (perpendicular) */
+        unsigned int side_angle = (heading + 0x200) & 0x7FF;
+        int ship_radius = (int)(unsigned int)*(unsigned char *)(shipStatOff + 0x22 + (int)DAT_0048780c);
+        int eoff = DAT_00489248 * 0x80;
+        int ebase2 = (int)DAT_004892e8 + eoff;
+
+        *(int *)(ebase2 + 0x00) = (ship_radius * lut2[side_angle]) / 2 + ent[0];
+        *(int *)(ebase2 + 0x08) = (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
+        *(int *)(ebase2 + 0x18) = (lut2[heading] * speed >> 6) + ent[4];
+        *(int *)(ebase2 + 0x1C) = (lut2[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
+        *(int *)(ebase2 + 0x04) = *(int *)(ebase2 + 0x00);
+        *(int *)(ebase2 + 0x0C) = *(int *)(ebase2 + 0x08);
+
+        *(unsigned short *)(ebase2 + 0x24) = 0;
+        *(unsigned char *)(ebase2 + 0x20) = 0;
+        *(unsigned char *)(ebase2 + 0x26) = 6;
+        *(unsigned char *)(ebase2 + 0x22) = (unsigned char)idx;
+        *(int *)(ebase2 + 0x28) = 0;
+
+        if (weapon_type < 6) {
+            *(unsigned char *)(ebase2 + 0x21) = 0;
+            *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+            *(char *)(ebase2 + 0x40) = (char)weapon_type;
+        } else {
+            *(unsigned char *)(ebase2 + 0x21) = 0x69;
+            *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+            *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+            *(char *)(ebase2 + 0x40) = (char)weapon_type - 6;
+        }
+        *(int *)(ebase2 + 0x34) = 0;
+        *(int *)(ebase2 + 0x48) = 0;
+        *(unsigned char *)(ebase2 + 0x54) = 0;
+        *(int *)(ebase2 + 0x3C) = 0;
+
+        DAT_00489248++;
+
+        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
+        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+        if (sprIdx != NULL) {
+            *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+                (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
+        }
+
+        /* Right side projectile: heading - 0x200 (opposite perpendicular) */
+        if (DAT_00489248 < 0xA28) {
+            side_angle = (heading - 0x200) & 0x7FF;
+            eoff = DAT_00489248 * 0x80;
+            ebase2 = (int)DAT_004892e8 + eoff;
+
+            *(int *)(ebase2 + 0x00) = (ship_radius * lut2[side_angle]) / 2 + ent[0];
+            *(int *)(ebase2 + 0x08) = (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
+            *(int *)(ebase2 + 0x18) = (lut2[heading] * speed >> 6) + ent[4];
+            *(int *)(ebase2 + 0x1C) = (lut2[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
+            *(int *)(ebase2 + 0x04) = *(int *)(ebase2 + 0x00);
+            *(int *)(ebase2 + 0x0C) = *(int *)(ebase2 + 0x08);
+
+            *(unsigned short *)(ebase2 + 0x24) = 0;
+            *(unsigned char *)(ebase2 + 0x20) = 0;
+            *(unsigned char *)(ebase2 + 0x26) = 6;
+            *(unsigned char *)(ebase2 + 0x22) = (unsigned char)idx;
+            *(int *)(ebase2 + 0x28) = 0;
+
+            if (weapon_type < 6) {
+                *(unsigned char *)(ebase2 + 0x21) = 0;
+                *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+                *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+                *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+                *(char *)(ebase2 + 0x40) = (char)weapon_type;
+            } else {
+                *(unsigned char *)(ebase2 + 0x21) = 0x69;
+                *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+                *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+                *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+                *(char *)(ebase2 + 0x40) = (char)weapon_type - 6;
+            }
+            *(int *)(ebase2 + 0x34) = 0;
+            *(int *)(ebase2 + 0x48) = 0;
+            *(unsigned char *)(ebase2 + 0x54) = 0;
+            *(int *)(ebase2 + 0x3C) = 0;
+
+            DAT_00489248++;
+
+            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
+            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+            if (sprIdx != NULL) {
+                *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+                    (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
+            }
+        }
     }
 
     /* Play fire sound */
     unsigned int snd_type = (unsigned int)weapon_type;
     if (weapon_type > 7) snd_type = 7;
-    FUN_0040f9b0(snd_type + 0xD2, ent[0], ent[1]);
+    FUN_0040f9b0(snd_type + 0xD2, ent[0], ent[1], 0x14);
 }
 /* ===== FUN_0044d650 — Detonate Owned Projectiles (0044D650) ===== */
 static void FUN_0044d650_impl(int *ent, int idx)
@@ -2122,7 +2259,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
     int *piVar1 = ent;
 
     /* Play explosion sound */
-    FUN_0040fd70((float)idx, 0xc, ent[0], ent[1]);
+    FUN_0040fd70(idx, 0xc, ent[0], ent[1]);
 
     /* Knockback all nearby entities */
     int playerIdx = 0;
@@ -3273,25 +3410,72 @@ static void FUN_00401000_impl(int idx)
     if (local_14 == 0x32) return;
 
     if (local_14 == 0x17) {
-        if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) != '\x01' ||
-            *(int *)(iVar12 + 0xa4 + (int)DAT_00487810) != 0) {
-            goto do_switch;
+        if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01' &&
+            *(int *)(iVar12 + 0xa4 + (int)DAT_00487810) == 0) {
+            local_14 = 0x5a;
         }
-        local_14 = 0x5a;
-    }
-    else if (local_14 < 0x2d) {
-        goto do_switch;
     }
 
-    /* For local_14 >= 0x2d (and 0x5a override): play sound, update stats */
-    FUN_0040f9b0((int)local_14,
-                 *(int *)(iVar12 + (int)DAT_00487810),
-                 *(int *)(iVar12 + 4 + (int)DAT_00487810));
+    /* === Sound dispatch (first jump table in original) === */
+    {
+        int ex = *(int *)(iVar12 + (int)DAT_00487810);
+        int ey = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+        char field35 = *(char *)(iVar12 + 0x35 + (int)DAT_00487810);
+
+        if (local_14 > 0x2c) {
+            /* Types > 44 (including 0x5a override): play sound using type as index */
+            FUN_0040f9b0((int)local_14, ex, ey, 0xFF, 0x3E8);
+        } else {
+            /* Types 0-44: per-type sound dispatch */
+            switch (local_14) {
+            case 0:
+                FUN_0040f9b0(0x78, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 2:
+                if (field35 == 0) FUN_0040fd70(idx, 2, ex, ey, 0xFF, 0x3E8);
+                else FUN_0040f9b0(0x10E, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 3:
+                FUN_0040f9b0(rand() % 6 + 0x105, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 4:
+                FUN_0040fd70(idx, 4, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 10: case 18: case 25:
+                break; /* no sound (continuous-fire types) */
+            case 12:
+                FUN_0040fd70(idx, 0x0C, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 16:
+                FUN_0040fd70(idx, 0x10, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 24:
+                if (field35 == 0) FUN_0040f9b0(0x18, ex, ey, 0xFF, 0x3E8);
+                else FUN_0040f9b0(0x10E, ex, ey, 0xFF, 0x3E8);
+                break;
+            case 34: {
+                /* Sub-switch on field35 (0-3), >3 = no sound */
+                static const int type34_sounds[] = {0xD3, 0xD5, 0x113, 0x22};
+                if ((unsigned char)field35 <= 3)
+                    FUN_0040f9b0(type34_sounds[(unsigned char)field35], ex, ey, 0xFF, 0x3E8);
+                break;
+            }
+            case 44:
+                FUN_0040fd70(idx, 0x2C, ex, ey, 0xFF, 0x3E8);
+                break;
+            default:
+                /* Generic: play sound using weapon type as index */
+                FUN_0040f9b0((int)local_14, ex, ey, 0xFF, 0x3E8);
+                break;
+            }
+        }
+    }
+
+    /* Stats update (runs for ALL weapon types) */
     iVar13 = (int)DAT_00487810;
     DAT_00486d28[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481ca8 + local_14);
     DAT_004870e8[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481c58 + local_14);
 
-do_switch:
     uVar9 = (unsigned char)idx;
 
     switch (local_14) {
@@ -3344,8 +3528,12 @@ do_switch:
             DAT_00489248++;
             iVar13 = rand();
             uVar8 = iVar13 % 100 + 0x14;
-            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                ((int)uVar8 >> 3) + 30000 + ((uVar8 & 0x1fffff8) * 0x20 + (uVar8 & 0x3ffffff8)) * 4;
+            {
+                /* Grayscale particle color: original X1R5G5B5 (*0x421), converted to RGB565 (*0x841) */
+                unsigned int gray5 = uVar8 >> 3;
+                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                    ((gray5 << 11) | (gray5 << 6) | gray5) + 30000;
+            }
             iVar13 = rand();
             *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = iVar13 % 0x32 + 0x50;
             *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
@@ -4511,7 +4699,8 @@ static void FUN_0044ea70_impl(int *ent)
 }
 
 /* ===== FUN_0040f9b0 — Positional Sound Playback (0040F9B0) ===== */
-void FUN_0040f9b0(int snd, int x, int y)
+/* vol_override: 0xFF = use volume from g_SoundTable, else use this value directly */
+void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
 {
     float fVar2;
     int iVar3, iVar5, iVar7;
@@ -4539,7 +4728,16 @@ void FUN_0040f9b0(int snd, int x, int y)
         } while (count != 0);
 
         if (iVar8 != 0xff) {
-            iVar7 = (int)(1.0f / minDist) * 2;
+            /* Volume: use table volume or override, scaled by inverse distance */
+            int vol_byte;
+            if ((vol_override & 0xFF) != 0xFF) {
+                vol_byte = vol_override & 0xFF;
+            } else {
+                vol_byte = (int)*(unsigned char *)((int)g_SoundTable + snd * 8 + 4);
+            }
+            /* Original formula: vol = (int)(vol_byte / minDist) * 2
+             * Boosted ×4 for modern Windows audio stack (WASAPI vs DirectSound) */
+            iVar7 = (int)((float)vol_byte / minDist) * 8;
 
             int angle = FUN_004257e0(
                 *(int *)((int)DAT_00487810 + iVar8 * 0x598),
@@ -5478,13 +5676,13 @@ void FUN_0044b0b0(void)
                     *(char *)((int)ent + 0x1D) = 0;
                 }
 
-                /* Fire secondary weapon (stub) */
+                /* Fire secondary weapon */
                 if ((buttons & 0x10) && *(char *)((int)ent + 0xA2) == '\0' && ent[0x25] == 0) {
                     FUN_0044d860_impl((int *)ent, i);
                 }
             }
 
-            /* Detonate owned projectiles (stub) */
+            /* Detonate owned projectiles */
             FUN_0044d650_impl((int *)ent, i);
 
             /* Boundary clamp */
@@ -5584,7 +5782,7 @@ void FUN_0044b0b0(void)
             FUN_0044ed90_impl((int *)ent, i, (unsigned int)tile_val);
         }
 
-        /* Tile pickup interaction (stub) */
+        /* Tile pickup interaction */
 
         /* Check if tile is walkable — clear underwater flag if so */
         if (*(char *)((int)DAT_00487928 + 0x18 + (unsigned int)tile_val * 0x20) == '\0' &&
@@ -5632,7 +5830,7 @@ void FUN_0044b0b0(void)
             DAT_00486be8[i] += 0x0C;
         }
 
-        /* Pickup collision check (stub) */
+        /* Pickup collision check */
         int pickup = FUN_00450ce0_impl(ent[0], ent[1]);
         if ((char)pickup != '\0' && *(char *)((int)ent + 0x47C) == '\x01') {
             FUN_00451010_impl(ent, (char)pickup, i);

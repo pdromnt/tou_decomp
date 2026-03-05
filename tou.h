@@ -147,7 +147,10 @@ extern DWORD                 DAT_004892b8;
 extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 extern char                  DAT_00483732;      /* config option (preserved across Load_Options_Config) */
-extern char                  DAT_0048372d;      /* config option (preserved across Load_Options_Config) */
+extern char                  DAT_0048372d;      /* fog of war mode: 0=off, 1=full, 2=simplified */
+extern char                  DAT_0048372e;      /* fog of war ray resolution */
+extern char                  DAT_0048372f;      /* fog of war sub-option */
+extern char                  DAT_00483730;      /* fog of war wobble enable */
 
 /* ===== Intro particle system (memory.cpp) ===== */
 extern int                   DAT_00489248;      /* Entity count (also main entity count in gameplay) */
@@ -412,7 +415,7 @@ extern int                   DAT_0048382c;       /* game scaling constant 3 (fir
 extern char                  DAT_0048372a;       /* team count setting */
 extern char                  DAT_0048372b;       /* team mode setting */
 extern char                  DAT_00483729;       /* game type setting */
-extern char                  DAT_00483731;       /* sky/fade color mode */
+extern char                  DAT_00483731;       /* sky/fade color mode / fog of war sub-option */
 extern char                  DAT_00483739;       /* game mode preset index */
 extern float                 DAT_00483854;       /* entity density scale factor */
 extern float                 DAT_00483858;       /* inverse density factor (1.0/density) */
@@ -548,6 +551,7 @@ void FUN_00408f90(unsigned int palette, unsigned short *dest, int stride); /* mi
 void FUN_004090e0(int buffer, int stride, unsigned int player_idx); /* minimap/radar */
 void FUN_0040b860(int buffer, int stride, int player_idx);     /* health bar */
 void FUN_0040b580(int buffer, int stride, int player_idx);     /* shield/energy bar */
+void FUN_004095e0(unsigned int buffer, int stride, int player_idx);  /* fog of war */
 void FUN_0040aaf0(int buffer, int stride, int x, int y, int weapon, char state); /* weapon icon */
 void FUN_0040a710(int buffer, int stride, int x, int y, int loaded, int total);  /* ammo dots */
 void FUN_0040a9e0(int buffer, int stride, int player_idx);     /* weapon grid */
@@ -607,13 +611,13 @@ extern unsigned int          DAT_00483844;      /* fire color match G threshold 
 extern unsigned int          DAT_00483848;      /* fire color match B threshold */
 
 /* ===== Sub-functions ===== */
-void FUN_0040fd70(float param1, int snd, int x, int y);   /* positional sound variant */
+void FUN_0040fd70(int entity_idx, int snd, int x, int y, int vol_override = 0xFF, int param6 = 0x3E8); /* looping positional sound */
 int  FUN_00450dd0(int x, int y);                           /* collision passability check */
 
 void FUN_00454340(void);        /* projectile update */
 void FUN_0044b0b0(void);        /* Entity_Behavior_Loop (entity.cpp) */
 void FUN_0044e510(int *ent);    /* Boundary_Clamp (entity.cpp) */
-void FUN_0040f9b0(int snd, int x, int y); /* positional sound (stub in entity.cpp) */
+void FUN_0040f9b0(int snd, int x, int y, int vol_override = 0xFF, int param5 = 0x3E8); /* positional sound */
 void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, char param_5,
                   int param_6, int param_7, int param_8, int param_9,
                   char param_10, char param_11, unsigned char param_12); /* AoE tile damage / explosion */

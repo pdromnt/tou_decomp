@@ -95,6 +95,14 @@ static void Load_Sound_Sample(const char bLoop, int index, int vol_priority,
 }
 
 /* ===== Load_Game_Sounds (0040E9E0) ===== */
+/*
+ * Loads all game sound samples into g_SoundTable (300 entries × 8 bytes = 0x960).
+ * The original binary has 16 "complex" loads that call FSOUND_Sample_Load directly
+ * with raw byte-offsets into the table, followed by ~55 "simple" loads via
+ * Load_Sound_Sample.  Both produce the same result, so we use Load_Sound_Sample
+ * for everything (converting byte-offsets to array indices and halving the volume
+ * to compensate for Load_Sound_Sample's ×2 scaling).
+ */
 void Load_Game_Sounds(void)
 {
     g_SoundTable = (SoundEntry *)Mem_Alloc(0x960);
@@ -103,10 +111,98 @@ void Load_Game_Sounds(void)
     memset(g_SoundTable, 0, 0x960);
     g_MemoryTracker += 0x960;
 
-    /* TODO: Full sound table from 0040E9E0 */
-    Load_Sound_Sample(0, 0x1c, 0x40, "mini_r");
-    Load_Sound_Sample(0, 0x1d, 0x40, "mega.1");
-    Load_Sound_Sample(0, 0x1e, 0x40, "phot_r");
+    /* --- Complex loads: 8 base weapon sounds (table offsets 0x690-0x6C8 = indices 0xD2-0xD9) --- */
+    Load_Sound_Sample(0, 0xD2, 0x10, "bas1_r");
+    Load_Sound_Sample(0, 0xD3, 0x10, "bas2_r");
+    Load_Sound_Sample(0, 0xD4, 0x10, "bas3_r");
+    Load_Sound_Sample(0, 0xD5, 0x10, "bas4_r");
+    Load_Sound_Sample(0, 0xD6, 0x10, "bas5_r");
+    Load_Sound_Sample(0, 0xD7, 0x10, "bas6_r");
+    Load_Sound_Sample(0, 0xD8, 0x10, "bas7_r");
+    Load_Sound_Sample(0, 0xD9, 0x10, "bas8_r");
+
+    /* --- Complex loads: dump, organ, infiltrator (various offsets) --- */
+    Load_Sound_Sample(0, 0x01,  0x40, "dump_r");     /* offset 0x008, vol 0x80 */
+    Load_Sound_Sample(0, 0x104, 0x40, "dump_h");     /* offset 0x820, vol 0x80 */
+    Load_Sound_Sample(1, 0x02,  0x10, "orga_l");     /* offset 0x010, vol 0x20, looping */
+    Load_Sound_Sample(0, 0x105, 0x30, "inf1_r");     /* offset 0x828, vol 0x60 */
+    Load_Sound_Sample(0, 0x106, 0x30, "inf2_r");     /* offset 0x830, vol 0x60 */
+    Load_Sound_Sample(0, 0x107, 0x30, "inf3_r");     /* offset 0x838, vol 0x60 */
+    Load_Sound_Sample(0, 0x108, 0x30, "inf4_r");     /* offset 0x840, vol 0x60 */
+    Load_Sound_Sample(0, 0x109, 0x30, "inf5_r");     /* offset 0x848, vol 0x60 */
+
+    /* --- Simple loads via Load_Sound_Sample (0x0040e8e0) --- */
+    Load_Sound_Sample(0, 0x10a, 0x30, "inf6_r");
+    Load_Sound_Sample(1, 0x04,  0x60, "turb_l");     /* looping */
+    Load_Sound_Sample(0, 0x05,  0x40, "coll_r");
+    Load_Sound_Sample(0, 0x06,  0x40, "cars_r");
+    Load_Sound_Sample(0, 0x07,  0x40, "tele_r");
+    Load_Sound_Sample(0, 0x08,  0x40, "tour_r");
+    Load_Sound_Sample(0, 0x09,  0x40, "kick_r");
+    Load_Sound_Sample(0, 0x0a,  0x40, "pers_h");
+    Load_Sound_Sample(0, 0x0b,  0x18, "nucb_r");
+    Load_Sound_Sample(1, 0x0c,  0x40, "digg_l");     /* looping */
+    Load_Sound_Sample(0, 0x0d,  0x40, "repe_r");
+    Load_Sound_Sample(0, 0x0e,  0x40, "repb_r");
+    Load_Sound_Sample(0, 0x0f,  0x40, "bone_r");
+    Load_Sound_Sample(1, 0x10,  0x40, "flam_l");     /* looping */
+    Load_Sound_Sample(0, 0x11,  0x40, "firb_1");
+    Load_Sound_Sample(0, 0x12,  0x40, "airs_r");
+    Load_Sound_Sample(0, 0x13,  0x40, "free_r");
+    Load_Sound_Sample(0, 0x10b, 0x40, "free_h");
+    Load_Sound_Sample(0, 0x14,  0x40, "plas_r");
+    Load_Sound_Sample(0, 0x10c, 0x40, "plas_h");
+    Load_Sound_Sample(0, 0x15,  0x40, "fire_r");
+    Load_Sound_Sample(0, 0x16,  0x40, "bric_r");
+    Load_Sound_Sample(0, 0x10d, 0x40, "bric_h");
+    Load_Sound_Sample(0, 0x17,  0x40, "nucl_r");
+    Load_Sound_Sample(0, 0x18,  0x30, "pilo_r");
+    Load_Sound_Sample(0, 0x10e, 0x30, "engi_r");
+    Load_Sound_Sample(0, 0x10f, 0x40, "land_r");
+    Load_Sound_Sample(0, 0x110, 0x40, "basi_r");
+    Load_Sound_Sample(0, 0x111, 0x40, "expl_r");
+    Load_Sound_Sample(0, 0x1a,  0x20, "mult_r");
+    Load_Sound_Sample(0, 0x1b,  0x40, "kami_r");
+    Load_Sound_Sample(0, 0x1c,  0x40, "mini_r");
+    Load_Sound_Sample(0, 0x1d,  0x40, "mega_1");
+    Load_Sound_Sample(0, 0x1e,  0x40, "phot_r");
+    Load_Sound_Sample(0, 0x1f,  0x40, "inse_r");
+    Load_Sound_Sample(0, 0x22,  0x40, "firw_r");
+    Load_Sound_Sample(0, 0x112, 0x80, "firw_!");
+    Load_Sound_Sample(0, 0x113, 0x40, "magi_r");
+    Load_Sound_Sample(0, 0x114, 0x80, "magi_!");
+    Load_Sound_Sample(0, 0x23,  0x40, "gamm_1");
+    Load_Sound_Sample(0, 0x11c, 0x40, "gamm_2");
+    Load_Sound_Sample(0, 0x25,  0x40, "roma_r");
+    Load_Sound_Sample(0, 0x27,  0x40, "kome_r");
+    Load_Sound_Sample(0, 0x28,  0x40, "pipe_r");
+    Load_Sound_Sample(0, 0x29,  0x40, "turr_r");
+    Load_Sound_Sample(0, 0x2a,  0x40, "turr_r");     /* same sound, different index */
+    Load_Sound_Sample(0, 0x2b,  0x40, "repa_r");
+    Load_Sound_Sample(1, 0x2c,  0x40, "mach_l");     /* looping */
+    Load_Sound_Sample(0, 0x2d,  0x40, "lase_r");
+    Load_Sound_Sample(0, 0x2e,  0x40, "nall_r");
+    Load_Sound_Sample(0, 0x115, 0x40, "butt_m");
+    Load_Sound_Sample(0, 0x116, 0x10, "hit1_m");
+    Load_Sound_Sample(0, 0x117, 0x10, "hit2_m");
+    Load_Sound_Sample(0, 0x118, 0x10, "hit3_m");
+    Load_Sound_Sample(0, 0x65,  0x20, "exp1_m");
+    Load_Sound_Sample(0, 0x66,  0x20, "exp2_m");
+    Load_Sound_Sample(0, 0x67,  0x20, "exp3_m");
+    Load_Sound_Sample(0, 0x68,  0x20, "exp4_m");
+    Load_Sound_Sample(0, 0x69,  0x20, "exp5_m");
+    Load_Sound_Sample(0, 0x6a,  0x20, "exp6_m");
+    Load_Sound_Sample(0, 0x6b,  0x20, "exp7_m");
+    Load_Sound_Sample(0, 0x119, 0x30, "wats_m");
+    Load_Sound_Sample(0, 0x11a, 0x7f, "watd_m");
+    Load_Sound_Sample(0, 0x70,  0x40, "flat_m");
+    Load_Sound_Sample(0, 0x11b, 0x20, "rebo_m");
+    Load_Sound_Sample(0, 0x71,  0x40, "scr1_m");
+    Load_Sound_Sample(0, 0x72,  0x40, "scr2_m");
+    Load_Sound_Sample(0, 0x73,  0x40, "scr3_m");
+    Load_Sound_Sample(0, 0x74,  0x40, "scr4_m");
+    Load_Sound_Sample(0, 0x78,  0x40, "shot_r");
+    Load_Sound_Sample(0, 0x79,  0x20, "spec_m");
 }
 
 /* ===== FUN_0040e130 (0040E130) - Menu/intro music init ===== */

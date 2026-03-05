@@ -205,26 +205,8 @@ int Load_Level_Resources(void)
     }
     LOG("[LEVEL] Player setup: %d total, %d human\n", DAT_00489240, DAT_00489244);
 
-    /* Allocate player data array (0x598 bytes per player, fixed 80 slots).
-     * Original binary allocates 80 * 0x598 = 0x1BF80 bytes in Init_Memory_Pools,
-     * regardless of actual player count. FUN_0041a8c0 clears all 80 slots. */
-    if (DAT_00487810 == 0) {
-        void *player_mem = Mem_Alloc(80 * 0x598);
-        if (player_mem) {
-            DAT_00487810 = (int)player_mem;
-            g_MemoryTracker += 80 * 0x598;
-            LOG("[LEVEL] Allocated player data: 80 slots, %d bytes (0x1BF80)\n",
-                80 * 0x598);
-        }
-    }
-
-    /* Allocate ship stats table (0x40 bytes per ship type, 9 types) */
-    if (!DAT_0048780c) {
-        DAT_0048780c = Mem_Alloc(9 * 0x40);
-        if (DAT_0048780c) {
-            g_MemoryTracker += 9 * 0x40;
-        }
-    }
+    /* Player data (DAT_00487810) and ship stats (DAT_0048780c) are now
+     * allocated in Init_Memory_Pools, matching the original binary. */
 
     /* Set default ship type for player 0 (type 9 = random) */
     DAT_0048236e[0] = 9;

@@ -6,6 +6,10 @@
 #include "tou.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
+
+/* float constant used in fog sky ratio check (1.0f) */
+static float _DAT_004753e8_fog = 1.0f;
 
 /* ===== FUN_0040aca0 - Pickup/powerup text display (0040ACA0) ===== */
 /* Shows pickup name near bottom of viewport when player collects an item.
@@ -222,21 +226,22 @@ void FUN_0040b860(int param_1, int param_2, int param_3)
     int health = *(int *)(DAT_00487810 + 0x20 + param_3 * 0x598);
     if (health <= 0) return;
 
-    /* Max bar height = viewport height - 18 (9px margin top + 9px margin bottom) */
-    int max_bar = DAT_004806e4 - 18;
+    /* Max bar height = viewport height - 50 (0x32) */
+    int max_bar = DAT_004806e4 - 50;
     if (max_bar <= 0) return;
 
-    /* Compute bar height: scale health to pixel height.
-     * Original uses FPU: __ftol(health_ratio * max_height).
-     * health_ratio = health / starting_health (set by FUN_0041a8c0).
-     * For now, cap health to max_bar and use directly. */
-    int bar_h = health;
+    /* Compute bar height: ratio of current health to max health, scaled to pixels.
+     * max_health from ship stats table: DAT_0048780c + player * 0x40 + 0x28 */
+    int max_health = *(int *)((int)DAT_0048780c + param_3 * 0x40 + 0x28);
+    if (max_health <= 0) max_health = 1;
+    int bar_h = (int)((float)max_bar * (float)health / (float)max_health);
+    if (health > 0 && bar_h < 1) bar_h = 1;
     if (bar_h > max_bar) bar_h = max_bar;
     if (bar_h <= 0) return;
 
     /* Color threshold based on health ratio */
     int lut_idx;
-    float ratio = (float)bar_h / (float)max_bar;
+    float ratio = (float)health / (float)max_health;
     if (ratio > 0.4f) {
         lut_idx = 0x0C;  /* Healthy: green */
     } else if (ratio > 0.2f) {
@@ -472,8 +477,8 @@ void FUN_0040a710(int param_1, int param_2, int param_3, int param_4,
         /* Row 1: [black, bright, bright, black] */
         p += param_2;
         p[-1] = 0;
-        p[0] = 0x6739;
-        p[1] = 0x6739;
+        p[0] = 0xCE59; /* gray: X1R5G5B5 0x6739 → RGB565 */
+        p[1] = 0xCE59;
         p[2] = 0;
         /* Row 2: [black, black] */
         p += param_2;
@@ -560,4 +565,545 @@ void FUN_0040a9e0(int param_1, int param_2, int param_3)
         }
         y_pos += 0x24;
     } while (y_pos <= 0x6B);
+}
+
+/* ===== FUN_004095e0 - Fog of War raycasting + rendering (004095E0) ===== */
+/* Per-player visibility system. Casts rays from player to viewport edges
+ * in 4 directions, accumulating darkness from wall hits. Then applies the
+ * visibility map to the framebuffer using one of 3 rendering modes.
+ *
+ * param_1 = framebuffer base address
+ * param_2 = stride (pixels per row)
+ * param_3 = player index (0-3) */
+void FUN_004095e0(unsigned int param_1, int param_2, int param_3)
+{
+    unsigned int step = (unsigned int)(unsigned char)DAT_0048372e;
+    int ent_off = DAT_004877f8[param_3] * 0x598;
+    int player_x = (*(int *)(ent_off + DAT_00487810) >> 0x12) - DAT_004806dc;
+    int player_y = (*(int *)(ent_off + 4 + DAT_00487810) >> 0x12) - DAT_004806e0;
+    int vp_w = DAT_004806d8;
+    int vp_h = DAT_004806e4;
+    int stride_ext = vp_w + 0x20;
+    unsigned char *vis_buf = (unsigned char *)DAT_00489eac[param_3];
+
+    /* Scale factor for distance: 0.9f normally, 2.0f for mode 2 */
+    float scale = 0.9f;
+    int threshold = 0x200;
+    if (DAT_0048372d == '\x02') {
+        scale = 2.0f;
+        threshold = 0xF3C;
+    }
+
+    /* Skip raycasting if player is in certain states */
+    char state = *(char *)(ent_off + 0x4a0 + DAT_00487810);
+    if (state != '\0' && state != (char)-1)
+        goto apply_rendering;
+
+    if (!vis_buf)
+        goto apply_rendering;
+
+    /* ---- Quadrant 1 & 2: vertical rays (column by column) ---- */
+    {
+        int col = 0;
+        int col_fx = 0;
+        int col_step_fx = step * 0x40000;
+
+        while (col <= vp_w) {
+            /* Quadrant 1: UP from player (rows 0..player_y-1) */
+            if (player_y != 0) {
+                int px_fx = player_x << 0x12;
+                int slope = (col_fx - px_fx) / player_y;
+                int slope2 = (col_fx - px_fx + col_step_fx) / player_y;
+                int slope12 = slope >> 0xC;
+                int dist = (int)(sqrtf((float)(slope12 * slope12 + 0x1000)) * scale);
+
+                /* Optional wobble */
+                if (DAT_00483730 != '\0') {
+                    int angle = FUN_004257e0(0, 0, slope12, -0x40);
+                    int *sinlut = (int *)DAT_00487ab0;
+                    unsigned int idx;
+
+                    idx = (DAT_00487788[2] + angle * 5) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w1 = sinlut[idx] / 120000;
+
+                    idx = (DAT_00487788[3] + angle * 0xC) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w2 = sinlut[idx] / 150000;
+
+                    idx = (DAT_00487788[0] + angle * 0xE) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w3 = sinlut[idx] / 150000;
+
+                    idx = (DAT_00487788[1] + angle * 9) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w4 = sinlut[idx] / 160000;
+
+                    dist = dist + w1 + w2 + w3 + w4;
+                }
+
+                int darkness = 0;
+                int hit_wall = 0;
+                int accum = 0;
+                int scan_y = (player_y - 1) * stride_ext;
+                unsigned char vis_val = 0;
+                int ray_fx = px_fx;
+
+                for (int row = 0; row < player_y; row++) {
+                    ray_fx += slope;
+                    int ray_fx2_next = px_fx + (row + 1) * slope;
+                    (void)ray_fx2_next;
+
+                    if ((row & 2) != 0) {
+                        int ty = (*(int *)(ent_off + 4 + DAT_00487810) >> 0x12) - row;
+                        int tx = (*(int *)(ent_off + DAT_00487810) + ray_fx) >> 0x12;
+                        int tile_idx = (ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx - player_x;
+                        unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                        accum += dist;
+
+                        if (accum < 0x201 || *(char *)(tile * 0x20 + (int)DAT_00487928) != '\0') {
+                            if (hit_wall) darkness += dist;
+                        } else {
+                            if (*(char *)(tile * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                                if (accum > threshold) darkness += dist >> 1;
+                                if (hit_wall) darkness += dist;
+                            } else {
+                                hit_wall = 1;
+                                darkness += dist;
+                            }
+                        }
+
+                        int level = (darkness >> 6) - 10;
+                        if (level < 0) vis_val = 0;
+                        else if (level >= 0x11) vis_val = 0x11;
+                        else vis_val = (unsigned char)level;
+                    }
+
+                    /* Fill visibility row */
+                    int fill_start = (ray_fx >> 0x12) + scan_y;
+                    scan_y -= stride_ext;
+                    int px_fx2 = px_fx + (row + 1) * slope2;
+                    int fill_count = ((px_fx2 - ray_fx) >> 0x12) + 1;
+                    for (int f = 0; f < fill_count; f++) {
+                        vis_buf[fill_start + f] = vis_val;
+                    }
+                }
+            }
+
+            /* Quadrant 2: DOWN from player (rows player_y..vp_h-1) */
+            {
+                int below = vp_h - player_y;
+                if (below != 0) {
+                    int px_fx = player_x << 0x12;
+                    int slope = (col_fx - (player_x << 0x12)) / below;
+                    int slope2 = (col_fx - (player_x << 0x12) + col_step_fx) / below;
+                    int slope12 = slope >> 0xC;
+                    int dist = (int)(sqrtf((float)(slope12 * slope12 + 0x1000)) * scale);
+
+                    if (DAT_00483730 != '\0') {
+                        int angle = FUN_004257e0(0, 0, slope12, 0x40);
+                        int *sinlut = (int *)DAT_00487ab0;
+                        unsigned int idx;
+
+                        idx = (DAT_00487788[2] + angle * 5) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w1 = sinlut[idx] / 120000;
+
+                        idx = (DAT_00487788[3] + angle * 0xC) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w2 = sinlut[idx] / 150000;
+
+                        idx = (DAT_00487788[0] + angle * 0xE) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w3 = sinlut[idx] / 150000;
+
+                        idx = (DAT_00487788[1] + angle * 9) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w4 = sinlut[idx] / 160000;
+
+                        dist = dist + w1 + w2 + w3 + w4;
+                    }
+
+                    int scan_y = stride_ext * player_y;
+                    unsigned char vis_val = 0;
+                    int darkness = 0;
+                    int hit_wall = 0;
+                    int accum = 0;
+                    int ray_fx = px_fx;
+                    int ray2_fx = px_fx;
+
+                    for (int row = 0; row < below; row++) {
+                        ray_fx += slope;
+                        ray2_fx += slope2;
+
+                        if ((row & 2) != 0) {
+                            int ty = (*(int *)(ent_off + 4 + DAT_00487810) >> 0x12) + row;
+                            int tx = (*(int *)(ent_off + DAT_00487810) + ray2_fx) >> 0x12;
+                            int tile_idx = (ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx - player_x;
+                            unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                            accum += dist;
+
+                            if (accum < 0x201 || *(char *)(tile * 0x20 + (int)DAT_00487928) != '\0') {
+                                if (hit_wall) darkness += dist;
+                            } else {
+                                if (*(char *)(tile * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                                    if (accum > threshold) darkness += dist >> 1;
+                                    if (hit_wall) darkness += dist;
+                                } else {
+                                    hit_wall = 1;
+                                    darkness += dist;
+                                }
+                            }
+
+                            int level = (darkness >> 6) - 10;
+                            if (level < 0) vis_val = 0;
+                            else if (level >= 0x11) vis_val = 0x11;
+                            else vis_val = (unsigned char)level;
+                        }
+
+                        int fill_start = (ray_fx >> 0x12) + scan_y;
+                        scan_y += stride_ext;
+                        int fill_count = ((ray2_fx - ray_fx) >> 0x12) + 1;
+                        for (int f = 0; f < fill_count; f++) {
+                            vis_buf[fill_start + f] = vis_val;
+                        }
+                    }
+                }
+            }
+
+            col += step;
+            col_fx += col_step_fx;
+        }
+    }
+
+    /* ---- Quadrant 3 & 4: horizontal rays (row by row) ---- */
+    {
+        int row = 0;
+        int row_fx = 0;
+        int row_step_fx = step * 0x40000;
+
+        while (row < vp_h) {
+            /* Quadrant 3: LEFT from player (cols 0..player_x-1) */
+            if (player_x != 0) {
+                int py_fx = player_y << 0x12;
+                int slope = (row_fx - py_fx) / player_x;
+                int slope2 = (row_fx - py_fx + row_step_fx) / player_x;
+                int slope12 = slope >> 0xC;
+                int dist = (int)(sqrtf((float)(slope12 * slope12 + 0x1000)) * scale);
+
+                if (DAT_00483730 != '\0') {
+                    int angle = FUN_004257e0(0, 0, -0x40, slope12);
+                    int *sinlut = (int *)DAT_00487ab0;
+                    unsigned int idx;
+
+                    idx = (DAT_00487788[3] + angle * 0xC) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w1 = sinlut[idx] / 150000;
+
+                    idx = (DAT_00487788[0] + angle * 0xE) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w2 = sinlut[idx] / 150000;
+
+                    idx = (DAT_00487788[1] + angle * 9) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w3 = sinlut[idx] / 160000;
+
+                    idx = (DAT_00487788[2] + angle * 5) & 0x800007ff;
+                    if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                    int w4 = sinlut[idx] / 120000;
+
+                    dist = dist + w1 + w2 + w3 + w4;
+                }
+
+                unsigned char vis_val = 0;
+                int darkness = 0;
+                int hit_wall = 0;
+                int accum = 0;
+                int ray_fx = py_fx;
+                int ray2_fx = py_fx;
+
+                for (int c = 0; c < player_x; c++) {
+                    ray2_fx += slope;
+                    ray_fx += slope2;
+
+                    if ((c & 2) != 0) {
+                        int ty = (*(int *)(ent_off + 4 + DAT_00487810) + ray_fx) >> 0x12;
+                        int dy = ty - player_y;
+                        if (dy < DAT_004879f4 && dy > 0) {
+                            int tx = (*(int *)(ent_off + DAT_00487810) >> 0x12) - c;
+                            int tile_idx = (dy << ((unsigned char)DAT_00487a18 & 0x1f)) + tx;
+                            unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                            (void)tile; /* tile used for wall check */
+                        }
+                        accum += dist;
+
+                        if (accum < 0x201 || *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c +
+                            ((((*(int *)(ent_off + 4 + DAT_00487810) + ray_fx) >> 0x12) - player_y) <<
+                            ((unsigned char)DAT_00487a18 & 0x1f)) +
+                            ((*(int *)(ent_off + DAT_00487810) >> 0x12) - c)) * 0x20 + (int)DAT_00487928) != '\0') {
+                            if (hit_wall) darkness += dist;
+                        } else {
+                            char *ent = (char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c +
+                                ((((*(int *)(ent_off + 4 + DAT_00487810) + ray_fx) >> 0x12) - player_y) <<
+                                ((unsigned char)DAT_00487a18 & 0x1f)) +
+                                ((*(int *)(ent_off + DAT_00487810) >> 0x12) - c)) * 0x20 + (int)DAT_00487928);
+                            if (ent[4] != '\0') {
+                                if (accum > threshold) darkness += dist >> 1;
+                                if (hit_wall) darkness += dist;
+                            } else {
+                                hit_wall = 1;
+                                darkness += dist;
+                            }
+                        }
+
+                        int level = (darkness >> 6) - 10;
+                        if (level < 0) vis_val = 0;
+                        else if (level >= 0x11) vis_val = 0x11;
+                        else vis_val = (unsigned char)level;
+                    }
+
+                    /* Fill visibility column */
+                    int fill_pos = ((ray2_fx >> 0x12) * stride_ext) - c - 1 + player_x;
+                    int fill_count = ((ray_fx - ray2_fx) >> 0x12) + 1;
+                    for (int f = 0; f < fill_count; f++) {
+                        vis_buf[fill_pos + (f * stride_ext)] = vis_val;
+                    }
+                }
+            }
+
+            /* Quadrant 4: RIGHT from player (cols player_x..vp_w-1) */
+            {
+                int right = vp_w - player_x;
+                if (right != 0) {
+                    int py_fx = player_y << 0x12;
+                    int slope = (row_fx - py_fx) / right;
+                    int slope2 = (row_fx - py_fx + row_step_fx) / right;
+                    int slope12 = slope >> 0xC;
+                    int dist = (int)(sqrtf((float)(slope12 * slope12 + 0x1000)) * scale);
+
+                    if (DAT_00483730 != '\0') {
+                        int angle = FUN_004257e0(0, 0, 0x40, slope12);
+                        int *sinlut = (int *)DAT_00487ab0;
+                        unsigned int idx;
+
+                        idx = (DAT_00487788[3] + angle * 0xC) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w1 = sinlut[idx] / 150000;
+
+                        idx = (DAT_00487788[0] + angle * 0xE) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w2 = sinlut[idx] / 150000;
+
+                        idx = (DAT_00487788[1] + angle * 9) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w3 = sinlut[idx] / 160000;
+
+                        idx = (DAT_00487788[2] + angle * 5) & 0x800007ff;
+                        if ((int)idx < 0) idx = ((idx - 1) | 0xfffff800) + 1;
+                        int w4 = sinlut[idx] / 120000;
+
+                        dist = dist + w1 + w2 + w3 + w4;
+                    }
+
+                    unsigned char vis_val = 0;
+                    int darkness = 0;
+                    int hit_wall = 0;
+                    int accum = 0;
+                    int ray_fx = py_fx;
+                    int ray2_fx = py_fx;
+
+                    for (int c = 0; c < right; c++) {
+                        ray_fx += slope;
+                        ray2_fx += slope2;
+
+                        if ((c & 2) != 0) {
+                            int ty = (*(int *)(ent_off + 4 + DAT_00487810) + ray_fx) >> 0x12;
+                            int dy = ty - player_y;
+                            if (dy < DAT_004879f4 && dy > 0) {
+                                int tx = (*(int *)(ent_off + DAT_00487810) >> 0x12) + c;
+                                int tile_idx = (dy << ((unsigned char)DAT_00487a18 & 0x1f)) + tx;
+                                unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                                (void)tile;
+                            }
+                            accum += dist;
+
+                            unsigned char tile_val = *(unsigned char *)((int)DAT_0048782c +
+                                ((((*(int *)(ent_off + 4 + DAT_00487810) + ray_fx) >> 0x12) - player_y) <<
+                                ((unsigned char)DAT_00487a18 & 0x1f)) +
+                                ((*(int *)(ent_off + DAT_00487810) >> 0x12) + c));
+
+                            if (accum < 0x201 || *(char *)(tile_val * 0x20 + (int)DAT_00487928) != '\0') {
+                                if (hit_wall) darkness += dist;
+                            } else {
+                                if (*(char *)(tile_val * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                                    if (accum > threshold) darkness += dist >> 1;
+                                    if (hit_wall) darkness += dist;
+                                } else {
+                                    hit_wall = 1;
+                                    darkness += dist;
+                                }
+                            }
+
+                            int level = (darkness >> 6) - 10;
+                            if (level < 0) vis_val = 0;
+                            else if (level >= 0x11) vis_val = 0x11;
+                            else vis_val = (unsigned char)level;
+                        }
+
+                        /* Fill visibility column */
+                        int fill_pos = ((ray_fx >> 0x12) * stride_ext) + c + player_x;
+                        int fill_count = ((ray2_fx - ray_fx) >> 0x12) + 1;
+                        for (int f = 0; f < fill_count; f++) {
+                            vis_buf[fill_pos + (f * stride_ext)] = vis_val;
+                        }
+                    }
+                }
+            }
+
+            row += step;
+            row_fx += row_step_fx;
+        }
+    }
+
+apply_rendering:
+    /* ---- Apply visibility map to framebuffer ---- */
+    if (DAT_0048372d == '\x01') {
+        /* Mode 1: Full fog with tile/sky substitution */
+        int tilemap_row = (DAT_004806e0 << ((unsigned char)DAT_00487a18 & 0x1f)) + DAT_004806dc;
+        int tilemap_row_skip = DAT_00487a00 - vp_w;
+        int sky_disabled = (DAT_00483960 == '\0') ? 0 : 1;
+        int sky_off = 0;
+
+        if (!sky_disabled) {
+            float ratio_x = (float)(DAT_004879f0 - vp_w) / (float)(DAT_00487a0c - vp_w);
+            float ratio_y = (float)(DAT_004879f4 - vp_h) / (float)(DAT_00487a10 - vp_h);
+            if (ratio_x < _DAT_004753e8_fog || ratio_y < _DAT_004753e8_fog) {
+                sky_disabled = 1;
+            } else {
+                float r = (ratio_x < ratio_y) ? ratio_x : ratio_y;
+                int sky_y = (int)((float)DAT_004806e0 / r);
+                int sky_x = (int)((float)DAT_004806dc / r);
+                sky_off = sky_y * DAT_00487a0c + sky_x;
+            }
+        }
+
+        int vis_idx = 0;
+        unsigned short *dst = (unsigned short *)(param_1 + (DAT_004806e8 * param_2 + DAT_004806ec) * 2);
+
+        for (int y = 0; y < vp_h; y++) {
+            for (int x = 0; x < vp_w; x++) {
+                unsigned char vis = vis_buf[vis_idx];
+                if (vis == 0x11) {
+                    /* Fully dark: show tile or sky color through LUT[40] */
+                    unsigned short tile_px = ((unsigned short *)DAT_00481f50)[tilemap_row];
+                    unsigned short color;
+                    unsigned short remapped;
+                    if (tile_px != 0) {
+                        color = tile_px;
+                    } else if (!sky_disabled) {
+                        color = ((unsigned short *)DAT_00489ea0)[sky_off];
+                    } else {
+                        color = *(unsigned short *)&DAT_00483820;
+                        goto store_mode1;
+                    }
+                    /* Apply remap then darkness LUT[40] */
+                    remapped = ((unsigned short *)DAT_00489230)[color];
+                    color = ((unsigned short *)DAT_004876a4[40])[remapped];
+                store_mode1:
+                    *dst = color;
+                } else if (vis != 0) {
+                    /* Partial darkness: darken existing pixel */
+                    unsigned short remapped = ((unsigned short *)DAT_00489230)[*dst];
+                    *dst = ((unsigned short *)DAT_004876a4[32 + (vis >> 1)])[remapped];
+                }
+                tilemap_row++;
+                dst++;
+                vis_idx++;
+                sky_off++;
+            }
+            vis_idx += 0x20;  /* stride_ext - vp_w = 0x20 */
+            sky_off += (DAT_00487a0c - vp_w);
+            tilemap_row += tilemap_row_skip;
+            dst += (param_2 - vp_w);
+        }
+    } else if (DAT_0048372d == '\x02') {
+        /* Mode 2: Simplified fog with tile transparency check */
+        int tilemap_row = (DAT_004806e0 << ((unsigned char)DAT_00487a18 & 0x1f)) + DAT_004806dc;
+        int tilemap_row_skip = DAT_00487a00 - vp_w;
+        int sky_disabled = (DAT_00483960 == '\0') ? 0 : 1;
+        int sky_off = 0;
+
+        if (!sky_disabled) {
+            float ratio_x = (float)(DAT_004879f0 - vp_w) / (float)(DAT_00487a0c - vp_w);
+            float ratio_y = (float)(DAT_004879f4 - vp_h) / (float)(DAT_00487a10 - vp_h);
+            if (ratio_x < _DAT_004753e8_fog || ratio_y < _DAT_004753e8_fog) {
+                sky_disabled = 1;
+            } else {
+                float r = (ratio_x < ratio_y) ? ratio_x : ratio_y;
+                int sky_y = (int)((float)DAT_004806e0 / r);
+                int sky_x = (int)((float)DAT_004806dc / r);
+                sky_off = sky_y * DAT_00487a0c + sky_x;
+            }
+        }
+
+        int vis_idx = 0;
+        unsigned short *dst = (unsigned short *)(param_1 + (DAT_004806e8 * param_2 + DAT_004806ec) * 2);
+
+        for (int y = 0; y < vp_h; y++) {
+            for (int x = 0; x < vp_w; x++) {
+                if (vis_buf[vis_idx] == 0x11) {
+                    unsigned short tile_px = ((unsigned short *)DAT_00481f50)[tilemap_row];
+                    unsigned short color;
+                    if (tile_px != 0) {
+                        /* Check if tile entity has transparency flag */
+                        unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + tilemap_row);
+                        if (*(char *)(tile_type * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                            /* Apply remap then LUT[39] */
+                            unsigned short remapped = ((unsigned short *)DAT_00489230)[tile_px];
+                            color = ((unsigned short *)DAT_004876a4[39])[remapped];
+                        } else {
+                            color = tile_px;
+                        }
+                    } else if (!sky_disabled) {
+                        unsigned short sky_px = ((unsigned short *)DAT_00489ea0)[sky_off];
+                        unsigned short remapped = ((unsigned short *)DAT_00489230)[sky_px];
+                        color = ((unsigned short *)DAT_004876a4[39])[remapped];
+                    } else {
+                        color = *(unsigned short *)&DAT_00483820;
+                    }
+                    *dst = color;
+                }
+                tilemap_row++;
+                dst++;
+                vis_idx++;
+                sky_off++;
+            }
+            vis_idx += 0x20;
+            sky_off += (DAT_00487a0c - vp_w);
+            tilemap_row += tilemap_row_skip;
+            dst += (param_2 - vp_w);
+        }
+    } else {
+        /* Mode 0/default: Simple LUT darkening */
+        int vis_idx = 0;
+        unsigned short *dst = (unsigned short *)(param_1 + (DAT_004806e8 * param_2 + DAT_004806ec) * 2);
+
+        for (int y = 0; y < vp_h; y++) {
+            for (int x = 0; x < vp_w; x++) {
+                unsigned char vis = vis_buf[vis_idx];
+                if (vis != 0) {
+                    if (vis >= 0x11) {
+                        *dst = *(unsigned short *)&DAT_00483820;
+                    } else {
+                        unsigned short remapped = ((unsigned short *)DAT_00489230)[*dst];
+                        *dst = ((unsigned short *)DAT_004876a4[31 + vis])[remapped];
+                    }
+                }
+                dst++;
+                vis_idx++;
+            }
+            vis_idx += 0x20;
+            dst += (param_2 - vp_w);
+        }
+    }
 }

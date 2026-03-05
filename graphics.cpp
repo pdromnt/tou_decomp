@@ -469,7 +469,12 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     FUN_0040caf0((int)buffer, stride);       /* Player/ship */
     FUN_0040d930((int)buffer, stride);       /* Misc effects (glow/smoke) */
     FUN_0040d360((int)buffer, stride);       /* Edge tiles/detail */
-    FUN_0040d100((int)buffer, stride);       /* Darkness/fog overlay */
+    FUN_0040d100((int)buffer, stride);       /* Particle overlay */
+
+    /* Fog of War — raycasting visibility + darkening */
+    if (DAT_0048372d != '\0' && DAT_00489eac[0] != NULL) {
+        FUN_004095e0((unsigned int)(uintptr_t)buffer, stride, 0);
+    }
 
     /* Spawn shield overlay — draw contracting cross effect for spawning players */
     if (DAT_00487810 != 0) {
@@ -533,12 +538,29 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                     int weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + weapon_slot);
                     int icon_x = DAT_004806ec + DAT_004806d8 - 0x12;
                     int icon_y = DAT_004806e8 + 0x12;
-                    FUN_0040aaf0((int)buffer, stride, icon_x, icon_y, weapon_type, 0);
+
+                    /* Determine icon state: check if weapon has enough charge to show
+                     * as "selected" (bright). player[+0x94] != 0 means weapon is firing/active,
+                     * then check charge threshold: sub_index * weapon_data[+0xDC] * DAT_0048382c >= 0x23000 */
+                    char icon_state = 1;  /* default: normal/dim */
+                    if (*(int *)(DAT_00487810 + poff + 0x94) != 0) {
+                        unsigned char sub_idx = *(unsigned char *)(DAT_00487810 + poff + 0x35);
+                        int capacity = *(int *)((char *)DAT_00487abc + weapon_type * 0x218 +
+                                                sub_idx * 4 + 0xDC);
+                        unsigned char charge = *(unsigned char *)(DAT_00487810 + poff + 0x9C);
+                        int check = (capacity * charge * DAT_0048382c) & 0xFFFFF000;
+                        if (check >= 0x23000) {
+                            icon_state = 0;  /* selected/bright */
+                        }
+                    }
+
+                    FUN_0040aaf0((int)buffer, stride, icon_x, icon_y, weapon_type, icon_state);
 
                     /* Ammo dots around weapon icon */
                     if (DAT_00487ab0 != NULL) {
-                        int ammo_loaded = *(unsigned char *)(DAT_00487810 + poff + 0x35);
-                        int ammo_total = 8;  /* TODO: read actual capacity from weapon data */
+                        int ammo_loaded = *(unsigned char *)(DAT_00487810 + poff + 0x35) + 1;
+                        int ammo_total = *(unsigned char *)((char *)DAT_00487abc +
+                                          weapon_type * 0x218 + 0x7D);
                         FUN_0040a710((int)buffer, stride, icon_x, icon_y, ammo_loaded, ammo_total);
                     }
                 }

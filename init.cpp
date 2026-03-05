@@ -4250,10 +4250,7 @@ void FUN_0041a8c0(void)
     }
 
     /* 6. Clear 8 per-player stat arrays (80 entries each) + player ship fields.
-     * Original loops all 80 slots unconditionally — player data buffer is
-     * always allocated as 80 * 0x598 in Init_Memory_Pools.
-     * In our decomp, allocation happens in Load_Level_Resources (called AFTER
-     * FUN_0041a8c0 on the first case 4 call), so we guard player writes. */
+     * Player data buffer (DAT_00487810) is allocated in Init_Memory_Pools. */
     for (i = 0; i < 80; i++) {
         DAT_00486968[i] = 0;
         DAT_00486aa8[i] = 0;
@@ -4263,7 +4260,7 @@ void FUN_0041a8c0(void)
         DAT_00486fa8[i] = 0;
         DAT_004870e8[i] = 0;
         DAT_00487228[i] = 0;
-        if (DAT_00487810 != 0) {
+        {
             int poff = i * 0x598;
             *(char *)(poff + 0x34 + DAT_00487810) = 0;
             *(char *)(poff + 0x35 + DAT_00487810) = 0;
@@ -4341,9 +4338,8 @@ void FUN_0041a8c0(void)
     }
 
     /* Steps 12-14 write to player data (DAT_00487810).
-     * In the original, DAT_00487810 is allocated in Init_Memory_Pools (80 * 0x598)
-     * and is always valid here. Guard kept for safety in our decomp. */
-    if (DAT_00487810 != 0) {
+     * DAT_00487810 is allocated in Init_Memory_Pools, always valid here. */
+    {
         /* 12. Copy key bindings from config blob to player data (+0xAC..+0xB2).
          * Key binding block: 8 bytes per player at blob offset 0x186A.
          * Maps to player offsets +0xAC..+0xB2 in a remapped order. */
@@ -4402,6 +4398,7 @@ void FUN_0041a8c0(void)
                 *(int *)(DAT_00487810 + poff + 0x38) = 0;
                 *(char *)(DAT_00487810 + poff + 0x3C) = 0x32;
             }
+
         }
     }
 }
@@ -4951,6 +4948,9 @@ void Sync_Config_From_Blob(void)
     DAT_0048372b      = (char)g_ConfigBlob[0x17D3];
     DAT_0048372c      = (char)g_ConfigBlob[0x17D4];
     DAT_0048372d      = (char)g_ConfigBlob[0x17D5];
+    DAT_0048372e      = (char)g_ConfigBlob[0x17D6];
+    DAT_0048372f      = (char)g_ConfigBlob[0x17D7];
+    DAT_00483730      = (char)g_ConfigBlob[0x17D8];
 
     /* Misc config */
     DAT_00483731      = (char)g_ConfigBlob[0x17D9];
@@ -5036,6 +5036,9 @@ void Sync_Config_To_Blob(void)
     g_ConfigBlob[0x17D3]                          = (unsigned char)DAT_0048372b;
     g_ConfigBlob[0x17D4]                          = (unsigned char)DAT_0048372c;
     g_ConfigBlob[0x17D5]                          = (unsigned char)DAT_0048372d;
+    g_ConfigBlob[0x17D6]                          = (unsigned char)DAT_0048372e;
+    g_ConfigBlob[0x17D7]                          = (unsigned char)DAT_0048372f;
+    g_ConfigBlob[0x17D8]                          = (unsigned char)DAT_00483730;
 
     g_ConfigBlob[0x17D9]                          = (unsigned char)DAT_00483731;
     g_ConfigBlob[0x17DA]                          = (unsigned char)DAT_00483732;
