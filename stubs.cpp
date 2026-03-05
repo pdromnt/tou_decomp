@@ -6171,9 +6171,9 @@ void FUN_0045e2c0(void)
                         *(int *)(pbase + 0x00) = dest_x;
                         *(int *)(pbase + 0x04) = dest_y;
                         int vel_rnd = rand();
-                        *(int *)(pbase + 0x08) = (vel_rnd % 50) * *(int *)((int)DAT_00487ab0 + next_sin * 4) >> 5;
+                        *(int *)(pbase + 0x08) = (vel_rnd % 50) * *(int *)((int)DAT_00487ab0 + next_sin) >> 5;
                         vel_rnd = rand();
-                        *(int *)(pbase + 0x0C) = (vel_rnd % 50) * *(int *)((int)DAT_00487ab0 + next_cos * 4) >> 5;
+                        *(int *)(pbase + 0x0C) = (vel_rnd % 50) * *(int *)((int)DAT_00487ab0 + next_cos) >> 5;
                         *(char *)(pbase + 0x10) = (char)rnd_color + 1;
                         unsigned int rnd2 = rand() & 3;
                         *(char *)(pbase + 0x11) = (char)rnd2;

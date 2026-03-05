@@ -667,5 +667,19 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     LOG("[LEVEL] Grid buffers allocated (coarse=%p, shadow1=%p, shadow2=%p)\n",
         DAT_00487814, DAT_00489ea4, DAT_00489ea8);
 
+    /* ---- 10. Initialize game config defaults (from FUN_00416ad0) ---- */
+    /* These are gameplay tuning values set each time a level's grid is built.
+     * Addresses 0x483963-0x48396c = g_ConfigBlob offsets 0x1A0B-0x1A14 */
+    g_ConfigBlob[0x1A0B] = 0x28;  /* 40 — spawn timer? */
+    g_ConfigBlob[0x1A0C] = 0x3C;  /* 60 — respawn delay? */
+    g_ConfigBlob[0x1A0D] = (char)0x8C;  /* 140 — ? */
+    g_ConfigBlob[0x1A0E] = 1;     /* flag */
+    g_ConfigBlob[0x1A0F] = 0x0A;  /* 10 */
+    g_ConfigBlob[0x1A10] = 0x0A;  /* 10 — drag factor */
+    g_ConfigBlob[0x1A11] = 0x0A;  /* 10 — wall collision damage multiplier */
+    g_ConfigBlob[0x1A12] = 0x0A;  /* 10 — wall collision bounce factor */
+    g_ConfigBlob[0x1A13] = 0;
+    g_ConfigBlob[0x1A14] = 0;
+
     return 1;
 }

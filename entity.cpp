@@ -3210,9 +3210,9 @@ LAB_apply:
             *(int *)(base2 + 0x00) = ent[0];
             *(int *)(base2 + 0x04) = ent[1];
             *(int *)(base2 + 0x08) = (rand() % 0x32) *
-                *(int *)((int)DAT_00487ab0 + nextSin * 4) >> 5;
+                *(int *)((int)DAT_00487ab0 + nextSin) >> 5;
             *(int *)(base2 + 0x0c) = (rand() % 0x32) *
-                *(int *)(nextCos * 4 + (int)DAT_00487ab0) >> 5;
+                *(int *)(nextCos + (int)DAT_00487ab0) >> 5;
             *(char *)(base2 + 0x10) = (char)ptype + '\x01';
             unsigned int sub = (unsigned int)rand() & 3;
             *(char *)(base2 + 0x11) = (char)sub;
