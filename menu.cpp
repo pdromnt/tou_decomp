@@ -1860,7 +1860,7 @@ int FUN_004249c0(void)
             sp[0x21] = stats_buf[1];
             sp[0x22] = stats_buf[2];
             sp[0x23] = stats_buf[3];
-            sp[0x24] = stats_buf[4];  /* approximate: original uses __ftol */
+            sp[0x24] = (char)(int)((double)(unsigned char)stats_buf[4] * 0.4);
             *(unsigned int *)(sp + 0x28) = (unsigned int)(unsigned char)stats_buf[5] * 0x7D000;
             sp[0x2C] = stats_buf[6];
             sp[0x2D] = stats_buf[7];
@@ -1943,9 +1943,12 @@ int FUN_004249c0(void)
             }
         }
 
-        /* Store computed value at +0x38 (approximate: original uses __ftol) */
+        /* Store collision radius at +0x38.
+         * Original: (int)((double)(frame_width << 18) * 0.4)
+         * Converts sprite width to fixed-point, then scales to 40% for hitbox. */
         if (DAT_0048780c) {
-            *(int *)((char *)DAT_0048780c + stats_offset + 0x38) = total_pixels;
+            int width_fp = (int)(frame_w & 0xFFFF) << 18;
+            *(int *)((char *)DAT_0048780c + stats_offset + 0x38) = (int)((double)width_fp * 0.4);
         }
 
         fclose(f);

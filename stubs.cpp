@@ -1879,7 +1879,7 @@ void FUN_00434310(void)
          *   0x00 = basic bullet (wtype 0,1,5)
          *   0x01 = homing missile (wtype 3)
          *   0x11 = spread shot (wtype 4)
-         *   0x13 = guided missile (wtype 2)
+         *   0x13 = freeze projectile
          * Debris entities (type 2, >=0x6C, state 5) are excluded. */
         if (!should_remove && is_projectile && !is_debris) {
             /* Wall collision for projectiles */
@@ -1894,44 +1894,140 @@ void FUN_00434310(void)
                 if (pass2 == 0 && pass10 == 0) {
                     /* Hit solid wall: apply damage to tile and expire */
                     FUN_00451e70(i, 0x5000);
+                    /* Turret projectiles (owner >= 0x50) play free_h on wall impact.
+                     * Player projectiles (owner < 0x50) have their own sounds via
+                     * fire entity system (FUN_004357b0). */
+                    if (*(unsigned char *)(ebase + 0x22) >= 0x50) {
+                        FUN_0040f9b0(0x10B, pos_x, pos_y);
+                    }
                     should_remove = 1;
                 }
             } else {
             }
 
-            /* Player collision for projectiles */
-            if (!should_remove) {
-                int gx = pos_x >> 0x16;
-                int gy = pos_y >> 0x16;
-                if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
-                    unsigned char grid_byte = *(unsigned char *)((int)DAT_00487814 + gx + gy * DAT_004879f8);
-                    if ((grid_byte & 1) && DAT_00489240 > 0) {
-                        /* A player is nearby — check AABB overlap */
-                        /* Entity +0x22 stores (team + 0x78) for turret projectiles */
-                        unsigned char raw_team = *(unsigned char *)(ebase + 0x22);
-                        unsigned char proj_team = (raw_team >= 0x78) ? (raw_team - 0x78) : 0xFF;
-                        for (int p = 0; p < DAT_00489240; p++) {
-                            int poff = p * 0x598;
-                            int player_health = *(int *)(poff + 0x20 + DAT_00487810);
-                            if (player_health <= 0) continue;
+            /* Player collision for projectiles — matches FUN_004348a0.
+             * The original behavior callback calls FUN_004348a0 which iterates
+             * ALL players (no spatial grid pre-check) and uses AABB dimensions
+             * from the type config table + player ship size. */
+            if (!should_remove && DAT_00489240 > 0) {
+                unsigned char raw_owner = *(unsigned char *)(ebase + 0x22);
+                unsigned char byte_26 = *(unsigned char *)(ebase + 0x26);
+                unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
+                int proj_damage = *(int *)(ebase + 0x44);
 
-                            int px = *(int *)(poff + DAT_00487810);
-                            int py = *(int *)(poff + 4 + DAT_00487810);
+                /* Read collision dimensions from type config table */
+                unsigned char coll_w = 2, coll_h = 2;
+                if (DAT_00487abc != NULL) {
+                    coll_w = *(unsigned char *)((int)DAT_00487abc + (unsigned int)sub_type + 0x136 + (unsigned int)ent_type * 0x218);
+                    coll_h = *(unsigned char *)((int)DAT_00487abc + (unsigned int)sub_type + 0x13c + (unsigned int)ent_type * 0x218);
+                }
 
-                            /* AABB: ~2 tiles range */
-                            int range = 0x80000;
-                            if (pos_x - range < px && px < pos_x + range &&
-                                pos_y - range < py && py < pos_y + range) {
-                                /* Check team — only damage enemies */
-                                unsigned char player_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
-                                if (proj_team != player_team || DAT_0048373d != 0) {
-                                    /* Apply damage */
-                                    *(int *)(poff + 0x20 + DAT_00487810) -= 0x5000;
-                                    should_remove = 1;
-                                    break;
-                                }
+                /* Determine "team" identifier for guard check.
+                 * For type 0x1f: use the owner's player team byte.
+                 * For others: use raw owner byte directly. */
+                unsigned int guard_team;
+                if (ent_type == 0x1f) {
+                    guard_team = (unsigned int)*(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
+                } else {
+                    guard_team = (unsigned int)raw_owner;
+                }
+
+                for (int p = 0; p < DAT_00489240; p++) {
+                    int poff = p * 0x598;
+                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+
+                    /* Guard check: (byte_0x26 == 0) || (guard_team != player_id).
+                     * For turret projectiles: byte_0x26=0xfe, guard_team=0x50+
+                     * → always passes since 0x50+ != any player index 0-3.
+                     * This means turret projectiles hit ALL players regardless of team. */
+                    unsigned int player_id;
+                    if (ent_type == 0x1f) {
+                        player_id = (unsigned int)*(unsigned char *)(poff + 0x2c + DAT_00487810);
+                    } else {
+                        player_id = (unsigned int)p;
+                    }
+                    if (byte_26 != 0 && guard_team == player_id) continue;
+
+                    /* AABB collision using config-based dimensions + player ship size */
+                    int ship_size = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) : 0;
+                    int h_range = ship_size + (unsigned int)coll_w * 0x40000;
+                    int v_range = ship_size + (unsigned int)coll_h * 0x40000;
+                    if (DAT_004892e5 != '\0') {
+                        h_range += 0x140000;
+                        v_range += 0x140000;
+                    }
+
+                    int px = *(int *)(poff + DAT_00487810);
+                    int py = *(int *)(poff + 4 + DAT_00487810);
+
+                    if (px - h_range < pos_x && pos_x < px + h_range &&
+                        py - v_range < pos_y && pos_y < py + v_range) {
+                        /* === HIT: Apply damage based on owner type === */
+                        if (raw_owner < 0x50) {
+                            /* Player-owned projectile: team-check before damage */
+                            unsigned char shooter_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
+                            unsigned char target_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                            if (shooter_team != target_team || DAT_0048373d != 0) {
+                                *(int *)(poff + 0x20 + DAT_00487810) -= proj_damage;
+                            }
+                        } else {
+                            /* Turret/base-owned: always apply damage */
+                            *(int *)(poff + 0x20 + DAT_00487810) -= proj_damage;
+                        }
+
+                        /* Record who hit the player (offset 0x4a1) */
+                        if (raw_owner < 0x50) {
+                            unsigned char shooter_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
+                            unsigned char target_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                            if (shooter_team != target_team || DAT_0048373d != 0) {
+                                *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner;
+                            }
+                        } else if (raw_owner < 100) {
+                            /* Turret owner (0x50-0x63): record as owner + 0x14 */
+                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner + 0x14;
+                        } else if (raw_owner < 0x78) {
+                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner;
+                        } else if (raw_owner < 0x8c) {
+                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner - 0x14;
+                        } else {
+                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = 0xff;
+                        }
+                        *(unsigned char *)(poff + 0x4a2 + DAT_00487810) = 0x6e;
+
+                        /* Freeze reduction: if player is already frozen and projectile
+                         * is NOT freeze type, reduce freeze timer */
+                        unsigned char cur_freeze = *(unsigned char *)(poff + 0xc6 + DAT_00487810);
+                        if (cur_freeze != 0 && ent_type != 0x13) {
+                            int new_freeze = (int)cur_freeze - (proj_damage >> 0xf) - 1;
+                            if (new_freeze < 0) new_freeze = 0;
+                            *(unsigned char *)(poff + 0xc6 + DAT_00487810) = (unsigned char)new_freeze;
+                        }
+
+                        /* Freeze effect: entity type 0x13 freezes the player */
+                        if (ent_type == 0x13 && *(unsigned char *)(poff + 0xc6 + DAT_00487810) == 0) {
+                            *(unsigned char *)(poff + 0xc6 + DAT_00487810) = 5;
+                            *(char *)(poff + 0xc7 + DAT_00487810) = (char)(rand() % 3);
+                            FUN_0040f9b0(0x13, pos_x, pos_y);
+                        }
+
+                        /* Set hit flags (original FUN_004348a0 also sets
+                         * DAT_00481e8f=4 as callback state, but we use should_remove) */
+                        *(unsigned char *)(poff + 0xc4 + DAT_00487810) = 5;
+                        *(unsigned char *)(poff + 0xa3 + DAT_00487810) = 1;
+
+                        /* Apply knockback */
+                        if (DAT_00487abc != NULL) {
+                            unsigned char kb_div = *(unsigned char *)((int)DAT_00487abc + (unsigned int)sub_type + 0xa6 + (unsigned int)ent_type * 0x218);
+                            if (kb_div != 99 && kb_div != 0) {
+                                int proj_vx = *(int *)(ebase + 0x18);
+                                int proj_vy = *(int *)(ebase + 0x1C);
+                                *(int *)(poff + 0x10 + DAT_00487810) += proj_vx / (int)(unsigned int)kb_div;
+                                *(int *)(poff + 0x14 + DAT_00487810) += proj_vy / (int)(unsigned int)kb_div;
                             }
                         }
+
+                        should_remove = 1;
+                        break;
                     }
                 }
             }
@@ -2613,27 +2709,59 @@ static unsigned int FUN_00455b50(int *param_1)
     return uVar5 & 0xffffff00;
 }
 
-/* ===== FUN_00459dd0 — Simplified Aimed Fire Direction (00459DD0) ===== */
-/* The original calls FUN_004599f0 (trajectory computation) and FUN_00459c70
- * (line-of-sight validation). Since those are complex undecompiled functions,
- * we simplify to just return the direct angle to target, or 0x801 (no shot). */
+/* ===== check_line_of_sight — Bresenham tile raycast ===== */
+/* Walks from source to target in tile coordinates, checking only intermediate tiles.
+ * Skips source and target tiles since entities stand on solid platforms.
+ * Returns 1 if clear line of sight, 0 if any intermediate tile is blocked. */
+static int check_line_of_sight(int sx, int sy, int tx, int ty)
+{
+    int shift = (unsigned char)DAT_00487a18 & 0x1f;
+    int x0 = sx >> 0x12;
+    int y0 = sy >> 0x12;
+    int x1 = tx >> 0x12;
+    int y1 = ty >> 0x12;
+
+    int dx = x1 - x0;
+    int dy = y1 - y0;
+    int abs_dx = dx < 0 ? -dx : dx;
+    int abs_dy = dy < 0 ? -dy : dy;
+    int step_x = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
+    int step_y = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
+    int err = abs_dx - abs_dy;
+
+    int steps = abs_dx + abs_dy;
+    for (int s = 0; s < steps; s++) {
+        /* Step first — this skips the source tile on the first iteration */
+        int e2 = 2 * err;
+        if (e2 > -abs_dy) { err -= abs_dy; x0 += step_x; }
+        if (e2 < abs_dx) { err += abs_dx; y0 += step_y; }
+
+        /* Don't check the target tile either */
+        if (x0 == x1 && y0 == y1) break;
+
+        if (x0 < 1 || y0 < 1 || x0 >= (int)DAT_004879f0 || y0 >= (int)DAT_004879f4) {
+            return 0;
+        }
+        int tile_idx = (y0 << shift) + x0;
+        unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_idx);
+        if (*(char *)((unsigned int)tile * 0x20 + 1 + (int)DAT_00487928) == '\0') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* ===== FUN_00459dd0 — Aimed Fire Direction (00459DD0) ===== */
+/* Computes firing angle from source to target with full line-of-sight validation.
+ * Original uses FUN_004599f0 (trajectory) + FUN_00459c70 (LOS ray trace).
+ * We use direct angle + Bresenham LOS which matches original low-gravity behavior. */
 static int FUN_00459dd0_simplified(int sx, int sy, int tx, int ty, float speed_factor, char use_alt)
 {
     (void)speed_factor;
     (void)use_alt;
-    /* Simple LOS check: verify tile at midpoint between source and target is walkable */
-    int mx = (sx + tx) / 2;
-    int my = (sy + ty) / 2;
-    int shift = (unsigned char)DAT_00487a18 & 0x1f;
-    int tile_x = mx >> 0x12;
-    int tile_y = my >> 0x12;
-    if (tile_x > 0 && tile_y > 0 && tile_x < (int)DAT_004879f0 && tile_y < (int)DAT_004879f4) {
-        int tile_idx = (tile_y << shift) + tile_x;
-        unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_idx);
-        char walkable = *(char *)((unsigned int)tile * 0x20 + 1 + (int)DAT_00487928);
-        if (walkable == '\0') {
-            return 0x801; /* blocked */
-        }
+
+    if (!check_line_of_sight(sx, sy, tx, ty)) {
+        return 0x801;
     }
     return FUN_004257e0(sx, sy, tx, ty);
 }
@@ -2928,22 +3056,13 @@ void FUN_00454b00(void)
                                     int dist_sq = dx * dx + dy * dy;
 
                                     if (dist_sq < 40000) {
-                                        /* LOS check using sin/cos LUT */
-                                        int angle = FUN_004257e0(*t, t[2], px, py);
+                                        /* Full Bresenham LOS check from turret to player */
                                         int can_fire = 0;
 
                                         if (*(char *)((int)t + 0x25) == '\x02') {
                                             can_fire = 1; /* floor turret always fires */
-                                        } else if (DAT_00487ab0 != NULL) {
-                                            int sin_val = *(int *)((int)DAT_00487ab0 + angle * 4);
-                                            int cos_val = *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4);
-                                            int check_x = (*t + sin_val * 4) >> 0x12;
-                                            int check_y = (t[2] + cos_val * 4) >> 0x12;
-                                            int check_tile = (check_y << shift) + check_x;
-                                            unsigned char ct = *(unsigned char *)((int)DAT_0048782c + check_tile);
-                                            if (*(char *)((unsigned int)ct * 0x20 + 1 + (int)DAT_00487928) == '\x01') {
-                                                can_fire = 1;
-                                            }
+                                        } else {
+                                            can_fire = check_line_of_sight(*t, t[2], px, py);
                                         }
 
                                         if (can_fire && candidate_count < 1024) {
@@ -2987,6 +3106,9 @@ void FUN_00454b00(void)
                     }
 
                     if (fire_angle != 0x801) {
+                        /* Update barrel direction to match shot */
+                        t[0xc] = fire_angle & 0x7ff;
+
                         /* Determine projectile type */
                         int proj_type = 0;
                         int proj_subtype = 2;
@@ -3084,6 +3206,9 @@ void FUN_00454b00(void)
                         /* Store turret position as projectile origin */
                         *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *t;
                         *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = t[2];
+
+                        /* Play turret fire sound */
+                        FUN_0040f9b0(0x29, *t, t[2]);
                     }
                 }
 

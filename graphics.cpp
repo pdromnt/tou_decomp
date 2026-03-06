@@ -575,7 +575,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
             if (*(char *)(DAT_00487810 + poff + 0xCB) != 0) {
                 char frag_buf[100];
                 FUN_004644af(frag_buf, (const unsigned char *)"Frags: %d",
-                             *(int *)(DAT_00487810 + poff + 0x28));
+                             *(int *)(DAT_00487810 + poff + 0x494));
                 Draw_Text_To_Buffer(frag_buf, 1, 1,
                     buffer + (DAT_004806e8 + 0x32) * stride + DAT_004806ec + 4,
                     stride, 0, DAT_004806d8 - 0x0C, 0);

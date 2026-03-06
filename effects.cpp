@@ -132,12 +132,15 @@ static void xform_fog_gray(int r, int g, int b, int *or_, int *og, int *ob, int 
     *ob = b + ((0x50 - b) * level) / 7;
 }
 
-/* [22] Shadow: subtractive darkening */
+/* [22] Shadow (ice/freeze overlay): additive blue tint.
+ * Original ASM multiplies 4-bit index by -17.0 then subtracts from constant,
+ * which is equivalent to: out = constant + scaled_value.
+ * Produces dark blue-teal at black (25,30,35) ramping to white at full brightness. */
 static void xform_shadow(int r, int g, int b, int *or_, int *og, int *ob, int /*unused*/)
 {
-    *or_ = 0x19 - r;
-    *og = 0x1E - g;
-    *ob = 0x23 - b;
+    *or_ = 0x19 + r;
+    *og = 0x1E + g;
+    *ob = 0x23 + b;
 }
 
 /* [23] Contrast pinch: pull R toward 0x8C, G/B toward 0xDC with +-0x28 */
