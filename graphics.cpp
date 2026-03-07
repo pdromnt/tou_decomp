@@ -651,6 +651,88 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                 }
             }
         }
+        else if ((unsigned char)DAT_0048693c < g_ConfigBlob[0]) {
+            /* States 3/4 (round-end stats / level preview): render sprite 0x3F panel
+             * with level number, round result, and team win counts.
+             * Original at end of FUN_00407720: draws for any substate not 0/1/2
+             * when more rounds remain. Static text ("Level:", "Current wins:",
+             * "Press Enter") is baked into the sprite artwork. */
+            if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+                int spr_idx = 0x3F;
+                int frame_off = ((int *)DAT_00489234)[spr_idx];
+                int spr_h = (int)((unsigned char *)DAT_00489e88)[spr_idx];
+                int spr_w = (int)((unsigned char *)DAT_00489e8c)[spr_idx];
+                unsigned short *spr_px = (unsigned short *)DAT_00487ab4;
+
+                if (spr_w > 0 && spr_h > 0) {
+                    int panel_x = (DAT_00489238 - spr_w) / 2;
+                    int panel_y = (DAT_0048923c - spr_h) / 2;
+                    unsigned short *dst = buffer + panel_y * stride + panel_x;
+                    int src_idx = frame_off;
+                    for (int y = 0; y < spr_h; y++) {
+                        for (int x = 0; x < spr_w; x++) {
+                            unsigned short pixel = spr_px[src_idx];
+                            if (pixel != 0) {
+                                dst[x] = pixel;
+                            }
+                            src_idx++;
+                        }
+                        dst += stride;
+                    }
+
+                    /* Dynamic text overlaid on sprite panel */
+                    char text_buf[100];
+
+                    /* Level count: "N / M" (original format at 0x47b110) */
+                    FUN_004644af(text_buf, (const unsigned char *)"%d / %d",
+                                 (int)(unsigned char)DAT_0048693c,
+                                 (int)(unsigned char)g_ConfigBlob[0]);
+                    Draw_Text_To_Buffer(text_buf, 2, 0,
+                        buffer + (panel_y + 10) * stride + panel_x + 0x73,
+                        stride, 0, 0xFA, 0);
+
+                    /* Round result text */
+                    if ((char)DAT_00487640[0] == 0) {
+                        strcpy(text_buf, "Level skipped");
+                    } else if ((char)DAT_00487640[0] == (char)-1) {
+                        strcpy(text_buf, "Draw. Everybody died");
+                    } else {
+                        FUN_004644af(text_buf, (const unsigned char *)"Team %d wins the round",
+                                     (int)(unsigned char)DAT_00487640[0]);
+                    }
+                    Draw_Text_To_Buffer(text_buf, 2, 1,
+                        buffer + (panel_y + 0x1c) * stride + panel_x + 0x14,
+                        stride, 0, 0xFA, 0);
+
+                    /* Team names and win counts */
+                    unsigned char *slots = (unsigned char *)&DAT_0048693c;
+
+                    Draw_Text_To_Buffer("Team1", 1, 6,
+                        buffer + (panel_y + 0x55) * stride + panel_x + 10,
+                        stride, 0, 0xFA, 0);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[1]);
+                    Draw_Text_To_Buffer(text_buf, 2, 6,
+                        buffer + (panel_y + 100) * stride + panel_x + 0x1E,
+                        stride, 0, 0xFA, 0);
+
+                    Draw_Text_To_Buffer("Team2", 1, 7,
+                        buffer + (panel_y + 0x55) * stride + panel_x + 0x5A,
+                        stride, 0, 0xFA, 0);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[2]);
+                    Draw_Text_To_Buffer(text_buf, 2, 7,
+                        buffer + (panel_y + 100) * stride + panel_x + 0x6E,
+                        stride, 0, 0xFA, 0);
+
+                    Draw_Text_To_Buffer("Team3", 1, 8,
+                        buffer + (panel_y + 0x55) * stride + panel_x + 0xAF,
+                        stride, 0, 0xFA, 0);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[3]);
+                    Draw_Text_To_Buffer(text_buf, 2, 8,
+                        buffer + (panel_y + 100) * stride + panel_x + 0xC3,
+                        stride, 0, 0xFA, 0);
+                }
+            }
+        }
     }
 }
 
@@ -1144,6 +1226,52 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
     if (color_idx < 0 || color_idx >= 14)
         color_idx = 0;
     unsigned short *palette = Font_Palettes[color_idx];
+
+    /* Team color palettes (6, 7, 8): dynamically build from DAT_00483838.
+     * Original binary does this inline when color_idx >= 0xFA; our callers
+     * pass 6/7/8 directly.  Build a 256-entry ramp each time so it always
+     * reflects the current team colors (X1R5G5B5 in DAT_00483838). */
+    unsigned short team_palette[256];
+    if (color_idx >= 6 && color_idx <= 8) {
+        int team_idx = color_idx - 6;
+        unsigned short tc = DAT_00483838[team_idx];
+        unsigned int tc_r = (unsigned char)(((unsigned char)(tc >> 10)) << 3);
+        unsigned int tc_g = (unsigned char)(((unsigned char)(tc >> 5)) << 3);
+        unsigned int tc_b = (unsigned char)(((unsigned char)tc) << 3);
+
+        /* First 128 entries: fade black → team color */
+        int accR = 0, accG = 0, accB = 0;
+        for (int j = 0; j < 128; j++) {
+            int cR = (accR + ((accR >> 31) & 0x7F)) >> 7;
+            int cG = (accG + ((accG >> 31) & 0x7F)) >> 7;
+            int cB = (accB + ((accB >> 31) & 0x7F)) >> 7;
+            if (cR > 255) cR = 255;
+            if (cG > 255) cG = 255;
+            if (cB > 255) cB = 255;
+            team_palette[j] = (unsigned short)(((cR & 0xF8) << 8) |
+                                                ((cG & 0xFC) << 3) | (cB >> 3));
+            accR += tc_r;
+            accG += tc_g;
+            accB += tc_b;
+        }
+
+        /* Next 128 entries: fade team color → white */
+        int fadeR = 0, fadeG = 0, fadeB = 0;
+        for (int j = 128; j < 256; j++) {
+            int cR = ((fadeR + ((fadeR >> 31) & 0x7F)) >> 7) + (int)tc_r;
+            int cG = ((fadeG + ((fadeG >> 31) & 0x7F)) >> 7) + (int)tc_g;
+            int cB = ((fadeB + ((fadeB >> 31) & 0x7F)) >> 7) + (int)tc_b;
+            if (cR > 255) cR = 255;
+            if (cG > 255) cG = 255;
+            if (cB > 255) cB = 255;
+            team_palette[j] = (unsigned short)(((cR & 0xF8) << 8) |
+                                                ((cG & 0xFC) << 3) | (cB >> 3));
+            fadeR += (255 - (int)tc_r);
+            fadeG += (255 - (int)tc_g);
+            fadeB += (255 - (int)tc_b);
+        }
+        palette = team_palette;
+    }
 
     /* If hovering, build a brightened palette (lerp towards white) */
     unsigned short hover_palette[256];

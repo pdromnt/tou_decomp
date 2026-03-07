@@ -516,28 +516,32 @@ void Game_Update_Render(void)
         }
         DWORD now_input = timeGetTime();
 
-        /* State 4: Level preview — F10 exits, Enter starts gameplay.
-         * Original checks at 0x004617FF. ESC is NOT handled in state 4. */
+        /* State 4: Level preview / stats screen.
+         * First level (counter == 0): skip straight to gameplay.
+         * Subsequent levels: show stats overlay, wait for Enter/F10. */
         if (g_SubState == 4) {
-            if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
-                g_SubState = 100;
-                *(unsigned char *)&DAT_0048693c = g_ConfigBlob[0];
-            }
-            if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
-                DAT_00489ee8 = now_input + 500;
-                DAT_00489eec = 0x1C;
+            if ((unsigned char)DAT_0048693c == 0) {
+                /* First level — no stats to show, start immediately */
                 g_SubState = 0;
                 g_NeedsRedraw = 2;
                 g_TimerStart = timeGetTime();
                 g_TimerAux = 0;
                 g_FrameTimer = timeGetTime();
+            } else {
+                if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
+                    g_SubState = 100;
+                    *(unsigned char *)&DAT_0048693c = g_ConfigBlob[0];
+                }
+                if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
+                    DAT_00489ee8 = now_input + 500;
+                    DAT_00489eec = 0x1C;
+                    g_SubState = 0;
+                    g_NeedsRedraw = 2;
+                    g_TimerStart = timeGetTime();
+                    g_TimerAux = 0;
+                    g_FrameTimer = timeGetTime();
+                }
             }
-
-            /* COMPAT: Auto-start gameplay (level preview camera not implemented) */
-            g_SubState = 0;
-            g_TimerStart = timeGetTime();
-            g_TimerAux = 0;
-            g_FrameTimer = timeGetTime();
         }
 
         /* State 2: ESC pause menu — F10/Enter/ESC.
@@ -595,23 +599,10 @@ void Game_Update_Render(void)
         }
     }
 
-    /* ---- Round-end state machine (substates 100/101 → 3) ---- */
+    /* ---- Round-end state machine (substates 100/101 → 3 → next level) ---- */
     /* Original at 0x00461a10 / 0x00461a2d in Game_Update_Render.
-     * Substate 100 = skip level (Enter), substate 101 = natural round end.
-     * Both increment DAT_0048693c (level slot index) and transition to 3.
-     * Substate 3 checks if all rounds are done → menu reload or game over. */
-    if (g_SubState == 100 || g_SubState == 101) {
-        DAT_00487640[0] = 0;
-        DAT_004892a5 = 0;
-
-        /* Advance to next level slot */
-        g_SubState = 3;
-        (*(unsigned char *)&DAT_0048693c)++;
-
-        LOG("[GAME] Round end: level slot now %d / %d rounds\n",
-            (int)(unsigned char)DAT_0048693c, (int)g_ConfigBlob[0]);
-    }
-
+     * Substate 3 is checked FIRST so it processes from the previous frame
+     * (after the stats overlay had a chance to render). */
     if (g_SubState == 3) {
         g_SubState = 0;
         if ((unsigned char)DAT_0048693c >= g_ConfigBlob[0]) {
@@ -622,6 +613,34 @@ void Game_Update_Render(void)
             g_GameState = 2;
         }
         return;
+    }
+
+    /* Substate 100 = skip level, substate 101 = natural round end.
+     * Both set g_SubState = 3, increment level slot, and fall through
+     * to rendering so the stats overlay displays for one frame. */
+    if (g_SubState == 100 || g_SubState == 101) {
+        if (g_SubState == 100) {
+            /* Level skip: clear victory flag */
+            DAT_004892a4 = 0;
+            DAT_00487640[0] = 0;
+        } else {
+            /* Natural round end: store winning team for display */
+            DAT_00487640[0] = DAT_004892a4;
+            /* Increment win counter for the winning team (teams 1-4) */
+            unsigned char winner = (unsigned char)DAT_004892a4;
+            if (winner >= 1 && winner <= 4) {
+                ((unsigned char *)&DAT_0048693c)[winner]++;
+            }
+        }
+        DAT_004892a5 = 0;
+
+        /* Advance to next level slot */
+        g_SubState = 3;
+        (*(unsigned char *)&DAT_0048693c)++;
+
+        LOG("[GAME] Round end: level slot now %d / %d rounds\n",
+            (int)(unsigned char)DAT_0048693c, (int)g_ConfigBlob[0]);
+        /* Fall through to rendering — stats overlay will be drawn this frame */
     }
 
     /* ---- Game logic update ---- */
