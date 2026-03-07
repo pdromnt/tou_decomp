@@ -5291,8 +5291,8 @@ void Sync_Config_From_Blob(void)
     /* Weather threshold */
     DAT_0048385c      = *(float *)&g_ConfigBlob[0x1904];
 
-    /* Player config: total count, human count, per-CPU difficulty */
-    memcpy(DAT_0048227c, &g_ConfigBlob[0x324], 82);
+    /* Player config: DAT_0048227c is now a macro alias into g_ConfigBlob[0x324],
+     * so no copy needed (they're the same memory). */
 }
 
 /* ===== Sync_Config_To_Blob ===== */
@@ -5370,7 +5370,8 @@ void Sync_Config_To_Blob(void)
 
     *(float *)&g_ConfigBlob[0x1904]               = DAT_0048385c;
 
-    memcpy(&g_ConfigBlob[0x324], DAT_0048227c, 82);
+    /* Player config: DAT_0048227c is now a macro alias into g_ConfigBlob[0x324],
+     * so no copy needed (they're the same memory). */
 }
 
 /* ===== Init_Math_Tables (00425780) ===== */

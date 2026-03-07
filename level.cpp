@@ -56,7 +56,10 @@ int           DAT_00487810 = 0;       /* player data base address */
 int           DAT_00489240 = 0;       /* player count */
 int           DAT_00489244 = 0;       /* active player count */
 /* DAT_0048764a defined in init.cpp */
-unsigned char DAT_0048227c[82] = {0}; /* player config: [0]=total, [1]=human, [2..81]=CPU difficulty */
+/* DAT_0048227c: In the original binary, this IS part of the config blob at
+ * address 0x00481F58 + 0x324 = 0x0048227C. Our decomp defines it as a macro
+ * alias into g_ConfigBlob so menu writes (via CFG_ADDR) are immediately
+ * visible to game logic that reads DAT_0048227c[0] for player count. */
 
 static const char LEV_MAGIC[] = "TOU level file v1.4";
 #define LEV_MAGIC_LEN 19

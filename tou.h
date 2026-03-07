@@ -336,7 +336,10 @@ extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
 extern int                   DAT_0048764a;      /* network/multiplayer flag */
 extern int                   DAT_0048764b;      /* result flag (tournament) */
-extern unsigned char         DAT_0048227c[82];  /* player config: [0]=total, [1]=human, [2..81]=CPU difficulty */
+/* DAT_0048227c is a macro alias into g_ConfigBlob, not a separate variable.
+ * In the original binary, address 0x0048227C = 0x00481F58 + 0x324, i.e. it's
+ * just a pointer into the config blob. See level.cpp comment. */
+#define DAT_0048227c (&g_ConfigBlob[0x324])
 extern void                 *DAT_00487928;      /* entity type table (0x10000 bytes) */
 
 /* ===== End-Game Award System (init.cpp / FUN_0041d740) ===== */
