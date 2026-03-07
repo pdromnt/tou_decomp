@@ -1547,202 +1547,204 @@ void FUN_0041bb00(void)
 
 
 /* ===== FUN_00424240 - Sprite Color Transform (00424240) ===== */
-/* Recolors ship sprites with a player's chosen color. Builds 3x3 LUT from
- * the color and ship type, then applies sqrt-of-sum-of-squares blend to
- * all 32 rotation frames.
+/* Recolors ship sprites using a 3-channel color system.  The ship sprite's
+ * pixel channels encode three independent color contributions:
+ *   B channel → team color   (from DAT_00483838[palette_index])
+ *   G channel → custom color (from shipal.col via passed R/G/B)
+ *   R channel → base color   (per-ship-type, from internal switch)
  *
- * Original passes R/G/B extracted from DAT_00481f4c[player_color_index]. */
-void FUN_00424240(int ship_type, int ship_index, int color_r, int color_g, int color_b)
+ * Builds a 3×3 LUT (3 output channels × 3 input sub-tables of 256 entries),
+ * then applies sqrt-of-sum-of-squares blend to all 32 rotation frames.
+ *
+ * Original signature: 10 params (pixel_off, ship_idx, R, G, B, 0, 0, 0,
+ *                                palette_idx, ship_type).
+ * Simplified: ship_type and palette_index from switch/palette, R/G/B passed. */
+void FUN_00424240(int ship_type, int ship_index, int color_r, int color_g, int color_b, int palette_index)
 {
-    unsigned int team_r, team_g, team_b;
-    unsigned int base_r, base_g, base_b;
-    int lut[3 * 256 * 3];  /* 3 output channels x 256 entries x 3 input channels */
+    int lut[3 * 256 * 3];  /* 3 output channels × 3 sub-tables × 256 entries */
     int frame_w, frame_h;
     int pixel_offset;
 
-    /* Use the player's selected color directly */
-    team_r = (unsigned int)color_r;
-    team_g = (unsigned int)color_g;
-    team_b = (unsigned int)color_b;
+    /* Row 0: Team color from DAT_00483838[palette_index] (X1R5G5B5).
+     * Sprite B channel maps through this row. */
+    unsigned short teamPal = ((unsigned short *)&DAT_00483838)[palette_index];
+    int row0_r = (unsigned char)(((teamPal >> 10) & 0x1F) << 3);
+    int row0_g = (unsigned char)(((teamPal >> 5) & 0x1F) << 3);
+    int row0_b = (unsigned char)((teamPal & 0x1F) << 3);
+
+    /* Row 1: Custom/player color from shipal.col (passed as params).
+     * Sprite G channel maps through this row. */
+    int row1_r = color_r;
+    int row1_g = color_g;
+    int row1_b = color_b;
+
+    /* Row 2: Base color per ship type (from switch below).
+     * Sprite R channel maps through this row. */
+    int row2_r = 0;
+    int row2_g = 0;
+    int row2_b = 0;
 
     /* Read frame dimensions (same for all 32 rotation frames) */
     frame_w = *(int *)((char *)DAT_00487aac + 100000 + ship_index * 0x186A8);
     frame_h = *(int *)((char *)DAT_00487aac + ship_index * 0x186A8 + 0x186A4);
 
-    /* Initialize base color weights (overridden by switch) */
-    base_r = 0x50;
-    base_g = 0x50;
-    base_b = 0x50;
-
-    /* Configure color transform per ship type */
+    /* Configure color transform and base color per ship type.
+     * The switch sets DAT_00481d0c/10/14 (matrix weights per row),
+     * DAT_00481d2c/30/34 (transition thresholds), DAT_00481d18/1c/20
+     * (upper thresholds), and row2 base color. */
     switch (ship_type) {
     case 0:
-        base_b = 0x78; base_r = 0x46; base_g = 0x46;
-        DAT_00481d10 = 0x80; DAT_00481d1c = 0x14A;
-        DAT_00481d18 = 0xFF; DAT_00481d14 = 0x80;
-        DAT_00481d0c = 0x80; DAT_00481d20 = 0xFF;
+        row2_r = 0x46; row2_g = 0x46; row2_b = 0x78;
+        DAT_00481d0c = 0x80; DAT_00481d10 = 0x80; DAT_00481d14 = 0x80;
         DAT_00481d2c = 0xB4; DAT_00481d30 = 0x8C; DAT_00481d34 = 0xB4;
+        DAT_00481d18 = 0xFF; DAT_00481d1c = 0x14A; DAT_00481d20 = 0xFF;
         break;
     case 1:
-        base_b = 0x78; base_r = 0x46; base_g = 0x46;
-        DAT_00481d10 = 200; DAT_00481d30 = 0xDC;
-        DAT_00481d2c = 0xB4; DAT_00481d34 = 0xB4;
-        DAT_00481d1c = 0xFF;
-        DAT_00481d18 = 0xFF; DAT_00481d14 = 0x80;
-        DAT_00481d0c = 0x80; DAT_00481d20 = 0xFF;
+        row2_r = 0x46; row2_g = 0x46; row2_b = 0x78;
+        DAT_00481d0c = 0x80; DAT_00481d10 = 200; DAT_00481d14 = 0x80;
+        DAT_00481d2c = 0xB4; DAT_00481d30 = 0xDC; DAT_00481d34 = 0xB4;
+        DAT_00481d18 = 0xFF; DAT_00481d1c = 0xFF; DAT_00481d20 = 0xFF;
         break;
     case 2:
     case 5:
     case 6:
-        base_r = 0x50; base_g = 0x50; base_b = 0x50;
+        row2_r = 0x50; row2_g = 0x50; row2_b = 0x50;
         DAT_00481d0c = 0x80; DAT_00481d10 = 0x80; DAT_00481d14 = 0x80;
         DAT_00481d2c = 0xA0; DAT_00481d30 = 0xA0; DAT_00481d34 = 0xA0;
         DAT_00481d18 = 0x14A; DAT_00481d1c = 0x14A; DAT_00481d20 = 0x14A;
         break;
     case 3:
-        base_r = 0x6E; base_g = 0x6E; base_b = 0x6E;
+        row2_r = 0x6E; row2_g = 0x6E; row2_b = 0x6E;
         DAT_00481d0c = 0x8C; DAT_00481d10 = 0xA0; DAT_00481d14 = 0x80;
         DAT_00481d2c = 0x5A; DAT_00481d30 = 0x6E; DAT_00481d34 = 0xA0;
         DAT_00481d18 = 0x96; DAT_00481d1c = 0xBE; DAT_00481d20 = 0xF0;
         break;
     case 4:
-        DAT_00481d10 = 200;
-        base_r = 100; base_g = 100; base_b = 100;
-        DAT_00481d0c = 0x80; DAT_00481d14 = 0x80;
+        row2_r = 100; row2_g = 100; row2_b = 100;
+        DAT_00481d0c = 0x80; DAT_00481d10 = 200; DAT_00481d14 = 0x80;
         DAT_00481d2c = 0x100; DAT_00481d30 = 0x8C; DAT_00481d34 = 0xBE;
         DAT_00481d18 = 0xFF; DAT_00481d1c = 0x14A; DAT_00481d20 = 0x1A4;
         break;
     case 7:
-        base_b = 0x14; base_r = 0x5A; base_g = 0x5A;
+        row2_r = 0x5A; row2_g = 0x5A; row2_b = 0x14;
         DAT_00481d0c = 0x80; DAT_00481d10 = 0x80; DAT_00481d14 = 0x80;
         DAT_00481d2c = 0xA0; DAT_00481d30 = 0xA0; DAT_00481d34 = 0xA0;
         DAT_00481d18 = 0x14A; DAT_00481d1c = 0x14A; DAT_00481d20 = 0x14A;
         break;
     case 8:
-        DAT_00481d2c = 0xAA;
-        base_r = 10; base_g = 10; base_b = 10;
-        DAT_00481d34 = 0xA0; DAT_00481d30 = 0xA0;
-        DAT_00481d10 = 0x80; DAT_00481d1c = 0x14A;
-        DAT_00481d18 = 0xFF; DAT_00481d14 = 0x80;
-        DAT_00481d0c = 0x80; DAT_00481d20 = 0xFF;
+        row2_r = 10; row2_g = 10; row2_b = 10;
+        DAT_00481d0c = 0x80; DAT_00481d10 = 0x80; DAT_00481d14 = 0x80;
+        DAT_00481d2c = 0xAA; DAT_00481d30 = 0xA0; DAT_00481d34 = 0xA0;
+        DAT_00481d18 = 0xFF; DAT_00481d1c = 0x14A; DAT_00481d20 = 0xFF;
         break;
     }
 
-    /* Scale base colors by min matrix values (>>7 = divide by 128) */
-    {
-        int *base_arr[3] = { (int *)&base_r, (int *)&base_g, (int *)&base_b };
-        int *matrix = &DAT_00481d0c;  /* 3 consecutive ints */
+    /* Scale all 9 color values by their respective matrix weights (>>7).
+     * Original processes a flat array of 9 ints: [row0_R, row0_G, row0_B,
+     * row1_R, row1_G, row1_B, row2_R, row2_G, row2_B] with matrix values
+     * [DAT_00481d0c, DAT_00481d10, DAT_00481d14] (one per row). */
+    int colors[9] = { row0_r, row0_g, row0_b, row1_r, row1_g, row1_b, row2_r, row2_g, row2_b };
+    int matrix[3] = { DAT_00481d0c, DAT_00481d10, DAT_00481d14 };
+    for (int row = 0; row < 3; row++) {
         for (int ch = 0; ch < 3; ch++) {
-            *(base_arr[0]) = (int)base_r * matrix[ch] >> 7;
-            *(base_arr[1]) = (int)base_g * matrix[ch] >> 7;
-            *(base_arr[2]) = (int)base_b * matrix[ch] >> 7;
+            colors[row * 3 + ch] = colors[row * 3 + ch] * matrix[row] >> 7;
         }
     }
 
-    /* Actually, re-implement the LUT build more faithfully.
-     * The original builds 3 LUTs (one per output R/G/B), each has 3×256 entries
-     * (one sub-table per input R/G/B channel). */
-
-    /* Scaled team colors (already multiplied by matrix) */
-    int team_scaled[3][3];  /* [output_channel][input_channel] */
-    team_scaled[0][0] = (int)team_r * DAT_00481d0c >> 7;  /* R-from-R */
-    team_scaled[0][1] = (int)team_g * DAT_00481d0c >> 7;  /* G-from-R */
-    team_scaled[0][2] = (int)team_b * DAT_00481d0c >> 7;  /* B-from-R */
-    team_scaled[1][0] = (int)team_r * DAT_00481d10 >> 7;  /* R-from-G */
-    team_scaled[1][1] = (int)team_g * DAT_00481d10 >> 7;  /* G-from-G */
-    team_scaled[1][2] = (int)team_b * DAT_00481d10 >> 7;  /* B-from-G */
-    team_scaled[2][0] = (int)team_r * DAT_00481d14 >> 7;  /* R-from-B */
-    team_scaled[2][1] = (int)team_g * DAT_00481d14 >> 7;  /* G-from-B */
-    team_scaled[2][2] = (int)team_b * DAT_00481d14 >> 7;  /* B-from-B */
-
-    /* Build LUTs: 3 output channels, each with 3 input channel sub-tables */
+    /* Build LUTs: 3 sub-tables (one per input source: team/custom/base), each
+     * sub-table has entries for all 3 output channels.
+     *
+     * LUT layout: lut[out_ch * 768 + sub * 256 + input_value]
+     *   sub 0 = indexed by ch_hi  (B input) → uses row 0 (team color) targets
+     *   sub 1 = indexed by ch_mid (G input) → uses row 1 (custom color) targets
+     *   sub 2 = indexed by ch_lo  (R input) → uses row 2 (base color) targets
+     *
+     * Transition/threshold values are per-SUB (per input source), not per output
+     * channel.  Original iterates sub as outer loop, building all 3 output channels
+     * simultaneously within each sub. */
     int transitions[3] = { DAT_00481d2c, DAT_00481d30, DAT_00481d34 };
     int thresholds[3] = { DAT_00481d18, DAT_00481d1c, DAT_00481d20 };
 
-    for (int out_ch = 0; out_ch < 3; out_ch++) {
-        int trans = transitions[out_ch];
-        int thresh = thresholds[out_ch];
+    for (int sub = 0; sub < 3; sub++) {
+        int trans = transitions[sub];
+        int thresh = thresholds[sub];
 
-        /* Phase 1: ramp from 0 to team_scaled (0..trans entries) */
+        /* Phase 1: ramp from 0 to scaled color target (0..trans entries).
+         * For this sub (input source), build entries for all 3 output channels.
+         * colors[sub*3 + 0] = this row's R, colors[sub*3 + 1] = G, [+2] = B */
         if (trans > 0) {
+            int acc[3] = { 0, 0, 0 };
             for (int k = 0; k < trans && k < 256; k++) {
-                for (int in_ch = 0; in_ch < 3; in_ch++) {
-                    int idx = out_ch * 768 + in_ch * 256 + k;
-                    lut[idx] = (k * team_scaled[out_ch][in_ch] * 256 / trans) >> 8;
+                for (int out_ch = 0; out_ch < 3; out_ch++) {
+                    int target = colors[sub * 3 + out_ch];
+                    lut[out_ch * 768 + sub * 256 + k] = acc[out_ch] / trans >> 8;
+                    acc[out_ch] += target * 0x100;
                 }
             }
         }
 
-        /* Phase 2: ramp from team_scaled to 255 (trans..255 entries) */
-        int remain = thresh - trans;
-        if (trans < 256 && remain > 0) {
-            for (int k = 0; k < 256 - trans; k++) {
-                for (int in_ch = 0; in_ch < 3; in_ch++) {
-                    int base_val = team_scaled[out_ch][in_ch];
-                    int target = 256 - base_val;
-                    int idx = out_ch * 768 + in_ch * 256 + trans + k;
-                    if (idx < 3 * 256 * 3) {
-                        lut[idx] = base_val + (k * target) / remain;
-                    }
+        /* Phase 2: ramp from scaled color to 256 (trans..255 entries). */
+        if (trans < 256) {
+            int remain = thresh - trans;
+            if (remain <= 0) remain = 1;
+            for (int out_ch = 0; out_ch < 3; out_ch++) {
+                int base_val = colors[sub * 3 + out_ch];
+                int gap = 0x100 - base_val;
+                int edge_acc = gap * trans;
+                for (int k = 0; k < 256 - trans; k++) {
+                    lut[out_ch * 768 + sub * 256 + trans + k] =
+                        base_val + (edge_acc - gap * trans) / remain;
+                    edge_acc += gap;
                 }
             }
         }
     }
 
-    /* Apply LUTs to all 32 rotation frames */
+    /* Apply LUTs to all 32 rotation frames.
+     * For each output channel, combine 3 sub-table lookups via sqrt(sum of squares):
+     *   out_R = sqrt(team_R_ramp[B_in]² + custom_R_ramp[G_in]² + base_R_ramp[R_in]²)
+     *   out_G = sqrt(team_G_ramp[B_in]² + custom_G_ramp[G_in]² + base_G_ramp[R_in]²)
+     *   out_B = sqrt(team_B_ramp[B_in]² + custom_B_ramp[G_in]² + base_B_ramp[R_in]²) */
     pixel_offset = 0;
     for (int frame = 0; frame < 32; frame++) {
-        for (int row = 0; row < frame_h; row++) {
+        for (int r = 0; r < frame_h; r++) {
             for (int col = 0; col < frame_w; col++) {
                 int byte_off = (pixel_offset + ship_index * 0xC354) * 2;
                 unsigned short pixel = *(unsigned short *)((char *)DAT_00487aac + byte_off);
 
                 if (pixel != 0) {
                     /* Extract from X1B5G5R5 format (5 bits each, all <<3 to 8-bit).
-                     * Ship pixels: R in bits 0-4, G in bits 5-9, B in bits 10-14.
-                     * Matches original disasm: SHL AL,3 / SHL DL,3 / SHL CL,3 */
-                    unsigned int ch_lo  = (unsigned char)((pixel << 3) & 0xFF);        /* bits 0-4 (R) */
-                    unsigned int ch_mid = (unsigned char)(((pixel >> 5) << 3) & 0xFF); /* bits 5-9 (G) */
-                    unsigned int ch_hi  = (unsigned char)(((pixel >> 10) << 3) & 0xFF);/* bits 10-14 (B) */
+                     * Ship pixels: R in bits 0-4, G in bits 5-9, B in bits 10-14. */
+                    unsigned int ch_lo  = (unsigned char)((pixel << 3) & 0xFF);        /* R: bits 0-4 */
+                    unsigned int ch_mid = (unsigned char)(((pixel >> 5) << 3) & 0xFF); /* G: bits 5-9 */
+                    unsigned int ch_hi  = (unsigned char)(((pixel >> 10) << 3) & 0xFF);/* B: bits 10-14 */
 
-                    /* Apply 3x3 LUT: sqrt(sum of squares) per output channel.
-                     * Original uses ch_hi (B) with LUT columns 0, ch_mid (G) with 1, ch_lo (R) with 2.
-                     * Output ch0 goes to bits 10-14, ch1 to bits 5-9, ch2 to bits 0-4 (X1R5G5B5). */
-                    int sum0 = lut[0 * 768 + 0 * 256 + (ch_hi & 0xFF)] *
-                               lut[0 * 768 + 0 * 256 + (ch_hi & 0xFF)] +
-                               lut[0 * 768 + 1 * 256 + (ch_mid & 0xFF)] *
-                               lut[0 * 768 + 1 * 256 + (ch_mid & 0xFF)] +
-                               lut[0 * 768 + 2 * 256 + (ch_lo & 0xFF)] *
-                               lut[0 * 768 + 2 * 256 + (ch_lo & 0xFF)];
-                    int out0 = (int)sqrt((double)sum0);
+                    /* Output channel 0: sub0[ch_hi]² + sub1[ch_mid]² + sub2[ch_lo]² */
+                    int v;
+                    v = lut[0 * 768 + 0 * 256 + ch_hi]; int s0 = v * v;
+                    v = lut[0 * 768 + 1 * 256 + ch_mid]; s0 += v * v;
+                    v = lut[0 * 768 + 2 * 256 + ch_lo]; s0 += v * v;
+                    int out0 = (int)sqrt((double)s0);
 
-                    int sum1 = lut[1 * 768 + 0 * 256 + (ch_hi & 0xFF)] *
-                               lut[1 * 768 + 0 * 256 + (ch_hi & 0xFF)] +
-                               lut[1 * 768 + 1 * 256 + (ch_mid & 0xFF)] *
-                               lut[1 * 768 + 1 * 256 + (ch_mid & 0xFF)] +
-                               lut[1 * 768 + 2 * 256 + (ch_lo & 0xFF)] *
-                               lut[1 * 768 + 2 * 256 + (ch_lo & 0xFF)];
-                    int out1 = (int)sqrt((double)sum1);
+                    v = lut[1 * 768 + 0 * 256 + ch_hi]; int s1 = v * v;
+                    v = lut[1 * 768 + 1 * 256 + ch_mid]; s1 += v * v;
+                    v = lut[1 * 768 + 2 * 256 + ch_lo]; s1 += v * v;
+                    int out1 = (int)sqrt((double)s1);
 
-                    int sum2 = lut[2 * 768 + 0 * 256 + (ch_hi & 0xFF)] *
-                               lut[2 * 768 + 0 * 256 + (ch_hi & 0xFF)] +
-                               lut[2 * 768 + 1 * 256 + (ch_mid & 0xFF)] *
-                               lut[2 * 768 + 1 * 256 + (ch_mid & 0xFF)] +
-                               lut[2 * 768 + 2 * 256 + (ch_lo & 0xFF)] *
-                               lut[2 * 768 + 2 * 256 + (ch_lo & 0xFF)];
-                    int out2 = (int)sqrt((double)sum2);
+                    v = lut[2 * 768 + 0 * 256 + ch_hi]; int s2 = v * v;
+                    v = lut[2 * 768 + 1 * 256 + ch_mid]; s2 += v * v;
+                    v = lut[2 * 768 + 2 * 256 + ch_lo]; s2 += v * v;
+                    int out2 = (int)sqrt((double)s2);
 
-                    /* Clamp to 255 */
                     if (out0 > 255) out0 = 255;
                     if (out1 > 255) out1 = 255;
                     if (out2 > 255) out2 = 255;
 
-                    /* Near-black → transparent (original thresholds) */
+                    /* Near-black → transparent */
                     if (out0 < 8 && out1 < 4 && out2 < 8) {
                         pixel = 0;
                     } else {
-                        /* Pack as X1R5G5B5: out2 → bits 0-4, out1 → bits 5-9, out0 → bits 10-14.
-                         * Matches original: LEA EDX,[EAX+EBP*4] with ch2 at low, ch0 at high. */
+                        /* Pack X1R5G5B5: out2→bits 0-4, out1→bits 5-9, out0→bits 10-14 */
                         pixel = (unsigned short)(
                             (out2 >> 3) +
                             (((out0 & 0x1F8) * 0x20 + (out1 & 0x3FF8)) * 4));
@@ -1927,15 +1929,21 @@ int FUN_004249c0(void)
 
         /* Apply player color transform (produces X1R5G5B5 output).
          * Original reads color index from g_ConfigBlob[0x466 + playerIdx],
-         * looks up RGB565 in DAT_00481f4c palette, extracts R/G/B, passes
-         * to FUN_00424240 as explicit color parameters. */
+         * looks up X1R5G5B5 in DAT_00481f4c palette, extracts R/G/B.
+         * palette_index for team color comes from DAT_00487810 (player data
+         * buffer) at player_offset + 0x2c, NOT from stats_buf[6]. At load
+         * time this is 0 (calloc-zeroed), so team color = DAT_00483838[0]. */
         {
             unsigned char colorIdx = g_ConfigBlob[0x466 + ship_idx];
             unsigned short palColor = ((unsigned short *)DAT_00481f4c)[colorIdx];
-            int cr = (unsigned char)((palColor >> 10) << 3);  /* R: bits 14-10 */
-            int cg = (unsigned char)(((palColor >> 5) & 0x1F) << 3);  /* G: bits 9-5 */
-            int cb = (unsigned char)((palColor & 0x1F) << 3);  /* B: bits 4-0 */
-            FUN_00424240(ship_type, ship_idx, cr, cg, cb);
+            int cr = (unsigned char)(((palColor >> 10) & 0x1F) << 3);
+            int cg = (unsigned char)(((palColor >> 5) & 0x1F) << 3);
+            int cb = (unsigned char)((palColor & 0x1F) << 3);
+            /* Original: palette_index = *(byte*)(DAT_00487810 + player_offset + 0x2c)
+             * At ship load time, DAT_00487810 is calloc-zeroed → always 0. */
+            int pal_idx = (DAT_00487810) ?
+                (int)(unsigned char)*((char *)DAT_00487810 + player_offset + 0x2c) : 0;
+            FUN_00424240(ship_type, ship_idx, cr, cg, cb, pal_idx);
         }
 
         /* COMPAT: Convert ship pixels from X1R5G5B5 → RGB565 for display.
