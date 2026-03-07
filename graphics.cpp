@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
+
 /* ===== Globals defined in this module ===== */
 int                 DAT_00489238    = 640;   /* Screen/viewport width */
 int                 DAT_0048923c    = 480;   /* Screen/viewport height */
@@ -869,9 +871,9 @@ void Render_Game_View_To(unsigned short *frame)
 
             switch (item->render_mode) {
             /* Static labels: use string_idx directly */
-            case 0x00: case 0x0C: case 0x20: case 0x21: case 0x22:
-            case 0x23: case 0x24: case 0x25: case 0x2B: case 0x2C:
-            case 0x2D: case 0x2E: case 0x2F:
+            case 0x00: case 0x0C: case 0x1A: case 0x20: case 0x21:
+            case 0x22: case 0x23: case 0x24: case 0x25: case 0x2B:
+            case 0x2C: case 0x2D: case 0x2E: case 0x2F:
                 if (g_MenuStrings && item->string_idx < 350 &&
                     g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
@@ -879,8 +881,8 @@ void Render_Game_View_To(unsigned short *frame)
 
             /* Enum: string_idx + config_value */
             case 0x01: case 0x04: case 0x0F: case 0x10: case 0x11:
-            case 0x12: case 0x17: case 0x1E: case 0x1F: case 0x27:
-            case 0x30: case 0x33: case 0x26: case 0x1C: case 0x1D: {
+            case 0x12: case 0x17: case 0x1E: case 0x26: case 0x27:
+            case 0x30: case 0x33: {
                 int val = cfgPtr ? (int)*cfgPtr : 0;
                 int idx = item->string_idx + val;
                 if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
@@ -997,10 +999,136 @@ void Render_Game_View_To(unsigned short *frame)
                 break;
             }
 
-            /* Color swatch: no text, draw colored rect */
-            case 0x1B:
-                /* TODO: draw color swatch rectangle */
+            /* Color swatch: draw 25x25 filled rectangle from ship palette */
+            case 0x1B: {
+                unsigned char colorVal = cfgPtr ? *cfgPtr : 0;
+
+                /* Inline slider preview: if dragging this item, add delta */
+                if (g_InputMode == 1 && (unsigned char)i == DAT_004877e6) {
+                    colorVal = (unsigned char)((char)colorVal + (char)(DAT_004877e8 >> 8));
+                }
+
+                /* Draw 25x25 rectangle using DAT_00481f4c palette */
+                int sx = item->x;
+                int sy = item->y;
+                if (DAT_00481f4c && sx >= 0 && sy >= 0 && sx + 25 <= 640 && sy + 25 <= 480) {
+                    unsigned short fillColor = ((unsigned short *)DAT_00481f4c)[colorVal];
+                    for (int row = 0; row < 25; row++) {
+                        for (int col = 0; col < 25; col++) {
+                            frame[(sy + row) * 640 + sx + col] = fillColor;
+                        }
+                    }
+                }
                 break;
+            }
+
+            /* Team number: sprintf + team-colored text */
+            case 0x1C: {
+                int teamVal = cfgPtr ? (int)*cfgPtr : 0;
+                sprintf(valBuf, "%d", teamVal);
+                str = valBuf;
+                /* Use team color palette (6=team0, 7=team1, 8=team2) */
+                item->color_style = teamVal + 6;
+                break;
+            }
+
+            /* Ship type: draw ship sprite or "Random" text */
+            case 0x1D: {
+                unsigned int shipType = cfgPtr ? (unsigned int)*cfgPtr : 0;
+
+                /* If ship is banned, draw disabled sprite (0xEF) centered */
+                if (shipType < 9 && DAT_0048378e[shipType] != 0 &&
+                    DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+                    int dspr = 0xEF;
+                    int dw = (int)((unsigned char *)DAT_00489e8c)[dspr];
+                    int dh = (int)((unsigned char *)DAT_00489e88)[dspr];
+                    if (dw > 0 && dh > 0) {
+                        int dx = item->x - dw / 2;
+                        int dy = item->y - dh / 2;
+                        if (dx >= 0 && dy >= 0 && dx + dw <= 640 && dy + dh <= 480) {
+                            int dpb = ((int *)DAT_00489234)[dspr];
+                            unsigned short *src = (unsigned short *)DAT_00487ab4;
+                            unsigned short *ddst = frame + dy * 640 + dx;
+                            for (int row = 0; row < dh; row++) {
+                                for (int col = 0; col < dw; col++) {
+                                    unsigned short px = src[dpb++];
+                                    if (px != 0) ddst[col] = px;
+                                }
+                                ddst += 640;
+                            }
+                        }
+                    }
+                }
+
+                if (shipType == 9) {
+                    /* "Random" text */
+                    str = "Random";
+                } else if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+                    /* Draw ship preview sprite at index 0xE5 + ship_type */
+                    int sIdx = (int)shipType + 0xE5;
+                    int sw2 = (int)((unsigned char *)DAT_00489e8c)[sIdx];
+                    int sh2 = (int)((unsigned char *)DAT_00489e88)[sIdx];
+                    if (sw2 > 0 && sh2 > 0) {
+                        int sx2 = item->x - sw2 / 2;
+                        int sy2 = item->y - sh2 / 2;
+                        if (sx2 >= 0 && sy2 >= 0 && sx2 + sw2 <= 640 && sy2 + sh2 <= 480) {
+                            int spb = ((int *)DAT_00489234)[sIdx];
+                            unsigned short *src = (unsigned short *)DAT_00487ab4;
+                            unsigned short *sdst = frame + sy2 * 640 + sx2;
+                            for (int row = 0; row < sh2; row++) {
+                                for (int col = 0; col < sw2; col++) {
+                                    unsigned short px = src[spb++];
+                                    if (px != 0) sdst[col] = px;
+                                }
+                                sdst += 640;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
+            /* Computer/CPU: stars for CPU players, "-" for humans */
+            case 0x1F: {
+                unsigned char cpuDiff = cfgPtr ? *cfgPtr : 0;
+                unsigned int humanCount = g_ConfigBlob[0x325] & 0xFF;
+
+                /* Inline slider preview for human count */
+                if (g_InputMode == 1 && g_GameViewData) {
+                    MenuItem *chkIt = (MenuItem *)g_GameViewData;
+                    if (chkIt[(unsigned char)DAT_004877e6].extra_data ==
+                        CFG_ADDR(0x48227d)) {
+                        int hDelta = DAT_004877e8 >> 0xC;
+                        int hv = (int)humanCount + hDelta;
+                        if (hv > 0)
+                            hv = hv % 5;
+                        else if (hv < 0)
+                            hv = hv + (1 - (hv + 1) / 5) * 5;
+                        humanCount = (unsigned int)hv;
+                    }
+                }
+
+                unsigned int starCount = (unsigned int)cpuDiff + 1;
+                /* Build stars string */
+                int spos = 0;
+                for (unsigned int s = 0; s < starCount && spos < 120; s++)
+                    valBuf[spos++] = '*';
+                valBuf[spos] = '\0';
+
+                unsigned char playerIdx = item->flag1;
+                if ((int)(unsigned int)playerIdx < (int)humanCount) {
+                    /* Human player: show "-" */
+                    valBuf[0] = '-'; valBuf[1] = '\0';
+                    item->color_style = 2;  /* cyan */
+                    item->font_idx = 2;
+                } else {
+                    /* CPU player: show stars */
+                    item->font_idx = 0;
+                    item->color_style = (starCount > 3) ? 0 : 3;
+                }
+                str = valBuf;
+                break;
+            }
 
             default:
                 if (g_MenuStrings && item->string_idx < 350 &&

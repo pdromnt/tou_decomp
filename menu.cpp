@@ -208,8 +208,10 @@ int Load_Level_Resources(void)
     /* Player data (DAT_00487810) and ship stats (DAT_0048780c) are now
      * allocated in Init_Memory_Pools, matching the original binary. */
 
-    /* Set default ship type for player 0 (type 9 = random) */
-    DAT_0048236e[0] = 9;
+    /* Load ship types from config blob (0=Peru..8=Dest, 9=random) */
+    for (int st = 0; st < DAT_00489240 && st < 80; st++) {
+        DAT_0048236e[st] = g_ConfigBlob[0x416 + st];
+    }
 
     /* Mark human/CPU flags and team assignments for all players */
     if (DAT_00487810 != 0) {

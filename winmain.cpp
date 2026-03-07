@@ -315,6 +315,13 @@ MAIN_LOOP:
                     g_MouseDeltaX = pt.x << 18;
                     g_MouseDeltaY = pt.y << 18;
                 }
+                /* Original binary calls Input_Update() here for g_GameState==1
+                 * to poll DirectInput mouse (accumulates DAT_004877e8 for slider drag).
+                 * COMPAT: In windowed mode, all mouse input (position, buttons, slider
+                 * delta) is handled via Win32 APIs in FUN_00425fe0's COMPAT block,
+                 * making Input_Update redundant. Calling it would double-accumulate
+                 * DAT_004877e8 since both DirectInput and Win32 cursor delta report
+                 * the same physical mouse movement. */
                 g_ProcessInput = 1;
                 if (g_GameState == 0x00) {
                     Game_Update_Render();

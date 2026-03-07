@@ -2274,88 +2274,111 @@ void FUN_00425fe0(void)
         g_MouseButtons = 0;
         if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
         if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g_MouseButtons |= 2;
+
+        /* COMPAT: Fallback slider delta from cursor position.
+         * Input_Update accumulates DAT_004877e8 from DirectInput mouse
+         * relative events, but DInput mouse can lose acquisition in
+         * windowed mode.  As a safety net, also accumulate from the
+         * Win32 absolute cursor delta so sliders work even if DInput
+         * mouse is not reporting events. */
+        static int s_lastCursorX = -1;
+        if (g_InputMode == 1) {
+            if (s_lastCursorX >= 0) {
+                int dx = pt.x - s_lastCursorX;
+                DAT_004877e8 += dx * 0x80;
+            }
+            s_lastCursorX = pt.x;
+        } else {
+            s_lastCursorX = -1;
+        }
     }
 
-    /* ---- Input processing (normal mode, g_InputMode == 0) ---- */
+    /* ---- Input processing ---- */
+    /* Mode 0: arrow keys move viewport. Mode 1: arrow keys adjust drag delta.
+     * Both modes share the click/release detection code below. */
     if (g_InputMode == 0) {
         /* Arrow key viewport movement (time-based speed) */
-        {
-            int spd = (int)DAT_004877f0;
-            if (spd == 0) spd = 1;
-            if ((g_KeyboardState[0xC8] & 0x80) != 0) g_MouseDeltaY -= spd;  /* Up */
-            if ((g_KeyboardState[0xD0] & 0x80) != 0) g_MouseDeltaY += spd;  /* Down */
-            if ((g_KeyboardState[0xCB] & 0x80) != 0) g_MouseDeltaX -= spd;  /* Left */
-            if ((g_KeyboardState[0xCD] & 0x80) != 0) g_MouseDeltaX += spd;  /* Right */
-        }
+        int spd = (int)DAT_004877f0;
+        if (spd == 0) spd = 1;
+        if ((g_KeyboardState[0xC8] & 0x80) != 0) g_MouseDeltaY -= spd;  /* Up */
+        if ((g_KeyboardState[0xD0] & 0x80) != 0) g_MouseDeltaY += spd;  /* Down */
+        if ((g_KeyboardState[0xCB] & 0x80) != 0) g_MouseDeltaX -= spd;  /* Left */
+        if ((g_KeyboardState[0xCD] & 0x80) != 0) g_MouseDeltaX += spd;  /* Right */
+    } else if (g_InputMode == 1) {
+        /* Arrow key delta adjustment for slider drag mode */
+        if ((g_KeyboardState[0xCB] & 0x80) != 0) DAT_004877e8 -= 0x400; /* Left */
+        if ((g_KeyboardState[0xCD] & 0x80) != 0) DAT_004877e8 += 0x400; /* Right */
+    }
 
-        /* Primary click: Right Ctrl (0x9D) OR Left Mouse Button */
-        if (((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
-            (DAT_004877bd & 1) == 0) {
-            DAT_004877bc |= 1;
-            DAT_004877bd |= 1;
-        }
+    /* ---- Shared click/release detection (runs for mode 0 AND mode 1) ---- */
 
-        /* Secondary click: Right Shift (0x36) OR Right Mouse Button */
-        if (((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
-            (DAT_004877bd & 2) == 0) {
-            DAT_004877bc |= 2;
-            DAT_004877bd |= 2;
-        }
+    /* Primary click: Right Ctrl (0x9D) OR Left Mouse Button */
+    if (((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
+        (DAT_004877bd & 1) == 0) {
+        DAT_004877bc |= 1;
+        DAT_004877bd |= 1;
+    }
 
-        /* Middle button: scan 0x30 (B key) */
-        if ((g_KeyboardState[0x30] & 0x80) != 0 && (DAT_004877bd & 4) == 0) {
-            DAT_004877bc |= 4;
-            DAT_004877bd |= 4;
-        }
+    /* Secondary click: Right Shift (0x36) OR Right Mouse Button */
+    if (((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
+        (DAT_004877bd & 2) == 0) {
+        DAT_004877bc |= 2;
+        DAT_004877bd |= 2;
+    }
 
-        /* ESC (scan 0x01): Navigate back or center view */
-        if ((g_KeyboardState[0x01] & 0x80) != 0 && (DAT_004877bd & 8) == 0) {
-            if (DAT_004877a4 == 0 &&
-                (g_MouseDeltaX != 0x5000000 || g_MouseDeltaY != 0x5b80000)) {
-                /* Main menu, not centered → center the viewport */
-                g_MouseDeltaX = 0x5000000;
-                g_MouseDeltaY = 0x5b80000;
-            } else {
-                /* Navigate to parent page (DAT_004877c9 = back page) */
-                DAT_004877b1 = 1;
-                DAT_004877a4 = DAT_004877c9;
-            }
-            DAT_004877bd |= 8;
-        }
+    /* Middle button: scan 0x30 (B key) */
+    if ((g_KeyboardState[0x30] & 0x80) != 0 && (DAT_004877bd & 4) == 0) {
+        DAT_004877bc |= 4;
+        DAT_004877bd |= 4;
+    }
 
-        /* Page 0x1C: any click navigates back */
-        if (DAT_004877a4 == 0x1C && DAT_004877bc != 0) {
+    /* ESC (scan 0x01): Navigate back or center view */
+    if ((g_KeyboardState[0x01] & 0x80) != 0 && (DAT_004877bd & 8) == 0) {
+        if (DAT_004877a4 == 0 &&
+            (g_MouseDeltaX != 0x5000000 || g_MouseDeltaY != 0x5b80000)) {
+            /* Main menu, not centered → center the viewport */
+            g_MouseDeltaX = 0x5000000;
+            g_MouseDeltaY = 0x5b80000;
+        } else {
+            /* Navigate to parent page (DAT_004877c9 = back page) */
             DAT_004877b1 = 1;
             DAT_004877a4 = DAT_004877c9;
         }
+        DAT_004877bd |= 8;
+    }
 
-        /* Button release: primary (RCtrl) + DAT_004877e5 conditional.
-         * Original only marks input as processed when BOTH RCtrl and LMB
-         * are released, creating a button-up signal for FUN_00426650. */
-        if ((g_KeyboardState[0x9D] & 0x80) == 0) {
-            if ((g_MouseButtons & 1) == 0) {
-                DAT_004877e5 = 1;
-            }
-            if ((g_MouseButtons & 1) == 0 && (DAT_004877bd & 1) != 0) {
-                DAT_004877bd ^= 1;
-            }
-        }
+    /* Page 0x1C: any click navigates back */
+    if (DAT_004877a4 == 0x1C && DAT_004877bc != 0) {
+        DAT_004877b1 = 1;
+        DAT_004877a4 = DAT_004877c9;
+    }
 
-        /* Button release: secondary (RShift + RMB) */
-        if ((g_KeyboardState[0x36] & 0x80) == 0 && (g_MouseButtons & 2) == 0 &&
-            (DAT_004877bd & 2) != 0) {
-            DAT_004877bd ^= 2;
+    /* Button release: primary (RCtrl) + DAT_004877e5 conditional.
+     * Marks input as processed when BOTH RCtrl and LMB are released,
+     * creating a button-up signal for FUN_00426650 to apply slider deltas. */
+    if ((g_KeyboardState[0x9D] & 0x80) == 0) {
+        if ((g_MouseButtons & 1) == 0) {
+            DAT_004877e5 = 1;
         }
+        if ((g_MouseButtons & 1) == 0 && (DAT_004877bd & 1) != 0) {
+            DAT_004877bd ^= 1;
+        }
+    }
 
-        /* Button release: ESC */
-        if ((g_KeyboardState[0x01] & 0x80) == 0 && (DAT_004877bd & 8) != 0) {
-            DAT_004877bd ^= 8;
-        }
+    /* Button release: secondary (RShift + RMB) */
+    if ((g_KeyboardState[0x36] & 0x80) == 0 && (g_MouseButtons & 2) == 0 &&
+        (DAT_004877bd & 2) != 0) {
+        DAT_004877bd ^= 2;
+    }
 
-        /* Button release: middle (0x30) */
-        if ((g_KeyboardState[0x30] & 0x80) == 0 && (DAT_004877bd & 4) != 0) {
-            DAT_004877bd ^= 4;
-        }
+    /* Button release: ESC */
+    if ((g_KeyboardState[0x01] & 0x80) == 0 && (DAT_004877bd & 8) != 0) {
+        DAT_004877bd ^= 8;
+    }
+
+    /* Button release: middle (0x30) */
+    if ((g_KeyboardState[0x30] & 0x80) == 0 && (DAT_004877bd & 4) != 0) {
+        DAT_004877bd ^= 4;
     }
 
     /* ---- Clamp viewport position ---- */
@@ -2538,6 +2561,20 @@ void FUN_0042fcf0(void)
     items[n - 2].color_style = 0x0B;   /* special action: combo control */
 }
 
+/* ===== FUN_0042fcb0 - Simple link last two items (0042FCB0) ===== */
+/* Links label+value pair WITHOUT changing widths or color_style.
+ * Used by Players page and Key Bindings page for compact column items. */
+void FUN_0042fcb0(void)
+{
+    if (DAT_004877a8 < 2) return;
+
+    MenuItem *items = (MenuItem *)g_GameViewData;
+    int n = DAT_004877a8;
+
+    items[n - 1].linked_item = n - 2;  /* value → label */
+    items[n - 2].linked_item = n - 1;  /* label → value */
+}
+
 /* ===== FUN_0042fdf0 - Add separator/divider item (0042FDF0) ===== */
 /* Creates a centered sprite separator at the given Y position.
  * Returns 8 (height of separator). */
@@ -2570,9 +2607,6 @@ int FUN_0042fdf0(int param_y)
     }
     return 8;
 }
-
-/* ===== FUN_0042fcb0 - Stub (0042FCB0) ===== */
-void FUN_0042fcb0(void) {}
 
 /* ===== FUN_0042a470 - Menu page builder (0042A470) ===== */
 /* Builds the menu item layout for the current page (DAT_004877a4).
@@ -3814,13 +3848,120 @@ void FUN_00427df0(int param_1, char param_2)
     }
 }
 
-/* ===== FUN_00427a70 - Input mode key assignment (00427A70) ===== */
-/* Processes mouse wheel/scroll input on value items while hovering.
- * TODO: implement in Phase 3 (options page). */
+/* ===== FUN_00427a70 - Slider drag apply (00427A70) ===== */
+/* On mouse release after a drag (g_InputMode==1), applies the accumulated
+ * mouse delta (DAT_004877e8) to the config value linked to the hovered item.
+ * Each render_mode has its own range and wrapping behavior. */
 void FUN_00427a70(int param_1)
 {
-    (void)param_1;
-    /* Stub - input mode processing not yet implemented */
+    if (!g_GameViewData || param_1 < 0 || param_1 >= DAT_004877a8)
+        return;
+
+    MenuItem *items = (MenuItem *)g_GameViewData;
+    unsigned char rm = items[param_1].render_mode;
+
+    /* Only render_modes 0x05..0x34 use slider drag */
+    if ((unsigned char)(rm - 5) > 0x2F)
+        return;
+
+    int delta = DAT_004877e8 >> 10;
+    unsigned char *data = (unsigned char *)(uintptr_t)items[param_1].extra_data;
+    if (!data) return;
+
+    switch (rm) {
+    case 0x05: /* Direct add (unbounded byte) */
+        *data = (unsigned char)((char)*data + (char)delta);
+        break;
+
+    case 0x09: { /* Range 1-200 with modular wrapping */
+        int v = (int)(*data - 1) + delta;
+        if (v > 0)
+            *data = (unsigned char)((v % 200) + 1);
+        else if (v < 0)
+            *data = (unsigned char)(v + (1 - (v + 1) / 200) * 200 + 1);
+        else
+            *data = 1;
+        break;
+    }
+
+    case 0x0E: { /* Range 0-100 (0x65) */
+        int v = (int)*data + delta;
+        if (v > 0)
+            v = v % 0x65;
+        else if (v < 0)
+            v = v + (1 - (v + 1) / 0x65) * 0x65;
+        *data = (unsigned char)v;
+        break;
+    }
+
+    case 0x13: { /* Range 0-80 (0x51) */
+        int v = (int)*data + delta;
+        if (v > 0)
+            *data = (unsigned char)(v % 0x51);
+        else if (v < 0)
+            *data = (unsigned char)(v + (1 - (v + 1) / 0x51) * 0x51);
+        else
+            *data = 0;
+        break;
+    }
+
+    case 0x14: { /* Range 0-20 (0x15), uses >> 0xb for delta */
+        int d14 = DAT_004877e8 >> 0xB;
+        int v = (int)*data + d14;
+        if (v > 0)
+            *data = (unsigned char)(v % 0x15);
+        else if (v < 0)
+            *data = (unsigned char)(v + (1 - (v + 1) / 0x15) * 0x15);
+        else
+            *data = 0;
+        break;
+    }
+
+    case 0x15: { /* Range 1-250 (0xfa) */
+        int v = (int)(*data - 1) + delta;
+        if (v > 0)
+            *data = (unsigned char)((v % 0xFA) + 1);
+        else if (v < 0)
+            *data = (unsigned char)(v + (1 - (v + 1) / 0xFA) * 0xFA + 1);
+        else
+            *data = 1;
+        break;
+    }
+
+    case 0x16: case 0x34: { /* Range 0-250 (0xfb) */
+        int v = (int)*data + delta;
+        if (v > 0)
+            *data = (unsigned char)(v % 0xFB);
+        else if (v < 0)
+            *data = (unsigned char)(v + (1 - (v + 1) / 0xFB) * 0xFB);
+        else
+            *data = 0;
+        break;
+    }
+
+    case 0x18: { /* Range 1-64 (player count) */
+        int v = (int)(*data - 1) + delta;
+        if (v > 0) {
+            v = v & 0x3F;  /* mod 64 (power of 2) */
+            *data = (unsigned char)(v + 1);
+        } else if (v < 0) {
+            v = v + (1 - ((v + 1) >> 6)) * 64;
+            *data = (unsigned char)(v + 1);
+        } else {
+            *data = 1;
+        }
+        break;
+    }
+
+    case 0x1B: { /* Color swatch: direct add with >> 8 delta */
+        int d1b = DAT_004877e8 >> 8;
+        *data = (unsigned char)((char)*data + (char)d1b);
+        break;
+    }
+
+    default:
+        break;
+    }
 }
 
 /* ===== FUN_00426650 - Game/menu logic tick (00426650) ===== */
@@ -3885,7 +4026,120 @@ void FUN_00426650(void)
         }
     }
 
-    /* TODO: Pages 0x12 (players), 0x1A (key bindings), 0x14 (scores)
+    /* Page 0x12: Players (dynamic rows) */
+    if (DAT_004877a4 == 0x12 && DAT_004877b0 != 0) {
+        unsigned int playerCount = g_ConfigBlob[0x324] & 0xFF;  /* total players */
+
+        /* Inline slider preview: if dragging on the player count item,
+         * preview the adjusted count without committing yet */
+        if (g_InputMode == 1 && g_GameViewData) {
+            MenuItem *chkItems = (MenuItem *)g_GameViewData;
+            if (chkItems[(unsigned char)DAT_004877e6].extra_data ==
+                CFG_ADDR(0x48227c)) {
+                int delta = DAT_004877e8 >> 10;
+                int v = (int)playerCount - 1 + delta;
+                if (v < 0)
+                    v = v + (1 - ((v + 1) >> 6)) * 64;
+                else if (v > 0)
+                    v = v & 0x3F;
+                playerCount = (unsigned int)(v + 1);
+            }
+        }
+
+        unsigned int maxVisible = 10;
+        int scrollOff = 0;
+        if (playerCount > maxVisible) {
+            scrollOff = (int)(DAT_004877d4 * (float)(playerCount - maxVisible));
+            if (scrollOff < 0) scrollOff = 0;
+            if (scrollOff > (int)(playerCount - maxVisible))
+                scrollOff = (int)(playerCount - maxVisible);
+        } else {
+            maxVisible = playerCount;
+        }
+
+        /* Reset dynamic item count back to static items */
+        DAT_004877a8 = DAT_004877ac;
+
+        if (maxVisible < 1) goto players_done;
+
+        /* puVar22 = &g_ConfigBlob[0x3C6 + scrollOff] (team data base) */
+        unsigned char *puVar22 = &g_ConfigBlob[0x3C6 + scrollOff];
+        int yPos = 0x6D;  /* first row Y */
+        int strIdx = 0x71; /* dynamic string buffer start */
+
+        for (unsigned int i = 0; i < maxVisible; i++) {
+            int pidx = scrollOff + (int)i;
+
+            /* Column 1: Player number (render_mode 0x1A = display text, non-clickable) */
+            if (g_MenuStrings && g_MenuStrings[strIdx + (int)i])
+                sprintf(g_MenuStrings[strIdx + (int)i], "%d", pidx + 1);
+            FUN_00430200(0x3C, yPos, strIdx + (int)i, 2, 2, 0, 0x1A, 0, 0xff);
+
+            /* Column 2: Color swatch (render_mode 0x1B, clickable=1) */
+            FUN_00430200(0x69, yPos - 6, 0xE6, 2, 2, 2, 0, 0, 0xff);  /* label */
+            FUN_00430200(0x7D, yPos, 0x22, 2, 2, 1, 0x1B, 0, 0xff);   /* value */
+            FUN_0042fcb0();
+            if (g_GameViewData && DAT_004877a8 >= 2) {
+                MenuItem *ditems = (MenuItem *)g_GameViewData;
+                ditems[DAT_004877a8 - 2].width = 0x41;     /* label width */
+                ditems[DAT_004877a8 - 2].height = 0x23;    /* label height */
+                ditems[DAT_004877a8 - 1].width = 0;        /* value width */
+            }
+            FUN_0042fc90((int)(uintptr_t)(puVar22 + 0xA0)); /* color: 0x466+i */
+
+            /* Column 3: Team number (render_mode 0x1C, cycle 0-2) */
+            FUN_00430200(0xBC, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);      /* label */
+            FUN_00430200(0xD2, yPos, 0x22, 2, 2, 1, 0x1C, 0, 0xff);   /* value */
+            FUN_0042fcb0();
+            if (g_GameViewData && DAT_004877a8 >= 2) {
+                MenuItem *ditems = (MenuItem *)g_GameViewData;
+                ditems[DAT_004877a8 - 2].width = 0x35;     /* label width */
+                ditems[DAT_004877a8 - 1].width = 0;        /* value width */
+            }
+            FUN_0042fc90((int)(uintptr_t)puVar22);          /* team: 0x3C6+i */
+
+            /* Column 4: Ship type (render_mode 0x1D, cycle 0-8) */
+            FUN_00430200(0x100, yPos - 6, 0xE6, 2, 0, 2, 0, 0, 0xff); /* label (font 0) */
+            FUN_00430200(0x118, yPos + 9, 0x22, 2, 2, 1, 0x1D, 0, 0xff); /* value */
+            FUN_0042fcb0();
+            if (g_GameViewData && DAT_004877a8 >= 2) {
+                MenuItem *ditems = (MenuItem *)g_GameViewData;
+                ditems[DAT_004877a8 - 2].width = 0x31;     /* label width */
+                ditems[DAT_004877a8 - 2].height = 0x23;    /* label height */
+                ditems[DAT_004877a8 - 1].width = 0;        /* value width */
+            }
+            FUN_0042fc90((int)(uintptr_t)(puVar22 + 0x50)); /* ship: 0x416+i */
+
+            /* Column 5: Visible (render_mode 0x1E, toggle 0/1) */
+            FUN_00430200(0x140, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);     /* label */
+            FUN_00430200(0x14C, yPos, 0x22, 2, 2, 1, 0x1E, 0, 0xff);  /* value */
+            FUN_0042fcb0();
+            if (g_GameViewData && DAT_004877a8 >= 2) {
+                MenuItem *ditems = (MenuItem *)g_GameViewData;
+                ditems[DAT_004877a8 - 2].width = 0x35;     /* label width */
+                ditems[DAT_004877a8 - 1].width = 0;        /* value width */
+            }
+            FUN_0042fc90((int)(uintptr_t)(puVar22 - 0x50)); /* visible: 0x376+i */
+
+            /* Column 6: Computer (render_mode 0x1F, cycle 0-4) */
+            FUN_00430200(0x1A2, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);    /* label */
+            FUN_00430200(0x1A6, yPos, 0x36, 2, 2, 1, 0x1F, 0, 0xff);  /* value */
+            FUN_0042fcb0();
+            if (g_GameViewData && DAT_004877a8 >= 2) {
+                MenuItem *ditems = (MenuItem *)g_GameViewData;
+                ditems[DAT_004877a8 - 2].width = 0x50;     /* label width */
+                ditems[DAT_004877a8 - 1].width = 0;        /* value width */
+                ditems[DAT_004877a8 - 1].flag1 = (unsigned char)pidx; /* player index */
+            }
+            FUN_0042fc90((int)(uintptr_t)(puVar22 - 0xA0)); /* CPU: 0x326+i */
+
+            puVar22++;
+            yPos += 0x1E;  /* 30px row height */
+        }
+    }
+    players_done:
+
+    /* TODO: Pages 0x1A (key bindings), 0x14 (scores)
      * also need dynamic list population. */
 
     /* Click sound effect */
