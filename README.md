@@ -1,6 +1,6 @@
 # Decompilation of Tunnels of Underworld
 
-DISCLAIMER: This is project is incomplete and not close to completion yet. The original source code I'm assuming was lost, so I'm attempting an effort to bring this game back to life, first by decompiling it and then by updating it so it works properly in current day Windows versions.
+DISCLAIMER: This is project is incomplete. The original source code I'm assuming was lost, so I'm attempting an effort to bring this game back to life, first by decompiling it and then by updating it so it works properly in current day Windows versions.
 
 Tunnels of Underworld (or TOU for short) is an original creation by [hannukp](https://github.com/hannukp) and I don't claim any ownership over it. I'm simply a fan who wants to preserve his game.
 
@@ -8,19 +8,19 @@ Tunnels of Underworld (or TOU for short) is an original creation by [hannukp](ht
 
 A lot of things. A lot of things are also very buggy. The code I got is essentialy heavily decompiling things with Ghidra and having a clanker help me with the hardest parts.
 
-- Most render stuff
+- Renderer (Sprites, Particles, Animations, etc.)
 - Menus
 - SFX/BGM
 - Controls
 - Physics
-- Levels (Partial)
+- Levels (No GG levels)
 - Most subsystems (AI, spawns, etc.)
 
-I'd guesstimate we're 70% of the way there.
+I'd guesstimate we're 80% of the way there.
 
 ## Objective
 
-Hopefully pull off a 95% compatible decomp, where we can fire up the game and play through the levels.  
+Hopefully pull off a 95% compatible decomp, where we can fire up the game and play through the levels without major issues.  
 I also plan on making a level viewer in the style of my other project, [Hotzone](https://github.com/pdromnt/uprising-level-editor), to hopefully better understand how the levels (and maybe GG Packs) work.  
 
 Later on, when we have a working game, I plan to update the stack (SDL?) to add more compatibility and maybe some improvements.
