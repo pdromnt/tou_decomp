@@ -3135,8 +3135,23 @@ void FUN_00454b00(void)
                         *(int *)(ebase + 0x00) = *t;
                         *(int *)(ebase + 0x08) = t[2] - 0x100000;
 
-                        /* Compute velocity from angle using sin/cos LUT */
-                        if (DAT_00487ab0 != NULL) {
+                        /* Compute velocity: aimed shots fire directly at target,
+                         * random shots (team 0xFE) use sin/cos LUT from random angle. */
+                        if ((char)t[7] != (char)-2 && tgt_x != 0 && tgt_y != 0) {
+                            /* Direct aim at target coordinates */
+                            double speed = 524288.0 * (double)speed_sqrt * 2.3;
+                            double dx = (double)(tgt_x - *t);
+                            double dy = (double)(tgt_y - (t[2] - 0x100000));
+                            double dist = sqrt(dx * dx + dy * dy);
+                            if (dist > 1.0) {
+                                *(int *)(ebase + 0x18) = (int)(dx / dist * speed);
+                                *(int *)(ebase + 0x1c) = (int)(dy / dist * speed);
+                            } else {
+                                *(int *)(ebase + 0x18) = 0;
+                                *(int *)(ebase + 0x1c) = 0;
+                            }
+                        } else if (DAT_00487ab0 != NULL) {
+                            /* Random angle: use sin/cos LUT */
                             int sin_val = *(int *)((int)DAT_00487ab0 + fire_angle * 4);
                             int cos_val = *(int *)((int)DAT_00487ab0 + 0x800 + fire_angle * 4);
                             *(int *)(ebase + 0x18) = (int)((double)sin_val * (double)speed_sqrt * 2.3);
