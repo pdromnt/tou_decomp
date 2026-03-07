@@ -575,7 +575,7 @@ void FUN_0041b5d0(void);
 void FUN_0041bad0(void);
 void FUN_0041bb00(void);
 int  FUN_004249c0(void);
-void FUN_00424240(int ship_type, int ship_index, int team_index);
+void FUN_00424240(int ship_type, int ship_index, int color_r, int color_g, int color_b);
 void FUN_0041bfe0(void);
 void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned char type, char subtype);
 void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsigned char orientation);

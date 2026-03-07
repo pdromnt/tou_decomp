@@ -1547,12 +1547,12 @@ void FUN_0041bb00(void)
 
 
 /* ===== FUN_00424240 - Sprite Color Transform (00424240) ===== */
-/* Recolors ship sprites with team colors. Builds 3x3 LUT from team palette
- * and ship type, then applies sqrt-of-sum-of-squares blend to all 32 frames.
+/* Recolors ship sprites with a player's chosen color. Builds 3x3 LUT from
+ * the color and ship type, then applies sqrt-of-sum-of-squares blend to
+ * all 32 rotation frames.
  *
- * In the original binary, this reads parameters from the caller's stack frame.
- * Here we pass them explicitly. */
-void FUN_00424240(int ship_type, int ship_index, int team_index)
+ * Original passes R/G/B extracted from DAT_00481f4c[player_color_index]. */
+void FUN_00424240(int ship_type, int ship_index, int color_r, int color_g, int color_b)
 {
     unsigned int team_r, team_g, team_b;
     unsigned int base_r, base_g, base_b;
@@ -1560,11 +1560,10 @@ void FUN_00424240(int ship_type, int ship_index, int team_index)
     int frame_w, frame_h;
     int pixel_offset;
 
-    /* Extract team color from X1R5G5B5 palette */
-    unsigned short team_color = DAT_00483838[team_index];
-    team_r = (unsigned char)((team_color >> 10) << 3);
-    team_g = (unsigned char)(((team_color >> 5) & 0x1F) << 3);
-    team_b = (unsigned char)((team_color & 0x1F) << 3);
+    /* Use the player's selected color directly */
+    team_r = (unsigned int)color_r;
+    team_g = (unsigned int)color_g;
+    team_b = (unsigned int)color_b;
 
     /* Read frame dimensions (same for all 32 rotation frames) */
     frame_w = *(int *)((char *)DAT_00487aac + 100000 + ship_index * 0x186A8);
@@ -1926,8 +1925,18 @@ int FUN_004249c0(void)
             }
         }
 
-        /* Apply team color transform (produces X1R5G5B5 output) */
-        FUN_00424240(ship_type, ship_idx, ship_idx % 4);
+        /* Apply player color transform (produces X1R5G5B5 output).
+         * Original reads color index from g_ConfigBlob[0x466 + playerIdx],
+         * looks up RGB565 in DAT_00481f4c palette, extracts R/G/B, passes
+         * to FUN_00424240 as explicit color parameters. */
+        {
+            unsigned char colorIdx = g_ConfigBlob[0x466 + ship_idx];
+            unsigned short palColor = ((unsigned short *)DAT_00481f4c)[colorIdx];
+            int cr = (unsigned char)((palColor >> 10) << 3);  /* R: bits 14-10 */
+            int cg = (unsigned char)(((palColor >> 5) & 0x1F) << 3);  /* G: bits 9-5 */
+            int cb = (unsigned char)((palColor & 0x1F) << 3);  /* B: bits 4-0 */
+            FUN_00424240(ship_type, ship_idx, cr, cg, cb);
+        }
 
         /* COMPAT: Convert ship pixels from X1R5G5B5 → RGB565 for display.
          * Original ran fullscreen DDraw which handled this in hardware.
