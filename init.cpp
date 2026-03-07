@@ -4215,6 +4215,25 @@ void FUN_00426650(void)
             }
         }
 
+        /* COMPAT: Fallback release handling for slider drag.
+         * If the mouse was released while the cursor was not over the dragged
+         * item (common in windowed mode), the release was not processed inside
+         * the hover loop above.  Use DAT_004877e6 (item index stored on drag
+         * start) to apply the accumulated delta to the correct item. */
+        if (DAT_004877e5 == 1 && g_InputMode == 1) {
+            int dragIdx = (int)(unsigned int)DAT_004877e6;
+            if (dragIdx >= 0 && dragIdx < DAT_004877a8) {
+                FUN_00427a70(dragIdx);
+                MenuItem *dragItem = &items[dragIdx];
+                int linked = dragItem->linked_item;
+                if (linked != 20000) {
+                    FUN_00427a70(linked);
+                }
+            }
+            DAT_004877e8 = 0;
+            g_InputMode = 0;
+            DAT_004877e5 = 0;
+        }
     }
 
 hover_decay:
