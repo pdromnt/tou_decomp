@@ -602,6 +602,7 @@ void FUN_00413720(void);        /* entity logic */
 extern void                 *DAT_004876b8;      /* color degradation palette LUT */
 extern unsigned short        DAT_00481e8c;      /* tile explosion color accumulator */
 extern unsigned short        DAT_00481e8e;      /* tile explosion count accumulator */
+extern unsigned char         DAT_00481e8f;      /* building collision result flag */
 /* DAT_00487880 == g_PhysicsParams (defined in memory.cpp) */
 extern char                  DAT_0048373b;      /* shared lives mode flag */
 extern char                  DAT_00483744;      /* respawn delay mode */
@@ -621,6 +622,7 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override = 0xFF, int param5 = 0
 void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, char param_5,
                   int param_6, int param_7, int param_8, int param_9,
                   char param_10, char param_11, unsigned char param_12); /* AoE tile damage / explosion */
+void FUN_004355d0(unsigned int param_1);         /* building collision for projectiles */
 void FUN_00451e70(int particle_idx, int damage); /* building damage (stub) */
 void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner); /* explosion knockback */
 void FUN_00434310(void);        /* weapon/terrain */

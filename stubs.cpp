@@ -25,6 +25,7 @@ float DAT_0048385c = 0.0f;     /* weather/temperature threshold */
 unsigned int DAT_00483840 = 0; /* fire color match R threshold */
 unsigned int DAT_00483844 = 0; /* fire color match G threshold */
 unsigned int DAT_00483848 = 0; /* fire color match B threshold */
+unsigned char DAT_00481e8f = 0; /* building collision result flag (set by FUN_004355d0) */
 
 /* ===== Turret LOS / Targeting globals ===== */
 int    DAT_00481ed0 = 0;
@@ -364,8 +365,15 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) = iVar6 % 100 + 0x78;
             *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0x3e800;
             iVar6 = rand();
-            *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
-                *(unsigned short *)((int)DAT_00487aa8 + 0x1ec + (iVar6 % 10) * 2) + 30000;
+            {
+                unsigned short pal555 = *(unsigned short *)((int)DAT_00487aa8 + 0x1ec + (iVar6 % 10) * 2);
+                /* Convert X1R5G5B5 → RGB565 (our framebuffer is 565, not 555) */
+                unsigned short r5 = (pal555 >> 10) & 0x1F;
+                unsigned short g5 = (pal555 >> 5) & 0x1F;
+                unsigned short b5 = pal555 & 0x1F;
+                unsigned short rgb565 = (r5 << 11) | (g5 << 6) | b5;
+                *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) = rgb565 + 30000;
+            }
 
             param_6 = param_6 + 0x100;
         } while (param_6 < 0x800);
@@ -745,8 +753,15 @@ LAB_00436bc6:
             DAT_00489248 = DAT_00489248 + 1;
 
             iVar6 = rand();
-            *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
-                *(unsigned short *)((int)DAT_00487aa8 + 0x44 + (iVar6 % 6) * 2) + 30000;
+            {
+                unsigned short pal555 = *(unsigned short *)((int)DAT_00487aa8 + 0x44 + (iVar6 % 6) * 2);
+                /* Convert X1R5G5B5 → RGB565 (our framebuffer is 565, not 555) */
+                unsigned short r5 = (pal555 >> 10) & 0x1F;
+                unsigned short g5 = (pal555 >> 5) & 0x1F;
+                unsigned short b5 = pal555 & 0x1F;
+                unsigned short rgb565 = (r5 << 11) | (g5 << 6) | b5;
+                *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) = rgb565 + 30000;
+            }
             uVar10 = rand();
             uVar10 = uVar10 & 0x8000007f;
             if ((int)uVar10 < 0) {
@@ -760,6 +775,84 @@ LAB_00436bc6:
     }
     return;
 }
+/* ===== FUN_004355d0 — Building/Structure Collision for Projectiles (004355D0) ===== */
+/* Checks if a System 1 projectile (by index) collides with any structure in
+ * DAT_00481f28 (stride 0x40, count DAT_00489260). On hit, subtracts damage
+ * from the structure's health and sets DAT_00481e8f = 3 (or 4 if structure
+ * type == 7) as a result flag for the caller. */
+void FUN_004355d0(unsigned int param_1)
+{
+    int *piVar5 = (int *)((int)DAT_004892e8 + param_1 * 0x80);
+    unsigned char bVar1 = *(unsigned char *)((int)piVar5 + 0x22); /* owner byte */
+    int iVar2 = *piVar5;       /* pos_x */
+    int iVar3 = piVar5[2];     /* pos_y */
+
+    /* Compute team from owner byte */
+    unsigned int team;
+    if (bVar1 < 0x78 || bVar1 > 0x8b) {
+        team = 0xfb;
+    } else {
+        team = bVar1 - 0x78;
+    }
+
+    int iVar7;
+    if (*(char *)((int)piVar5 + 0x26) == '\0') {
+        /* Branch: byte_0x26 == 0 — check all structures regardless of team */
+        iVar7 = 0;
+        if (DAT_00489260 < 1) return;
+        int *piVar6 = (int *)((int)DAT_00481f28 + 4);
+        while (1) {
+            unsigned int uVar4 = *(unsigned char *)(*(int *)((unsigned int)*(unsigned char *)((int)piVar6 + 0x18) * 0x20 + (int)DAT_00487818) + (int)DAT_00489e8c) & 0xfffffffe;
+            if (piVar6[3] >= 0 &&
+                (int)(piVar6[-1] + uVar4 * (unsigned int)(-0x20000)) < iVar2 &&
+                iVar2 < (int)(piVar6[-1] + uVar4 * 0x20000) &&
+                (int)(*piVar6 + uVar4 * (unsigned int)(-0x20000)) < iVar3 &&
+                iVar3 < (int)(*piVar6 + uVar4 * 0x20000)) {
+                break;
+            }
+            iVar7++;
+            piVar6 = (int *)((int)piVar6 + 0x40);
+            if (DAT_00489260 <= iVar7) return;
+        }
+        DAT_00481e8f = 3;
+        iVar7 = iVar7 * 0x40;
+        if (*(char *)(iVar7 + 0x1c + (int)DAT_00481f28) == '\x07') {
+            DAT_00481e8f = 4;
+        }
+        if (team == *(unsigned char *)(iVar7 + 0x1d + (int)DAT_00481f28)) {
+            return; /* Same team as structure — no damage */
+        }
+    } else {
+        /* Branch: byte_0x26 != 0 — check structures, skip same-team */
+        iVar7 = 0;
+        if (DAT_00489260 < 1) return;
+        int *piVar6 = (int *)((int)DAT_00481f28 + 0x10);
+        while (1) {
+            unsigned int uVar4 = *(unsigned char *)(*(int *)((unsigned int)*(unsigned char *)((int)piVar6 + 0xC) * 0x20 + (int)DAT_00487818) + (int)DAT_00489e8c) & 0xfffffffe;
+            if (*piVar6 >= 0 &&
+                team != *(unsigned char *)((int)piVar6 + 0xd) &&
+                (int)(piVar6[-4] + uVar4 * (unsigned int)(-0x20000)) < iVar2 &&
+                iVar2 < (int)(piVar6[-4] + uVar4 * 0x20000) &&
+                (int)(piVar6[-3] + uVar4 * (unsigned int)(-0x20000)) < iVar3 &&
+                iVar3 < (int)(piVar6[-3] + uVar4 * 0x20000)) {
+                break;
+            }
+            iVar7++;
+            piVar6 = (int *)((int)piVar6 + 0x40);
+            if (DAT_00489260 <= iVar7) return;
+        }
+        DAT_00481e8f = 3;
+        iVar7 = iVar7 * 0x40;
+        if (*(char *)(iVar7 + 0x1c + (int)DAT_00481f28) == '\x07') {
+            DAT_00481e8f = 4;
+        }
+    }
+
+    /* Apply damage and set damaged flag */
+    *(int *)(iVar7 + 0x10 + (int)DAT_00481f28) -= piVar5[0x11]; /* subtract damage (offset 0x44) */
+    *(unsigned char *)(iVar7 + 0x1e + (int)DAT_00481f28) = 1;   /* set damaged flag */
+}
+
 /* ===== FUN_00451e70 — Building/Structure Damage from Fire Particles (00451E70) ===== */
 /* Checks fire particle against 9 categories of indexed entities (structures/buildings).
  * Each category has different hitbox sizes and health thresholds.
@@ -1839,8 +1932,12 @@ void FUN_00434310(void)
 
         /* === Entity behavior (inline replacement for callback at +0x34) === */
 
-        /* Entity category flags */
-        int is_projectile = (ent_type == 0 || ent_type == 1 || ent_type == 0x11 || ent_type == 0x13);
+        /* Entity category flags.
+         * Types 0x69 (secondary weapon projectiles) and 0x12 (bombs) also
+         * need wall/player collision — the original callback at 0x438010
+         * handles all entity types through its state machine. */
+        int is_projectile = (ent_type == 0 || ent_type == 1 || ent_type == 0x11 ||
+                             ent_type == 0x13 || ent_type == 0x69 || ent_type == 0x12);
         int is_debris = (ent_type == 2 || ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
 
         /* Apply projectile gravity BEFORE position integration.
@@ -1890,16 +1987,63 @@ void FUN_00434310(void)
                 unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_off);
                 unsigned char pass2 = *(unsigned char *)((unsigned int)tile * 0x20 + 2 + (int)DAT_00487928);
                 unsigned char pass10 = *(unsigned char *)((unsigned int)tile * 0x20 + 10 + (int)DAT_00487928);
-                /* Check tile passability: offset +2 = walkable, +10 = flyable */
-                if (pass2 == 0 && pass10 == 0) {
-                    /* Hit solid wall: apply damage to tile and expire */
-                    FUN_00451e70(i, 0x5000);
-                    /* Turret projectiles (owner >= 0x50) play free_h on wall impact.
-                     * Player projectiles (owner < 0x50) have their own sounds via
-                     * fire entity system (FUN_004357b0). */
-                    if (*(unsigned char *)(ebase + 0x22) >= 0x50) {
-                        FUN_0040f9b0(0x10B, pos_x, pos_y);
+                /* Building collision (original callback at 0x438816).
+                 * If tile[+10] == 1 (flyable), check for structure collision.
+                 * FUN_004355d0 sets DAT_00481e8f to 3 or 4 on building hit. */
+                if (pass10 == 1) {
+                    DAT_00481e8f = 0;
+                    FUN_004355d0(i);
+                    if (DAT_00481e8f != 0) {
+                        should_remove = 1;
                     }
+                }
+
+                /* Destructible tile health damage (original callback at 0x438851).
+                 * Tiles >= 0xF0 are destructible with health stored in the
+                 * wall segment array at DAT_00489e80. */
+                if (tile >= 0xF0 && DAT_00489e80 != NULL) {
+                    int proj_damage = *(int *)(ebase + 0x44);
+                    int *tile_hp = (int *)((unsigned int)tile * 0x20 - 0x1DF4 + (int)DAT_00489e80);
+                    *tile_hp -= proj_damage;
+                }
+
+                /* Wall collision (original callback at 0x43889E + 0x438906-0x438A1B).
+                 * Only check pass2 (walkable), NOT pass10 (flyable). Original checks
+                 * these independently. When a projectile hits a solid wall (pass2 == 0),
+                 * call FUN_004357b0 to deform/destroy tiles (create craters). */
+                if (!should_remove && pass2 == 0) {
+                    /* Compute explosion level from sub_type and entity state
+                     * (original at 0x43897B-0x4389B5) */
+                    unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
+                    unsigned char ent_byte_21 = *(unsigned char *)(ebase + 0x21);
+                    int explevel;
+                    if (ent_byte_21 == 0) {
+                        explevel = (int)sub_type;
+                    } else {
+                        if (sub_type == 2) explevel = 3;
+                        else if (sub_type == 3) explevel = 3;
+                        else if (sub_type == 4) explevel = 2;
+                        else if (sub_type > 4) explevel = 6;
+                        else explevel = (int)sub_type + 6;
+                    }
+
+                    /* Replacement tile: pass through tile index if tile[+4] != 0,
+                     * otherwise 0 (original at 0x438938-0x438948) */
+                    unsigned char stored_tile = 0;
+                    unsigned char tile_prop4 = *(unsigned char *)((unsigned int)tile * 0x20 + 4 + (int)DAT_00487928);
+                    if (tile_prop4 != 0) stored_tile = tile;
+
+                    /* Water check: param_5 = 1 for water tiles (0x0C), 0 otherwise */
+                    char is_water = (tile == 0x0C) ? (char)1 : (char)0;
+
+                    unsigned char owner = *(unsigned char *)(ebase + 0x22);
+
+                    /* Call FUN_004357b0 for AoE tile damage / wall deformation.
+                     * Params 6-9 = 0 (no directional tracing, same as System 2).
+                     * This is what creates the visual crater in the tilemap. */
+                    FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                 0, 0, 0, 0, 0, '\0', owner);
+
                     should_remove = 1;
                 }
             } else {
