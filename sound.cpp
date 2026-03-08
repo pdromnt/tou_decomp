@@ -11,7 +11,9 @@
 /* ===== Globals defined in this module ===== */
 SoundEntry     *g_SoundTable   = NULL;   /* 00487874 */
 FSOUND_STREAM  *g_MusicStream  = NULL;   /* 004806F8 */
+FMUSIC_MODULE  *g_MusicModule  = NULL;   /* 004806F4 */
 int             g_MusicChannel = -1;     /* 004806FC */
+char            DAT_0048371e   = 1;      /* music enable flag */
 
 /* ===== Init_Sound_Hardware (0040DF60) ===== */
 /* Original at 0040DF60 (was mislabeled as 0040E530).
@@ -205,10 +207,12 @@ void Load_Game_Sounds(void)
     Load_Sound_Sample(0, 0x79,  0x20, "spec_m");
 }
 
-/* ===== FUN_0040e130 (0040E130) - Menu/intro music init ===== */
+/* ===== FUN_0040e130 (0040E130) - Music init/selection ===== */
 /*
- * Original: Complex music selection with file type detection.
- * Simplified: Stop existing, open stream, play, pause if in intro state.
+ * Stops any playing music, then selects and plays a track:
+ *   - Menu/intro states (g_GameState==3, DAT_004877a4==0x97/0x98): use MAINMENU track
+ *   - In-game: pick a random track from the scanned music folder
+ * Supports both streaming formats (OGG/MP3/WMA/ASF) and tracker modules (IT/XM/S3M/MOD).
  */
 void FUN_0040e130(void)
 {
@@ -216,34 +220,71 @@ void FUN_0040e130(void)
         return;
     }
 
-    /* Stop existing music */
+    /* Stop existing tracker module */
+    if (g_MusicModule) {
+        FMUSIC_StopSong(g_MusicModule);
+        FMUSIC_FreeSong(g_MusicModule);
+    }
+    /* Stop existing stream */
     if (g_MusicStream) {
         FSOUND_Stream_Stop(g_MusicStream);
         FSOUND_Stream_Close(g_MusicStream);
-        g_MusicStream = NULL;
     }
-    g_MusicChannel = -1;
+    g_MusicStream = NULL;
+    g_MusicModule = NULL;
 
     /* Set SFX master volume from config */
     int sfxVol = ((DAT_00483720[1]) * 0xFF) / 100;
     FSOUND_SetSFXMasterVolume(sfxVol);
 
-    /* Open stream - use mainmenu.ogg for now
-     * Original selects from a music table based on game state */
-    g_MusicStream = FSOUND_Stream_OpenFile("music/mainmenu.ogg",
-                                           FSOUND_LOOP | FSOUND_2D | 0x09, 0);
-    if (g_MusicStream) {
-        g_MusicChannel = FSOUND_Stream_Play(FSOUND_FREE, g_MusicStream);
-        if (g_MusicChannel != -1) {
-            FSOUND_SetPan(g_MusicChannel, -1); /* center pan */
-            /* KEY: Pause music if we're in intro state (0x97) */
-            FSOUND_SetPaused(g_MusicChannel, DAT_004877a4 == 0x97);
-            LOG("[SND] Music started, channel=%d, paused=%d\n",
-                g_MusicChannel, DAT_004877a4 == 0x97);
+    /* Check if music is enabled and files exist */
+    if (!DAT_0048371e || DAT_00485fcc == 0) {
+        return;
+    }
 
-            /* Set music volume */
-            int musVol = ((DAT_00483720[0]) * 0xFF) / 100;
-            FSOUND_SetVolumeAbsolute(g_MusicChannel, musVol);
+    /* Select track: menu/intro states use MAINMENU, otherwise random */
+    int trackIdx;
+    if (g_GameState == 3 || DAT_004877a4 == 0x98 || DAT_004877a4 == 0x97) {
+        trackIdx = DAT_00485fd0;
+    } else {
+        trackIdx = rand() % DAT_00485fcc;
+    }
+
+    /* Build full path: "music\" + filename */
+    char path[256];
+    strcpy(path, "music\\");
+    strcat(path, (const char *)DAT_00485fd4[trackIdx]);
+
+    /* Determine if streaming format by extension */
+    int is_stream = 0;
+    const char *ext = strrchr(path, '.');
+    if (ext) {
+        ext++;
+        if (_stricmp(ext, "mp3") == 0 || _stricmp(ext, "ogg") == 0 ||
+            _stricmp(ext, "wma") == 0 || _stricmp(ext, "asf") == 0) {
+            is_stream = 1;
+        }
+    }
+
+    int musVol = ((DAT_00483720[0]) * 0xFF) / 100;
+
+    if (is_stream) {
+        /* Streaming format (OGG, MP3, WMA, ASF) */
+        g_MusicStream = FSOUND_Stream_OpenFile(path, FSOUND_LOOP | FSOUND_2D | 0x09, 0);
+        if (g_MusicStream) {
+            g_MusicChannel = FSOUND_Stream_Play(FSOUND_FREE, g_MusicStream);
+            if (g_MusicChannel != -1) {
+                FSOUND_SetPan(g_MusicChannel, -1);
+                FSOUND_SetPaused(g_MusicChannel, DAT_004877a4 == 0x97);
+                FSOUND_SetVolumeAbsolute(g_MusicChannel, musVol);
+            }
+        }
+    } else {
+        /* Tracker format (IT, XM, S3M, MOD) */
+        g_MusicModule = (FMUSIC_MODULE *)FMUSIC_LoadSong(path);
+        if (g_MusicModule) {
+            FMUSIC_SetMasterVolume(g_MusicModule, musVol);
+            FMUSIC_PlaySong(g_MusicModule);
         }
     }
 }
@@ -264,6 +305,9 @@ void Stop_All_Sounds(void)
     int max_channels = FSOUND_GetMaxChannels();
     for (int i = 0; i < max_channels; i++)
         FSOUND_StopSound(i);
+    if (g_MusicModule) {
+        FMUSIC_StopSong(g_MusicModule);
+    }
     if (g_MusicStream) {
         FSOUND_Stream_Stop(g_MusicStream);
     }

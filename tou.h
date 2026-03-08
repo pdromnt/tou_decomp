@@ -101,7 +101,9 @@ extern int                   g_IntroSplashIndex;/* 0048924C */
 /* ===== Sound (sound.cpp) ===== */
 extern SoundEntry           *g_SoundTable;      /* 00487874 */
 extern FSOUND_STREAM        *g_MusicStream;     /* 004806F8 */
+extern FMUSIC_MODULE        *g_MusicModule;     /* 004806F4 */
 extern int                   g_MusicChannel;    /* 004806FC */
+extern char                  DAT_0048371e;       /* music enable flag */
 extern int                   g_SoundEnabled;    /* 00487649 */
 
 /* ===== Memory (memory.cpp) ===== */

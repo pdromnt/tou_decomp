@@ -5168,6 +5168,7 @@ void Init_Game_Config(void)
     g_ConfigBlob[0x17EE] = 0x3C;  /* DAT_00483746 = 60 */
 
     /* Sound/SFX enabled by default */
+    g_ConfigBlob[0x17C6] = 1;   /* DAT_0048371e - music enable */
     g_ConfigBlob[0x17C7] = 1;   /* DAT_0048371f - SFX enable */
 
     /* Default key bindings (in case options.cfg doesn't exist) */
@@ -5211,6 +5212,7 @@ void Save_Options_Config(void)
 void Sync_Config_From_Blob(void)
 {
     /* Sound / display config */
+    DAT_0048371e      = (char)g_ConfigBlob[0x17C6];
     DAT_0048371f      = (char)g_ConfigBlob[0x17C7];
     memcpy(DAT_00483720, &g_ConfigBlob[0x17C8], 8);
     memcpy(DAT_00483724, &g_ConfigBlob[0x17CC], 4);
