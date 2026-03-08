@@ -308,7 +308,6 @@ int FUN_00450dd0(int x, int y)
     return 0;  /* no collision */
 }
 
-/* ===== Sub-function stubs (Tier 4+, implement later) ===== */
 /* ===== FUN_004483c0 — Find Nearest Walkable Tile (004483C0) ===== */
 /* Adjusts coordinates to the nearest walkable shadow-grid cell.
  * Used by A* pathfinding to snap start/end to valid positions. */

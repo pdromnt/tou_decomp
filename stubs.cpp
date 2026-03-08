@@ -46,7 +46,7 @@ int    DAT_00481ef0 = 0;
 char   DAT_00481ed8 = 0;
 /* DAT_00489e90 already defined in memory.cpp */
 
-/* ===== Utility stubs (implement later) ===== */
+/* ===== Utility functions ===== */
 /* ===== FUN_00410030 — Spawn Random Debris Particle from Top (00410030) ===== */
 int FUN_00410030(void)
 {

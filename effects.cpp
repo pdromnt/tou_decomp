@@ -522,9 +522,6 @@ void FUN_0040d100(int buffer, int stride)
 {
     if (DAT_00489250 <= 0) return;
 
-    /* (diagnostics moved to stubs.cpp emitter/physics functions) */
-
-
     int i = 0;
     int offset = 0;
 

@@ -826,9 +826,8 @@ void FUN_0041aea0(void)
         /* Set heading to 0 (pointing right) */
         *(int *)(DAT_00487810 + poff + 0x18) = 0;
 
-        /* Default key bindings for player 0 (arrow keys + rshift/rctrl/numpadslash).
-         * FUN_0041a8c0 is supposed to copy config bindings but is currently stubbed,
-         * so we hardcode sensible defaults here. */
+        /* Default key bindings (overwritten by FUN_0041a8c0 from config blob).
+         * These serve as initial fallback values during level loading. */
         if (i == 0) {
             *(unsigned char *)(DAT_00487810 + poff + 0xAC) = 0xCB; /* LEFT arrow: Turn Left */
             *(unsigned char *)(DAT_00487810 + poff + 0xAD) = 0xCD; /* RIGHT arrow: Turn Right */

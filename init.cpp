@@ -58,7 +58,7 @@ unsigned char g_ConfigBlob[6408]; /* 00481F58 - raw config data */
 unsigned short DAT_00483838[4] = {0};
 unsigned short DAT_00483820 = 0;  /* Fade target color (RGB565) for blend-to-background LUTs */
 
-/* Stub globals referenced in init */
+/* Tournament/network mode globals */
 int DAT_0048764b = 0;
 int DAT_0048764a = 0;
 
@@ -2044,8 +2044,7 @@ int FUN_00414060(void)
     for (int i = 0; i < DAT_00486484; i++) {
         DAT_0048396d = 2; /* mark as GG-generated */
         strcpy(DAT_00480740, (const char *)DAT_00486488[i]);
-        /* FUN_00415a60 parses info.txt — too complex, stub for now */
-        /* FUN_00415a60(); */
+        FUN_00415a60();
 
         /* Register the GG theme as a level entry */
         FUN_004644af(pathbuf, (const unsigned char *)"%s", (const char *)DAT_00486488[i]);
@@ -2168,7 +2167,6 @@ void FUN_0041e4a0(void)
     DAT_00481c58[0x28] = 0x28;
     DAT_00481c58[0x2e] = (char)0x8c;
 }
-/* FUN_0045d7d0 moved to stubs.cpp */
 
 /* ===== FUN_00425fe0 - Main game/menu render loop (00425FE0) ===== */
 /* Called from Game_State_Manager case 0x01 every frame.
@@ -2428,10 +2426,12 @@ void FUN_004644af(char *dest, const unsigned char *format, ...)
     va_end(args);
 }
 
-/* ===== FUN_00425840 - Reset/load defaults (00425840) ===== */
+/* ===== FUN_00425840 — Campaign Briefing Page Builder (00425840) ===== */
+/* Builds the story-mode mission briefing menu page. Selects dialogue text
+ * and NPC portrait based on campaign chapter/mission progress indices
+ * (DAT_004837e4/e8). Not used in standard multiplayer mode. */
 void FUN_00425840(void)
 {
-    /* TODO: decompile - resets config to defaults */
 }
 
 /* ===== FUN_00430200 - Create text menu item (00430200) ===== */
@@ -4149,11 +4149,11 @@ void FUN_00426650(void)
      * if not in input mode, sound enabled, and sound config allows. */
     if (DAT_004877bc != 0 && g_InputMode == 0 && DAT_004877ec == 0
         && g_SoundEnabled != 0 && g_SoundTable != NULL) {
-        /* TODO: FMOD click sound
-         * FSOUND_PlaySoundEx(-1, g_SoundTable[0x155].handle, 0, 1);
-         * FSOUND_SetVolume(ch, 0x80);
-         * FSOUND_SetPan(ch, 0x80);
-         * FSOUND_SetPaused(ch, 0); */
+        int ch = FSOUND_PlaySoundEx(-1,
+            (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + 0x155 * 8)), NULL, 1);
+        FSOUND_SetVolume(ch, 0x80);
+        FSOUND_SetPan(ch, 0x80);
+        FSOUND_SetPaused(ch, 0);
     }
     DAT_004877ec = 0;
 

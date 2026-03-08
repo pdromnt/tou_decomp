@@ -349,6 +349,7 @@ extern int           DAT_004892ec[676];  /* Markov transition matrix CDF */
 
 /* GG Function Prototypes */
 int  FUN_004143e0(int width, int height);
+int  FUN_00415a60(void);              /* info.txt parser */
 int  Calc_Power_Of_Two(int value);
 int  FUN_00425820(int base, int exp);
 
@@ -680,7 +681,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                   int param_6, int param_7, int param_8, int param_9,
                   char param_10, char param_11, unsigned char param_12); /* AoE tile damage / explosion */
 void FUN_004355d0(unsigned int param_1);         /* building collision for projectiles */
-void FUN_00451e70(int particle_idx, int damage); /* building damage (stub) */
+void FUN_00451e70(int particle_idx, int damage); /* building damage */
 void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner); /* explosion knockback */
 void FUN_00434310(void);        /* weapon/terrain */
 void FUN_004527e0(void);        /* sound update */
@@ -719,7 +720,7 @@ void FUN_0041fc10(void);
 void FUN_0041fe70(void);
 void FUN_0041f900(void);
 void FUN_00422a10(void);
-void FUN_0042d8b0(void);  /* Full implementation in init.cpp */
+void FUN_0042d8b0(void);  /* Session/UI init (init.cpp) */
 int  FUN_00422740(void);
 int  FUN_004252d0(void);    /* Load pal.col + shipal.col color palettes */
 void FUN_00420be0(void);
@@ -728,11 +729,11 @@ int  FUN_00414060(void);
 void FUN_00413f70(void);
 void FUN_0041e4a0(void);
 void FUN_0045d7d0(void);
-void FUN_00425fe0(void);  /* Main game/menu render loop - implemented in init.cpp */
+void FUN_00425fe0(void);  /* Main game/menu render loop (init.cpp) */
 void FUN_0042a470(void);  /* Menu page builder */
 void FUN_00426650(void);  /* Game/menu logic tick */
 void FUN_00427df0(int item_idx, char click_type); /* Menu item click handler */
-void FUN_00427a70(int item_idx); /* Input mode key assignment handler (stub) */
+void FUN_00427a70(int item_idx); /* Input mode key assignment handler */
 int  FUN_00430200(int x, int y, int string_idx, int color_style, int font_idx,
                   unsigned char clickable, unsigned char render_mode,
                   unsigned char alignment, unsigned char nav_target);
