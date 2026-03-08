@@ -145,19 +145,39 @@ int Load_Level_Resources(void)
 
         if (DAT_00485ea0[levelIdx] == '\x02') {
             /* GG theme (type 2): procedural level generation.
-             * FUN_004143e0 generates a random level from GG theme assets.
-             * Not yet decompiled — fall back to first available .lev level. */
-            LOG("[LEVEL] GG theme '%s' selected (index %d) — not yet implemented\n",
-                (char *)DAT_00485090[levelIdx], levelIdx);
+             * Copy theme name to DAT_0048396e for matching, then call generator. */
+            levelName = (char *)DAT_00485090[levelIdx];
+            LOG("[LEVEL] GG theme '%s' selected (index %d)\n", levelName, levelIdx);
+            strcpy(DAT_0048396e, levelName);
 
-            /* Try to find a regular .lev level as fallback */
-            if (DAT_0048508c > 0) {
-                levelIdx = 0;
-                LOG("[LEVEL] Falling back to first .lev level\n");
+            /* Compute random map dimensions based on size preset g_ConfigBlob[2] */
+            int gg_w, gg_h;
+            char sizePreset = (char)g_ConfigBlob[2];
+            if (sizePreset == 0) {
+                gg_w = rand() % 800 + 300;
+                gg_h = rand() % 800 + 300;
+            } else if (sizePreset == 1) {
+                gg_w = rand() % 0x4B0 + 400;
+                gg_h = rand() % 0x4B0 + 400;
+            } else if (sizePreset == 2) {
+                gg_w = rand() % 0x4B0 + 0x400;
+                gg_h = rand() % 0x4B0 + 0x400;
             } else {
-                LOG("[LEVEL] ERROR: No .lev levels available for fallback\n");
+                gg_w = 7000;
+                gg_h = 7000;
+            }
+
+            result = FUN_004143e0(gg_w, gg_h);
+            if (result == 0) {
+                LOG("[LEVEL] GG generation FAILED: %s\n", DAT_00489d7c);
                 return 0;
             }
+
+            DAT_00486938 = levelName;
+            LOG("[LEVEL] GG level generated: %ux%u map\n", DAT_004879f0, DAT_004879f4);
+
+            /* Skip Load_Level_File — GG generator already set up the map */
+            goto gg_level_ready;
         }
 
         levelName = (char *)DAT_00485090[levelIdx];
@@ -190,6 +210,8 @@ int Load_Level_Resources(void)
             LOG("[LEVEL] WARNING: Sky enabled but no SWP file, falling back to tiled sprite\n");
         }
     }
+
+gg_level_ready:
 
     /* Set up player count from config (DAT_0048227c: [0]=total, [1]=human) */
     if (DAT_00489240 == 0) {

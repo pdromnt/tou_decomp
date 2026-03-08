@@ -300,6 +300,50 @@ extern int                   DAT_00481d34;       /* color transition B */
 extern int                   DAT_00489238;      /* Screen/viewport width (default 640) */
 extern int                   DAT_0048923c;      /* Screen/viewport height (default 480) */
 
+/* ===== GG Generator (gg_gen.cpp) ===== */
+extern char          DAT_0048396e[];     /* theme name match buffer */
+extern char          DAT_004808e1;       /* simple-mode flag */
+extern int           DAT_0048071c;       /* left boundary */
+extern int           DAT_00480724;       /* top boundary */
+extern int           DAT_00480720;       /* right boundary */
+extern int           DAT_00480728;       /* bottom boundary */
+extern int           DAT_00480898;       /* tile count */
+extern int           DAT_004808d0;       /* GG error code */
+extern int           DAT_00480840;       /* pixel write cursor */
+extern unsigned int  DAT_0048085c;       /* texture darkness copy */
+extern void         *DAT_0048072c;       /* GG work buffer (8MB) */
+extern void         *DAT_00481b54;       /* tile dimensions buffer */
+extern void         *DAT_00480738;       /* GG buffer */
+extern void         *DAT_00480734;       /* GG buffer */
+extern void         *DAT_00480730;       /* GG buffer */
+extern void         *DAT_004818e4;       /* GG buffer */
+extern int           DAT_00480848;       /* half-total area */
+extern int           DAT_00480844;       /* cleared area counter */
+extern int           DAT_00480860;       /* darkness adjusted value */
+extern int           DAT_0048084c;       /* tunnel style */
+extern int           DAT_00480854;       /* lighting enable */
+extern int           DAT_00480858;       /* border tunnel flag */
+extern int           DAT_00480894;       /* main tile sprite index */
+extern int           DAT_004808a8;       /* extra tile count */
+extern int           DAT_004808c0;       /* decoration count */
+extern int           DAT_004808b8;       /* creature count */
+extern int           DAT_004808c8;       /* pickup count */
+extern int           DAT_004808b0;       /* treasure count */
+extern char          DAT_004839ee;       /* entity enable flag */
+extern char          DAT_004839ef;       /* creature density */
+extern short         DAT_004839f0;       /* treasure/pickup config */
+extern DWORD         DAT_004839f4;       /* progress timer */
+extern char          DAT_00481a40;       /* beach style flag */
+extern char          DAT_00481a41;       /* texture darkness */
+extern int           DAT_00481a34;       /* fixed width */
+extern int           DAT_00481a38;       /* fixed height */
+extern int           DAT_00481a3c;       /* water config */
+
+/* GG Function Prototypes */
+int  FUN_004143e0(int width, int height);
+int  Calc_Power_Of_Two(int value);
+int  FUN_00425820(int base, int exp);
+
 /* ===== Level / Map Data (level.cpp) ===== */
 extern unsigned int          DAT_004879f0;      /* map width (pixels + 14 border) */
 extern unsigned int          DAT_004879f4;      /* map height (pixels + 14 border) */
