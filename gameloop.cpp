@@ -151,6 +151,8 @@ void Game_State_Manager(void)
             }
         }
         DAT_004877b1 = 1;
+        DAT_004877bd = 0;       /* clear mouse button latch on menu entry */
+        g_MouseButtons = 0;
         g_FrameTimer = timeGetTime();
 
         /* Music: If coming from state 0x98 (new game after intro),
@@ -242,6 +244,8 @@ void Game_State_Manager(void)
             }
         }
         DAT_004877b1 = 1;
+        DAT_004877bd = 0;       /* clear mouse button latch on menu entry */
+        g_MouseButtons = 0;
         g_FrameTimer  = timeGetTime();
         DAT_004892b8  = timeGetTime();
         g_IntroSplashIndex = 0;

@@ -2204,14 +2204,11 @@ void FUN_00425fe0(void)
             return;
         }
 
-        /* COMPAT: Reset input state for clean menu entry.
-         * On initial session entry, FUN_0042d8b0 resets all these variables.
-         * On F10 return (case 5 → case 3), they're never reset — carry stale
-         * values from the previous menu/gameplay session.  Clear everything
-         * that FUN_0042d8b0 clears so the menu starts in a known state. */
-        DAT_004877bd = 0;
+        /* COMPAT: Reset input mode state for clean page entry.
+         * Do NOT clear DAT_004877bd (mouse button latch) here — it must
+         * persist across page transitions to prevent a held click from
+         * re-triggering on the new page's items. */
         DAT_004877e5 = 0;
-        g_MouseButtons = 0;
         g_InputMode    = 0;
         DAT_004877e8   = 0;
         DAT_004877ec   = 0;
