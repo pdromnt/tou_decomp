@@ -33,9 +33,9 @@ int           DAT_00480728;         /* bottom boundary (height - 7) */
 /* Tile graphics state */
 int           DAT_00480898;         /* tile count */
 int           DAT_004808d0;         /* error code */
-int           DAT_004808d4;         /* unused counter */
-int           DAT_004808d8;         /* unused counter */
-int           DAT_004808dc;         /* unused counter */
+int           DAT_004808d4;         /* creature spawn position count */
+int           DAT_004808d8;         /* pickup/treasure spawn position count */
+int           DAT_004808dc;         /* portal count */
 char          DAT_00480884;         /* sprite start index (above water) */
 int           DAT_00480888;         /* sprite count (above water) */
 char          DAT_0048088c;         /* sprite start index (below water) */
@@ -51,6 +51,7 @@ int           DAT_004808bc;         /* decoration start */
 int           DAT_004808c0;         /* decoration count */
 int           DAT_004808c4;         /* pickup start */
 int           DAT_004808c8;         /* pickup count */
+int           DAT_004808cc;         /* current sprite index for entity placement */
 int           DAT_004808ac;         /* treasure start */
 int           DAT_004808b0;         /* treasure count */
 char          DAT_004808e0;         /* TGA vertical flip flag */
@@ -104,6 +105,7 @@ char          DAT_00481a42;         /* parallax darkness (0-128) */
 char          DAT_00481a43;         /* sign name count */
 char          DAT_00481a44[256];    /* sign name table (16 entries x 16 bytes) */
 char          DAT_00481b44[16];     /* sign name type table (0=above, 1=below, 2=alongside) */
+char          DAT_00481b58[256];    /* noise offset table for decoration placement */
 
 /* Info parsed flags */
 char          DAT_00480708;         /* maker parsed */
@@ -648,8 +650,8 @@ void FUN_00416ad0(void)
     ((unsigned char *)&DAT_004839f0)[0] = 10;
     ((unsigned char *)&DAT_004839f0)[1] = 10;
 
-    /* DAT_00483bf8[0] = 0 (within the config region) */
-    DAT_00483860[0x598] = 0;
+    /* DAT_00483bf8 = 0 (at offset 0x398 from DAT_00483860) */
+    DAT_00483860[0x398] = 0;
 }
 
 /* ===== FUN_00417700: Place a tile sprite at position ===== */
@@ -1756,19 +1758,858 @@ void FUN_00414c90(void)
     DAT_00483960 = 1;
 }
 
-/* ===== Stub functions (Phase E: entity spawning, effects) ===== */
+/* ===== FUN_00416ea0: Bilinear interpolation for full 32x32 lighting cell ===== */
+void FUN_00416ea0(int param_1, int param_2)
+{
+    unsigned char shift_val = (unsigned char)DAT_00487a18 & 0x1F;
+    int idx = (param_2 << shift_val) + param_1;
 
-void FUN_00414bb0(int water_level) { /* Water plane fill - stub */ }
-void FUN_00417140(void)   { /* Lighting/shadow pass - stub */ }
-void FUN_00418a60(void)   { /* Decoration placement - stub */ }
-void FUN_00418430(void)   { /* Terrain layer pass 1 - stub */ }
-void FUN_00418420(void)   { /* Terrain layer pass 2 - stub */ }
-void FUN_00419d80(void)   { /* Portal placement - stub */ }
-void FUN_00419f60(void)   { /* Creature spawning (regular) - stub */ }
-void FUN_00419c90(void)   { /* Creature spawning (timed) - stub */ }
-void FUN_00419fb0(void)   { /* Pickup spawning (regular) - stub */ }
-void FUN_00419d00(void)   { /* Pickup spawning (timed) - stub */ }
-void FUN_00419860(void)   { /* Treasure spawning - stub */ }
+    /* Read four corner brightness values */
+    unsigned int tl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + idx * 2);
+    unsigned int tr = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + idx * 2);
+    int idx_bottom = (0x20 << shift_val) + idx;
+    unsigned int bl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + idx_bottom * 2);
+    unsigned int br = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + idx_bottom * 2);
+
+    /* Clamp to minimum brightness */
+    unsigned int min_val = 0x80 - DAT_0048085c;
+    if (bl < min_val) bl = min_val;
+    if (tr < min_val) tr = min_val;
+    if (br < min_val) br = min_val;
+    if (tl < min_val) tl = min_val;
+
+    /* Fixed-point 18-bit interpolation */
+    int left_step = (int)(bl - tl) * 0x40000;
+    int right_step = (int)(br - tr) * 0x40000;
+    int left_val = (int)tl << 0x12;
+    int right_val = (int)tr << 0x12;
+
+    for (int row = 0x20; row > 0; row--) {
+        int horiz = left_val;
+        int h_diff = right_val - left_val;
+        int horiz_step = (h_diff + (h_diff >> 31 & 0x1F)) >> 5;
+
+        for (int col = 0x20; col > 0; col--) {
+            *(short *)((int)DAT_00481f50 + idx * 2) = (short)(horiz >> 0x12);
+            horiz += horiz_step;
+            idx++;
+        }
+
+        idx += DAT_00487a00 - 0x20;
+        int ls = (left_step + (left_step >> 31 & 0x1F)) >> 5;
+        int rs = (right_step + (right_step >> 31 & 0x1F)) >> 5;
+        left_val += ls;
+        right_val += rs;
+    }
+}
+
+/* ===== FUN_00416fb0: Bilinear interpolation for edge 32x32 lighting cell ===== */
+void FUN_00416fb0(int param_1, int param_2)
+{
+    unsigned char shift_val = (unsigned char)DAT_00487a18 & 0x1F;
+    int idx = (param_2 << shift_val) + param_1;
+
+    /* Read corners with boundary checking (use darkness default for out-of-bounds) */
+    unsigned int tl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + idx * 2);
+
+    unsigned int bl = (unsigned int)DAT_00480860;
+    if (param_2 + 0x20 <= DAT_00480728) {
+        bl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + ((0x20 << shift_val) + idx) * 2);
+    }
+
+    unsigned int tr = (unsigned int)DAT_00480860;
+    unsigned int br = (unsigned int)DAT_00480860;
+    if (param_1 + 0x20 <= DAT_00480720) {
+        tr = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + idx * 2);
+        if (param_2 + 0x20 <= DAT_00480728) {
+            br = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + ((0x20 << shift_val) + idx) * 2);
+        }
+    }
+
+    unsigned int min_val = 0x80 - DAT_0048085c;
+    if (bl < min_val) bl = min_val;
+    if (tr < min_val) tr = min_val;
+    if (br < min_val) br = min_val;
+    if (tl < min_val) tl = min_val;
+
+    int left_step = (int)(bl - tl) * 0x40000;
+    int right_step = (int)(br - tr) * 0x40000;
+    int left_val = (int)tl << 0x12;
+    int right_val = (int)tr << 0x12;
+
+    int cell_w = 0x20;
+    if (param_1 + 0x20 > DAT_00480720) {
+        cell_w = DAT_00480720 - param_1;
+    }
+
+    int row_count = 0;
+    do {
+        int horiz = left_val;
+        int h_diff = right_val - left_val;
+        int horiz_step = (h_diff + (h_diff >> 31 & 0x1F)) >> 5;
+
+        if (cell_w > 0) {
+            for (int col = 0; col < cell_w; col++) {
+                *(short *)((int)DAT_00481f50 + idx * 2) = (short)(horiz >> 0x12);
+                horiz += horiz_step;
+                idx++;
+            }
+        }
+
+        right_val += (right_step + (right_step >> 31 & 0x1F)) >> 5;
+        left_val += (left_step + (left_step >> 31 & 0x1F)) >> 5;
+        idx += DAT_00487a00 - cell_w;
+        param_2++;
+        row_count++;
+    } while (param_2 <= DAT_00480728 && row_count < 0x20);
+}
+
+/* ===== FUN_00414bb0: Water plane fill ===== */
+/* Remaps tile codes below the water line to water-variant codes */
+void FUN_00414bb0(int param_1)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int water_y = DAT_00480728 - (DAT_00480728 * param_1) / 100;
+
+    for (int y = water_y; y < DAT_00480728; y++) {
+        for (int x = DAT_0048071c; x < DAT_00480720; x++) {
+            int offset = (y << shift) + x;
+            char tile = *(char *)((int)DAT_0048782c + offset);
+
+            if (tile == 'R') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x57;
+            } else if (tile == 'P') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x55;
+            } else if (tile == 'Q') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x56;
+            } else if (tile == 'S') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x58;
+            } else if (tile == '\0') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x40;
+            } else if (tile == '\f') {  /* 0x0C */
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x11;
+            } else if (tile == '\a') {  /* 0x07 */
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x12;
+            } else if (tile == '\n') {  /* 0x0A */
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x10;
+            } else if (tile == '\x02') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x13;
+            } else {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x0F;
+            }
+        }
+    }
+}
+
+/* ===== FUN_00418430: Terrain layer pass 1 (multi-tile themes) ===== */
+/* Two-pass: marks all non-zero tiles with +0x80, then processes them via FUN_00417850 */
+void FUN_00418430(void)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+
+    /* Pass 1: Mark all non-zero tiles < 0x80 with +0x80 */
+    for (int y = DAT_00480724; y < DAT_00480728; y++) {
+        for (int x = DAT_0048071c; x < DAT_00480720; x++) {
+            unsigned char *tile = (unsigned char *)((int)DAT_0048782c + (y << shift) + x);
+            if (*tile != 0 && *tile < 0x80) {
+                *tile += 0x80;
+            }
+        }
+    }
+
+    /* Pass 2: Process tiles > 0x7F via FUN_00417850 for tile-aware placement */
+    for (int y = DAT_00480724; y < DAT_00480728; y++) {
+        for (int x = DAT_0048071c; x < DAT_00480720; x++) {
+            unsigned char *tile = (unsigned char *)((int)DAT_0048782c + (y << shift) + x);
+            unsigned char val = *tile;
+            if (val > 0x7F && val != 0xFF) {
+                unsigned char unwrapped = val + 0x80; /* byte wrap: same as val - 0x80 */
+                char *type = (char *)((unsigned int)unwrapped * 0x20 + (int)DAT_00487928);
+                if (type[0] == '\0' && type[4] == '\0' && type[0x18] == '\0') {
+                    FUN_00417850(x, y, unwrapped);
+                } else {
+                    *tile = unwrapped;
+                }
+            }
+        }
+    }
+}
+
+/* ===== FUN_00418420: Terrain layer pass 2 ===== */
+/* Empty in original binary - just returns */
+void FUN_00418420(void)
+{
+    return;
+}
+
+/* ===== FUN_00418800: Place decoration sprite at position ===== */
+void FUN_00418800(int param_1, int param_2)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int tile_start = *(int *)((int)DAT_00481b54 + 8 + DAT_004808bc * 0xc);
+    int tile_w = *(int *)((int)DAT_00481b54 + DAT_004808bc * 0xc);
+    int tile_h = *(int *)((int)DAT_00481b54 + 4 + DAT_004808bc * 0xc);
+    int half_w = tile_w / 2;
+
+    for (int row = 0; row < tile_h; row++) {
+        for (int col = 0; col < tile_w; col++) {
+            unsigned int px = (unsigned int)(param_1 - half_w + col);
+
+            /* Apply noise offset from table */
+            unsigned int noise_idx = px & 0xFF;
+            int py = (int)(char)DAT_00481b58[noise_idx] + param_2 + (4 - tile_h / 2) + row;
+
+            if ((int)px >= DAT_0048071c && (int)px < DAT_00480720 &&
+                py >= DAT_00480724 && py < DAT_00480728) {
+
+                unsigned short src_pixel = *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                if (src_pixel != 0) {
+                    int map_offset = (py << shift) + (int)px;
+                    unsigned short *dest = (unsigned short *)((int)DAT_00481f50 + map_offset * 2);
+                    unsigned short cur_pixel = *dest;
+                    unsigned char tile_val = *(unsigned char *)((int)DAT_0048782c + map_offset);
+
+                    /* Overwrite if on specific tile types, or if source is brighter */
+                    if (tile_val == 1 || tile_val == 0x81 || tile_val == 0x51 || tile_val == 0xD1 ||
+                        (((unsigned int)(unsigned char)((unsigned char)(cur_pixel >> 10) << 3) +
+                          (unsigned int)(unsigned char)((char)(cur_pixel >> 5) << 3) +
+                          (unsigned int)(unsigned char)((char)cur_pixel << 3)) <
+                         ((unsigned int)(unsigned char)((unsigned char)(src_pixel >> 10) << 3) +
+                          (unsigned int)(unsigned char)((char)(src_pixel >> 5) << 3) +
+                          (unsigned int)(unsigned char)(*(char *)((int)DAT_0048072c + tile_start * 2) << 3)) &&
+                         *(char *)((unsigned int)tile_val * 0x20 + (int)DAT_00487928) == '\0')) {
+
+                        *dest = src_pixel;
+
+                        /* Set tile code based on current tile type */
+                        if (tile_val == 1 || tile_val == 0x51) {
+                            *(unsigned char *)((int)DAT_0048782c + map_offset) = 0x50;
+                        } else if (tile_val == 0x81 || tile_val == 0xD1) {
+                            *(unsigned char *)((int)DAT_0048782c + map_offset) = 0xD0;
+                        }
+                    }
+                }
+            }
+
+            tile_start++;
+            /* Re-read tile dimensions (compiler pattern, values unchanged) */
+            tile_w = *(int *)((int)DAT_00481b54 + DAT_004808bc * 0xc);
+        }
+        tile_h = *(int *)((int)DAT_00481b54 + 4 + DAT_004808bc * 0xc);
+    }
+}
+
+/* ===== FUN_00418a60: Decoration placement ===== */
+/* Scans map for solid tiles with open space below, places l1 decoration sprite */
+void FUN_00418a60(void)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+
+    /* Fill noise table with random offsets (-2 to +1) */
+    for (int i = 0; i < 0x100; i++) {
+        unsigned int r = rand() & 3;
+        DAT_00481b58[i] = (char)((int)r - 2);
+    }
+
+    int step = (DAT_00480850 != 1) ? 2 : 1;
+
+    for (int y = DAT_00480724; y < DAT_00480728; y += step) {
+        for (int x = DAT_0048071c; x < DAT_00480720; x += step) {
+            int offset = (y << shift) + x;
+            unsigned char tile = *(unsigned char *)((int)DAT_0048782c + offset);
+            if (tile > 0x7F) tile += 0x80; /* unwrap */
+
+            /* Check tile one stride-row below */
+            unsigned char below = *(unsigned char *)((int)DAT_0048782c + DAT_00487a00 + offset);
+            if (below > 0x7F) below += 0x80;
+
+            char *type = (char *)((unsigned int)tile * 0x20 + (int)DAT_00487928);
+
+            /* Must be solid tile with open space below (tile codes 1, 0x51, 0x50) */
+            if (type[0] != '\0' && (below == 1 || below == 0x51 || below == 0x50)) {
+                /* Count solid tiles in 8x10 area around this position */
+                int count = 0;
+                for (int dy = -5; dy < 5; dy++) {
+                    int cy = dy + y;
+                    int cx_start = x - 4;
+                    for (int col_count = 8; col_count > 0; col_count--) {
+                        if (cx_start >= DAT_0048071c && cx_start < DAT_00480720 &&
+                            cy >= DAT_00480724 && cy < DAT_00480728) {
+                            int coff = (cy << shift) + cx_start;
+                            unsigned char ct = *(unsigned char *)((int)DAT_0048782c + coff);
+                            if (ct > 0x7F) ct += 0x80;
+                            unsigned char cb = *(unsigned char *)((int)DAT_0048782c + DAT_00487a00 + coff);
+                            if (cb > 0x7F) cb += 0x80;
+
+                            char *ctype = (char *)((unsigned int)ct * 0x20 + (int)DAT_00487928);
+                            if (ctype[0] != '\0' && (cb == 1 || cb == 0x51 || cb == 0x50)) {
+                                count++;
+                            }
+                        }
+                        cx_start++;
+                    }
+                }
+
+                if (count > 4) {
+                    FUN_00418800(x, y);
+                }
+            }
+        }
+    }
+}
+
+/* ===== FUN_00417140: Lighting/shadow pass ===== */
+/* Three phases: vertical gradient, horizontal gradient with jitter, bilinear interpolation */
+void FUN_00417140(void)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int stride = DAT_00487a00;
+    int darkness_factor = (int)DAT_0048085c << 0x17;
+    int stride_32 = stride * 0x20;
+
+    /* Phase 1: Vertical light sweep (top-down gradient per column of cells) */
+    for (int x = DAT_0048071c; x <= DAT_00480720; x += 0x20) {
+        for (int y = DAT_00480724; y <= DAT_00480728; y += 0x20) {
+            int offset = (y << shift) + x;
+            unsigned char *tmap = (unsigned char *)((int)DAT_0048782c + offset);
+            char *type = (char *)((unsigned int)*tmap * 0x20 + (int)DAT_00487928);
+
+            if (type[0] == '\0' && type[4] == '\0') {
+                /* Scan downward to find extent of open air */
+                int scan_y = y;
+                unsigned char *scan = tmap;
+                while (scan_y <= DAT_00480728) {
+                    char *stype = (char *)((unsigned int)*scan * 0x20 + (int)DAT_00487928);
+                    if (stype[0] != '\0' || stype[4] != '\0') break;
+                    if (stype[0x1a] == '\0') {
+                        if (type[0x1a] != '\0') break;
+                    } else {
+                        if (type[0x1a] == '\0') break;
+                    }
+                    scan_y += 0x20;
+                    scan += stride_32;
+                }
+
+                int extent = scan_y - y;
+                int gradient = 0x2000000; /* 128.0 in fixed-point 18-bit */
+
+                if (y < scan_y) {
+                    int pixel_offset = offset * 2;
+                    unsigned int cells = (unsigned int)(extent + 0x1F) >> 5;
+                    int grad_step = darkness_factor / extent;
+
+                    for (unsigned int i = 0; i < cells; i++) {
+                        *(short *)((int)DAT_00481f50 + pixel_offset) = (short)(gradient >> 0x12);
+                        gradient -= grad_step;
+                        pixel_offset += stride * 0x40;
+                    }
+                }
+            }
+        }
+    }
+
+    /* Phase 2: Horizontal light sweep with random jitter (blends with phase 1) */
+    for (int y = DAT_00480724; y <= DAT_00480728; y += 0x20) {
+        for (int x = DAT_0048071c; x <= DAT_00480720; x += 0x20) {
+            int offset = (y << shift) + x;
+            char *type = (char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + offset) *
+                         0x20 + (int)DAT_00487928);
+
+            if (type[0] == '\0' && type[4] == '\0') {
+                /* Scan rightward to find extent of open air */
+                int scan_x = x;
+                unsigned char *scan = (unsigned char *)((y << shift) + (int)DAT_0048782c + x);
+                while (scan_x <= DAT_00480720) {
+                    char *stype = (char *)((unsigned int)*scan * 0x20 + (int)DAT_00487928);
+                    if (stype[0] != '\0' || stype[4] != '\0') break;
+                    if (stype[0x1a] == '\0') {
+                        if (type[0x1a] != '\0') break;
+                    } else {
+                        if (type[0x1a] == '\0') break;
+                    }
+                    scan_x += 0x20;
+                    scan += 0x20;
+                }
+
+                int extent = scan_x - x;
+                int gradient = 0x2000000;
+
+                if (x < scan_x) {
+                    unsigned int cells = (unsigned int)(extent + 0x1F) >> 5;
+                    int pixel_offset = offset * 2;
+                    int grad_step = darkness_factor / extent;
+
+                    for (unsigned int i = 0; i < cells; i++) {
+                        unsigned short *pixel = (unsigned short *)((int)DAT_00481f50 + pixel_offset);
+                        unsigned int jitter = rand() & 0x1F;
+                        int val = (int)((gradient >> 0x12) + (unsigned int)*pixel) / 2 +
+                                  (int)(jitter - 0x10);
+                        if (val > 0x80) val = 0x80;
+                        if (val < (int)(0x80 - DAT_0048085c)) val = (int)(0x80 - DAT_0048085c);
+                        *pixel = (unsigned short)val;
+
+                        pixel_offset += 0x40;
+                        gradient -= grad_step;
+                    }
+                }
+            }
+        }
+    }
+
+    /* Phase 3: Bilinear interpolation per 32x32 cell */
+    for (int y = 7; y <= DAT_00480728; y += 0x20) {
+        for (int x = 7; x <= DAT_00480720 + 0x20; x += 0x20) {
+            if (DAT_00480720 < x + 0x20 || DAT_00480728 < y + 0x20) {
+                FUN_00416fb0(x, y);
+            } else {
+                FUN_00416ea0(x, y);
+            }
+        }
+    }
+}
+
+/* ===== FUN_00419d80: Portal placement ===== */
+/* Scans map for tile value 2 (creature portal) and 0xFF (pickup portal) */
+void FUN_00419d80(void)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    DAT_004808dc = 0;
+
+    for (int y = DAT_00480724; y < DAT_00480728; y++) {
+        int y_check = y + 2;
+        for (int x = DAT_0048071c; x < DAT_00480720; x++) {
+            int offset = (y << shift) + x;
+
+            /* Check for creature portal (tile == 2) */
+            if (*(char *)((int)DAT_0048782c + offset) == '\x02') {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0;
+
+                unsigned char below = *(unsigned char *)((y_check << shift) + (int)DAT_0048782c + x);
+                char *type = (char *)((unsigned int)below * 0x20 + (int)DAT_00487928);
+
+                if (DAT_004808dc < 1000 && type[0] == '\0' && type[4] == '\0' &&
+                    type[0x18] == '\0' && below != 0xFF) {
+                    *(int *)((int)DAT_00480730 + DAT_004808dc * 0xc) = x;
+                    *(int *)((int)DAT_00480730 + 4 + DAT_004808dc * 0xc) = y_check - 5;
+                    *(int *)((int)DAT_00480730 + 8 + DAT_004808dc * 0xc) = 0;
+                    DAT_004808dc++;
+                }
+            }
+
+            /* Check for pickup portal (tile == 0xFF / -1 signed) */
+            if (*(char *)((int)DAT_0048782c + offset) == -1) {
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0;
+
+                unsigned char below = *(unsigned char *)((y_check << shift) + (int)DAT_0048782c + x);
+                char *type = (char *)((unsigned int)below * 0x20 + (int)DAT_00487928);
+
+                if (DAT_004808dc < 1000 && type[0] == '\0' && type[4] == '\0' &&
+                    type[0x18] == '\0' && below != 0xFF) {
+                    *(int *)((int)DAT_00480730 + DAT_004808dc * 0xc) = x;
+                    *(int *)((int)DAT_00480730 + 4 + DAT_004808dc * 0xc) = y_check - 3;
+                    *(int *)((int)DAT_00480730 + 8 + DAT_004808dc * 0xc) = 1;
+                    DAT_004808dc++;
+                }
+            }
+        }
+    }
+}
+
+/* ===== FUN_00418ed0: Clearance check for entity spawning ===== */
+/* Returns 1 if area is clear, 0 if blocked. mode=0: check solid, mode=1: check unwrapped */
+int FUN_00418ed0(int param_1, int param_2, int param_3, int param_4,
+                 int param_5, int param_6, char param_7)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int special = (param_6 == 7);
+    if (special) param_6 = 8;
+
+    for (int dy = 0; dy < param_4; dy += param_6) {
+        for (int dx = 0; dx < param_3; dx += param_5) {
+            int cx = dx + param_1;
+            int cy = dy + param_2;
+            if (cx < DAT_0048071c || cx >= DAT_00480720 ||
+                cy < DAT_00480724 || cy >= DAT_00480728) {
+                return 0;
+            }
+            int offset = (cy << shift) + cx;
+            if (param_7 == '\0') {
+                if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + offset) *
+                    0x20 + (int)DAT_00487928) == '\0') {
+                    return 0;
+                }
+            } else {
+                if (*(unsigned char *)((int)DAT_0048782c + offset) > 0x7F) {
+                    return 0;
+                }
+            }
+            if (special) {
+                *(unsigned short *)((int)DAT_00481f50 + offset * 2) = 0x1e;
+            }
+        }
+    }
+    return 1;
+}
+
+/* ===== FUN_00419010: Pickup position validation (bottom row check) ===== */
+int FUN_00419010(int param_1, unsigned int param_2, int param_3)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int tile_w = *(int *)((int)DAT_00481b54 + param_3 * 0xc);
+    int tile_h = *(int *)((int)DAT_00481b54 + param_3 * 0xc + 4);
+    int tile_start = *(int *)((int)DAT_00481b54 + param_3 * 0xc + 8);
+
+    int px = param_1 - tile_w / 2;
+
+    if ((int)param_2 >= DAT_00480724 && (int)param_2 < DAT_00480728 && tile_w > 0) {
+        /* Point to bottom row of sprite data */
+        short *src = (short *)((int)DAT_0048072c + ((tile_h - 1) * tile_w + tile_start) * 2);
+        int col = 0;
+
+        while (col < tile_w) {
+            if (px + col < DAT_0048071c || px + col >= DAT_00480720) {
+                return 0;
+            }
+            unsigned char tile = *(unsigned char *)((param_2 << shift) + px + col + (int)DAT_0048782c);
+            char *type = (char *)((int)DAT_00487928 + (unsigned int)tile * 0x20);
+            if ((type[4] == '\x01' || type[0] == '\x01' || tile > 0x7F) && *src != 0) {
+                return 0;
+            }
+            col += 2;
+            src += 2;
+        }
+    }
+    return 1;
+}
+
+/* ===== FUN_00418c50: Creature sprite placement ===== */
+void FUN_00418c50(int param_1, int param_2)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int tile_w = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc);
+    int tile_h = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc + 4);
+    int tile_start = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc + 8);
+    int half_w = tile_w / 2;
+
+    for (int row = 0; row < tile_h; row++) {
+        int py = (param_2 - tile_h) + row;
+        int px = param_1 - half_w;
+        for (int col = 0; col < tile_w; col++) {
+            if (px >= DAT_0048071c && px < DAT_00480720 &&
+                py >= DAT_00480724 && py < DAT_00480728 &&
+                *(short *)((int)DAT_0048072c + tile_start * 2) != 0) {
+                int offset = (py << shift) + px;
+                *(unsigned char *)((int)DAT_0048782c + offset) = 0x82;
+                *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
+                    *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+            }
+            tile_start++;
+            px++;
+            /* Re-read tile_w (compiler pattern) */
+            tile_w = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc);
+        }
+        tile_h = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc + 4);
+    }
+}
+
+/* ===== FUN_00418d50: Pickup/treasure sprite placement with tile codes ===== */
+void FUN_00418d50(int param_1, int param_2, int sprite_idx, char solid_code, char water_code)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int rec_off = sprite_idx * 0xc;
+    int tile_w = *(int *)((int)DAT_00481b54 + rec_off);
+    int tile_h = *(int *)((int)DAT_00481b54 + rec_off + 4);
+    int tile_start = *(int *)((int)DAT_00481b54 + rec_off + 8);
+    int half_w = tile_w / 2;
+
+    for (int row = 0; row < tile_h; row++) {
+        int py = (param_2 - tile_h) + row;
+        int px = param_1 - half_w;
+        for (int col = 0; col < tile_w; col++) {
+            if (px >= DAT_0048071c && px < DAT_00480720 &&
+                py >= DAT_00480724 && py < DAT_00480728 &&
+                *(short *)((int)DAT_0048072c + tile_start * 2) != 0) {
+                int offset = (py << shift) + px;
+                unsigned char *tmap = (unsigned char *)((int)DAT_0048782c + offset);
+                char *type = (char *)((unsigned int)*tmap * 0x20 + (int)DAT_00487928);
+
+                if (type[0] == '\0') {
+                    /* Air/open tile */
+                    if (type[4] != '\0') {
+                        /* Water tile: apply brightness remap */
+                        *tmap = (unsigned char)(water_code + (char)0x80);
+                        if (DAT_00489230 != NULL && DAT_004876a4[29] != NULL) {
+                            unsigned short src = *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                            unsigned short remapped = *(unsigned short *)((int)DAT_00489230 + (unsigned int)src * 2);
+                            *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
+                                *(unsigned short *)((int)DAT_004876a4[29] + (unsigned int)remapped * 2);
+                        } else {
+                            *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
+                                *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                        }
+                    }
+                } else {
+                    /* Solid tile: place directly */
+                    *tmap = (unsigned char)(solid_code + (char)0x80);
+                    *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
+                        *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                }
+            }
+            tile_start++;
+            px++;
+            tile_w = *(int *)((int)DAT_00481b54 + rec_off);
+        }
+        tile_h = *(int *)((int)DAT_00481b54 + rec_off + 4);
+    }
+}
+
+/* ===== FUN_00419af0: Creature spawn helper ===== */
+/* Validates position and places creature sprite */
+void FUN_00419af0(int param_1, int param_2)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+
+    /* Check tile at position is solid */
+    unsigned char tile_at = *(unsigned char *)((param_2 << shift) + (int)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)tile_at * 0x20 + (int)DAT_00487928) != '\x01') return;
+
+    /* Check tile 6 rows below is open and < 0x80 */
+    unsigned char tile_below = *(unsigned char *)(((param_2 + 6) << shift) + (int)DAT_0048782c + param_1);
+    char *below_type = (char *)((unsigned int)tile_below * 0x20 + (int)DAT_00487928);
+    if (below_type[0] != '\0' || below_type[4] != '\0') return;
+    if (tile_below >= 0x80) return;
+
+    /* Distance check against existing creature spawns */
+    int idx = 0;
+    if (DAT_004808d4 > 0) {
+        while (idx < DAT_004808d4) {
+            int ex = *(int *)((int)DAT_00480738 + idx * 8);
+            if (ex - DAT_00480878 < param_1 && param_1 < ex + DAT_00480878) {
+                int ey = *(int *)((int)DAT_00480738 + 4 + idx * 8);
+                if (ey - DAT_00480878 < param_2 && param_2 < ey + DAT_00480878) {
+                    idx = DAT_004808d4 + 4;
+                }
+            }
+            idx++;
+        }
+    }
+
+    /* Pick random creature sprite */
+    int sprite = rand() % DAT_004808b8 + DAT_004808b4;
+    DAT_004808cc = sprite;
+
+    if (idx != DAT_004808d4) return;
+
+    /* Clearance check 1: area around creature */
+    int sh = *(int *)((int)DAT_00481b54 + 4 + sprite * 0xc);
+    int sw = *(int *)((int)DAT_00481b54 + sprite * 0xc);
+    if (FUN_00418ed0(param_1 - sw / 2, param_2 - sh, sw, sh, 8, 8, '\0') != 1) return;
+
+    /* Clearance check 2: area above creature (0x46 pixels) */
+    sw = *(int *)((int)DAT_00481b54 + sprite * 0xc);
+    if (FUN_00418ed0(param_1 - sw / 2,
+                     param_2 - *(int *)((int)DAT_00481b54 + 4 + sprite * 0xc) - 0x46,
+                     sw, 0x46, 8, 8, '\0') != 1) return;
+
+    /* Place creature sprite */
+    FUN_00418c50(param_1, param_2);
+
+    /* Record position */
+    *(int *)((int)DAT_00480738 + DAT_004808d4 * 8) = param_1;
+    *(int *)((int)DAT_00480738 + 4 + DAT_004808d4 * 8) = param_2;
+    DAT_004808d4++;
+}
+
+/* ===== FUN_00419f60: Creature spawning (portal-based) ===== */
+void FUN_00419f60(void)
+{
+    DAT_004808d4 = 0;
+    for (int i = 0; i < DAT_004808dc; i++) {
+        if (*(int *)((int)DAT_00480730 + i * 0xc + 8) == 0) {
+            FUN_00419af0(*(int *)((int)DAT_00480730 + i * 0xc),
+                         *(int *)((int)DAT_00480730 + i * 0xc + 4));
+        }
+    }
+}
+
+/* ===== FUN_00419c90: Creature spawning (random position) ===== */
+void FUN_00419c90(void)
+{
+    int range_x = DAT_00480720 - DAT_0048071c;
+    int range_y = DAT_00480728 - DAT_00480724;
+    DAT_004808d4 = 0;
+
+    for (int i = 0; i < 100000; i++) {
+        if (DAT_004808d4 > 0xF9) return;
+        int x = rand() % range_x + DAT_0048071c;
+        int y = rand() % range_y + DAT_00480724;
+        FUN_00419af0(x, y);
+    }
+}
+
+/* ===== FUN_00419110: Pickup/sign spawn helper ===== */
+/* Validates position, places pickup sprite. Sign text rendering simplified (skipped). */
+void FUN_00419110(int param_1, int param_2, int *param_3)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+
+    /* Check bounds and tile validity */
+    if (param_2 >= (int)DAT_004879f4 - 0x0D) return;
+
+    unsigned char tile_at = *(unsigned char *)((param_2 << shift) + (int)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)tile_at * 0x20 + (int)DAT_00487928) != '\x01') return;
+
+    unsigned char tile_below = *(unsigned char *)(((param_2 + 0x0C) << shift) + (int)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)tile_below * 0x20 + (int)DAT_00487928) != '\0') return;
+    if (tile_below >= 0x80) return;
+
+    /* Distance check against existing pickups */
+    int idx = 0;
+    if (DAT_004808d8 > 0) {
+        while (idx < DAT_004808d8) {
+            int ex = *(int *)((int)DAT_00480734 + idx * 0xc);
+            if (ex - DAT_0048087c < param_1 && param_1 < ex + DAT_0048087c) {
+                int ey = *(int *)((int)DAT_00480734 + idx * 0xc + 4);
+                if (ey - DAT_0048087c < param_2 && param_2 < ey + DAT_0048087c) {
+                    idx = DAT_004808d8 + 4;
+                }
+            }
+            idx++;
+        }
+    }
+
+    /* Pick random pickup sprite */
+    int sprite = rand() % DAT_004808c8 + DAT_004808c4;
+    DAT_004808cc = sprite;
+
+    if (idx != DAT_004808d8) return;
+
+    /* Clearance check 1 */
+    int *info = (int *)((int)DAT_00481b54 + sprite * 0xc);
+    int sw = info[0];
+    int sh = info[1];
+    if (FUN_00418ed0(param_1 - sw / 2, (param_2 - sh) - 0x1e, sw, sh + 0x1e, 0x10, 0x10, '\0') != 1)
+        return;
+
+    /* Validate bottom row */
+    if (FUN_00419010(param_1, (unsigned int)(param_2 + 0x0C), sprite) != 1) return;
+
+    /* Clearance check 2 */
+    info = (int *)((int)DAT_00481b54 + sprite * 0xc);
+    sw = info[0];
+    sh = info[1];
+    if (FUN_00418ed0(param_1 - sw / 2, (param_2 - sh) + 0x0C, sw, sh, 8, 8, '\x01') != 1) return;
+
+    /* Place the pickup sprite */
+    FUN_00418d50(param_1, param_2 + 0x0C, sprite, 'S', 'X');
+
+    /* Sign text rendering is skipped in this decomp (cosmetic feature requiring
+       Markov chain tables and level name arrays). Pickup sprite is still placed. */
+
+    /* Record position */
+    *(int *)((int)DAT_00480734 + DAT_004808d8 * 0xc) = param_1;
+    *(int *)((int)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = param_2;
+    DAT_004808d8++;
+}
+
+/* ===== FUN_00419fb0: Pickup spawning (portal-based) ===== */
+void FUN_00419fb0(void)
+{
+    int local_4 = 0;
+    DAT_004808d8 = 0;
+
+    for (int i = 0; i < DAT_004808dc; i++) {
+        if (*(int *)((int)DAT_00480730 + i * 0xc + 8) == 1) {
+            FUN_00419110(*(int *)((int)DAT_00480730 + i * 0xc),
+                         *(int *)((int)DAT_00480730 + i * 0xc + 4),
+                         &local_4);
+        }
+    }
+}
+
+/* ===== FUN_00419d00: Pickup spawning (random position) ===== */
+void FUN_00419d00(void)
+{
+    int range_x = DAT_00480720 - DAT_0048071c;
+    int range_y = DAT_00480728 - DAT_00480724;
+    DAT_004808d8 = 0;
+
+    for (int i = 0; i < 100000; i++) {
+        if (DAT_004808d8 > 999) return;
+        int x = rand() % (range_x - 0x28) + 0x14 + DAT_0048071c;
+        int y = rand() % (range_y - 0x1e) + 0x1e + DAT_00480724;
+        FUN_00419110(x, y, (int *)0);
+    }
+}
+
+/* ===== FUN_00419860: Treasure spawning ===== */
+void FUN_00419860(void)
+{
+    unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
+    int total = (int)(DAT_004879f4 * DAT_004879f0) / DAT_00480880;
+    int range_x = DAT_00480720 - DAT_0048071c;
+    int range_y = DAT_00480728 - DAT_00480724;
+    DAT_004808d8 = 0;
+
+    for (int i = 0; i < total; i++) {
+        if (DAT_004808d8 > 999) return;
+
+        int x = rand() % (range_x - 0x28) + 0x14 + DAT_0048071c;
+        int y = rand() % (range_y - 0x1e) + 0x1e + DAT_00480724;
+
+        /* Validate: tile at pos is solid, tile 0x1C rows below is open and < 0x80 */
+        if (y >= (int)DAT_004879f4 - 0x1e) continue;
+        unsigned char tile_at = *(unsigned char *)((y << shift) + (int)DAT_0048782c + x);
+        if (*(char *)((unsigned int)tile_at * 0x20 + (int)DAT_00487928) != '\x01') continue;
+
+        unsigned char tile_below = *(unsigned char *)(((y + 0x1C) << shift) + (int)DAT_0048782c + x);
+        if (*(char *)((unsigned int)tile_below * 0x20 + (int)DAT_00487928) != '\0') continue;
+        if (tile_below >= 0x80) continue;
+
+        /* Pick random treasure sprite */
+        int sprite = rand() % DAT_004808b0 + DAT_004808ac;
+        DAT_004808cc = sprite;
+
+        /* Distance check against existing treasures */
+        int idx = 0;
+        if (DAT_004808d8 > 0) {
+            while (idx < DAT_004808d8) {
+                int *rec = (int *)((int)DAT_00480734 + idx * 0xc);
+                if (*(int *)((int)DAT_00480734 + idx * 0xc + 8) == sprite &&
+                    rec[0] - 300 < x && x < rec[0] + 300 &&
+                    rec[1] - 300 < y && y < rec[1] + 300) {
+                    idx = DAT_004808d8 + 4;
+                }
+                idx++;
+            }
+        }
+        if (idx != DAT_004808d8) continue;
+
+        /* Clearance check 1 */
+        int sh = *(int *)((int)DAT_00481b54 + 4 + sprite * 0xc);
+        int sw = *(int *)((int)DAT_00481b54 + sprite * 0xc);
+        if (FUN_00418ed0(x - sw / 2, (y - sh) - 0x1e, sw, sh + 0x1e, 0x10, 0x10, '\0') != 1)
+            continue;
+
+        /* Validate bottom row */
+        if (FUN_00419010(x, (unsigned int)(y + 0x1C), sprite) != 1) continue;
+
+        /* Clearance check 2 */
+        int *info = (int *)((int)DAT_00481b54 + sprite * 0xc);
+        sh = info[1];
+        sw = info[0];
+        if (FUN_00418ed0(x - sw / 2, (y - sh) + 0x1C, sw, sh, 8, 8, '\x01') != 1) continue;
+
+        /* Place treasure sprite */
+        FUN_00418d50(x, y + 0x1C, sprite, 'R', 'W');
+
+        /* Record position */
+        *(int *)((int)DAT_00480734 + 8 + DAT_004808d8 * 0xc) = sprite;
+        *(int *)((int)DAT_00480734 + DAT_004808d8 * 0xc) = x;
+        *(int *)((int)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = y;
+        DAT_004808d8++;
+    }
+}
 
 /* ===== FUN_004143e0: Main GG generator ===== */
 /* Returns 1 on success, 0 on failure */

@@ -328,6 +328,7 @@ extern int           DAT_004808a8;       /* extra tile count */
 extern int           DAT_004808c0;       /* decoration count */
 extern int           DAT_004808b8;       /* creature count */
 extern int           DAT_004808c8;       /* pickup count */
+extern int           DAT_004808cc;       /* current sprite index for entity placement */
 extern int           DAT_004808b0;       /* treasure count */
 extern char          DAT_004839ee;       /* entity enable flag */
 extern char          DAT_004839ef;       /* creature density */
