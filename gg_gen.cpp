@@ -107,6 +107,10 @@ char          DAT_00481a44[256];    /* sign name table (16 entries x 16 bytes) *
 char          DAT_00481b44[16];     /* sign name type table (0=above, 1=below, 2=alongside) */
 char          DAT_00481b58[256];    /* noise offset table for decoration placement */
 
+/* Markov chain name generation tables (loaded from data\names.dat by FUN_00422900) */
+int           DAT_00487888[26];     /* cumulative starting letter frequencies */
+int           DAT_004892ec[676];    /* 26x26 cumulative transition matrix */
+
 /* Info parsed flags */
 char          DAT_00480708;         /* maker parsed */
 char          DAT_00480709;         /* (part of DAT_00480708 int) */
@@ -152,8 +156,8 @@ static const char *g_InfoKeywords[17] = {
 };
 
 /* Attribute lookup tables (per-type values for tile codes 1-7) */
-static unsigned char g_AttrTileCode[7]  = { 1, 10, 5, 0x14, 4, 0x0C, 0 };
-static unsigned char g_AttrTileColor[7] = { 0x0F, 0x0F, 0x0F, 0x10, 0x0F, 0x0F, 0x11 };
+static unsigned char g_AttrTileCode[7]  = { 1, 10, 5, 6, 0x14, 4, 0x0C };
+static unsigned char g_AttrTileColor[7] = { 0x0F, 0x10, 5, 0x0F, 0x0F, 0x0F, 0x11 };
 
 /* ===== Helper Functions ===== */
 
@@ -279,22 +283,19 @@ int FUN_004153b0(const char *filename, int tile_idx)
     fread(pixels, 1, data_size, f);
     fclose(f);
 
-    /* Convert BGR(A) to RGB for FUN_004152e0 */
-    unsigned char *rgb_buf = (unsigned char *)malloc(pixel_count * 3);
-    if (!rgb_buf) {
-        free(pixels);
-        return -1;
-    }
-
+    /* Convert BGR(A) to RGB and store in DAT_00481cf8 (shared temp buffer).
+     * CRITICAL: FUN_004155e0 reads raw pixel data from DAT_00481cf8 to build
+     * the tile region map for t2. The original binary reads TGA data directly
+     * into DAT_00481cf8 and passes it to FUN_004152e0. We must do the same. */
+    unsigned char *dest = (unsigned char *)DAT_00481cf8;
     for (int i = 0; i < pixel_count; i++) {
-        rgb_buf[i * 3 + 0] = pixels[i * bytes_per_pixel + 2]; /* R */
-        rgb_buf[i * 3 + 1] = pixels[i * bytes_per_pixel + 1]; /* G */
-        rgb_buf[i * 3 + 2] = pixels[i * bytes_per_pixel + 0]; /* B */
+        dest[i * 3 + 0] = pixels[i * bytes_per_pixel + 2]; /* R */
+        dest[i * 3 + 1] = pixels[i * bytes_per_pixel + 1]; /* G */
+        dest[i * 3 + 2] = pixels[i * bytes_per_pixel + 0]; /* B */
     }
     free(pixels);
 
-    FUN_004152e0((int)rgb_buf, tile_idx, height, width);
-    free(rgb_buf);
+    FUN_004152e0((int)DAT_00481cf8, tile_idx, height, width);
 
     DAT_004808d0 = 0;
     return 1;
@@ -2447,8 +2448,157 @@ void FUN_00419c90(void)
     }
 }
 
-/* ===== FUN_00419110: Pickup/sign spawn helper ===== */
-/* Validates position, places pickup sprite. Sign text rendering simplified (skipped). */
+/* ===== FUN_00415060: Markov chain random name generator ===== */
+/* Generates a random fantasy name using frequency tables loaded from names.dat.
+ * First letter is uppercase, subsequent are lowercase.
+ * Constraints: max 2 consecutive consonants, max 2 same-letter repeats.
+ * After step 3, 25% chance of doubling current consonant. */
+void FUN_00415060(char *param_1)
+{
+    /* Vowel lookup table: A(0),E(4),I(8),O(14),U(20),Y(24) */
+    char is_vowel[32];
+    memset(is_vowel, 0, sizeof(is_vowel));
+    is_vowel[0]  = 1;  /* A */
+    is_vowel[4]  = 1;  /* E */
+    is_vowel[8]  = 1;  /* I */
+    is_vowel[14] = 1;  /* O */
+    is_vowel[20] = 1;  /* U */
+    is_vowel[24] = 1;  /* Y */
+
+    int same_count = 0;   /* consecutive same-letter counter */
+    int prev = 0;         /* previous/current letter index (0-25) */
+    int out_pos = 0;      /* output string position */
+    int found = 0;        /* starting letter found flag */
+
+    /* Pick starting letter using cumulative frequency distribution */
+    unsigned int r1 = rand() & 0x3ff;
+    unsigned int r2 = rand() & 0x3ff;
+    int total = DAT_00487888[25]; /* total frequency = last CDF entry */
+
+    for (int i = 0; i < 26; i++) {
+        if ((int)(r2 + r1 * 0x400) % total < DAT_00487888[i]) {
+            found = 1;
+            param_1[0] = (char)i + 'A';
+            prev = i;
+            out_pos = 1;
+            break;
+        }
+    }
+
+    /* Track consecutive consonants */
+    unsigned int cons_count = (unsigned int)(is_vowel[prev] == '\0');
+
+    /* Pick word length: 3-5, with 1/64 chance of just 2 */
+    int word_len = rand() % 3 + 3;
+    if ((rand() & 0x3f) == 0) {
+        word_len = 2;
+    }
+
+    /* Generate subsequent letters */
+    for (int step = 1; step <= word_len; step++) {
+        int retry = 0;
+retry_letter:
+        retry++;
+        if (retry == 500) {
+            param_1[out_pos] = '\0';
+            return;
+        }
+
+        r1 = rand() & 0x3ff;
+        r2 = rand() & 0x3ff;
+        int row_total = DAT_004892ec[25 + prev * 26]; /* row CDF total */
+
+        /* After step 3: 25% chance of consonant doubling */
+        if (step >= 3) {
+            unsigned int chance = rand() & 0x3;
+            if (chance == 0 && is_vowel[prev] == '\0' &&
+                (int)cons_count <= 1 && step < word_len) {
+                /* Double the current consonant */
+                param_1[out_pos] = (char)prev + 'a';
+                out_pos++;
+                same_count++;
+                goto update_consonants;
+            }
+        }
+
+        /* CDF lookup for next letter */
+        {
+            int next;
+            int fell_through = 1;
+            for (next = 0; next <= 25; next++) {
+                /* Rejection: max 2 same-letter repeats */
+                if (next == prev && same_count > 1) goto retry_letter;
+                /* Rejection: max 2 consecutive consonants */
+                if (is_vowel[next] == '\0' && (int)cons_count > 1) goto retry_letter;
+                /* Rejection: no immediate consonant repeat after start */
+                if (step == 1 && next == prev && is_vowel[prev] == '\0') goto retry_letter;
+
+                if ((int)(r1 * 0x400 + r2) % row_total < DAT_004892ec[next + prev * 26]) {
+                    param_1[out_pos] = (char)next + 'a';
+                    out_pos++;
+                    if (next == prev) {
+                        same_count++;
+                    } else {
+                        same_count = 0;
+                    }
+                    prev = next;
+                    fell_through = 0;
+                    break;
+                }
+            }
+            if (fell_through) {
+                /* No letter matched CDF (edge case) — just increment same count */
+                same_count++;
+            }
+        }
+
+update_consonants:
+        if (is_vowel[prev] == '\0') {
+            cons_count++;
+        } else {
+            cons_count = 0;
+        }
+    }
+
+    param_1[out_pos] = '\0';
+}
+
+/* ===== Helper: Blit text buffer to sign tiles in pixel map ===== */
+/* Renders 16x64 pixel text from DAT_004818e4 onto DAT_00481f50 where
+ * tilemap has sign tiles (0xD3 = 'S'+0x80, 0xD8 = 'X'+0x80). */
+static void Blit_Text_To_Signs(int start_pos)
+{
+    int text_idx = 0;
+    int pos = start_pos;
+    for (int row = 0; row < 16; row++) {
+        for (int col = 0; col < 64; col++) {
+            char tile = *(char *)((int)DAT_0048782c + pos);
+            if ((tile == (char)0xD3 || tile == (char)0xD8)) {
+                short pixel = *(short *)((int)DAT_004818e4 + text_idx * 2);
+                if (pixel != 0) {
+                    *(short *)((int)DAT_00481f50 + pos * 2) = pixel;
+                }
+            }
+            text_idx++;
+            pos++;
+        }
+        pos = pos - 64 + DAT_00487a00;
+    }
+}
+
+/* ===== Helper: Clear text buffer, render text, blit to sign tiles ===== */
+static void Render_And_Blit_Sign_Text(const char *text, int start_pos)
+{
+    /* Clear 0x800 bytes (64x16 pixels x 2 bytes = 0x800) */
+    memset(DAT_004818e4, 0, 0x800);
+    /* Render text with font 3 (tiny), color 0 (golden), into 64-pixel-wide buffer */
+    Draw_Text_To_Buffer(text, 3, 0, (unsigned short *)DAT_004818e4, 0x40, 0, 0, 0);
+    /* Blit to pixel map where sign tiles exist */
+    Blit_Text_To_Signs(start_pos);
+}
+
+/* ===== FUN_00419110: Pickup/sign spawn with text rendering ===== */
+/* Validates position, places pickup sprite, and renders sign text onto tiles. */
 void FUN_00419110(int param_1, int param_2, int *param_3)
 {
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
@@ -2503,11 +2653,113 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
     /* Place the pickup sprite */
     FUN_00418d50(param_1, param_2 + 0x0C, sprite, 'S', 'X');
 
-    /* Sign text rendering is skipped in this decomp (cosmetic feature requiring
-       Markov chain tables and level name arrays). Pickup sprite is still placed. */
+    /* ===== Sign text rendering ===== */
+    int orig_x = param_1; /* save original X (param_1 gets clobbered conceptually) */
+
+    if (param_3 == (int *)0 || (int)(DAT_00483860[0x398] & 0xff) <= *param_3) {
+        /* Path A: GG mode — generate Markov name, optionally show sign name from info.txt */
+        char gen_name[20];
+        char sign_name[32];
+
+        FUN_00415060(gen_name);
+
+        int *spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+        int sprite_w = spr_info[0];
+        int sprite_h = spr_info[1];
+        int name_y_offset; /* Y offset for generated name text */
+
+        if (DAT_00481a43 == 0) {
+            /* No sign names from info.txt — only render generated name */
+            name_y_offset = sprite_h - (unsigned int)(unsigned char)DAT_00481a32;
+        } else {
+            /* Pick random sign name from info.txt table */
+            int sign_idx = rand() % (int)(unsigned int)(unsigned char)DAT_00481a43;
+
+            if (DAT_00481b44[sign_idx] == '\x02') {
+                /* SIGNA type: replace Markov name with random number */
+                sprintf(gen_name, "%d", rand());
+            }
+
+            /* Copy sign name string (16 bytes per entry) */
+            strncpy(sign_name, &DAT_00481a44[sign_idx * 16], 16);
+            sign_name[16] = '\0';
+
+            char sign_type = DAT_00481b44[sign_idx];
+            int sign_y_offset; /* Y offset for sign name text */
+
+            if (sign_type == '\0' || sign_type == '\x02') {
+                /* SIGNU or SIGNA: sign name higher (above), generated name lower (below) */
+                sign_y_offset = (sprite_h - (unsigned int)(unsigned char)DAT_00481a32) + 5;
+                name_y_offset = (sprite_h - (unsigned int)(unsigned char)DAT_00481a32) - 5;
+            } else {
+                /* SIGND: sign name lower (below), generated name higher (above) */
+                sign_y_offset = (sprite_h - (unsigned int)(unsigned char)DAT_00481a32) - 5;
+                name_y_offset = (sprite_h - (unsigned int)(unsigned char)DAT_00481a32) + 5;
+            }
+
+            /* Render sign name text */
+            spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
+                           ((param_2 - sign_y_offset) << shift) - spr_info[0] / 2;
+            Render_And_Blit_Sign_Text(sign_name, text_pos);
+        }
+
+        /* Render generated name text */
+        spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+        int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + orig_x +
+                       ((param_2 - name_y_offset) << shift) - spr_info[0] / 2;
+        Render_And_Blit_Sign_Text(gen_name, text_pos);
+
+    } else {
+        /* Path B: Level mode — use level-specific sign name tables */
+        int name_idx = *param_3 * 0x20;
+        /* DAT_004839f8 = DAT_00483860[0x198], DAT_00483a08 = DAT_00483860[0x1a8] */
+        char *name_table_1 = (char *)&DAT_00483860[0x198];
+        char *name_table_2 = (char *)&DAT_00483860[0x1a8];
+
+        if (name_table_2[name_idx] == '\0') {
+            /* Single name entry — render one text line */
+            char sign_name[32];
+            strncpy(sign_name, &name_table_1[name_idx], 31);
+            sign_name[31] = '\0';
+
+            int *spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            int sprite_h = spr_info[1];
+            int sprite_w = spr_info[0];
+            int y_offset = sprite_h - (unsigned int)(unsigned char)DAT_00481a32;
+
+            int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
+                           ((param_2 - y_offset) << shift) - sprite_w / 2;
+            Render_And_Blit_Sign_Text(sign_name, text_pos);
+            *param_3 = *param_3 + 1;
+        } else {
+            /* Two name entries — render both text lines */
+            char text_line[32];
+            int *spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            int sprite_h = spr_info[1];
+            int y_base = sprite_h - (unsigned int)(unsigned char)DAT_00481a32;
+
+            /* First text line (above: y_base - 5) */
+            strncpy(text_line, &name_table_2[name_idx], 31);
+            text_line[31] = '\0';
+            spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
+                           ((param_2 - (y_base - 5)) << shift) - spr_info[0] / 2;
+            Render_And_Blit_Sign_Text(text_line, text_pos);
+
+            /* Second text line (below: y_base + 5) */
+            strncpy(text_line, &name_table_1[*param_3 * 0x20], 31);
+            text_line[31] = '\0';
+            spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
+                       ((param_2 - (y_base + 5)) << shift) - spr_info[0] / 2;
+            Render_And_Blit_Sign_Text(text_line, text_pos);
+            *param_3 = *param_3 + 1;
+        }
+    }
 
     /* Record position */
-    *(int *)((int)DAT_00480734 + DAT_004808d8 * 0xc) = param_1;
+    *(int *)((int)DAT_00480734 + DAT_004808d8 * 0xc) = orig_x;
     *(int *)((int)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = param_2;
     DAT_004808d8++;
 }

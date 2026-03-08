@@ -339,6 +339,13 @@ extern char          DAT_00481a41;       /* texture darkness */
 extern int           DAT_00481a34;       /* fixed width */
 extern int           DAT_00481a38;       /* fixed height */
 extern int           DAT_00481a3c;       /* water config */
+extern char          DAT_00481a43;       /* sign name count */
+extern char          DAT_00481a44[];     /* sign name table */
+extern char          DAT_00481b44[];     /* sign name type table */
+extern char          DAT_00481a31;       /* sign text X offset */
+extern char          DAT_00481a32;       /* sign text Y offset */
+extern int           DAT_00487888[26];   /* Markov starting letter CDF */
+extern int           DAT_004892ec[676];  /* Markov transition matrix CDF */
 
 /* GG Function Prototypes */
 int  FUN_004143e0(int width, int height);

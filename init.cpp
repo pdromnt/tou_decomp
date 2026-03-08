@@ -1713,7 +1713,24 @@ int FUN_00422740(void)
         }
     }
 
-    /* TODO: FUN_00422900 - load names.dat */
+    /* FUN_00422900 — Load Markov chain frequency tables from names.dat */
+    /* File contains big-endian 16-bit values: 26 starting letter CDF entries,
+     * then 26x26 transition matrix CDF entries. */
+    {
+        FILE *f = fopen("data\\names.dat", "rb");
+        if (f) {
+            unsigned char buf[2];
+            for (int i = 0; i < 26; i++) {
+                fread(buf, 1, 2, f);
+                DAT_00487888[i] = (int)buf[0] * 256 + (int)buf[1];
+            }
+            for (int i = 0; i < 676; i++) {
+                fread(buf, 1, 2, f);
+                DAT_004892ec[i] = (int)buf[0] * 256 + (int)buf[1];
+            }
+            fclose(f);
+        }
+    }
 
     return 1;
 }
