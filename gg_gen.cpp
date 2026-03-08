@@ -1138,6 +1138,7 @@ void FUN_004155e0(void)
     int unique_count = 0;
     int palette[256];
     int tile_data_start = *(int *)((char *)DAT_00481b54 + DAT_00480894 * 0xc + 0x14);
+    int original_data_start = tile_data_start;  /* Save before first loop modifies it */
 
     for (int y = tile_h - 1; y >= 0; y--) {
         int src_y = (DAT_004808e0 != '\0') ? (tile_h - 1 - y) : y;
@@ -1192,7 +1193,7 @@ void FUN_004155e0(void)
                     int found_in_row = 0;
                     for (int r = 0; r < tile_h; r++) {
                         unsigned short *p = (unsigned short *)((char *)DAT_0048072c +
-                            (check_col + tile_data_start + r * tile_w) * 2);
+                            (check_col + original_data_start + r * tile_w) * 2);
                         if (*p == color_idx) { found_in_row = 1; break; }
                     }
                     if (!found_in_row) break;
@@ -1209,7 +1210,7 @@ void FUN_004155e0(void)
                     int found_in_row = 0;
                     for (int r = 0; r < tile_h; r++) {
                         unsigned short *p = (unsigned short *)((char *)DAT_0048072c +
-                            (left_col + tile_data_start + r * tile_w) * 2);
+                            (left_col + original_data_start + r * tile_w) * 2);
                         if (*p == color_idx) { found_in_row = 1; break; }
                     }
                     if (!found_in_row) break;
@@ -1224,7 +1225,7 @@ void FUN_004155e0(void)
                     int found_in_col = 0;
                     for (int c = 0; c < tile_w; c++) {
                         unsigned short *p = (unsigned short *)((char *)DAT_0048072c +
-                            (c + tile_data_start + check_row * tile_w) * 2);
+                            (c + original_data_start + check_row * tile_w) * 2);
                         if (*p == color_idx) { found_in_col = 1; break; }
                     }
                     if (!found_in_col) break;
@@ -1241,7 +1242,7 @@ void FUN_004155e0(void)
                     int found_in_col = 0;
                     for (int c = 0; c < tile_w; c++) {
                         unsigned short *p = (unsigned short *)((char *)DAT_0048072c +
-                            (c + tile_data_start + top_row * tile_w) * 2);
+                            (c + original_data_start + top_row * tile_w) * 2);
                         if (*p == color_idx) { found_in_col = 1; break; }
                     }
                     if (!found_in_col) break;
