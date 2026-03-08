@@ -20,10 +20,15 @@ I'd guesstimate we're 85% of the way there.
 
 ## Objective
 
-Hopefully pull off a 95% compatible decomp, where we can fire up the game and play through the levels without major issues.  
+Initially perform a "dirty" decomp, with no organized file structure or namings, just decompiling, making sure things work, implementing systems and fixing bugs.
+
+Later on, organize file structure, namings and overall code architecture for easy maintenance.
+
+All in a all, the plan is to hopefully pull off a 99% compatible decomp, where we can fire up the game and play through the levels without major issues.  
+
 I also plan on making a level viewer in the style of my other project, [Hotzone](https://github.com/pdromnt/uprising-level-editor), to hopefully better understand how the levels (and maybe GG Packs) work.  
 
-Later on, when we have a working game, I plan to update the stack (SDL?) to add more compatibility and maybe some improvements.
+When we're done with everything and have a fully working game, I plan to update the stack (SDL?) to add more compatibility (and maybe support for other OSs?) and maybe some improvements (Netplay, Gamepad support, experiment with Upscaling).
 
 ## Contribs
 
