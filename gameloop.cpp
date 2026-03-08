@@ -685,25 +685,14 @@ void Handle_Menu_State(void)
  * Returns 1 on success, 0 on failure. */
 int Init_New_Game(void)
 {
-    /* Original clears sprite pixel cursors + all 20000 entries in
-     * frame offset / width / height tables, then calls FUN_00423150()
-     * to reload sprites from disk. Since we don't have the sprite
-     * file loader yet, SKIP the clearing — sprites loaded during
-     * System_Init_Check remain valid and must be preserved.
-     *
-     * TODO: When FUN_00423150 (sprite file loader) is implemented:
-     *   DAT_00481d28 = 0;  DAT_00481d24 = 0;
-     *   memset(DAT_00489234, 0, 20000 * 4);
-     *   memset(DAT_00489e8c, 0, 20000);
-     *   memset(DAT_00489e88, 0, 20000);
-     *   Init_Math_Tables((int *)DAT_00487ab0, 0x800);
-     *   FUN_00423150();
-     */
-
-    /* Reinitialize sin/cos lookup tables (safe — doesn't destroy sprites) */
-    if (DAT_00487ab0) {
-        Init_Math_Tables((int *)DAT_00487ab0, 0x800);
-    }
+    /* Clear sprite metadata tables and reload all sprites from disk */
+    DAT_00481d28 = 0;
+    DAT_00481d24 = 0;
+    memset(DAT_00489234, 0, 20000 * 4);
+    memset(DAT_00489e8c, 0, 20000);
+    memset(DAT_00489e88, 0, 20000);
+    Init_Math_Tables((int *)DAT_00487ab0, 0x800);
+    FUN_00423150();
 
     return 1;
 }

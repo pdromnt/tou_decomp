@@ -154,6 +154,9 @@ extern char                  DAT_0048372e;      /* fog of war ray resolution */
 extern char                  DAT_0048372f;      /* fog of war sub-option */
 extern char                  DAT_00483730;      /* fog of war wobble enable */
 
+/* ===== Entity init array (init.cpp) ===== */
+extern unsigned char         DAT_00487ac0[6000]; /* 60 records × 100 bytes */
+
 /* ===== Intro particle system (memory.cpp) ===== */
 extern int                   DAT_00489248;      /* Entity count (also main entity count in gameplay) */
 extern int                   DAT_00489250;      /* Particle count */
@@ -571,6 +574,7 @@ void Input_Update(void);
 void Handle_Menu_State(void);
 void Intro_Sequence(void);
 int  Init_New_Game(void);
+int  FUN_00423150(void);       /* Load sprites from all3.gfx */
 void Free_Game_Resources(void);
 void FUN_0045e1f0(void);       /* pre-tick entity flag reset */
 

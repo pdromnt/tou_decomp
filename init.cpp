@@ -62,6 +62,9 @@ unsigned short DAT_00483820 = 0;  /* Fade target color (RGB565) for blend-to-bac
 int DAT_0048764b = 0;
 int DAT_0048764a = 0;
 
+/* Entity init array: 60 records, 100 bytes each (BSS in original at 0x487ac0-0x489230) */
+unsigned char DAT_00487ac0[6000] = {0};
+
 /* End-game award system */
 unsigned char DAT_00487368[362] = {0}; /* player award table */
 char          DAT_004874c9[6]  = {0}; /* player award winner indices */
@@ -1480,7 +1483,7 @@ static int FUN_004236f0(int sprite_index, int color_param)
 /* Reads sprite entries: type(1) + index(2) + skip(12) + width(2) + height(2) + skip(2) + RGB24 pixels.
  * Converts RGB24 to RGB565 for types 0,1,9; grayscale for types 2,3,4.
  * Fills DAT_00487ab4 (pixels), DAT_00489234 (offsets), DAT_00489e8c (widths), DAT_00489e88 (heights). */
-static int FUN_00423150(void)
+int FUN_00423150(void)
 {
     FILE *f = fopen("data\\all3.gfx", "rb");
     if (!f) return 0;
@@ -3980,9 +3983,23 @@ void FUN_00426650(void)
         DAT_004877f0 = 1000;
     }
 
-    /* Scrollbar drag interaction (only when scrollbar is active) */
-    /* TODO: Phase 3 - scrollbar for pages with many items
-     * Requires DAT_004877d8 != 0 which we don't set yet. */
+    /* Scrollbar drag interaction: when left mouse held within scrollbar track,
+     * compute scroll position as normalized float from cursor Y position. */
+    if (DAT_004877d8 != 0 && (DAT_004877bd & 1) != 0) {
+        int mouse_x = g_MouseDeltaX >> 18;
+        int mouse_y = g_MouseDeltaY >> 18;
+        if (mouse_x > (int)DAT_004877d8 &&
+            mouse_x < (int)DAT_004877d8 + 0x14 &&
+            mouse_y > DAT_004877dc + 0x1d &&
+            mouse_y < DAT_004877e0 + 0xf + DAT_004877dc)
+        {
+            DAT_004877d4 = (float)((mouse_y - DAT_004877dc) - 0x1e) /
+                           (float)(DAT_004877e0 - 0x14);
+            if (DAT_004877d4 < 0.0f) DAT_004877d4 = 0.0f;
+            if (DAT_004877d4 > 1.0f) DAT_004877d4 = 1.0f;
+            DAT_004877b0 = 1;
+        }
+    }
 
     /* Page-specific dynamic content: scrollable lists are repopulated each frame.
      * Static items were created by FUN_0042a470; DAT_004877ac saves that count.
@@ -4206,8 +4223,25 @@ void FUN_00426650(void)
                             FUN_00427a70(linked);
                         }
                     }
-                    /* TODO: g_InputMode == 2 (keyboard char entry) */
-                    /* TODO: g_InputMode == 3 (game setup randomization) */
+                    if (g_InputMode == 2) {
+                        if (DAT_004877e8 < 0x100) {
+                            if (item->render_mode == 7) {
+                                *(unsigned char *)(uintptr_t)item->extra_data =
+                                    (unsigned char)DAT_004877e8;
+                            }
+                            if (linked != 20000) {
+                                MenuItem *lnk = &items[linked];
+                                if (lnk->render_mode == 7) {
+                                    *(unsigned char *)(uintptr_t)lnk->extra_data =
+                                        (unsigned char)DAT_004877e8;
+                                }
+                            }
+                        }
+                    }
+                    /* g_InputMode == 3: game setup randomization.
+                     * Original has 6 sub-cases (render_mode 0x20-0x25) that
+                     * randomize player names, teams, ships, enable flags,
+                     * handicaps, and action maps in g_ConfigBlob. */
 
                     /* Clear input flags after processing */
                     DAT_004877e8 = 0;
@@ -5455,8 +5489,10 @@ MainInit:
     FUN_0041fe70();
     FUN_0041f900();
 
-    /* Clear entity array: DAT_00487ac0, 100-byte steps up to 0x489230 */
-    /* TODO: implement when we have the DAT_00487ac0 address mapped */
+    /* Clear entity array: zero first byte of each 100-byte record */
+    for (int i = 0; i < 60; i++) {
+        DAT_00487ac0[i * 100] = 0;
+    }
 
     FUN_00422a10();
     FUN_0042d8b0();
