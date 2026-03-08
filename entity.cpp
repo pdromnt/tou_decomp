@@ -1764,7 +1764,25 @@ LAB_0044aecc:
     FUN_00449fd0(piVar2);
     FUN_0044a6b0(piVar2);
 }
-static void FUN_0044c9a0(int *ent)            { (void)ent; }  /* ftol — handled inline by caller */
+/* ===== FUN_0044c9a0 — Brake/Reverse Thrust (0044C9A0) ===== */
+/* Applies reverse thrust at 80% of forward power, no exhaust particles. */
+static void FUN_0044c9a0(int *ent, int player_idx)
+{
+    int heading = ent[6];  /* +0x18: heading angle 0-0x7FF */
+    int cfg_off = player_idx * 0x40;
+    unsigned char accel = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x23);
+    int boost_active = (ent[0x35] > 0) ? 1 : 0;  /* +0xD4: speed boost timer */
+    int shift = 0xB + boost_active;
+
+    int *lut = (int *)DAT_00487ab0;
+
+    int thrust_x = (lut[heading] * (int)accel) >> shift;
+    int thrust_y = (lut[(heading + 0x200) & 0x7FF] * (int)accel) >> shift;
+
+    /* Subtract 80% of thrust from velocity (reverse/brake) */
+    ent[4] = (int)((double)ent[4] - (double)thrust_x * 0.8);
+    ent[5] = (int)((double)ent[5] - (double)thrust_y * 0.8);
+}
 static void FUN_00401000_impl(int idx);  /* forward declaration — defined below */
 
 /* ===== FUN_0044bd50 — Boundary Clamping (0044BD50) ===== */
@@ -5676,9 +5694,9 @@ void FUN_0044b0b0(void)
                     FUN_0044bf20((int)ent, i);
                 }
 
-                /* Brake */
+                /* Brake / reverse thrust */
                 if (buttons & 0x40) {
-                    FUN_0044c9a0((int *)ent);
+                    FUN_0044c9a0((int *)ent, i);
                 }
 
                 /* Fire primary weapon */
