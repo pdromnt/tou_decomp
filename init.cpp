@@ -4158,8 +4158,145 @@ void FUN_00426650(void)
     }
     players_done:
 
-    /* TODO: Pages 0x1A (key bindings), 0x14 (scores)
-     * also need dynamic list population. */
+    /* Page 0x14: Score display (scrollable, max 6 visible) */
+    if (DAT_004877a4 == 0x14 && DAT_004877b0 != 0) {
+        unsigned int playerCount = g_ConfigBlob[0x324] & 0xFF;
+        unsigned int maxVisible = 6;
+        int scrollOff = 0;
+
+        if (playerCount > maxVisible) {
+            scrollOff = (int)(DAT_004877d4 * (float)(playerCount - maxVisible));
+            if (scrollOff < 0) scrollOff = 0;
+            if (scrollOff > (int)(playerCount - maxVisible))
+                scrollOff = (int)(playerCount - maxVisible);
+        } else {
+            maxVisible = playerCount;
+        }
+
+        DAT_004877a8 = DAT_004877ac;
+
+        if (maxVisible > 0) {
+            int strIdx = 0x71;
+            int yPos = 0xA4;
+            int playerDataOff = scrollOff * 0x598;
+            int playerNum = scrollOff + 1;
+
+            for (unsigned int row = 0; row < maxVisible; row++) {
+                /* Column 1: Player number */
+                if (g_MenuStrings && g_MenuStrings[strIdx])
+                    FUN_004644af(g_MenuStrings[strIdx], (const unsigned char *)"%d", playerNum);
+                FUN_00430200(0x3C, yPos, strIdx, 1, 0, 0, 0x1A, 0, 0xFF);
+
+                /* Column 2: Ship type+1 (read from player data offset 0x2C) */
+                int shipVal = 0;
+                if (DAT_00487810)
+                    shipVal = *(unsigned char *)(DAT_00487810 + playerDataOff + 0x2C);
+                if (g_MenuStrings && g_MenuStrings[strIdx + 1])
+                    FUN_004644af(g_MenuStrings[strIdx + 1], (const unsigned char *)"%d", shipVal + 1);
+                FUN_00430200(0xAA, yPos, strIdx + 1, shipVal + 6, 0, 0, 0x1A, 0, 0xFF);
+
+                /* Column 3: Kills */
+                if (g_MenuStrings && g_MenuStrings[strIdx + 2])
+                    FUN_004644af(g_MenuStrings[strIdx + 2], (const unsigned char *)"%d",
+                                 DAT_00486968[scrollOff + (int)row]);
+                FUN_00430200(0x118, yPos, strIdx + 2, 1, 0, 0, 0x1A, 0, 0xFF);
+
+                /* Column 4: Deaths */
+                if (g_MenuStrings && g_MenuStrings[strIdx + 3])
+                    FUN_004644af(g_MenuStrings[strIdx + 3], (const unsigned char *)"%d",
+                                 DAT_00486aa8[scrollOff + (int)row]);
+                FUN_00430200(0x17C, yPos, strIdx + 3, 1, 0, 0, 0x1A, 0, 0xFF);
+
+                strIdx += 4;
+                playerDataOff += 0x598;
+                yPos += 0x1C;
+                playerNum++;
+            }
+        }
+    }
+
+    /* Page 0x1A: Key bindings (scrollable, max 3 visible players) */
+    if (DAT_004877a4 == 0x1A && DAT_004877b0 != 0) {
+        unsigned int playerCount = g_ConfigBlob[0x324] & 0xFF;
+
+        /* Handle scroll wheel adjustment of player count preview */
+        if (g_InputMode == 1 && g_GameViewData) {
+            MenuItem *chkItems = (MenuItem *)g_GameViewData;
+            if (chkItems[(unsigned char)DAT_004877e6].extra_data ==
+                CFG_ADDR(0x48227c)) {
+                int delta = DAT_004877e8 >> 10;
+                int v = (int)playerCount - 1 + delta;
+                if (v < 0)
+                    v = v + (1 - ((v + 1) >> 6)) * 64;
+                else if (v > 0)
+                    v = v & 0x3F;
+                playerCount = (unsigned int)(v + 1);
+            }
+        }
+
+        unsigned int maxVisible = 3;
+        int scrollOff = 0;
+
+        if (playerCount > maxVisible) {
+            scrollOff = (int)(DAT_004877d4 * (float)(playerCount - maxVisible));
+            if (scrollOff < 0) scrollOff = 0;
+            if (scrollOff > (int)(playerCount - maxVisible))
+                scrollOff = (int)(playerCount - maxVisible);
+        } else {
+            maxVisible = playerCount;
+        }
+
+        DAT_004877a8 = DAT_004877ac;
+
+        if (maxVisible > 0) {
+            unsigned char *actionMapBase = &g_ConfigBlob[0x4B6 + scrollOff * 0x3C];
+            int playerNum = scrollOff + 1;
+            int yPos = 0x6D;
+            int strIdx = 0x71;
+            int numKeys = (int)(DAT_00481d84 & 0xFF);
+
+            for (unsigned int row = 0; row < maxVisible; row++) {
+                /* Player number label */
+                if (g_MenuStrings && g_MenuStrings[strIdx])
+                    FUN_004644af(g_MenuStrings[strIdx], (const unsigned char *)"%d", playerNum);
+                FUN_00430200(0x14, yPos, strIdx, 2, 2, 0, 0x1A, 0, 0xFF);
+                strIdx++;
+
+                /* Key binding grid for this player */
+                int col = 0;
+                for (int k = 0; k < numKeys; k++) {
+                    int xPos = col * 0x20 + 0x32;
+                    /* Label background */
+                    FUN_00430200(xPos, yPos - 7, 0xE6, 2, 2, 2, 0, 0, 0xFF);
+                    /* Key binding value (render_mode 0x26, clickable) */
+                    FUN_00430200(xPos, yPos, 0x22, k, 2, 1, 0x26, 0, 0xFF);
+                    FUN_0042fcb0();
+                    /* Set item dimensions and metadata */
+                    if (g_GameViewData && DAT_004877a8 > 0) {
+                        MenuItem *ditems = (MenuItem *)g_GameViewData;
+                        ditems[DAT_004877a8 - 1].width = 0x20;
+                        ditems[DAT_004877a8 - 1].height = 0x28;
+                        ditems[DAT_004877a8 - 1].x = 0;
+                        ditems[DAT_004877a8 - 1].flag1 = (unsigned char)scrollOff;
+                        ditems[DAT_004877a8 - 1].linked_item = k;
+                    }
+                    FUN_0042fc90((int)(uintptr_t)actionMapBase);
+
+                    col++;
+                    if (col > 0x10) {
+                        col = 0;
+                        yPos += 0x20;
+                    }
+                    actionMapBase++;
+                }
+
+                playerNum++;
+                scrollOff++;
+                actionMapBase = &g_ConfigBlob[0x4B6 + scrollOff * 0x3C];
+                yPos += 0x75;
+            }
+        }
+    }
 
     /* Click sound effect */
     /* Original: plays FMOD sound when any mouse button pressed,
@@ -4238,10 +4375,189 @@ void FUN_00426650(void)
                             }
                         }
                     }
-                    /* g_InputMode == 3: game setup randomization.
-                     * Original has 6 sub-cases (render_mode 0x20-0x25) that
-                     * randomize player names, teams, ships, enable flags,
-                     * handicaps, and action maps in g_ConfigBlob. */
+                    if (g_InputMode == 3 && DAT_004877e8 != 0x100) {
+                        unsigned char bVar12 = g_ConfigBlob[0x325];
+                        MenuItem *tgtItem = &items[(unsigned char)DAT_004877e6];
+                        switch (tgtItem->render_mode) {
+                        case 0x20: /* Randomize player names */
+                            if (DAT_004877e8 == 1) {
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x466 + j] = (char)rand();
+                            } else {
+                                unsigned int teamNames[4];
+                                for (int t = 0; t < 4; t++) {
+                                    int r = rand();
+                                    teamNames[t] = (unsigned int)((unsigned char)r);
+                                }
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x466 + j] =
+                                        (char)teamNames[(unsigned char)g_ConfigBlob[0x3C6 + j]];
+                            }
+                            break;
+                        case 0x21: /* Randomize teams */
+                            if (DAT_004877e8 == 1) {
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x3C6 + j] = (char)(j % 3);
+                            } else if (DAT_004877e8 == 2) {
+                                int na = (int)(unsigned int)bVar12;
+                                for (int j = 0; j < na && j < 64; j++)
+                                    g_ConfigBlob[0x3C6 + j] = 0;
+                                if (na < 64)
+                                    memset(&g_ConfigBlob[0x3C6 + na], 1, 64 - na);
+                            } else if (bVar12 != 0) {
+                                int nt = (int)(unsigned int)bVar12;
+                                int maxT = nt > 3 ? 3 : nt;
+                                for (int j = 0; j < nt && j < 64; j++)
+                                    g_ConfigBlob[0x3C6 + j] = (char)(j % 3);
+                                for (int j = nt; j < 64; j++)
+                                    g_ConfigBlob[0x3C6 + j] = (char)((j - nt) % maxT);
+                            }
+                            break;
+                        case 0x22: { /* Randomize ships */
+                            int avail = 9;
+                            for (int j = 0; j < 9; j++)
+                                if (DAT_0048378e[j] != 0) avail--;
+                            if (DAT_004877e8 == 1) {
+                                if (avail > 0) {
+                                    unsigned char *sp = (unsigned char *)&g_ConfigBlob[0x416];
+                                    while (sp < (unsigned char *)&g_ConfigBlob[0x416 + 64]) {
+                                        int r = rand() % 9;
+                                        *sp = (unsigned char)r;
+                                        if (DAT_0048378e[r] != 0) sp--;
+                                        sp++;
+                                    }
+                                }
+                            } else if (DAT_004877e8 == 2) {
+                                memset(&g_ConfigBlob[0x416], 9, 64);
+                            } else {
+                                /* Shuffle ships by team: team[j]->ship mapping */
+                                int shipByTeam[4];
+                                for (int j = 63; j >= 0; j--)
+                                    shipByTeam[(unsigned char)g_ConfigBlob[0x3C6 + j] - 4] =
+                                        (int)(unsigned char)g_ConfigBlob[0x416 + j];
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x416 + j] =
+                                        (char)shipByTeam[(unsigned char)g_ConfigBlob[0x3C6 + j] - 4];
+                            }
+                            break;
+                        }
+                        case 0x23: /* Randomize enable flags */
+                            if (DAT_004877e8 == 1) {
+                                int na = (int)(unsigned int)bVar12;
+                                for (int j = 0; j < na && j < 64; j++)
+                                    g_ConfigBlob[0x376 + j] = 1;
+                                if (na < 64)
+                                    memset(&g_ConfigBlob[0x376 + na], 0, 64 - na);
+                            } else {
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x376 + j] =
+                                        (g_ConfigBlob[0x3C6 + j] == 0) ? 1 : 0;
+                            }
+                            break;
+                        case 0x24: /* Randomize handicaps */
+                            if (DAT_004877e8 == 1) {
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x326 + j] = (char)(rand() % 5);
+                            } else if (DAT_004877e8 == 2) {
+                                for (int j = 0; j < 64; j++) {
+                                    char team = g_ConfigBlob[0x3C6 + j];
+                                    if (team == 0) {
+                                        int r = rand(); r &= 1;
+                                        g_ConfigBlob[0x326 + j] = (char)r;
+                                    } else if (team == 1) {
+                                        g_ConfigBlob[0x326 + j] = (char)(rand() % 3 + 1);
+                                    } else if (team == 2) {
+                                        int r = rand(); r &= 1;
+                                        g_ConfigBlob[0x326 + j] = (char)(r + 3);
+                                    }
+                                }
+                            } else if (DAT_004877e8 == 3) {
+                                for (int j = 0; j < 64; j++) {
+                                    int r = rand(); r &= 1;
+                                    g_ConfigBlob[0x326 + j] = (char)r;
+                                }
+                            } else if (DAT_004877e8 == 4) {
+                                for (int j = 0; j < 64; j++)
+                                    g_ConfigBlob[0x326 + j] = (char)(rand() % 3 + 1);
+                            } else {
+                                for (int j = 0; j < 64; j++) {
+                                    int r = rand(); r &= 1;
+                                    g_ConfigBlob[0x326 + j] = (char)(r + 3);
+                                }
+                            }
+                            break;
+                        case 0x25: { /* Randomize action maps */
+                            unsigned char *shipAvail = &g_ConfigBlob[0x1804];
+                            if (DAT_004877e8 == 1) {
+                                int mapOff = 0;
+                                for (int pi = 0; pi < 64; pi++) {
+                                    for (int a = 0; a < 0x2F; a++)
+                                        g_ConfigBlob[0x4B6 + mapOff + a] =
+                                            (shipAvail[a] == 1) ? 1 : 0;
+                                    /* Pick random active ship for this player */
+                                    int cnt = 0;
+                                    int candidates[60];
+                                    for (int a = 0; a < 0x2F; a++) {
+                                        if (shipAvail[a] == 1) {
+                                            candidates[cnt] = a;
+                                            cnt++;
+                                        }
+                                    }
+                                    if (cnt > 0)
+                                        DAT_004836ce[pi] = (char)candidates[rand() % cnt];
+                                    else
+                                        DAT_004836ce[pi] = 0;
+                                    mapOff += 0x3C;
+                                }
+                            } else {
+                                int actionCounts[] = {0, 1, 2, 4, 8, 0x10, 0x20};
+                                int numActions = actionCounts[DAT_004877e8];
+                                /* Clear all action maps */
+                                for (int off = 0; off < 64 * 0x3C; off += 0x3C) {
+                                    memset(&g_ConfigBlob[0x4B6 + off], 0, 0x2F);
+                                }
+                                int mapOff = 0;
+                                for (int pi = 0; pi < 64; pi++) {
+                                    /* Build list of available ships */
+                                    int cnt = 0;
+                                    int candidates[60];
+                                    for (int a = 0; a < 0x2F; a++) {
+                                        if (shipAvail[a] == 1) {
+                                            candidates[cnt] = a;
+                                            cnt++;
+                                        }
+                                    }
+                                    /* Randomly enable numActions ships */
+                                    int picked = 0;
+                                    while (picked < numActions && cnt > 0) {
+                                        int r = rand() % cnt;
+                                        g_ConfigBlob[0x4B6 + candidates[r] + mapOff] = 1;
+                                        candidates[r] = candidates[cnt - 1];
+                                        cnt--;
+                                        picked++;
+                                    }
+                                    /* Pick random active ship for this player */
+                                    int activeCnt = 0;
+                                    int active[60];
+                                    for (int a = 0; a < 0x2F; a++) {
+                                        if (g_ConfigBlob[0x4B6 + mapOff + a] != 0) {
+                                            active[activeCnt] = a;
+                                            activeCnt++;
+                                        }
+                                    }
+                                    if (activeCnt > 0)
+                                        DAT_004836ce[pi] = (char)active[rand() % activeCnt];
+                                    else
+                                        DAT_004836ce[pi] = 0;
+                                    mapOff += 0x3C;
+                                }
+                            }
+                            break;
+                        }
+                        default:
+                            break;
+                        }
+                    }
 
                     /* Clear input flags after processing */
                     DAT_004877e8 = 0;
@@ -5170,51 +5486,200 @@ void Early_Init_Vars(void)
 /* ===== Init_Game_Config (004207C0) ===== */
 void Init_Game_Config(void)
 {
-    /* Initialize config blob with defaults */
-    g_ConfigBlob[0] = 1;     /* 00481F58 */
-    g_ConfigBlob[1] = 0;     /* 00481F59 */
-    g_ConfigBlob[2] = 1;     /* 00481F5A */
-    g_ConfigBlob[3] = 0x32;  /* 00481F5B = 50 */
+    /* === Basic config (offsets 0-3) === */
+    g_ConfigBlob[0] = 1;     /* DAT_00481f58: active level slots (1 = first slot active) */
+    g_ConfigBlob[1] = 0;     /* DAT_00481f59 */
+    g_ConfigBlob[2] = 1;     /* DAT_00481f5a */
+    g_ConfigBlob[3] = 0x32;  /* DAT_00481f5b = 50 (default round limit) */
 
-    /* Initialize level indirection table (200 ints at offset 4) to sequential order.
+    /* === Level indirection table (200 ints at offset 4) ===
      * Original zeros this, relying on options.cfg for saved level order.
      * Sequential default ensures levels play in scanned order without options.cfg. */
     {
         int *levelOrder = (int *)&g_ConfigBlob[4];
-        for (int i = 0; i < 200; i++) {
+        for (int i = 0; i < 200; i++)
             levelOrder[i] = i;
-        }
     }
 
-    /* Team color palette (X1R5G5B5) - used by FUN_004236f0 sprite variant generator.
-     * NOTE: palette[3] is overwritten to 0x7FF0 (gold) by FUN_0042d8b0 before
-     * sprites are loaded, so variant 3 is gold in practice, not gray. */
+    /* === Per-player config (64 players) === */
+    g_ConfigBlob[0x324] = 2;   /* DAT_0048227c[0]: player count low = 2 */
+    g_ConfigBlob[0x325] = 1;   /* DAT_0048227c[1]: player count high = 1 */
+
+    for (int i = 0; i < 64; i++) {
+        g_ConfigBlob[0x326 + i] = 0;                 /* Handicap: 0 */
+        g_ConfigBlob[0x376 + i] = 0;                 /* Enable: 0 (first set below) */
+        g_ConfigBlob[0x3C6 + i] = (char)(i % 3);     /* Team: round-robin 0,1,2 */
+        g_ConfigBlob[0x416 + i] = (char)(i % 9);     /* Ship: round-robin 0-8 */
+        g_ConfigBlob[0x466 + i] = (char)rand();       /* Name: random byte */
+        DAT_004836ce[i] = 0;                          /* Action assignment: 0 */
+        /* Action maps: all enabled (0x3C bytes per player, fill with 0x01) */
+        memset(&g_ConfigBlob[0x4B6 + i * 0x3C], 0x01, 0x3C);
+    }
+    g_ConfigBlob[0x376] = 1;  /* First player enabled by default */
+
+    /* === Display/audio config (offset 0x17C6+) === */
+    g_ConfigBlob[0x17C6] = 1;    /* DAT_0048371e: music enable */
+    g_ConfigBlob[0x17C7] = 1;    /* DAT_0048371f: SFX enable */
+    g_ConfigBlob[0x17C8] = 0x5A; /* DAT_00483720[0]: music volume */
+    g_ConfigBlob[0x17C9] = 0x46; /* DAT_00483720[1]: SFX volume */
+    g_ConfigBlob[0x17CA] = 1;    /* DAT_00483720[2] */
+    g_ConfigBlob[0x17CB] = 0;    /* DAT_00483720[3] */
+    g_ConfigBlob[0x17CC] = 0x40; /* DAT_00483724[0] */
+    g_ConfigBlob[0x17CD] = 5;    /* DAT_00483724[1]: resolution index */
+    g_ConfigBlob[0x17CE] = 0;    /* DAT_00483724[2] */
+    g_ConfigBlob[0x17CF] = 1;    /* DAT_00483724[3] */
+
+    /* === Game rules config === */
+    g_ConfigBlob[0x17D0] = 1;    /* DAT_00483728 */
+    g_ConfigBlob[0x17D1] = 1;    /* DAT_00483729: game mode */
+    g_ConfigBlob[0x17D2] = 2;    /* DAT_0048372a: particle density */
+    g_ConfigBlob[0x17D3] = 1;    /* DAT_0048372b */
+    g_ConfigBlob[0x17D4] = 1;    /* DAT_0048372c */
+    g_ConfigBlob[0x17D5] = 0;    /* DAT_0048372d */
+    g_ConfigBlob[0x17D6] = 0x1E; /* DAT_0048372e = 30 */
+    g_ConfigBlob[0x17D7] = 3;    /* DAT_0048372f */
+    g_ConfigBlob[0x17D8] = 1;    /* DAT_00483730 */
+    g_ConfigBlob[0x17D9] = 1;    /* DAT_00483731 */
+    g_ConfigBlob[0x17DA] = 0xFF; /* DAT_00483732 (set at end in original, moved here) */
+    g_ConfigBlob[0x17DC] = 0;    /* DAT_00483734 */
+    g_ConfigBlob[0x17DD] = 0;    /* DAT_00483735 */
+    g_ConfigBlob[0x17DE] = 0;    /* DAT_00483736 */
+    g_ConfigBlob[0x17DF] = 0;    /* DAT_00483737 */
+    g_ConfigBlob[0x17E0] = 0;    /* DAT_00483738 */
+    g_ConfigBlob[0x17E1] = 0;    /* DAT_00483739 */
+    g_ConfigBlob[0x17E2] = 3;    /* DAT_0048373a */
+    g_ConfigBlob[0x17E3] = 0;    /* DAT_0048373b */
+    g_ConfigBlob[0x17E4] = 0;    /* DAT_0048373c */
+    g_ConfigBlob[0x17E5] = 1;    /* DAT_0048373d */
+    g_ConfigBlob[0x17E6] = 1;    /* DAT_0048373e */
+    g_ConfigBlob[0x17E7] = 5;    /* DAT_0048373f */
+    g_ConfigBlob[0x17E8] = 9;    /* DAT_00483740[0] */
+    g_ConfigBlob[0x17E9] = 3;    /* DAT_00483740[1] */
+    g_ConfigBlob[0x17EA] = 1;    /* DAT_00483740[2] */
+    g_ConfigBlob[0x17EB] = 1;    /* DAT_00483740[3] */
+    g_ConfigBlob[0x17EC] = 2;    /* DAT_00483744 */
+    g_ConfigBlob[0x17ED] = 1;    /* DAT_00483745 */
+    g_ConfigBlob[0x17EE] = 0x3C; /* DAT_00483746: tick rate = 60 */
+    g_ConfigBlob[0x17EF] = 1;    /* DAT_00483747 */
+
+    /* === Entity/physics defaults === */
+    g_ConfigBlob[0x17F0] = 0x14; /* DAT_00483748[0] */
+    g_ConfigBlob[0x17F1] = 4;    /* DAT_00483748[1] */
+    g_ConfigBlob[0x17F2] = 0x14; /* DAT_00483748[2] */
+    g_ConfigBlob[0x17F3] = 0x14; /* DAT_00483748[3] */
+    g_ConfigBlob[0x17F4] = 0x14; /* DAT_0048374c[0] */
+    g_ConfigBlob[0x17F5] = 0x14; /* DAT_0048374c[1] */
+    g_ConfigBlob[0x17F6] = 0x14; /* DAT_0048374c[2] */
+    g_ConfigBlob[0x17F7] = 0x14; /* DAT_0048374c[3] */
+    g_ConfigBlob[0x17F8] = 0x14; /* DAT_00483750[0] */
+    g_ConfigBlob[0x17F9] = 0x14; /* DAT_00483750[1] */
+    g_ConfigBlob[0x17FA] = 0x14; /* DAT_00483750[2] */
+    g_ConfigBlob[0x17FB] = 1;    /* DAT_00483750[3] */
+    g_ConfigBlob[0x17FC] = 2;    /* DAT_00483754[0] */
+    g_ConfigBlob[0x17FD] = 0x14; /* DAT_00483754[1] */
+    g_ConfigBlob[0x17FE] = 1;    /* DAT_00483754[2] */
+    g_ConfigBlob[0x17FF] = 1;    /* DAT_00483754[3] */
+    g_ConfigBlob[0x1800] = 3;    /* DAT_00483758[0]: sky config */
+    g_ConfigBlob[0x1801] = 3;    /* DAT_00483758[1] */
+    g_ConfigBlob[0x1802] = 1;    /* DAT_00483758[2] */
+    g_ConfigBlob[0x1803] = 2;    /* DAT_00483758[3]: sky type */
+
+    /* === Ship availability flags (50 bytes at offset 0x1804, all enabled) === */
+    memset(&g_ConfigBlob[0x1804], 0x01, 50);
+
+    /* === Ship stats / per-ship data (zeroed) === */
+    /* _DAT_0048378e (offset 0x1836): 4 bytes */
+    memset(&g_ConfigBlob[0x1836], 0, 4);
+    /* _DAT_00483792 (offset 0x183A): 4 bytes */
+    memset(&g_ConfigBlob[0x183A], 0, 4);
+    /* _DAT_00483796 (offset 0x183E): 4 bytes */
+    memset(&g_ConfigBlob[0x183E], 0, 4);
+    /* _DAT_0048379a (offset 0x1842): 4 bytes */
+    memset(&g_ConfigBlob[0x1842], 0, 4);
+    /* _DAT_0048379e (offset 0x1846): 4 bytes */
+    memset(&g_ConfigBlob[0x1846], 0, 4);
+    /* DAT_004837e4 (offset 0x188C) */
+    memset(&g_ConfigBlob[0x188C], 0, 4);
+    /* DAT_004837e8 (offset 0x1890) = 1 */
+    g_ConfigBlob[0x1890] = 1;
+    g_ConfigBlob[0x1891] = 0; g_ConfigBlob[0x1892] = 0; g_ConfigBlob[0x1893] = 0;
+    /* DAT_004837ec (offset 0x1894) */
+    memset(&g_ConfigBlob[0x1894], 0, 4);
+
+    /* === Two parallel stat tables (6 ints each, zeroed) === */
+    /* Table at offset 0x1898 (DAT_004837f0) and 0x18B0 (DAT_00483808) */
+    memset(&g_ConfigBlob[0x1898], 0, 24);
+    memset(&g_ConfigBlob[0x18B0], 0, 24);
+
+    /* === Default key bindings (DirectInput scan codes) === */
+    g_ConfigBlob[0x1862] = 0x19;  /* DAT_004837ba: Pause = P */
+    g_ConfigBlob[0x1863] = 0x40;  /* DAT_004837bb: F6 */
+    g_ConfigBlob[0x1864] = (char)0xC9;  /* DAT_004837bc[0]: Page Up */
+    g_ConfigBlob[0x1865] = (char)0xD1;  /* DAT_004837bc[1]: Page Down */
+
+    /* Player 1: Up/Down/Left/Right/Fire/Special/Weapon1/Weapon2 */
+    g_ConfigBlob[0x186A] = (char)0xC8;  /* Up Arrow */
+    g_ConfigBlob[0x186B] = (char)0xD0;  /* Down Arrow */
+    g_ConfigBlob[0x186C] = (char)0xCB;  /* Left Arrow */
+    g_ConfigBlob[0x186D] = (char)0xCD;  /* Right Arrow */
+    g_ConfigBlob[0x186E] = 0x36;  /* Right Shift */
+    g_ConfigBlob[0x186F] = (char)0x9D;  /* Right Ctrl */
+    g_ConfigBlob[0x1870] = 0x35;  /* Numpad / */
+    g_ConfigBlob[0x1871] = 0x34;  /* Numpad . */
+
+    /* Player 2: WASD + Tab/Q/1/2 */
+    g_ConfigBlob[0x1872] = 0x11;  /* W */
+    g_ConfigBlob[0x1873] = 0x1F;  /* S */
+    g_ConfigBlob[0x1874] = 0x1E;  /* A */
+    g_ConfigBlob[0x1875] = 0x20;  /* D */
+    g_ConfigBlob[0x1876] = 0x0F;  /* Tab */
+    g_ConfigBlob[0x1877] = 0x10;  /* Q */
+    g_ConfigBlob[0x1878] = 0x02;  /* 1 */
+    g_ConfigBlob[0x1879] = 0x03;  /* 2 */
+
+    /* Player 3: IKJL + B/V/N/H */
+    g_ConfigBlob[0x187A] = 0x17;  /* I */
+    g_ConfigBlob[0x187B] = 0x25;  /* K */
+    g_ConfigBlob[0x187C] = 0x24;  /* J */
+    g_ConfigBlob[0x187D] = 0x26;  /* L */
+    g_ConfigBlob[0x187E] = 0x30;  /* B */
+    g_ConfigBlob[0x187F] = 0x2F;  /* V */
+    g_ConfigBlob[0x1880] = 0x31;  /* N */
+    g_ConfigBlob[0x1881] = 0x23;  /* H */
+
+    /* Player 4: Numpad 5/2/1/3/7/8/9/4 */
+    g_ConfigBlob[0x1882] = 0x4C;  /* Numpad 5 */
+    g_ConfigBlob[0x1883] = 0x50;  /* Numpad 2 */
+    g_ConfigBlob[0x1884] = 0x4F;  /* Numpad 1 */
+    g_ConfigBlob[0x1885] = 0x51;  /* Numpad 3 */
+    g_ConfigBlob[0x1886] = 0x47;  /* Numpad 7 */
+    g_ConfigBlob[0x1887] = 0x48;  /* Numpad 8 */
+    g_ConfigBlob[0x1888] = 0x49;  /* Numpad 9 */
+    g_ConfigBlob[0x1889] = 0x4B;  /* Numpad 4 */
+
+    /* === Team color palette (X1R5G5B5) === */
     DAT_00483838[0] = 0x1A56;  /* Teal/cyan */
     DAT_00483838[1] = 0x2ACA;  /* Green */
     DAT_00483838[2] = 0x6508;  /* Red */
-    DAT_00483838[3] = 0x6739;  /* Gray (overwritten to 0x7FF0 gold before sprite load) */
+    DAT_00483838[3] = 0x4A52;  /* Initial value (overwritten below and by FUN_0042d8b0) */
 
-    /* Sky pattern type: 0=sprite 0x40, 1=sprite 0x45, 2=sprite 0x46, 3=solid 0x446 */
-    g_ConfigBlob[0x1803] = 2;   /* DAT_0048375b - default sky type (cloudy texture) */
+    /* === Physics/render constants (int-sized at offsets 0x18E8+) === */
+    *(int *)&g_ConfigBlob[0x18E8] = 0x1F;   /* DAT_00483840 */
+    *(int *)&g_ConfigBlob[0x18EC] = 0x40;   /* DAT_00483844 */
+    *(int *)&g_ConfigBlob[0x18F0] = 9;      /* DAT_00483848 */
+    *(int *)&g_ConfigBlob[0x18F4] = 0xD01;  /* DAT_0048384c: water color */
+    *(short *)&g_ConfigBlob[0x18F6] = 0x1943; /* _DAT_0048384e */
+    *(int *)&g_ConfigBlob[0x18F8] = 0x4A0;  /* DAT_00483850 */
+    *(int *)&g_ConfigBlob[0x18FC] = 0x3F800000; /* _DAT_00483854: float 1.0 */
+    *(int *)&g_ConfigBlob[0x1900] = 0x3F800000; /* _DAT_00483858: float 1.0 */
+    *(int *)&g_ConfigBlob[0x1904] = 0x3F800000; /* _DAT_0048385c: float 1.0 */
 
-    /* Sky config byte 0 (DAT_00483758): used by FUN_0041a8c0 as float LUT index */
-    g_ConfigBlob[0x1800] = 3;   /* DAT_00483758 */
-
-    /* Tick rate: 60 ticks/sec (0x3C). Offset 0x17EE in config blob = DAT_00483746. */
-    g_ConfigBlob[0x17EE] = 0x3C;  /* DAT_00483746 = 60 */
-
-    /* Sound/SFX enabled by default */
-    g_ConfigBlob[0x17C6] = 1;   /* DAT_0048371e - music enable */
-    g_ConfigBlob[0x17C7] = 1;   /* DAT_0048371f - SFX enable */
-
-    /* Default key bindings (in case options.cfg doesn't exist) */
-    g_ConfigBlob[0x1862] = 0x19;  /* DAT_004837ba - Pause key = P */
-
-    /* TODO: Full config initialization (entity defaults, key bindings, etc.)
-     * See DECOMP_PLAN.md Phase 2 for details.
-     * For now, enough to pass System_Init_Check. */
-
+    /* Load saved config from options.cfg (overwrites defaults above) */
     Load_Options_Config();
+
+    /* Final overrides (applied AFTER loading saved config) */
+    DAT_00483838[3] = 0x6739;  /* Gray palette (will be overwritten to gold by FUN_0042d8b0) */
+
     Sync_Config_From_Blob();
 }
 
