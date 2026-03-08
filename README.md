@@ -8,15 +8,15 @@ Tunnels of Underworld (or TOU for short) is an original creation by [hannukp](ht
 
 A lot of things. A lot of things are also very buggy. The code I got is essentialy heavily decompiling things with Ghidra and having a clanker help me with the hardest parts.
 
-- Renderer (Sprites, Particles, Animations, etc.)
-- Menus
+- Renderer (Sprites, Particles, Animations, HUD, etc.)
+- Menus (90% functional)
 - SFX/BGM
 - Controls
-- Physics
-- Levels (No GG levels)
-- Most subsystems (AI, spawns, etc.)
+- Physics (Ships, water, collisions, etc.)
+- Levels (including GG Levels)
+- Most subsystems (Enemy AI (partial), spawns, pickups, etc.)
 
-I'd guesstimate we're 80% of the way there.
+I'd guesstimate we're 85% of the way there.
 
 ## Objective
 
