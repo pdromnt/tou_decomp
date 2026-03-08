@@ -4737,6 +4737,43 @@ void FUN_00455d50(void)
                         *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x15;
                         *(unsigned char *)(poff + 0xC9 + DAT_00487810) = 200;
                     }
+                    else if (item_anim_type == 2) {
+                        /* Random pickup crate */
+                        int roll = rand() % 642;
+                        if (roll < 12) {
+                            /* Full energy — restore health to max */
+                            int max_hp = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x28) : 0;
+                            *(int *)(poff + 0x20 + DAT_00487810) = max_hp;
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x00;
+                        } else if (roll < 42) {
+                            /* Booby trap — stub: HUD notification only */
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x01;
+                        } else if (roll < 142) {
+                            /* Death Ring — stub: HUD notification only */
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x02;
+                        } else if (roll < 242) {
+                            /* 4 Miniships — stub: HUD notification only */
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x03;
+                        } else if (roll < 342) {
+                            /* 6 Insects — stub: HUD notification only */
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x04;
+                        } else if (roll < 442) {
+                            /* Faster special gun — decrease fire rate delay, min 8 */
+                            int cur_rate = *(unsigned char *)(poff + 0x9C + DAT_00487810);
+                            cur_rate -= 8;
+                            if (cur_rate < 8) cur_rate = 8;
+                            *(unsigned char *)(poff + 0x9C + DAT_00487810) = (unsigned char)cur_rate;
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x06;
+                        } else {
+                            /* Better basic gun — upgrade primary weapon, cap at 5 */
+                            int cur_weapon = *(unsigned char *)(poff + 0x8C + DAT_00487810);
+                            cur_weapon += 1;
+                            if (cur_weapon > 5) cur_weapon = 5;
+                            *(unsigned char *)(poff + 0x8C + DAT_00487810) = (unsigned char)cur_weapon;
+                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x07;
+                        }
+                        *(unsigned char *)(poff + 0xC9 + DAT_00487810) = 200;
+                    }
 
                     /* Cap health to max */
                     int max_hp = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x28) : 0;
