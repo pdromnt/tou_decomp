@@ -700,9 +700,9 @@ void FUN_00417850(int param_1, int param_2, unsigned char param_3)
         int *tile_info = (int *)((char *)DAT_00481b54 + DAT_00480894 * 0xc);
         int tile_h = tile_info[1];
         int tile_w = tile_info[0];
-        int tile_start = tile_info[2];
+        int tile_start = tile_info[5];  /* t2's data_start (region indices, NOT RGB565) */
 
-        /* Get the pixel at this position in the tile */
+        /* Get the region index at this position in the t2 tile */
         unsigned int pix_idx = ((DAT_00480868 + param_2) % tile_h) * tile_w +
                                (param_1 + DAT_00480864) % tile_w + tile_start;
         unsigned short pix_val = *(unsigned short *)((char *)DAT_0048072c + pix_idx * 2);
@@ -725,7 +725,7 @@ void FUN_00417850(int param_1, int param_2, unsigned char param_3)
             int cy = start_y + dy;
             int *info = (int *)((char *)DAT_00481b54 + DAT_00480894 * 0xc);
             int tw = info[0];
-            int pixel_start = info[2];
+            int pixel_start = info[5];  /* t2's data_start (region indices) */
             int row_in_tile = (DAT_00480868 + cy) % info[1];
             int col_in_tile = (DAT_00480864 + start_x) % tw;
 
@@ -1774,6 +1774,8 @@ void FUN_00419860(void)   { /* Treasure spawning - stub */ }
 /* Returns 1 on success, 0 on failure */
 int FUN_004143e0(int width, int height)
 {
+    LOG("[GG] FUN_004143e0: width=%d height=%d, themes=%d\n", width, height, DAT_00486484);
+
     if (DAT_00486484 == 0) {
         sprintf(DAT_00489d7c, "GG Error : No GG themes!");
         return 0;
@@ -1797,6 +1799,7 @@ int FUN_004143e0(int width, int height)
 
     /* Copy selected theme name to DAT_00480740 */
     strcpy(DAT_00480740, (const char *)DAT_00486488[theme_idx]);
+    LOG("[GG] Theme: '%s' (idx=%d), simple_mode=%d\n", DAT_00480740, theme_idx, DAT_004808e1);
 
     /* Parse theme info.txt */
     FUN_00415a60();
@@ -1814,6 +1817,7 @@ int FUN_004143e0(int width, int height)
         if (DAT_004879f4 > 0x1e78) DAT_004879f4 = 0x1e78;
 
         FUN_00416ad0();
+        LOG("[GG] Map allocated: %ux%u\n", DAT_004879f0, DAT_004879f4);
     }
 
     /* Set map boundaries */
@@ -1832,6 +1836,7 @@ int FUN_004143e0(int width, int height)
     DAT_00480858 = 1;
 
     /* Load tile graphics */
+    LOG("[GG] Loading tile graphics...\n");
     int result = FUN_00416320();
     if (result == 0) {
         if (DAT_004808d0 == 3)
@@ -1844,6 +1849,8 @@ int FUN_004143e0(int width, int height)
             sprintf(DAT_00489d7c, "GG Error : Graphics take too much memory in \"%s\"", DAT_00480740);
         return 0;
     }
+
+    LOG("[GG] Tiles loaded: %d tiles, darkness=%d\n", DAT_00480898, DAT_0048085c);
 
     /* Generate terrain */
     if (DAT_004808e1 == '\0') {
@@ -1939,5 +1946,7 @@ int FUN_004143e0(int width, int height)
     Mem_Free(DAT_00480730);
     Mem_Free(DAT_004818e4);
 
+    LOG("[GG] Generation complete: %ux%u map, parallax=%d\n",
+        DAT_004879f0, DAT_004879f4, DAT_00483960);
     return 1;
 }
