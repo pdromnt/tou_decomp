@@ -1564,8 +1564,6 @@ static int FUN_00423150(void)
     }
 
     fclose(f);
-    LOG("[LOAD] all3.gfx: %d RGB pixels, %d grayscale pixels, max_spr_idx=%d\n",
-        DAT_00481d28, DAT_00481d24, max_spr_idx);
     return 1;
 }
 
@@ -1621,7 +1619,6 @@ static int FUN_004254b0(void)
     }
 
     fclose(f);
-    LOG("[LOAD] loadtime.dat: %d entity types loaded\n", offset / 0x218);
     return 1;
 }
 
@@ -1657,8 +1654,6 @@ int FUN_004252d0(void)
                                       ((R << 9) & 0xFC00));
         }
     }
-    LOG("[LOAD] pal.col: 256 palette entries loaded into DAT_00487aa8\n");
-
     /* --- Load shipal.col → DAT_00481f4c (ship palette) --- */
     f = fopen("data\\shipal.col", "rb");
     if (!f) {
@@ -1679,8 +1674,6 @@ int FUN_004252d0(void)
                                       ((R << 9) & 0xFC00));
         }
     }
-    LOG("[LOAD] shipal.col: 256 palette entries loaded into DAT_00481f4c\n");
-
     return 1;
 }
 
@@ -1717,11 +1710,6 @@ int FUN_00422740(void)
         if (f) {
             fread(DAT_00489e90, 1, 0x82D0, f);
             fclose(f);
-            unsigned short *lut_check = (unsigned short *)DAT_00489e90;
-            LOG("[LOAD] taulu2.tau: loaded 0x82D0 bytes, first words: %04X %04X %04X %04X\n",
-                lut_check[0], lut_check[1], lut_check[2], lut_check[3]);
-        } else {
-            LOG("[LOAD] WARNING: Could not open data\\taulu2.tau\n");
         }
     }
 
@@ -2638,7 +2626,6 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x19f, 0x98, 1, 3, 0, 0, 2, 0xff);      /* copyright line 1 */
         FUN_00430200(0, 0x1ae, 0x10f, 1, 3, 0, 0, 2, 0xff);     /* copyright line 2 */
         FUN_00430200(0, 0x1c2, 0x141, 0, 3, 0, 0, 2, 0xff);     /* version string */
-        LOG("[MENU] Page 0: Main menu (%d items)\n", DAT_004877a8);
         DAT_004877c9 = 0xFE;  /* Back page = exit */
         DAT_004877b1 = 0;
         return;
@@ -2655,7 +2642,6 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x13e, 0xe, 2, 0, 1, 0, 1, 8);          /* "Keys" → page 8 */
         FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);       /* "Name" → page 0xC */
         FUN_00430200(0, 0x194, 0xf, 2, 0, 1, 0, 1, 0);          /* "Back" → page 0 */
-        LOG("[MENU] Page 1: Options (%d items)\n", DAT_004877a8);
         g_FrameIndex = 1;
         DAT_004877c9 = 0;  /* ESC → main menu */
         DAT_004877b1 = 0;
@@ -2675,7 +2661,6 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x118, 0x1a, 0, 2, 0, 0, 3, 0xff);      /* credit line */
         FUN_00430200(0, 0x131, 0x19, 0, 2, 0, 0, 3, 0xff);      /* credit line */
         FUN_00430200(0, 400, 0xf, 2, 0, 1, 0, 1, 0);            /* "Back" → main menu */
-        LOG("[MENU] Page 2: Credits (%d items)\n", DAT_004877a8);
         DAT_004877c9 = 0;  /* ESC → main menu */
         DAT_004877b1 = 0;
         return;

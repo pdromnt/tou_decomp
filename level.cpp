@@ -81,8 +81,7 @@ int Load_SWP_Sky(const char *level_name)
         f = fopen(path, "rb");
     }
     if (!f) {
-        LOG("[LEVEL] No SWP sky file: %s\n", path);
-        return 0;
+            return 0;
     }
 
     fread(&w, 4, 1, f);
@@ -122,7 +121,6 @@ int Load_SWP_Sky(const char *level_name)
     }
 
     g_MemoryTracker += size;
-    LOG("[LEVEL] Loaded SWP sky: %dx%d (%d bytes), converted RGB555→RGB565\n", w, h, size);
     return 1;
 }
 
@@ -162,8 +160,6 @@ void Assign_Water_Tile_Colors(void)
         }
     }
 
-    LOG("[LEVEL] Water tile colors assigned: fill=0x%04X across %dx%d map\n",
-        (unsigned int)DAT_0048384c, width, height);
 }
 
 /* ===== FUN_0045af70 — Build_Water_Color_LUTs (0045AF70) ===== */
@@ -323,10 +319,6 @@ void FUN_00421310(void)
         );
     }
 
-    LOG("[LEVEL] Water colors: R=%d G=%d B=%d, fill=0x%04X, light=0x%04X, dark=0x%04X\n",
-        DAT_00483840, DAT_00483844, DAT_00483848,
-        (unsigned int)DAT_0048384c, (unsigned int)DAT_0048384e, (unsigned int)DAT_00483850);
-
     FUN_0045af70();
 }
 
@@ -345,8 +337,6 @@ int Load_Level_File(const char *level_name)
 
     /* Build path: levels\<name>.lev */
     sprintf(path, "levels\\%s.lev", level_name);
-    LOG("[LEVEL] Loading level file: %s\n", path);
-
     f = fopen(path, "rb");
     if (!f) {
         sprintf(DAT_00489d7c, "Level \"%s\" not found!", level_name);
@@ -383,15 +373,10 @@ int Load_Level_File(const char *level_name)
         return 0;
     }
 
-    LOG("[LEVEL] Header verified: %s (%ld bytes)\n", LEV_MAGIC, file_size);
-
     /* Extract section offsets from header */
     jpeg_offset   = *(int *)(file_buf + 0x16);
     extra_offset  = *(int *)(file_buf + 0x1a);
     entity_offset = *(int *)(file_buf + 0x1e);
-
-    LOG("[LEVEL] Offsets: jpeg=0x%x, extra=0x%x, entity=0x%x\n",
-        jpeg_offset, extra_offset, entity_offset);
 
     /* Validate offsets are within file bounds */
     if (jpeg_offset < 0x22 || entity_offset < jpeg_offset ||
@@ -409,8 +394,6 @@ int Load_Level_File(const char *level_name)
     memcpy(DAT_00483860, file_buf + 0x22, 0x39c);
     DAT_00483960 = (char)DAT_00483860[0x100];
     DAT_0048396d = (char)DAT_00483860[0x10d];
-    LOG("[LEVEL] Config blob: sky_enabled=%d, gen_map=%d\n",
-        (int)(unsigned char)DAT_00483960, (int)(unsigned char)DAT_0048396d);
 
     /* Load JPEG background, entities, and tilemap */
     result = Load_Image_Data(jpeg_offset, extra_offset, entity_offset, file_buf);
@@ -430,12 +413,6 @@ int Load_Level_File(const char *level_name)
      * Without this, the wave renderer paints surface tiles with stale
      * colors from the config blob, creating a visible two-layer effect. */
     if (result) {
-        LOG("[LEVEL] Pre-water: R=%d G=%d B=%d, fill=0x%04X (from config blob)\n",
-            DAT_00483840, DAT_00483844, DAT_00483848, (unsigned int)DAT_0048384c);
-        LOG("[LEVEL] Level data water bytes: [0x103]=0x%02X [0x104]=0x%02X [0x105]=0x%02X\n",
-            (unsigned int)DAT_00483860[0x103],
-            (unsigned int)DAT_00483860[0x104],
-            (unsigned int)DAT_00483860[0x105]);
         FUN_00421310();
     }
 
@@ -465,15 +442,11 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     jpeg_data = file_buf + jpeg_offset;
     jpeg_len  = entity_offset - jpeg_offset;
 
-    LOG("[LEVEL] Decoding JPEG: offset=0x%x, size=%d bytes\n", jpeg_offset, jpeg_len);
-
     rgb24 = (unsigned char *)Load_JPEG_From_Memory(jpeg_data, jpeg_len, &img_w, &img_h);
     if (!rgb24) {
         sprintf(DAT_00489d7c, "Failed to decode level background JPEG");
         return 0;
     }
-
-    LOG("[LEVEL] JPEG decoded: %dx%d pixels\n", img_w, img_h);
 
     /* ---- 2. Calculate map dimensions ---- */
     map_w = (unsigned int)img_w + 14;  /* +14 border (7 each side) */
@@ -496,10 +469,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     DAT_004879fc = ((int)map_h >> 4) + 2;   /* coarse grid rows */
     DAT_00487a04 = (int)map_w / 18 + 2;     /* shadow grid cols */
     DAT_00487a08 = (int)map_h / 18 + 2;     /* shadow grid rows */
-
-    LOG("[LEVEL] Map: %ux%u, stride=%u (shift=%u)\n", map_w, map_h, stride, shift);
-    LOG("[LEVEL] Grids: coarse=%dx%d, shadow=%dx%d\n",
-        DAT_004879f8, DAT_004879fc, DAT_00487a04, DAT_00487a08);
 
     /* ---- 3. Allocate combined buffer (background + tilemap) ---- */
     /* Layout: [stride*height*2 bytes RGB565] [stride*height*1 byte tilemap] */
@@ -538,8 +507,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     }
 
     stbi_image_free(rgb24);
-    LOG("[LEVEL] Background converted to RGB565\n");
-
     /* ---- 5. Parse entity placements ---- */
     {
         unsigned char *ent_section = file_buf + entity_offset;
@@ -555,7 +522,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
         }
 
         DAT_00489278 = ent_count;
-        LOG("[LEVEL] Entity placements: %d\n", ent_count);
 
         for (i = 0; i < ent_count; i++) {
             /* Copy 20 bytes per entity */
@@ -572,9 +538,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
             int tile_row = 7;
             int tile_col = 7;
             int tiles_filled = 0;
-
-            LOG("[LEVEL] Decoding RLE tilemap (starts at file offset 0x%x)\n",
-                (int)(rle_data - file_buf));
 
             while (1) {
                 unsigned char b0 = *rle_data++;
@@ -605,7 +568,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                 }
             }
 
-            LOG("[LEVEL] Tilemap decoded: %d tiles filled\n", tiles_filled);
         }
     }
 
@@ -666,9 +628,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
         g_MemoryTracker += (DAT_00487a08 + 1) * (DAT_00487a04 + 1);
         memset(DAT_00489ea8, 0, (DAT_00487a08 + 1) * (DAT_00487a04 + 1));
     }
-
-    LOG("[LEVEL] Grid buffers allocated (coarse=%p, shadow1=%p, shadow2=%p)\n",
-        DAT_00487814, DAT_00489ea4, DAT_00489ea8);
 
     /* ---- 10. Initialize game config defaults (from FUN_00416ad0) ---- */
     /* These are gameplay tuning values set each time a level's grid is built.

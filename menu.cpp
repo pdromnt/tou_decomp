@@ -110,8 +110,6 @@ int Load_Level_Resources(void)
     int levelIdx = 0;
     char *levelName;
 
-    LOG("[LEVEL] Load_Level_Resources\n");
-
     /* Set up flags for local mode.
      * Team mode / player count come from config blob (options.cfg). */
     DAT_0048396d = 0;      /* not a generated map */
@@ -147,7 +145,6 @@ int Load_Level_Resources(void)
             /* GG theme (type 2): procedural level generation.
              * Copy theme name to DAT_0048396e for matching, then call generator. */
             levelName = (char *)DAT_00485090[levelIdx];
-            LOG("[LEVEL] GG theme '%s' selected (index %d)\n", levelName, levelIdx);
             strcpy(DAT_0048396e, levelName);
 
             /* Compute random map dimensions based on size preset g_ConfigBlob[2] */
@@ -174,7 +171,6 @@ int Load_Level_Resources(void)
             }
 
             DAT_00486938 = levelName;
-            LOG("[LEVEL] GG level generated: %ux%u map\n", DAT_004879f0, DAT_004879f4);
 
             /* Skip Load_Level_File — GG generator already set up the map */
             goto gg_level_ready;
@@ -194,9 +190,6 @@ int Load_Level_Resources(void)
      * managed by the round-end state machine; bytes 1+ hold per-player scores.
      * Writing levelIdx as a full int would clobber score data AND corrupt the
      * slot counter if the indirection table reorders levels. */
-    LOG("[LEVEL] Selected level: '%s' (index %d, slot %d)\n",
-        levelName, levelIdx, (int)(unsigned char)DAT_0048693c);
-
     result = Load_Level_File(levelName);
     if (result == 0) {
         LOG("[LEVEL] Load_Level_File FAILED: %s\n", DAT_00489d7c);
@@ -206,9 +199,7 @@ int Load_Level_Resources(void)
     /* Load per-level sky image (.SWP) if sky rendering is enabled.
      * The level config blob sets DAT_00483960=1 for levels with sky. */
     if (DAT_00483960 == '\x01') {
-        if (!Load_SWP_Sky(levelName)) {
-            LOG("[LEVEL] WARNING: Sky enabled but no SWP file, falling back to tiled sprite\n");
-        }
+        Load_SWP_Sky(levelName);
     }
 
 gg_level_ready:
@@ -225,8 +216,6 @@ gg_level_ready:
             DAT_00489244 = 1;   /* 1 human */
         }
     }
-    LOG("[LEVEL] Player setup: %d total, %d human\n", DAT_00489240, DAT_00489244);
-
     /* Player data (DAT_00487810) and ship stats (DAT_0048780c) are now
      * allocated in Init_Memory_Pools, matching the original binary. */
 
@@ -246,16 +235,13 @@ gg_level_ready:
 
     /* FUN_0041b010() - Ship/player init */
     FUN_0041b010();
-    LOG("[LEVEL] FUN_0041b010 (ship init) complete\n");
 
     /* FUN_004249c0() - Ship sprite loading (fatal on failure in original) */
     result = FUN_004249c0();
     if (result != 1) {
-        LOG("[LEVEL] FATAL: FUN_004249c0 (ship sprites) failed\n");
         sprintf(DAT_00489d7c, "Could not load ships!");
         return 0;
     }
-    LOG("[LEVEL] FUN_004249c0 (ship sprites) loaded OK\n");
 
     /* Clear extended entity state (matches original loop) */
     if (DAT_004892e8) {
@@ -281,11 +267,8 @@ gg_level_ready:
 
     /* Check for entity spawning errors (original checks DAT_00489d7c after FUN_0041bfe0) */
     if (DAT_00489d7c[0] != '\0') {
-        LOG("[LEVEL] Entity spawning error: %s\n", DAT_00489d7c);
         return 0;
     }
-    LOG("[LEVEL] Entity spawning: %d entities, %d troopers, %d projectiles, %d debris, %d decor, %d spawns\n",
-        DAT_00489248, DAT_0048924c, DAT_00489260, DAT_00489268, DAT_004892d8, DAT_004892d4);
 
     /* Edge detection: find walkable tiles adjacent to solid */
     FUN_0041d2e0();
@@ -317,8 +300,6 @@ gg_level_ready:
     /* Visibility map: full rebuild for init */
     FUN_00449040('\x01');
 
-    LOG("[LEVEL] Load_Level_Resources complete: %ux%u map, stride=%d, %d entities\n",
-        DAT_004879f0, DAT_004879f4, DAT_00487a00, DAT_00489278);
     return 1;
 }
 
@@ -410,7 +391,6 @@ void FUN_004102b0(void)
         } while (iVar5 < DAT_0048927c);
     }
 
-    LOG("[INIT] Turret placement: %d turrets found\n", DAT_0048927c);
 }
 
 /* ===== FUN_0041bc50 - Trooper Spawn Placement (0041BC50) ===== */
@@ -486,7 +466,6 @@ done:
     FUN_00453230();
     FUN_004533d0();
 
-    LOG("[INIT] Trooper spawn: %d spawn points\n", DAT_004892c8);
 }
 
 /* ===== FUN_0041bed0 - Difficulty Constants (0041BED0) ===== */
@@ -512,9 +491,6 @@ void FUN_0041bed0(void)
     }
     DAT_004892ac = table2[(unsigned char)DAT_0048373f] * 0x3f;
 
-    LOG("[INIT] Difficulty: setting1=%d → ticks=%d, setting2=%d → value=%d\n",
-        (int)(unsigned char)DAT_00483740, DAT_004892a8,
-        (int)(unsigned char)DAT_0048373f, DAT_004892ac);
 }
 
 /* ===== FUN_00451500 - Team Initialization (00451500) ===== */
@@ -556,7 +532,6 @@ void FUN_00451500(void)
         DAT_004892a4 = (char)(last_team + 1);
     }
 
-    LOG("[INIT] Team init: %d active teams\n", count);
 }
 
 /* ===== FUN_0041a370 - Player Stat Scaling (0041A370) ===== */
@@ -737,10 +712,7 @@ after_team:
      * DAT_00483828 provides upward buoyancy for f2c particles (bubbles)
      * and gravity for entity/projectile physics. */
 
-    LOG("[INIT] Stat scaling: turrets=%d, troopers=%d, team_mode=%d, dmg_scale=%d, grav=%d, lev_byte=0x%02X\n",
-        (int)(unsigned char)DAT_00483834, (int)(unsigned char)DAT_00483835,
-        (int)(unsigned char)DAT_00483836, DAT_00483824, DAT_00483828,
-        (int)DAT_00483860[0x107]);
+    /* Stat scaling applied */
 }
 
 /* ===== FUN_0041d2e0 - Edge Detection (0041D2E0) ===== */
@@ -795,7 +767,6 @@ void FUN_0041d2e0(void)
         } while (row < (int)DAT_004879f4 - 7);
     }
 
-    LOG("[INIT] Edge detection: %d edges found\n", DAT_00489254);
 }
 
 /* ===== FUN_0041aea0 - Player Spawn Init (0041AEA0) ===== */
@@ -899,10 +870,6 @@ void FUN_0041aea0(void)
         soff += 0x40;
     }
 
-    LOG("[INIT] Player spawn: %d players initialized, P0 pos=(%d,%d)\n",
-        DAT_00489240,
-        DAT_00487810 ? *(int *)(DAT_00487810) >> 18 : 0,
-        DAT_00487810 ? *(int *)(DAT_00487810 + 4) >> 18 : 0);
 }
 
 /* ===== FUN_00449040 - Visibility Map Scanner (00449040) ===== */
@@ -1834,8 +1801,6 @@ int FUN_004249c0(void)
         strcpy(path, ship_dir);
         strcat(path, ship_files[ship_type]);
 
-        LOG("[SHIP] Loading ship %d: type=%d file=%s\n", ship_idx, ship_type, path);
-
         f = fopen(path, "rb");
         if (!f) {
             LOG("[SHIP] ERROR: Cannot open %s\n", path);
@@ -2000,7 +1965,6 @@ int FUN_004249c0(void)
         meta_offset += 0x186A8;
         stats_offset += 0x40;
 
-        LOG("[SHIP] Ship %d loaded: %d total pixels\n", ship_idx, total_pixels);
     }
 
     return 1;

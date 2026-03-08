@@ -353,16 +353,6 @@ static void Gameplay_Tick(void)
         catch_up = 9;
     }
 
-    /* Debug: log first few ticks */
-    {
-        static int dbg_frame = 0;
-        if (dbg_frame < 3) {
-            LOG("TICK: frame=%d catch_up=%d f2c=%d f34=%d\n",
-                dbg_frame, catch_up, DAT_0048925c, DAT_00489250);
-        }
-        dbg_frame++;
-    }
-
     /* Execute each tick */
     for (tick = 0; tick < catch_up; tick++) {
         g_TimerAux++;
@@ -638,8 +628,6 @@ void Game_Update_Render(void)
         g_SubState = 3;
         (*(unsigned char *)&DAT_0048693c)++;
 
-        LOG("[GAME] Round end: level slot now %d / %d rounds\n",
-            (int)(unsigned char)DAT_0048693c, (int)g_ConfigBlob[0]);
         /* Fall through to rendering — stats overlay will be drawn this frame */
     }
 
@@ -697,8 +685,6 @@ void Handle_Menu_State(void)
  * Returns 1 on success, 0 on failure. */
 int Init_New_Game(void)
 {
-    LOG("[INIT] Init_New_Game\n");
-
     /* Original clears sprite pixel cursors + all 20000 entries in
      * frame offset / width / height tables, then calls FUN_00423150()
      * to reload sprites from disk. Since we don't have the sprite
@@ -718,8 +704,6 @@ int Init_New_Game(void)
     if (DAT_00487ab0) {
         Init_Math_Tables((int *)DAT_00487ab0, 0x800);
     }
-
-    LOG("[INIT] Init_New_Game - math tables reinit (sprites preserved)\n");
 
     return 1;
 }
