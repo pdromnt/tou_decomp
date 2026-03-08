@@ -1933,15 +1933,28 @@ void FUN_00434310(void)
         /* === Entity behavior (inline replacement for callback at +0x34) === */
 
         /* Entity category flags.
-         * The original callback at 0x438010 handles all entity types through
-         * a state machine + FUN_00437B10 (homing toward deployed weapons).
-         * Types with initial velocity set at spawn are whitelisted as
-         * projectiles for gravity + wall/player collision.
-         * Type 0x2D (laser) handled separately as instant beam trace below. */
-        int is_projectile = (ent_type == 0 || ent_type == 1 || ent_type == 0x11 ||
-                             ent_type == 0x13 || ent_type == 0x69 || ent_type == 0x12 ||
-                             ent_type == 0x2c);
+         * is_debris MUST be evaluated first — debris types overlap with
+         * projectile velocity check and must be excluded.
+         *
+         * is_projectile uses velocity-based detection instead of a hardcoded
+         * type list.  The original callback at 0x438010 handles ALL entity
+         * types through a state machine; any spawned entity with non-zero
+         * velocity that isn't debris / laser / trail / water is a projectile
+         * that needs gravity + wall/player collision.
+         *
+         * Exclusions:
+         *   - is_debris  (type 2, 100, >=0x6C, state 5) — handled separately
+         *   - 0x2D laser — instant beam trace, handled above
+         *   - 0x67 machinegun trail — cosmetic particles, no collision
+         *   - 0x65 water splash particles — cosmetic, no collision */
         int is_debris = (ent_type == 2 || ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
+
+        int is_projectile = 0;
+        if (!is_debris && ent_type != 0x2d && ent_type != 0x67 && ent_type != 0x65) {
+            if (*(int *)(ebase + 0x18) != 0 || *(int *)(ebase + 0x1c) != 0) {
+                is_projectile = 1;
+            }
+        }
 
         /* === Laser beam trace (type 0x2D) ===
          * Original callback at 0x0043f990 traces the ENTIRE beam path in one
@@ -2123,11 +2136,9 @@ void FUN_00434310(void)
             }
         }
 
-        /* Wall collision for projectile entities (types from turret spawn):
-         *   0x00 = basic bullet (wtype 0,1,5)
-         *   0x01 = homing missile (wtype 3)
-         *   0x11 = spread shot (wtype 4)
-         *   0x13 = freeze projectile
+        /* Wall collision for all projectile entities (velocity-based detection).
+         * Covers all weapon types from FUN_00401000_impl including pipebomb,
+         * turret spawner, spread shot, homing missiles, freeze, etc.
          * Debris entities (type 2, >=0x6C, state 5) are excluded. */
         if (!should_remove && is_projectile && !is_debris) {
             /* Wall collision for projectiles */
@@ -2145,6 +2156,40 @@ void FUN_00434310(void)
                     DAT_00481e8f = 0;
                     FUN_004355d0(i);
                     if (DAT_00481e8f != 0) {
+                        /* Play per-type sound on building hit.
+                         * Silent types (shrapnel spawners, turret, shotgun,
+                         * grenades) skip the sound entirely. */
+                        int bx = *(int *)(ebase + 0x04);
+                        int by = *(int *)(ebase + 0x0C);
+                        switch (ent_type) {
+                        case 0x00:                        /* basic bullet */
+                        case 0x69:                        /* mine */
+                        case 0x08: case 0x09: case 0x0E: /* shrapnel spawners */
+                        case 0x18:                        /* silent KB */
+                        case 0x22:                        /* turret spawner */
+                        case 0x24: case 0x25:             /* shotgun/spawner */
+                        case 0x28: case 0x29: case 0x2A:  /* grenades */
+                            break; /* silent */
+                        case 0x01:
+                            FUN_0040f9b0(0x32, bx, by); break;
+                        case 0x13:
+                            FUN_0040f9b0(0x10B, bx, by); break;
+                        case 0x14:
+                            FUN_0040f9b0(0x10C, bx, by); break;
+                        case 0x16:
+                            FUN_0040f9b0(0x10D, bx, by); break;
+                        case 0x1F:
+                            FUN_0040f9b0(0x70, bx, by); break;
+                        case 0x23:
+                            FUN_0040f9b0(0x11C, bx, by); break;
+                        case 0x05: case 0x0B: case 0x0F:
+                        case 0x17: case 0x19: case 0x1B:
+                        case 0x1C: case 0x1D: case 0x1E:
+                        case 0x27: case 0x2E:
+                            FUN_0040f9b0(0x65 + (rand() % 7), bx, by); break;
+                        default:
+                            FUN_0040f9b0(0x11, bx, by); break;
+                        }
                         should_remove = 1;
                     }
                 }
@@ -2189,11 +2234,224 @@ void FUN_00434310(void)
 
                     unsigned char owner = *(unsigned char *)(ebase + 0x22);
 
-                    /* Call FUN_004357b0 for AoE tile damage / wall deformation.
-                     * Params 6-9 = 0 (no directional tracing, same as System 2).
-                     * This is what creates the visual crater in the tilemap. */
-                    FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                 0, 0, 0, 0, 0, '\0', owner);
+                    /* Per-type wall collision effects.
+                     * Each weapon type has specific effects matching the original
+                     * behavior callbacks mapped by FUN_0041fe70. */
+                    {
+                        int prev_x = *(int *)(ebase + 0x04);
+                        int prev_y = *(int *)(ebase + 0x0C);
+                        unsigned char sub_t = *(unsigned char *)(ebase + 0x40);
+                        int flash_count = 0;
+
+                        switch (ent_type) {
+                        /* Callback 0x438010: only type 0x12 gets flash + sound.
+                         * Types 0x00 and 0x69 exit early in original (0x438A33):
+                         * ent_type != 0x69 && ent_type != 0x12 → skip to end. */
+                        case 0x00: /* Basic bullet — tile damage only, no sound */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            break;
+                        case 0x12: /* Pipebomb — tile damage + flash + sound 0x11 */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            flash_count = (rand() & 1) + 3;
+                            FUN_0040f9b0(0x11, prev_x, prev_y);
+                            break;
+                        case 0x69: /* Mine — tile damage only, no sound */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            break;
+
+                        /* Callback 0x438D90: tile damage + KB + sound 0x32 */
+                        case 0x01: /* Bounce missile */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            FUN_0040f9b0(0x32, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x439880: tile damage + KB + random sound */
+                        case 0x05: /* Big explosion */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x43CC20: silent, original spawns 0x67 shrapnel */
+                        case 0x08:
+                        case 0x09:
+                            break;
+
+                        /* Callback 0x431650: tile damage + KB + random sound */
+                        case 0x0B:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x430DC0: silent, original spawns shrapnel */
+                        case 0x0E:
+                            break;
+
+                        /* Callback 0x4330C0: tile damage + KB + random sound */
+                        case 0x0F:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x441AA0: tile damage + flash + sound 0x11 */
+                        case 0x11: /* Spread shot */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            flash_count = (rand() & 1) + 2;
+                            FUN_0040f9b0(0x11, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x43A4B0: type-specific sound, no tile damage */
+                        case 0x13: /* Freeze */
+                            FUN_0040f9b0(0x10B, prev_x, prev_y);
+                            break;
+                        case 0x14: /* Homing freeze */
+                            FUN_0040f9b0(0x10C, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x439B90: tile damage, sound for 0x16 only */
+                        case 0x16:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_0040f9b0(0x10D, prev_x, prev_y);
+                            break;
+                        case 0x2B:
+                        case 0x6A:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            break;
+
+                        /* Callback 0x432C80: KB + random sound, no tile damage */
+                        case 0x17:
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x433C80: KB only, silent */
+                        case 0x18:
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            break;
+
+                        /* Callback 0x443420: flash + random sound (bouncing) */
+                        case 0x19:
+                            flash_count = (rand() & 1) + 2;
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x443B10: tile damage + KB(150/255) + sound */
+                        case 0x1B:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 150, owner, 255);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x440E20: KB(150/255) + sound, no tile damage */
+                        case 0x1C:
+                            FUN_00437cf0(prev_x, prev_y, 150, owner, 255);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x43C0B0: tile damage + sound; KB for 0x1D only */
+                        case 0x1D: /* Heavy — KB(400/500) */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 400, owner, 500);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+                        case 0x1E: /* Light — no KB */
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x43B370: unique sound 0x70, no tile damage */
+                        case 0x1F:
+                            FUN_0040f9b0(0x70, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x4442F0: turret spawner, silent */
+                        case 0x22:
+                            break;
+
+                        /* Callback 0x4457B0: heavy impact sound only */
+                        case 0x23:
+                            FUN_0040f9b0(0x11C, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x447A70: shotgun scatter, silent */
+                        case 0x24:
+                            break;
+
+                        /* Callback 0x446130: spawns 0x6A entities, silent */
+                        case 0x25:
+                            break;
+
+                        /* Callback 0x43DBD0: flash burst only, no sound */
+                        case 0x26:
+                            flash_count = (rand() & 1) + 4;
+                            break;
+
+                        /* Callback 0x43E070: 1 flash + sound 0x65 */
+                        case 0x27:
+                            flash_count = 1;
+                            FUN_0040f9b0(0x65, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x43E890: grenade bounce, silent */
+                        case 0x28:
+                        case 0x29:
+                        case 0x2A:
+                            break;
+
+                        /* Machinegun: tile damage only, no extra effects */
+                        case 0x2C:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            break;
+
+                        /* Callback 0x432220: 1 flash + sound 0x65 */
+                        case 0x2E:
+                            flash_count = 1;
+                            FUN_0040f9b0(0x65, prev_x, prev_y);
+                            break;
+
+                        /* Unknown types: conservative — tile damage only */
+                        default:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            break;
+                        }
+
+                        /* Spawn flash particles into DAT_00481f34 (0x20-byte records,
+                         * counter DAT_00489250, max 2000 entries) */
+                        for (int ep = 0; ep < flash_count && DAT_00489250 < 2000; ep++) {
+                            int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                            *(int *)(pbase + 0x00) = prev_x;
+                            *(int *)(pbase + 0x04) = prev_y;
+                            int dir = rand() & 0x7FF;
+                            int spd = rand() % 50 + 20;
+                            *(int *)(pbase + 0x08) = (*(int *)((int)DAT_00487ab0 + dir * 4) * spd) >> 7;
+                            *(int *)(pbase + 0x0C) = (*(int *)((int)DAT_00487ab0 + 0x800 + dir * 4) * spd) >> 7;
+                            *(unsigned char *)(pbase + 0x10) = (unsigned char)((rand() & 1) + 1);
+                            *(unsigned char *)(pbase + 0x11) = 0;
+                            *(unsigned char *)(pbase + 0x12) = 2;
+                            *(unsigned char *)(pbase + 0x13) = 0xC8;
+                            *(unsigned char *)(pbase + 0x14) = owner;
+                            *(unsigned char *)(pbase + 0x15) = 0;
+                            DAT_00489250++;
+                        }
+                    }
 
                     should_remove = 1;
                 }
