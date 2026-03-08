@@ -3188,15 +3188,181 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x13: /* Results screen (requires game state) */
-    case 0x14: /* Detailed statistics */
-    case 0x15: /* Game log */
-        /* These pages display post-game results. They need game state data
-         * that isn't available until Phase 6 gameplay is implemented.
-         * For now, redirect to main menu. */
-        DAT_004877a4 = 0;
-        DAT_004877b1 = 1;
+    case 0x13: { /* Post-match Team Stats */
+        FUN_0042fdf0(0x46);                                            /* separator line */
+        FUN_00430200(0x78, 0x5a, 0x66, 2, 0, 0, 0, 1, 0xff);        /* "Team stats" header */
+        FUN_00430200(0xa0, 0x96, 0x6a, 1, 2, 0, 0, 0, 0xff);        /* column header 1 */
+        FUN_00430200(0x118, 0x96, 0x6b, 1, 2, 0, 0, 0, 0xff);       /* column header 2 */
+        FUN_00430200(400, 0x96, 0x6c, 1, 2, 0, 0, 0, 0xff);         /* column header 3 */
+        FUN_00430200(0x28, 0xbe, 0x67, 6, 2, 0, 0, 0, 0xff);        /* Team 1 label */
+        FUN_00430200(0x28, 0xe6, 0x68, 7, 2, 0, 0, 0, 0xff);        /* Team 2 label */
+        FUN_00430200(0x28, 0x10e, 0x69, 8, 2, 0, 0, 0, 0xff);       /* Team 3 label */
+
+        /* Result text based on match outcome */
+        if (g_MenuStrings && g_MenuStrings[0x65]) {
+            unsigned char *teamScores = (unsigned char *)&DAT_0048693c;
+            if (DAT_00487640[3] == 3) {
+                FUN_004644af(g_MenuStrings[0x65],
+                    (const unsigned char *)"Draw!");
+            } else if (DAT_00487640[3] == 2) {
+                FUN_004644af(g_MenuStrings[0x65],
+                    (const unsigned char *)"Team %d and team %d win with a draw!",
+                    (int)(unsigned char)DAT_00487644[0] + 1,
+                    (int)(unsigned char)DAT_00487644[1] + 1);
+            } else {
+                FUN_004644af(g_MenuStrings[0x65],
+                    (const unsigned char *)"Team %d wins!",
+                    (int)(unsigned char)DAT_00487644[0] + 1);
+            }
+        }
+        FUN_00430200(0, 0x1e, 0x65, 0, 0, 0, 0, 1, 0xff);          /* result text item */
+
+        /* Per-team stats: 3 teams × 3 columns */
+        {
+            int strIdx = 0x71;
+            int rowY = 0xb9;
+            for (int team = 0; team < 3; team++) {
+                unsigned char teamWins = ((unsigned char *)&DAT_0048693c)[team + 1];
+                unsigned int color = (teamWins != DAT_00487648) ? 3 : 0;
+
+                /* Column 1: Wins (from DAT_0048693c bytes 1-3) */
+                if (g_MenuStrings && g_MenuStrings[strIdx])
+                    FUN_004644af(g_MenuStrings[strIdx],
+                        (const unsigned char *)"%d", (int)teamWins);
+                FUN_00430200(0xb1, rowY, strIdx, color, 0, 0, 0, 0, 0xff);
+
+                /* Column 2: Frags (from DAT_00486944) */
+                if (g_MenuStrings && g_MenuStrings[strIdx + 1])
+                    FUN_004644af(g_MenuStrings[strIdx + 1],
+                        (const unsigned char *)"%d", DAT_00486944[team]);
+                FUN_00430200(0x12d, rowY, strIdx + 1, color, 0, 0, 0, 0, 0xff);
+
+                /* Column 3: Deaths (from DAT_00486954) */
+                if (g_MenuStrings && g_MenuStrings[strIdx + 2])
+                    FUN_004644af(g_MenuStrings[strIdx + 2],
+                        (const unsigned char *)"%d", DAT_00486954[team]);
+                FUN_00430200(0x1b4, rowY, strIdx + 2, color, 0, 0, 0, 0, 0xff);
+
+                strIdx += 3;
+                rowY += 0x28;
+            }
+
+            /* "Debris killed: %d" — strIdx = 0x7A after loop */
+            if (g_MenuStrings && g_MenuStrings[strIdx])
+                FUN_004644af(g_MenuStrings[strIdx],
+                    (const unsigned char *)"Debris killed: %d", DAT_00486964);
+            FUN_00430200(0x28, 0x136, strIdx, 1, 2, 0, 0, 0, 0xff);
+
+            /* "Game elapsed: %d hours, %d minutes, %d seconds" — strIdx+1 = 0x7B */
+            {
+                unsigned int totalSec = DAT_004892bc / 1000;
+                int hours = (int)(totalSec / 3600);
+                int minutes = (int)((totalSec % 3600) / 60);
+                int seconds = (int)(totalSec % 60);
+                if (g_MenuStrings && g_MenuStrings[strIdx + 1])
+                    FUN_004644af(g_MenuStrings[strIdx + 1],
+                        (const unsigned char *)"Game elapsed: %d hours, %d minutes, %d seconds",
+                        hours, minutes, seconds);
+            }
+            FUN_00430200(0x28, 0x156, strIdx + 1, 1, 1, 0, 0, 0, 0xff);
+        }
+
+        /* Navigation buttons */
+        FUN_0042ff80(0x28, 0x181, 0x38, 1, 0, 0, 0);                 /* → Main menu */
+        FUN_0042ff80(0xfa, 0x181, 0x3c, 1, 0, 0, 0x13);              /* → Team stats */
+        FUN_0042ff80(0x17c, 0x181, 0x3e, 1, 0, 0, 0x14);             /* → Player stats */
+        FUN_0042ff80(0x1e0, 0x183, 0x3d, 1, 0, 0, 0x15);             /* → Awards */
+        DAT_004877c9 = 0;
+        DAT_004877b1 = 0;
         return;
+    }
+
+    case 0x14: { /* Post-match Player Stats (scrollable) */
+        FUN_00430200(0, 0x1e, 0x65, 0, 0, 0, 0, 1, 0xff);           /* result text */
+        FUN_0042fdf0(0x46);                                            /* separator */
+        FUN_00430200(0x78, 0x5a, 0x70, 2, 0, 0, 0, 1, 0xff);        /* "Player stats" */
+        FUN_00430200(0x32, 0x8c, 0x5e, 1, 2, 0, 0, 0, 0xff);        /* Name column */
+        FUN_00430200(0x96, 0x8c, 0x61, 1, 2, 0, 0, 0, 0xff);        /* Ship column */
+        FUN_00430200(0xfa, 0x8c, 0x6b, 1, 2, 0, 0, 0, 0xff);        /* Deaths column */
+        FUN_00430200(0x15e, 0x8c, 0x6c, 1, 2, 0, 0, 0, 0xff);       /* Wins column */
+        /* Navigation buttons */
+        FUN_0042ff80(0x28, 0x181, 0x38, 1, 0, 0, 0);
+        FUN_0042ff80(0xfa, 0x181, 0x3c, 1, 0, 0, 0x13);
+        FUN_0042ff80(0x17c, 0x181, 0x3e, 1, 0, 0, 0x14);
+        FUN_0042ff80(0x1e0, 0x183, 0x3d, 1, 0, 0, 0x15);
+        /* Scrollbar setup */
+        DAT_004877d4 = 0;
+        DAT_004877d8 = 0x208;
+        DAT_004877dc = 0x8c;
+        DAT_004877e0 = 0xbe;
+        FUN_0042ff80(0x208, 0x8c, 0x19d, 1, 10, 0, 0xff);           /* scroll up */
+        FUN_0042ff80(DAT_004877d8, DAT_004877e0 + 0x14 + DAT_004877dc,
+                     0x19e, 1, 0xb, 0, 0xff);                         /* scroll down */
+        DAT_004877ac = DAT_004877a8;
+        DAT_004877b0 = 2;
+        DAT_004877c9 = 0;
+        DAT_004877b1 = 0;
+        return;
+    }
+
+    case 0x15: { /* Post-match Awards */
+        FUN_00430200(0, 0x1e, 0x65, 0, 0, 0, 0, 1, 0xff);           /* result text */
+        FUN_0042fdf0(0x46);                                            /* separator */
+        FUN_00430200(0x78, 0x5a, 0x6d, 2, 0, 0, 0, 1, 0xff);        /* "Awards" header */
+        FUN_00430200(0x78, 0x7d, 0x6f, 1, 0, 0, 0, 2, 0xff);        /* sub-header 1 */
+        FUN_00430200(0x78, 0xfa, 0x6e, 1, 0, 0, 0, 2, 0xff);        /* sub-header 2 */
+
+        /* Player awards (render_mode 0x31).
+         * Original uses string_idx = award_index with a render_mode-specific
+         * text source in the rendering code. We format award text into dynamic
+         * g_MenuStrings buffers (0x71+) for compatible display. */
+        {
+            int awardBufIdx = 0x71;
+
+            /* Player awards */
+            int playerAwardCount = (int)(unsigned int)DAT_00487368[0];
+            if (playerAwardCount > 0) {
+                iVar3 = 0x82;
+                for (int a = 0; a < playerAwardCount && a < 6; a++) {
+                    char *awardName = (char *)&DAT_00487368[1 + a * 0x20];
+                    int playerNum = (int)(unsigned char)DAT_004874c9[a] + 1;
+                    if (g_MenuStrings && g_MenuStrings[awardBufIdx])
+                        FUN_004644af(g_MenuStrings[awardBufIdx],
+                            (const unsigned char *)"%s (Player %d)",
+                            awardName, playerNum);
+                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 2, 0, 0x31, 0, 0xff);
+                    awardBufIdx++;
+                    iVar3 += 0x14;
+                }
+            }
+
+            /* Team awards (render_mode 0x32) */
+            int teamAwardCount = (int)(unsigned int)DAT_004874d4[0];
+            if (teamAwardCount > 0) {
+                iVar3 = 0xff;
+                for (int a = 0; a < teamAwardCount && a < 6; a++) {
+                    char *awardName = (char *)&DAT_004874d4[1 + a * 0x20];
+                    int teamNum = (int)(unsigned char)DAT_00487635[a] + 1;
+                    if (g_MenuStrings && g_MenuStrings[awardBufIdx])
+                        FUN_004644af(g_MenuStrings[awardBufIdx],
+                            (const unsigned char *)"%s (Team %d)",
+                            awardName, teamNum);
+                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 2, 0, 0x32, 0, 0xff);
+                    awardBufIdx++;
+                    iVar3 += 0x14;
+                }
+            }
+        }
+
+        /* Navigation buttons */
+        FUN_0042ff80(0x28, 0x181, 0x38, 1, 0, 0, 0);
+        FUN_0042ff80(0xfa, 0x181, 0x3c, 1, 0, 0, 0x13);
+        FUN_0042ff80(0x17c, 0x181, 0x3e, 1, 0, 0, 0x14);
+        FUN_0042ff80(0x1e0, 0x183, 0x3d, 1, 0, 0, 0x15);
+        DAT_004877c9 = 0;
+        DAT_004877b1 = 0;
+        return;
+    }
 
     case 0x16: /* Color customization - team 1 */
         FUN_00430200(0x78, 0x7d, 0xe2, 0, 0, 0, 0, 1, 0xff);
