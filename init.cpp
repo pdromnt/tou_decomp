@@ -2183,14 +2183,8 @@ void FUN_00425fe0(void)
     /* ---- One-shot init when DAT_004877b1 is set (by Game_State_Manager case 0x03) ---- */
     if (DAT_004877b1 != 0) {
         /* Build menu page layout based on DAT_004877a4.
-         * Original calls FUN_0042a470 once then clears DAT_004877b1.
-         * COMPAT: Stub pages (0x13, 0x14, 0x15) redirect by setting
-         * DAT_004877a4 and DAT_004877b1=1 without building items.
-         * Re-run FUN_0042a470 once for the redirect target. */
+         * Original calls FUN_0042a470 once then clears DAT_004877b1. */
         FUN_0042a470();
-        if (DAT_004877b1 != 0) {
-            FUN_0042a470();
-        }
         DAT_004877b1 = 0;
 
         /* If FUN_0042a470 set g_GameState to 0x04 (start game), just return.
