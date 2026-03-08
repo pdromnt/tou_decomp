@@ -4220,14 +4220,24 @@ LAB_00401856:
         break;
     }
 
-    /* ===== CASE 0x2c: Homing projectile with recoil ===== */
+    /* ===== CASE 0x2c: Machinegun — rapid-fire projectile with recoil ===== */
+    /* Original sets vx/vy=0 and relies on behavior callback at 0x438010 to
+     * give velocity. Since we don't have the callback, compute velocity from
+     * player heading with angular scatter for the chaotic stream effect. */
     case 0x2c:
     {
         if (DAT_00489248 < 0x9c4) {
             int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
             *(int *)(p) = *(int *)(iVar12 + iVar13);
             *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = 0; *(int *)(p + 0x1c) = 0;
+            /* Compute velocity from heading with angular scatter */
+            {
+                int scatter = (rand() % 33) - 16;   /* ±16 angle units (~±3 degrees) */
+                unsigned int fire_heading = (uVar7 + scatter) & 0x7FF;
+                int speed = 500;
+                *(int *)(p + 0x18) = (sincos[fire_heading] * speed) >> 6;
+                *(int *)(p + 0x1c) = (sincos[(fire_heading + 0x200) & 0x7FF] * speed) >> 6;
+            }
             *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
             *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
@@ -4268,14 +4278,24 @@ LAB_00401856:
         break;
     }
 
-    /* ===== CASE 0x2d: Trail projectile ===== */
+    /* ===== CASE 0x2d: Laser — fast penetrating beam ===== */
+    /* Original behavior callback at 0x0043f990 (shared with 0x2C rocket):
+     *   vx = sincos[direction] * 2, vy = sincos[(dir+0x200)&0x7FF] * 2
+     *   Runs position+collision loop TWICE per tick (very fast beam).
+     *   Penetrates soft tiles, only stops at hard walls (tile flag 0x08).
+     * We set velocity at spawn since direction doesn't change for lasers. */
     case 0x2d:
     {
         if (DAT_00489248 < 0x9c4) {
             int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
             *(int *)(p) = *(int *)(iVar12 + iVar13);
             *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = 0; *(int *)(p + 0x1c) = 0;
+            /* Compute velocity from player heading (original callback formula) */
+            {
+                unsigned int heading = uVar7 & 0x7FF;
+                *(int *)(p + 0x18) = sincos[heading] * 2;
+                *(int *)(p + 0x1c) = sincos[(heading + 0x200) & 0x7FF] * 2;
+            }
             *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
             *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;

@@ -1933,12 +1933,115 @@ void FUN_00434310(void)
         /* === Entity behavior (inline replacement for callback at +0x34) === */
 
         /* Entity category flags.
-         * Types 0x69 (secondary weapon projectiles) and 0x12 (bombs) also
-         * need wall/player collision — the original callback at 0x438010
-         * handles all entity types through its state machine. */
+         * The original callback at 0x438010 handles all entity types through
+         * a state machine + FUN_00437B10 (homing toward deployed weapons).
+         * Types with initial velocity set at spawn are whitelisted as
+         * projectiles for gravity + wall/player collision.
+         * Type 0x2D (laser) handled separately as instant beam trace below. */
         int is_projectile = (ent_type == 0 || ent_type == 1 || ent_type == 0x11 ||
-                             ent_type == 0x13 || ent_type == 0x69 || ent_type == 0x12);
+                             ent_type == 0x13 || ent_type == 0x69 || ent_type == 0x12 ||
+                             ent_type == 0x2c);
         int is_debris = (ent_type == 2 || ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
+
+        /* === Laser beam trace (type 0x2D) ===
+         * Original callback at 0x0043f990 traces the ENTIRE beam path in one
+         * tick: loops up to 50 steps, each step moves by sincos[dir]*2,
+         * spawns a purple trail particle, and checks for hard wall collision.
+         * The laser entity itself is invisible (entity[0x4C]=30000).
+         * After tracing, the entity is removed. */
+        if (ent_type == 0x2d && !should_remove) {
+            int beam_vx = *(int *)(ebase + 0x18);
+            int beam_vy = *(int *)(ebase + 0x1C);
+            int beam_life = 50;  /* max range in steps */
+            int beam_x = *(int *)(ebase + 0x00);
+            int beam_y = *(int *)(ebase + 0x08);
+
+            for (int step = 0; step < beam_life; step++) {
+                beam_x += beam_vx;
+                beam_y += beam_vy;
+
+                /* Bounds check */
+                if (beam_x < 0 || beam_y < 0 ||
+                    beam_x >= (int)(DAT_004879f0 * 0x40000) ||
+                    beam_y >= (int)(DAT_004879f4 * 0x40000)) {
+                    break;
+                }
+
+                /* Wall collision check */
+                int btx = beam_x >> 0x12;
+                int bty = beam_y >> 0x12;
+                if (btx > 0 && bty > 0 && btx < (int)DAT_004879f0 && bty < (int)DAT_004879f4) {
+                    int btile_off = (bty << shift) + btx;
+                    unsigned char btile = *(unsigned char *)((int)DAT_0048782c + btile_off);
+                    unsigned char bpass2 = *(unsigned char *)((unsigned int)btile * 0x20 + 2 + (int)DAT_00487928);
+                    if (bpass2 == 0 && step >= 2) {
+                        /* Hit solid wall — apply crater damage like other projectiles */
+                        unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
+                        int explevel = (sub_type <= 4) ? (int)sub_type + 6 : 6;
+                        unsigned char stored_tile = 0;
+                        unsigned char tile_prop4 = *(unsigned char *)((unsigned int)btile * 0x20 + 4 + (int)DAT_00487928);
+                        if (tile_prop4 != 0) stored_tile = btile;
+                        char is_water = (btile == 0x0C) ? (char)1 : (char)0;
+                        unsigned char owner = *(unsigned char *)(ebase + 0x22);
+                        FUN_004357b0(btx, bty, explevel, stored_tile, is_water,
+                                     0, 0, 0, 0, 0, '\0', owner);
+                        break;
+                    }
+                }
+
+                /* Spawn purple trail particle at this beam position */
+                if (DAT_00489248 < 0x9c4) {
+                    int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                    memset((void *)tp, 0, 0x80);
+                    *(int *)(tp + 0x00) = beam_x;
+                    *(int *)(tp + 0x04) = beam_x;
+                    *(int *)(tp + 0x08) = beam_y;
+                    *(int *)(tp + 0x0C) = beam_y;
+                    *(int *)(tp + 0x18) = beam_vx / 8 + ((rand() & 0x3FFF) - 0x2000);
+                    *(int *)(tp + 0x1C) = beam_vy / 8 + ((rand() & 0x3FFF) - 0x2000);
+                    *(unsigned char *)(tp + 0x21) = 0x67;
+                    *(unsigned char *)(tp + 0x22) = 0xFF;
+                    *(unsigned char *)(tp + 0x26) = 0xFF;
+                    *(unsigned char *)(tp + 0x40) = 2;
+                    *(unsigned char *)(tp + 0x5C) = 2;
+                    *(unsigned char *)(tp + 0x65) = 0x5E;  /* purple palette index 94 */
+                    *(unsigned char *)(tp + 0x64) = 0x52;  /* death at 82 */
+                    if (DAT_00487aa8 != NULL) {
+                        *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[0x5E] + 30000;
+                    }
+                    *(unsigned short *)(tp + 0x24) = (unsigned short)(rand() % 5);
+                    *(int *)(tp + 0x38) = 2;
+                    DAT_00489248++;
+                }
+
+                /* Player collision along the beam */
+                for (int p = 0; p < DAT_00489240; p++) {
+                    int poff = p * 0x598;
+                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                    unsigned char raw_owner = *(unsigned char *)(ebase + 0x22);
+                    if (raw_owner == (unsigned char)p) continue;
+                    int ship_size = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) : 0;
+                    int h_range = ship_size + 0x80000;
+                    int v_range = ship_size + 0x80000;
+                    int px = *(int *)(poff + DAT_00487810);
+                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    if (px - h_range < beam_x && beam_x < px + h_range &&
+                        py - v_range < beam_y && beam_y < py + v_range) {
+                        int proj_damage = *(int *)(ebase + 0x44);
+                        unsigned char shooter_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
+                        unsigned char target_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                        if (shooter_team != target_team || DAT_0048373d != 0) {
+                            *(int *)(poff + 0x20 + DAT_00487810) -= proj_damage;
+                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner;
+                        }
+                        *(unsigned char *)(poff + 0xc4 + DAT_00487810) = 5;
+                        *(unsigned char *)(poff + 0xa3 + DAT_00487810) = 1;
+                        *(unsigned char *)(poff + 0x4a2 + DAT_00487810) = 0x6e;
+                    }
+                }
+            }
+            should_remove = 1;  /* beam traced — remove the invisible entity */
+        }
 
         /* Apply projectile gravity BEFORE position integration.
          * Original callback at 0x438010 (addr 0x4386e3):
@@ -1951,9 +2054,11 @@ void FUN_00434310(void)
             *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
         }
 
-        /* Position integration: pos += vel */
-        *(int *)(ebase + 0x00) += *(int *)(ebase + 0x18);
-        *(int *)(ebase + 0x08) += *(int *)(ebase + 0x1C);
+        /* Position integration: pos += vel (skip for laser, already traced) */
+        if (ent_type != 0x2d) {
+            *(int *)(ebase + 0x00) += *(int *)(ebase + 0x18);
+            *(int *)(ebase + 0x08) += *(int *)(ebase + 0x1C);
+        }
 
         /* Apply gravity + drag for debris entities (AFTER position update) */
         if (is_debris) {
@@ -1970,6 +2075,52 @@ void FUN_00434310(void)
             pos_x >= (int)(DAT_004879f0 * 0x40000) ||
             pos_y >= (int)(DAT_004879f4 * 0x40000)) {
             should_remove = 1;
+        }
+
+        /* === Trail particles for machinegun (0x2C) ===
+         * Original callback at 0x0043f990 spawns type 0x67 trail particles
+         * each tick. The projectile entity itself is invisible (entity[0x4C]
+         * = 30000 = black pixel dot). The visible "yellow stream" comes from
+         * these trail particles.
+         * Machinegun: palette indices 20-31 (yellow), velocity/22 */
+        if (!should_remove && ent_type == 0x2c) {
+            if (DAT_00489248 < 0x9c4) {
+                int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                memset((void *)tp, 0, 0x80);
+
+                /* Position: same as parent entity */
+                *(int *)(tp + 0x00) = *(int *)(ebase + 0x00);
+                *(int *)(tp + 0x04) = *(int *)(ebase + 0x00);
+                *(int *)(tp + 0x08) = *(int *)(ebase + 0x08);
+                *(int *)(tp + 0x0C) = *(int *)(ebase + 0x08);
+
+                /* Velocity: parent velocity / 22 + random jitter */
+                *(int *)(tp + 0x18) = *(int *)(ebase + 0x18) / 22 + ((rand() & 0x3FFF) - 0x2000);
+                *(int *)(tp + 0x1C) = *(int *)(ebase + 0x1C) / 22 + ((rand() & 0x3FFF) - 0x2000);
+
+                /* Identity */
+                *(unsigned char *)(tp + 0x21) = 0x67;   /* type: trail particle */
+                *(unsigned char *)(tp + 0x22) = 0xFF;    /* owner: none */
+                *(unsigned char *)(tp + 0x26) = 0xFF;    /* flag */
+                *(unsigned char *)(tp + 0x40) = 2;       /* sub_type */
+                *(unsigned char *)(tp + 0x5C) = 2;       /* palette step threshold */
+
+                /* Palette-based color: yellow range (indices 20-31) */
+                unsigned char pal_idx = (unsigned char)(rand() % 12 + 20);
+                *(unsigned char *)(tp + 0x65) = pal_idx;
+                *(unsigned char *)(tp + 0x64) = 0x12;    /* death threshold 18 */
+                if (DAT_00487aa8 != NULL) {
+                    *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[pal_idx] + 30000;
+                }
+
+                /* Random pixel shape pattern (0-4) */
+                *(unsigned short *)(tp + 0x24) = (unsigned short)(rand() % 5);
+
+                /* Gravity (small downward drift) */
+                *(int *)(tp + 0x38) = 2;
+
+                DAT_00489248++;
+            }
         }
 
         /* Wall collision for projectile entities (types from turret spawn):
