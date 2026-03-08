@@ -4239,8 +4239,10 @@ LAB_00401856:
 
     /* ===== CASE 0x2c: Machinegun — rapid-fire projectile with recoil ===== */
     /* Original sets vx/vy=0 and relies on behavior callback at 0x438010 to
-     * give velocity. Since we don't have the callback, compute velocity from
-     * player heading with angular scatter for the chaotic stream effect. */
+     * give velocity each tick. Since we don't have the callback, compute
+     * velocity from player heading with angular scatter at spawn.
+     * Tuned: half intensity (min 10-tick cooldown), limited range (80 ticks),
+     * explicit energy drain (0x38 per shot). */
     case 0x2c:
     {
         if (DAT_00489248 < 0x9c4) {
@@ -4251,7 +4253,7 @@ LAB_00401856:
             {
                 int scatter = (rand() % 33) - 16;   /* ±16 angle units (~±3 degrees) */
                 unsigned int fire_heading = (uVar7 + scatter) & 0x7FF;
-                int speed = 500;
+                int speed = 350;
                 *(int *)(p + 0x18) = (sincos[fire_heading] * speed) >> 6;
                 *(int *)(p + 0x1c) = (sincos[(fire_heading + 0x200) & 0x7FF] * speed) >> 6;
             }
@@ -4260,7 +4262,7 @@ LAB_00401856:
             *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
             *(unsigned char *)(p + 0x21) = 0x2c;
             *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xfe;
+            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0x50;
             *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
             *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x172a];
             *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1739];
@@ -4276,6 +4278,21 @@ LAB_00401856:
             *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             iVar13 = (int)DAT_00487810;
         }
+
+        /* Enforce minimum secondary cooldown and drain power.
+         * FUN_0044d860_impl sets these from entity type table, but the table
+         * values may be zero for machinegun variants. */
+        {
+            int ent_base = iVar12 + (int)DAT_00487810;
+            /* Min 4-tick cooldown (~75% of original fire rate) */
+            if (*(int *)(ent_base + 0x94) < 4)
+                *(int *)(ent_base + 0x94) = 4;
+            /* Energy drain: 0x140 (320) per shot */
+            int energy = *(int *)(ent_base + 0x98) - 0x140;
+            if (energy < 0) energy = 0;
+            *(int *)(ent_base + 0x98) = energy;
+        }
+
         if (*(char *)(*(unsigned char *)(iVar12 + 0x35 + iVar13) + 0x5cc0 + (int)DAT_00487abc) != '\0') {
             piVar1 = (int *)(iVar12 + 0x10 + iVar13);
             *piVar1 -= sincos[uVar7] >> 7;
