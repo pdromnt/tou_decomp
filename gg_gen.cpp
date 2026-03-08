@@ -528,6 +528,29 @@ int FUN_00415a60(void)
 /* ===== FUN_00416ad0: Allocate map buffers ===== */
 void FUN_00416ad0(void)
 {
+    /* Free previously allocated level buffers (prevents leak/crash on consecutive loads) */
+    if (DAT_00481f50 != NULL) {
+        Mem_Free(DAT_00481f50);
+        DAT_00481f50 = NULL;
+        DAT_0048782c = NULL;
+    }
+    if (DAT_00487814 != NULL) {
+        Mem_Free(DAT_00487814);
+        DAT_00487814 = NULL;
+    }
+    if (DAT_00489ea4 != NULL) {
+        Mem_Free(DAT_00489ea4);
+        DAT_00489ea4 = NULL;
+    }
+    if (DAT_00489ea8 != NULL) {
+        Mem_Free(DAT_00489ea8);
+        DAT_00489ea8 = NULL;
+    }
+    if (DAT_00489ea0 != NULL) {
+        Mem_Free(DAT_00489ea0);
+        DAT_00489ea0 = NULL;
+    }
+
     DAT_004879f8 = (DAT_004879f0 >> 4) + 2;
     DAT_004879fc = (DAT_004879f4 >> 4) + 2;
     DAT_00487a04 = DAT_004879f0 / 0x12 + 2;
