@@ -183,7 +183,7 @@ extern void                 *DAT_00487780;      /* misc effect array (32 bytes e
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
 extern void                 *DAT_00487aa8;      /* particle color palette (256 x RGB555, from pal.col) */
 extern void                 *DAT_00481f4c;      /* ship color palette (256 x RGB555, from shipal.col) */
-extern int                   DAT_0048784c;      /* entity-to-entity link count */
+#define                      DAT_0048784c DAT_00487834[6]  /* alias: same memory in original */
 extern void                 *DAT_0048781c;      /* entity link table base */
 extern char                  DAT_0048373d;       /* friendly fire enabled flag */
 extern void                 *DAT_00487ab8;      /* tile edge sprite table */
@@ -513,7 +513,7 @@ extern int                   DAT_004892cc;       /* trooper spawn flag */
 
 /* ===== Positional Sound System ===== */
 extern char                  DAT_0048371f;       /* sound effects enabled flag */
-extern int                   DAT_00487840;       /* indexed entity count (for proximity scan) */
+#define                      DAT_00487840 DAT_00487834[3]  /* alias: 0x487840 = 0x487834 + 3*4 */
 
 /* ===== Wall Particle System ===== */
 void FUN_0044f630(int x, int y, int velX, int velY, float scale, int maxDist, int spread, char direction); /* wall segment ripple */

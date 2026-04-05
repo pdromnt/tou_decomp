@@ -8,7 +8,7 @@
 
 /* ===== Globals defined in this module ===== */
 /* DAT_00487aa8 and DAT_0048781c already defined in memory.cpp */
-int   DAT_0048784c = 0;        /* entity-to-entity link count */
+/* DAT_0048784c is DAT_00487834[6] in the original binary — aliased via tou.h */
 int   DAT_00487228[80] = {0};  /* per-player pickup counter */
 char  DAT_0048372e = 0;        /* fog of war ray resolution (config 0x17D6) */
 char  DAT_0048372f = 0;        /* fog of war sub-option (config 0x17D7) */
@@ -1733,7 +1733,7 @@ void FUN_00454340(void)
         }
 
         case 1: {
-            /* Flame emitter: create flame particles in DAT_00481f34 */
+            /* Flame emitter: create flame particles in DAT_00481f34. */
             if (DAT_00489250 < 2000 && rand() % 6 == 0) {
                 unsigned int dir = ((unsigned int)((rand() & 0x7F) - 0x40) +
                                    (unsigned int)em_param) & 0x7FF;
@@ -1852,7 +1852,7 @@ void FUN_00454340(void)
             break;
         } /* end switch */
 
-        /* Self-removal: if source tile is destroyed (type '\0') and emitter is not type 2/3 */
+        /* Self-removal: if source tile is destroyed (type '\0') and emitter is not type 2/3. */
         {
             int tile_idx = (em_y << shift) + em_x;
             char tile_val = *(char *)((int)DAT_0048782c + tile_idx);
@@ -1952,6 +1952,11 @@ void FUN_00434310(void)
         int is_projectile = 0;
         if (!is_debris && ent_type != 0x2d && ent_type != 0x67 && ent_type != 0x65) {
             if (*(int *)(ebase + 0x18) != 0 || *(int *)(ebase + 0x1c) != 0) {
+                is_projectile = 1;
+            }
+            /* Turrets (0x29/0x2A) and PILOT DISRUPTOR (0x18) must be processed
+             * even when stationary (zero velocity after landing). */
+            if (ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18) {
                 is_projectile = 1;
             }
         }
@@ -2063,14 +2068,378 @@ void FUN_00434310(void)
          *   add  ecx, eax              ; pos_x += vx
          *   ... pos_y += vy            ; uses updated vy
          * entity[+0x38] = 6 for all turret projectiles (set at spawn). */
-        if (is_projectile && !is_debris) {
+        if (is_projectile && !is_debris && ent_type != 0x22) {
             *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
         }
 
-        /* Position integration: pos += vel (skip for laser, already traced) */
+        /* === Homing/guidance + special movement — per-type ===
+         * Applied AFTER gravity but BEFORE position integration.
+         * Modifies velocity to steer toward targets or add special patterns. */
+        if (is_projectile && !is_debris && !should_remove) {
+            switch (ent_type) {
+            case 0x08: { /* Orbiting ring — override velocity to orbit spawn point.
+                * Uses prev position (+0x04, +0x0C) as "spawn center" reference
+                * (set equal to initial pos at spawn). Orbit radius grows over time.
+                * Counter at +0x3C tracks orbit angle. */
+                int cx = *(int *)(ebase + 0x04); /* spawn center x */
+                int cy = *(int *)(ebase + 0x0C); /* spawn center y */
+                int angle = *(int *)(ebase + 0x3C);
+                int timer = *(int *)(ebase + 0x28);
+                /* Radius grows with elapsed time (inverse of timer) */
+                int radius = (255 - (timer > 255 ? 255 : timer)) * 0x400 + 0x20000;
+                /* Advance angle */
+                angle = (angle + 0x30) & 0x7FF;
+                *(int *)(ebase + 0x3C) = angle;
+                /* Compute orbit position directly */
+                int orbit_x = cx + ((*(int *)((int)DAT_00487ab0 + (angle & 0x7FF) * 4) * radius) >> 14);
+                int orbit_y = cy + ((*(int *)((int)DAT_00487ab0 + 0x800 + (angle & 0x7FF) * 4) * radius) >> 14);
+                /* Set velocity so position integration lands us at orbit point */
+                *(int *)(ebase + 0x18) = orbit_x - *(int *)(ebase + 0x00);
+                *(int *)(ebase + 0x1C) = orbit_y - *(int *)(ebase + 0x08);
+                break;
+            }
+
+            case 0x0E: { /* MOVING SUCKER — speed-normalized steering.
+                * Find nearest enemy, adjust heading, normalize speed. */
+                unsigned char own = *(unsigned char *)(ebase + 0x22);
+                int mx = *(int *)(ebase + 0x00);
+                int my = *(int *)(ebase + 0x08);
+                int best_dist = 0x7FFFFFFF;
+                int tgt_x = mx, tgt_y = my;
+                int found = 0;
+                for (int p = 0; p < DAT_00489240; p++) {
+                    if ((unsigned char)p == own) continue;
+                    int poff = p * 0x598;
+                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                    int px = *(int *)(poff + DAT_00487810);
+                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    int dx = px - mx; int dy = py - my;
+                    /* Approximate distance (Manhattan) */
+                    int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+                    if (dist < best_dist) {
+                        best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
+                    }
+                }
+                if (found) {
+                    /* Steer toward target: adjust velocity slightly each tick */
+                    int dx = tgt_x - mx;
+                    int dy = tgt_y - my;
+                    int vx = *(int *)(ebase + 0x18);
+                    int vy = *(int *)(ebase + 0x1C);
+                    /* Small turn rate: add 1/16 of direction-to-target */
+                    vx += dx / 64;
+                    vy += dy / 64;
+                    /* Speed normalization: keep constant speed magnitude.
+                     * Use original speed from spawn (approximate from field). */
+                    int cur_speed_sq = (vx >> 8) * (vx >> 8) + (vy >> 8) * (vy >> 8);
+                    if (cur_speed_sq > 0) {
+                        /* Target speed ~200 (typical guided missile) */
+                        int target_speed = 200;
+                        /* Scale velocity to maintain constant speed.
+                         * Approximate: multiply by target/current ratio.
+                         * Use integer sqrt approximation. */
+                        int cur_speed = 1;
+                        int temp = cur_speed_sq;
+                        while (temp > 0) { temp >>= 2; cur_speed <<= 1; }
+                        /* Newton's method for better sqrt */
+                        cur_speed = (cur_speed + cur_speed_sq / cur_speed) / 2;
+                        cur_speed = (cur_speed + cur_speed_sq / cur_speed) / 2;
+                        if (cur_speed > 0) {
+                            vx = (int)((long long)vx * target_speed / cur_speed);
+                            vy = (int)((long long)vy * target_speed / cur_speed);
+                        }
+                    }
+                    *(int *)(ebase + 0x18) = vx;
+                    *(int *)(ebase + 0x1C) = vy;
+                }
+                break;
+            }
+
+            case 0x13: case 0x14: case 0x6B: {
+                /* Seeking/spiral pattern. 0x14 also homes toward nearest enemy.
+                 * Rotate heading by a fixed increment each tick for spiral. */
+                int vx = *(int *)(ebase + 0x18);
+                int vy = *(int *)(ebase + 0x1C);
+                /* Spiral: rotate velocity by ~2 degrees per tick.
+                 * cos(2°)≈1, sin(2°)≈0.035 → vx' = vx - vy/29, vy' = vy + vx/29 */
+                int nvx = vx - vy / 29;
+                int nvy = vy + vx / 29;
+                if (ent_type == 0x14) {
+                    /* Active homing: also nudge toward nearest enemy */
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    int mx = *(int *)(ebase + 0x00);
+                    int my = *(int *)(ebase + 0x08);
+                    int best_dist = 0x7FFFFFFF;
+                    int found = 0;
+                    int tgt_x = mx, tgt_y = my;
+                    for (int p = 0; p < DAT_00489240; p++) {
+                        if ((unsigned char)p == own) continue;
+                        int poff = p * 0x598;
+                        if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                        int px = *(int *)(poff + DAT_00487810);
+                        int py = *(int *)(poff + 4 + DAT_00487810);
+                        int dx = px - mx; int dy = py - my;
+                        int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+                        if (dist < best_dist) {
+                            best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
+                        }
+                    }
+                    if (found) {
+                        nvx += (tgt_x - mx) / 128;
+                        nvy += (tgt_y - my) / 128;
+                    }
+                }
+                *(int *)(ebase + 0x18) = nvx;
+                *(int *)(ebase + 0x1C) = nvy;
+                break;
+            }
+
+            case 0x18: { /* PILOT DISRUPTOR — deploys on ground, stays alive.
+                * Flies with gravity until wall hit (state 0xFA in wall collision).
+                * Once deployed, actively scans for nearby enemy players each tick:
+                *   player+0xD8 = 0x20 (aim jitter +/-13/tick)
+                *   player+0xD4 = 0x20 (halved move/turn speed)
+                * Dies when lifetime at +0x60 expires. */
+                unsigned char pd_state = *(unsigned char *)(ebase + 0x20);
+                if (pd_state == 0xFA) {
+                    int pd_life = *(int *)(ebase + 0x60);
+                    if (pd_life <= 0) {
+                        /* Lifetime expired: AoE burst + die */
+                        int pd_x = *(int *)(ebase + 0x00);
+                        int pd_y = *(int *)(ebase + 0x08);
+                        unsigned char pd_own = *(unsigned char *)(ebase + 0x22);
+                        FUN_00437cf0(pd_x, pd_y, 0xC8, pd_own, -1);
+                        should_remove = 1;
+                    } else {
+                        *(int *)(ebase + 0x60) = pd_life - 1;
+                        /* Active disruption scan — set timers on nearby enemies.
+                         * Bypasses FUN_0044be20 (tracking list gets stale from swaps). */
+                        int pd_x = *(int *)(ebase + 0x00);
+                        int pd_y = *(int *)(ebase + 0x08);
+                        unsigned char pd_own = *(unsigned char *)(ebase + 0x22);
+                        for (int p = 0; p < DAT_00489240; p++) {
+                            int poff = p * 0x598;
+                            if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                            unsigned char p_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                            unsigned char my_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)pd_own * 0x598);
+                            if (p_team == my_team) continue;
+                            int px = *(int *)(poff + DAT_00487810);
+                            int py = *(int *)(poff + 4 + DAT_00487810);
+                            int dx = pd_x - px; if (dx < 0) dx = -dx;
+                            int dy = pd_y - py; if (dy < 0) dy = -dy;
+                            if (dx < 0x1180000 && dy < 0x1180000) {
+                                *(int *)(poff + 0xD8 + DAT_00487810) = 0x20;
+                                *(int *)(poff + 0xD4 + DAT_00487810) = 0x20;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
+            case 0x1C: { /* Flash bomb — target tracking + auto-detonate.
+                * Fuse timer at +0x60. Also auto-detonates if moving too slowly.
+                * Finds closest enemy, adjusts velocity. */
+                int vx = *(int *)(ebase + 0x18);
+                int vy = *(int *)(ebase + 0x1C);
+                /* Decrement fuse timer */
+                int fuse = *(int *)(ebase + 0x60);
+                if (fuse > 0) *(int *)(ebase + 0x60) = fuse - 1;
+                /* Auto-detonate if fuse expired OR moving too slowly */
+                int speed_sq = (vx >> 8) * (vx >> 8) + (vy >> 8) * (vy >> 8);
+                if (speed_sq < 50 || fuse <= 1) {
+                    /* Stalled — detonate */
+                    int det_x = *(int *)(ebase + 0x00);
+                    int det_y = *(int *)(ebase + 0x08);
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    FUN_00437cf0(det_x, det_y, 150, own, 255);
+                    FUN_0040f9b0(0x65 + (rand() % 7), det_x, det_y);
+                    should_remove = 1;
+                } else {
+                    /* Track nearest enemy */
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    int mx = *(int *)(ebase + 0x00);
+                    int my = *(int *)(ebase + 0x08);
+                    int best_dist = 0x7FFFFFFF;
+                    int found = 0;
+                    int tgt_x = mx, tgt_y = my;
+                    for (int p = 0; p < DAT_00489240; p++) {
+                        if ((unsigned char)p == own) continue;
+                        int poff = p * 0x598;
+                        if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                        int px = *(int *)(poff + DAT_00487810);
+                        int py = *(int *)(poff + 4 + DAT_00487810);
+                        int dx = px - mx; int dy = py - my;
+                        int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+                        if (dist < best_dist) {
+                            best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
+                        }
+                    }
+                    if (found) {
+                        *(int *)(ebase + 0x18) = vx + (tgt_x - mx) / 64;
+                        *(int *)(ebase + 0x1C) = vy + (tgt_y - my) / 64;
+                    }
+                }
+                break;
+            }
+
+            case 0x1F: /* Erratic flare/buzzer — random direction jitter per tick.
+                * No gravity (field +0x38 should be 0). Chaotic flight. */
+                *(int *)(ebase + 0x18) += ((rand() & 0x7FFFF) - 0x40000);
+                *(int *)(ebase + 0x1C) += ((rand() & 0x7FFFF) - 0x40000);
+                break;
+
+            case 0x16: case 0x2B: case 0x6A: {
+                /* Deployed weapon / homing mine / homing shot — tracking behavior.
+                 * All share callback 0x439B90. Home toward nearest enemy. */
+                unsigned char own = *(unsigned char *)(ebase + 0x22);
+                int mx = *(int *)(ebase + 0x00);
+                int my = *(int *)(ebase + 0x08);
+                int best_dist = 0x7FFFFFFF;
+                int found = 0;
+                int tgt_x = mx, tgt_y = my;
+                for (int p = 0; p < DAT_00489240; p++) {
+                    if ((unsigned char)p == own) continue;
+                    int poff = p * 0x598;
+                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                    int px = *(int *)(poff + DAT_00487810);
+                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    int dx = px - mx; int dy = py - my;
+                    int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+                    if (dist < best_dist) {
+                        best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
+                    }
+                }
+                if (found) {
+                    *(int *)(ebase + 0x18) += (tgt_x - mx) / 96;
+                    *(int *)(ebase + 0x1C) += (tgt_y - my) / 96;
+                }
+                break;
+            }
+
+            case 0x66: { /* Guided missile (heavy) — active steering + speed cap.
+                * Per WEAPONS.md: 5x gravity, active steering, speed capped.
+                * 5x gravity is handled by field +0x38 at spawn.
+                * Here we add steering + speed capping. */
+                unsigned char own = *(unsigned char *)(ebase + 0x22);
+                int mx = *(int *)(ebase + 0x00);
+                int my = *(int *)(ebase + 0x08);
+                int best_dist = 0x7FFFFFFF;
+                int found = 0;
+                int tgt_x = mx, tgt_y = my;
+                for (int p = 0; p < DAT_00489240; p++) {
+                    if ((unsigned char)p == own) continue;
+                    int poff = p * 0x598;
+                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                    int px = *(int *)(poff + DAT_00487810);
+                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    int dx = px - mx; int dy = py - my;
+                    int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+                    if (dist < best_dist) {
+                        best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
+                    }
+                }
+                int vx = *(int *)(ebase + 0x18);
+                int vy = *(int *)(ebase + 0x1C);
+                if (found) {
+                    /* Steer toward target */
+                    vx += (tgt_x - mx) / 48;
+                    vy += (tgt_y - my) / 48;
+                }
+                /* Speed cap: limit velocity magnitude */
+                int spd_sq = (vx >> 8) * (vx >> 8) + (vy >> 8) * (vy >> 8);
+                int max_spd = 300;
+                if (spd_sq > max_spd * max_spd) {
+                    /* Approximate normalization */
+                    int cur_speed = 1;
+                    int temp = spd_sq;
+                    while (temp > 0) { temp >>= 2; cur_speed <<= 1; }
+                    cur_speed = (cur_speed + spd_sq / cur_speed) / 2;
+                    cur_speed = (cur_speed + spd_sq / cur_speed) / 2;
+                    if (cur_speed > 0) {
+                        vx = (int)((long long)vx * max_spd / cur_speed);
+                        vy = (int)((long long)vy * max_spd / cur_speed);
+                    }
+                }
+                *(int *)(ebase + 0x18) = vx;
+                *(int *)(ebase + 0x1C) = vy;
+                break;
+            }
+
+            case 0x22: { /* Turret deployer — straight-line flight (callback 0x4442F0).
+                * Velocity-based projectile with magnitude capping. No gravity.
+                * On wall collision, spawns turret entity (handled in wall section). */
+                /* Velocity magnitude capping: if |v|^2 > 0x10000, normalize.
+                 * Original at 0x4442F0: fsqrt + scale to 256 magnitude. */
+                int t22_vx = *(int *)(ebase + 0x18);
+                int t22_vy = *(int *)(ebase + 0x1C);
+                long long t22_mag_sq = (long long)t22_vx * t22_vx + (long long)t22_vy * t22_vy;
+                if (t22_mag_sq > 0x10000LL) {
+                    double t22_mag = sqrt((double)t22_mag_sq);
+                    *(int *)(ebase + 0x18) = (int)((double)t22_vx * 256.0 / t22_mag);
+                    *(int *)(ebase + 0x1C) = (int)((double)t22_vy * 256.0 / t22_mag);
+                }
+                break;
+            }
+
+            default:
+                break;
+            }
+        }
+
+        /* Position integration: pos += vel (skip for laser — it does instant trace) */
         if (ent_type != 0x2d) {
             *(int *)(ebase + 0x00) += *(int *)(ebase + 0x18);
             *(int *)(ebase + 0x08) += *(int *)(ebase + 0x1C);
+        }
+
+        /* Entity-vs-tracked-entity collision (FUN_00437120 equivalent).
+         * Runs AFTER position integration but BEFORE wall collision, so the
+         * projectile position is at the wall-hit location (near tracked entities
+         * sitting on walls/ground), not reverted to pre-collision. */
+        if (ent_type != 0x67 && ent_type != 0x65 && !is_debris &&
+            *(unsigned char *)(ebase + 0x20) < 0xFA) {
+            int proj_x = *(int *)(ebase + 0x00);
+            int proj_y = *(int *)(ebase + 0x08);
+            int proj_damage = *(int *)(ebase + 0x44);
+            unsigned char proj_team = *(unsigned char *)(ebase + 0x22);
+            int eb = (int)DAT_004892e8;
+            for (int ei = 0; ei < DAT_00489248; ei++) {
+                if (ei == i) continue;
+                int tbase = ei * 0x80 + eb;
+                unsigned char t_type = *(unsigned char *)(tbase + 0x21);
+                int hp_threshold = 0;
+                int hx = 0, hy_lo = 0, hy_hi = 0;
+                switch (t_type) {
+                    case 0x0B: hp_threshold = 0x25800; hx = 0x100000; hy_lo = 0x040000; hy_hi = 0x140000; break;
+                    case 0x17: hp_threshold = 1; hx = 0x100000; hy_lo = 0x100000; hy_hi = 0x100000; break;
+                    case 0x0F: hp_threshold = 0x271000; hx = 0x140000; hy_lo = 0x040000; hy_hi = 0x200000; break;
+                    case 0x18: hp_threshold = 0x7d000; hx = 0x140000; hy_lo = 0x040000; hy_hi = 0x1c0000; break;
+                    case 0x1F: hp_threshold = 0xbb800; hx = 0x140000; hy_lo = 0x0c0000; hy_hi = 0x0c0000; break;
+                    case 0x1C: hp_threshold = 0x138800; hx = 0x1c0000; hy_lo = 0x1c0000; hy_hi = 0x1c0000; break;
+                    case 0x0E: hp_threshold = (*(char *)(tbase + 0x40) == 0) ? 12800000 : 0x70800;
+                        hx = 0x100000; hy_lo = 0x100000; hy_hi = 0x100000; break;
+                    case 0x2E: hp_threshold = 0x465000; hx = 0x180000; hy_lo = 0x200000; hy_hi = 0x200000; break;
+                    case 0x27: hp_threshold = 0xfa000; hx = 0x140000; hy_lo = 0x140000; hy_hi = 0x140000; break;
+                    default: continue;
+                }
+                if (*(unsigned char *)(tbase + 0x20) == 0xFA) continue;
+                /* Original has same-team immunity while +0x5C > 0, but the
+                 * barrel's +0x5C never decrements in our code (no callback).
+                 * Skip the team check — barrel should be hittable by anyone. */
+                int tx = *(int *)(tbase + 0x00);
+                int ty = *(int *)(tbase + 0x08);
+                if (proj_x < tx - hx || proj_x > tx + hx) continue;
+                if (proj_y < ty - hy_lo || proj_y > ty + hy_hi) continue;
+                *(unsigned short *)(tbase + 0x24) = 1;
+                *(int *)(tbase + 0x58) = proj_damage;
+                *(int *)(tbase + 0x28) += proj_damage;
+                if (hp_threshold > 0 && *(int *)(tbase + 0x28) >= hp_threshold) {
+                    *(unsigned char *)(tbase + 0x20) = 0xFA;
+                }
+                should_remove = 1;
+                break;
+            }
         }
 
         /* Apply gravity + drag for debris entities (AFTER position update) */
@@ -2081,67 +2450,579 @@ void FUN_00434310(void)
             *(int *)(ebase + 0x1C) = (int)((double)*(int *)(ebase + 0x1C) * 0.97);
         }
 
+        /* Debris ground collision: type 100 (0x64) debris dies on non-air tile.
+         * Skip first 5 ticks (lifespan starts at 40-89, so check < initial-5) to let
+         * debris escape the impact crater before ground-checking. */
+        if (is_debris && ent_type == 100) {
+            int dlife = *(int *)(ebase + 0x28);
+            if (dlife < 80) {  /* after a few ticks of flight */
+                int dx = *(int *)(ebase + 0x00) >> 0x12;
+                int dy = *(int *)(ebase + 0x08) >> 0x12;
+                if (dx > 0 && dy > 0 && dx < (int)DAT_004879f0 && dy < (int)DAT_004879f4) {
+                    unsigned char dtile = *(unsigned char *)((int)DAT_0048782c + (dy << shift) + dx);
+                    if (dtile != 0) {
+                        should_remove = 1;
+                    }
+                }
+            }
+        }
+
         /* Boundary check */
         int pos_x = *(int *)(ebase + 0x00);
         int pos_y = *(int *)(ebase + 0x08);
         if (pos_x < 0 || pos_y < 0 ||
             pos_x >= (int)(DAT_004879f0 * 0x40000) ||
             pos_y >= (int)(DAT_004879f4 * 0x40000)) {
-            should_remove = 1;
-        }
-
-        /* === Trail particles for machinegun (0x2C) ===
-         * Original callback at 0x0043f990 spawns type 0x67 trail particles
-         * each tick. The projectile entity itself is invisible (entity[0x4C]
-         * = 30000 = black pixel dot). The visible "yellow stream" comes from
-         * these trail particles.
-         * Machinegun: palette indices 20-31 (yellow), velocity/22 */
-        if (!should_remove && ent_type == 0x2c) {
-            if (DAT_00489248 < 0x9c4) {
-                int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                memset((void *)tp, 0, 0x80);
-
-                /* Position: same as parent entity */
-                *(int *)(tp + 0x00) = *(int *)(ebase + 0x00);
-                *(int *)(tp + 0x04) = *(int *)(ebase + 0x00);
-                *(int *)(tp + 0x08) = *(int *)(ebase + 0x08);
-                *(int *)(tp + 0x0C) = *(int *)(ebase + 0x08);
-
-                /* Velocity: parent velocity / 22 + random jitter */
-                *(int *)(tp + 0x18) = *(int *)(ebase + 0x18) / 22 + ((rand() & 0x3FFF) - 0x2000);
-                *(int *)(tp + 0x1C) = *(int *)(ebase + 0x1C) / 22 + ((rand() & 0x3FFF) - 0x2000);
-
-                /* Identity */
-                *(unsigned char *)(tp + 0x21) = 0x67;   /* type: trail particle */
-                *(unsigned char *)(tp + 0x22) = 0xFF;    /* owner: none */
-                *(unsigned char *)(tp + 0x26) = 0xFF;    /* flag */
-                *(unsigned char *)(tp + 0x40) = 2;       /* sub_type */
-                *(unsigned char *)(tp + 0x5C) = 2;       /* palette step threshold */
-
-                /* Palette-based color: yellow range (indices 20-31) */
-                unsigned char pal_idx = (unsigned char)(rand() % 12 + 20);
-                *(unsigned char *)(tp + 0x65) = pal_idx;
-                *(unsigned char *)(tp + 0x64) = 0x12;    /* death threshold 18 */
-                if (DAT_00487aa8 != NULL) {
-                    *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[pal_idx] + 30000;
+            if (ent_type == 0x22 || ent_type == 0x18) {
+                /* Turret deployer (0x22) and insect (0x18): clamp to map bounds.
+                 * Original callbacks clamp each axis and set prev_pos = clamped pos.
+                 * Insect also zeros velocity on boundary hit. */
+                if (pos_x < 0) {
+                    *(int *)(ebase + 0x00) = 0;
+                    *(int *)(ebase + 0x04) = 0;
+                } else if ((pos_x >> 0x12) >= (int)DAT_004879f0) {
+                    int max_x = (int)(DAT_004879f0 << 0x12);
+                    *(int *)(ebase + 0x00) = max_x;
+                    *(int *)(ebase + 0x04) = max_x;
                 }
-
-                /* Random pixel shape pattern (0-4) */
-                *(unsigned short *)(tp + 0x24) = (unsigned short)(rand() % 5);
-
-                /* Gravity (small downward drift) */
-                *(int *)(tp + 0x38) = 2;
-
-                DAT_00489248++;
+                if (pos_y < 0) {
+                    *(int *)(ebase + 0x08) = 0;
+                    *(int *)(ebase + 0x0C) = 0;
+                } else if ((pos_y >> 0x12) >= (int)DAT_004879f4) {
+                    int max_y = (int)(DAT_004879f4 << 0x12);
+                    *(int *)(ebase + 0x08) = max_y;
+                    *(int *)(ebase + 0x0C) = max_y;
+                }
+                /* Insect: zero velocity on boundary hit */
+                if (ent_type == 0x18) {
+                    *(int *)(ebase + 0x18) = 0;
+                    *(int *)(ebase + 0x1C) = 0;
+                }
+                pos_x = *(int *)(ebase + 0x00);
+                pos_y = *(int *)(ebase + 0x08);
+            } else {
+                should_remove = 1;
             }
         }
 
-        /* Wall collision for all projectile entities (velocity-based detection).
-         * Covers all weapon types from FUN_00401000_impl including pipebomb,
-         * turret spawner, spread shot, homing missiles, freeze, etc.
-         * Debris entities (type 2, >=0x6C, state 5) are excluded. */
+        /* === Trail particles during flight (per-type) ===
+         * Several weapon types emit visible particles during flight.
+         * All use the same entity spawning pattern: allocate 0x80-byte
+         * record in DAT_004892e8, set position/velocity/type/palette. */
         if (!should_remove && is_projectile && !is_debris) {
-            /* Wall collision for projectiles */
+            int trail_type = -1;     /* particle entity type to spawn */
+            int trail_vel_div = 22;  /* velocity divisor */
+            int trail_pal_lo = 20;   /* palette range low */
+            int trail_pal_hi = 31;   /* palette range high */
+            int trail_pal_die = 0x12; /* palette death threshold */
+            int trail_grav = 2;      /* trail particle gravity */
+            int trail_count = 1;     /* particles per tick */
+            int trail_chance = 1;    /* 1 = always, N = 1/N chance */
+
+            switch (ent_type) {
+            case 0x2C: /* Machinegun — yellow stream (velocity/22) */
+                trail_type = 0x67;
+                break;
+            case 0x01: /* Dumbfire — no trail in original */
+                break;
+            case 0x0B: /* NUCLEAR BARREL — no trail */
+                break;
+            case 0x09: /* Gravity arc shrapnel — 0x67 trail particles */
+                trail_type = 0x67;
+                trail_vel_div = 20;
+                trail_pal_lo = 30;
+                trail_pal_hi = 45;
+                trail_pal_die = 0x1E;
+                trail_grav = 2;
+                break;
+            case 0x0E: /* Guided missile — very rare trail (1/128 chance) */
+                trail_type = 0x67;
+                trail_chance = 128;
+                trail_vel_div = 16;
+                break;
+            case 0x0F: /* BONE CRUSHER — no trail */
+                break;
+            case 0x1F: /* Erratic buzzer — spark trail */
+                trail_type = 0x67;
+                trail_vel_div = 10;
+                trail_pal_lo = 15;
+                trail_pal_hi = 28;
+                trail_pal_die = 0x0E;
+                trail_grav = 3;
+                break;
+            case 0x23: /* Mortar — thick smoke trail (5 particles per tick) */
+                trail_type = 0x67;
+                trail_vel_div = 8;
+                trail_pal_lo = 70;
+                trail_pal_hi = 85;
+                trail_pal_die = 0x46;
+                trail_grav = 1;
+                trail_count = 5;
+                break;
+            case 0x11: /* Normal Fireball / Firestorm — short fire trail */
+                if (DAT_00489250 < 2000) {
+                    int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                    *(int *)(fp + 0x00) = *(int *)(ebase + 0x04);  /* prev pos for trail behind */
+                    *(int *)(fp + 0x04) = *(int *)(ebase + 0x0C);
+                    *(int *)(fp + 0x08) = 0;
+                    *(int *)(fp + 0x0c) = 0;
+                    *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 1) + 1;
+                    *(unsigned char *)(fp + 0x11) = 1;
+                    *(unsigned char *)(fp + 0x12) = 3;   /* faster palette step = shorter life */
+                    *(unsigned char *)(fp + 0x13) = 0x50; /* short lifespan */
+                    *(unsigned char *)(fp + 0x14) = *(unsigned char *)(ebase + 0x22);
+                    *(unsigned char *)(fp + 0x15) = 0;
+                    DAT_00489250++;
+                }
+                break;
+            default:
+                break;
+            }
+
+            if (trail_type >= 0 && (trail_chance <= 1 || (rand() % trail_chance) == 0)) {
+                for (int tc = 0; tc < trail_count && DAT_00489248 < 0x9c4; tc++) {
+                    int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                    memset((void *)tp, 0, 0x80);
+
+                    /* Position: same as parent entity */
+                    *(int *)(tp + 0x00) = *(int *)(ebase + 0x00);
+                    *(int *)(tp + 0x04) = *(int *)(ebase + 0x00);
+                    *(int *)(tp + 0x08) = *(int *)(ebase + 0x08);
+                    *(int *)(tp + 0x0C) = *(int *)(ebase + 0x08);
+
+                    /* Velocity: parent velocity / divisor + random jitter */
+                    *(int *)(tp + 0x18) = *(int *)(ebase + 0x18) / trail_vel_div + ((rand() & 0x3FFF) - 0x2000);
+                    *(int *)(tp + 0x1C) = *(int *)(ebase + 0x1C) / trail_vel_div + ((rand() & 0x3FFF) - 0x2000);
+
+                    /* Identity */
+                    *(unsigned char *)(tp + 0x21) = (unsigned char)trail_type;
+                    *(unsigned char *)(tp + 0x22) = 0xFF;    /* owner: none */
+                    *(unsigned char *)(tp + 0x26) = 0xFF;    /* flag */
+                    *(unsigned char *)(tp + 0x40) = 2;       /* sub_type */
+                    *(unsigned char *)(tp + 0x5C) = 2;       /* palette step threshold */
+
+                    /* Palette-based color */
+                    unsigned char pal_idx = (unsigned char)(rand() % (trail_pal_hi - trail_pal_lo + 1) + trail_pal_lo);
+                    *(unsigned char *)(tp + 0x65) = pal_idx;
+                    *(unsigned char *)(tp + 0x64) = (unsigned char)trail_pal_die;
+                    if (DAT_00487aa8 != NULL) {
+                        *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[pal_idx] + 30000;
+                    }
+
+                    /* Random pixel shape pattern (0-4) */
+                    *(unsigned short *)(tp + 0x24) = (unsigned short)(rand() % 5);
+
+                    /* Gravity */
+                    *(int *)(tp + 0x38) = trail_grav;
+
+                    DAT_00489248++;
+                }
+            }
+        }
+
+        /* === Fuse/timer detonation — per-type pre-collision checks ===
+         * Several weapons explode based on timers, animation state, or
+         * proximity rather than wall impact. This runs BEFORE wall collision
+         * so a timed-out entity doesn't also trigger wall effects. */
+        if (!should_remove && is_projectile && !is_debris) {
+            switch (ent_type) {
+            case 0x08: { /* Orbiting ring — timer-based shrapnel burst.
+                * Timer at +0x28 counts down. On expiry: spawn 0x67 shrapnel
+                * burst and remove. (No wall collision in original.) */
+                int timer = *(int *)(ebase + 0x28);
+                if (timer > 0) {
+                    *(int *)(ebase + 0x28) = timer - 1;
+                } else {
+                    /* Spawn shrapnel burst */
+                    int parent_x = *(int *)(ebase + 0x00);
+                    int parent_y = *(int *)(ebase + 0x08);
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    for (int s = 0; s < 12 && DAT_00489248 < 0x9c4; s++) {
+                        int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                        memset((void *)tp, 0, 0x80);
+                        int angle = (s * 0x6AA / 12) & 0x7FF; /* spread around full circle */
+                        int spd = 80 + (rand() % 40);
+                        *(int *)(tp + 0x00) = parent_x;
+                        *(int *)(tp + 0x04) = parent_x;
+                        *(int *)(tp + 0x08) = parent_y;
+                        *(int *)(tp + 0x0C) = parent_y;
+                        *(int *)(tp + 0x18) = (*(int *)((int)DAT_00487ab0 + (angle & 0x7FF) * 4) * spd) >> 7;
+                        *(int *)(tp + 0x1C) = (*(int *)((int)DAT_00487ab0 + 0x800 + (angle & 0x7FF) * 4) * spd) >> 7;
+                        *(unsigned char *)(tp + 0x21) = 0x67;
+                        *(unsigned char *)(tp + 0x22) = own;
+                        *(unsigned char *)(tp + 0x26) = 0xFF;
+                        *(unsigned char *)(tp + 0x40) = 2;
+                        *(unsigned char *)(tp + 0x5C) = 2;
+                        unsigned char pidx = (unsigned char)(rand() % 12 + 20);
+                        *(unsigned char *)(tp + 0x65) = pidx;
+                        *(unsigned char *)(tp + 0x64) = 0x12;
+                        if (DAT_00487aa8 != NULL) {
+                            *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[pidx] + 30000;
+                        }
+                        *(unsigned short *)(tp + 0x24) = (unsigned short)(rand() % 5);
+                        *(int *)(tp + 0x38) = 3;
+                        DAT_00489248++;
+                    }
+                    FUN_0040f9b0(0x65 + (rand() % 7), parent_x, parent_y);
+                    should_remove = 1;
+                }
+                break;
+            }
+
+            case 0x0F: { /* BONE CRUSHER — anti-infantry mine.
+                * Embeds in ground on wall hit (vel=0). Kills enemy troopers on contact.
+                * Simple proximity check vs trooper array (DAT_00487884, stride 0x40). */
+                if (DAT_0048924c > 0) {
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    int mx = *(int *)(ebase + 0x00);
+                    int my = *(int *)(ebase + 0x08);
+                    for (int v = 0; v < DAT_0048924c; v++) {
+                        int toff = v * 0x40;
+                        unsigned char t_team = *(unsigned char *)(toff + 0x1C + (int)DAT_00487884);
+                        if (t_team == own || t_team == 0xFF) continue;
+                        int tx = *(int *)(toff + (int)DAT_00487884);
+                        int ty = *(int *)(toff + 8 + (int)DAT_00487884);
+                        int dx = mx - tx; if (dx < 0) dx = -dx;
+                        int dy = my - ty; if (dy < 0) dy = -dy;
+                        if (dx < 0x80000 && dy < 0x80000) {
+                            /* Kill the trooper */
+                            *(int *)(toff + 0x10 + (int)DAT_00487884) = 0;
+                            should_remove = 1;
+                            break;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case 0x12: { /* Pipebomb — state-based detonation.
+                * State 0xC2: countdown with flying sparks.
+                * When countdown reaches 0: explode. */
+                if (ent_state == 0xC2) {
+                    int timer = *(int *)(ebase + 0x28);
+                    /* Spawn spark particle during countdown */
+                    if (DAT_00489250 < 2000 && (rand() & 3) == 0) {
+                        int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                        *(int *)(pbase + 0x00) = *(int *)(ebase + 0x00);
+                        *(int *)(pbase + 0x04) = *(int *)(ebase + 0x08);
+                        int dir = rand() & 0x7FF;
+                        int spd = rand() % 60 + 30;
+                        *(int *)(pbase + 0x08) = (*(int *)((int)DAT_00487ab0 + dir * 4) * spd) >> 7;
+                        *(int *)(pbase + 0x0C) = (*(int *)((int)DAT_00487ab0 + 0x800 + dir * 4) * spd) >> 7;
+                        *(unsigned char *)(pbase + 0x10) = 1;
+                        *(unsigned char *)(pbase + 0x11) = 0;
+                        *(unsigned char *)(pbase + 0x12) = 2;
+                        *(unsigned char *)(pbase + 0x13) = 0xC8;
+                        *(unsigned char *)(pbase + 0x14) = *(unsigned char *)(ebase + 0x22);
+                        *(unsigned char *)(pbase + 0x15) = 0;
+                        DAT_00489250++;
+                    }
+                    if (timer <= 1) {
+                        /* Detonate */
+                        int det_x = *(int *)(ebase + 0x00);
+                        int det_y = *(int *)(ebase + 0x08);
+                        unsigned char own = *(unsigned char *)(ebase + 0x22);
+                        int dtx = det_x >> 0x12;
+                        int dty = det_y >> 0x12;
+                        FUN_004357b0(dtx, dty, 6, 0, '\0',
+                                     0, 0, 0, 0, 0, '\0', own);
+                        FUN_00437cf0(det_x, det_y, 200, own, 100);
+                        FUN_0040f9b0(0x11, det_x, det_y);
+                        should_remove = 1;
+                    }
+                }
+                break;
+            }
+
+            case 0x25: { /* Cluster bomb — split into bomblets after countdown.
+                * Timer at +0x28. After reaching 0: spawn 0x6A bomblets. */
+                int timer = *(int *)(ebase + 0x28);
+                if (timer > 0) {
+                    *(int *)(ebase + 0x28) = timer - 1;
+                } else if (timer == 0) {
+                    /* Split: spawn bomblet sub-munitions */
+                    int parent_x = *(int *)(ebase + 0x00);
+                    int parent_y = *(int *)(ebase + 0x08);
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    int parent_vx = *(int *)(ebase + 0x18);
+                    int parent_vy = *(int *)(ebase + 0x1C);
+                    for (int s = 0; s < 6 && DAT_00489248 < 0x9c4; s++) {
+                        int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                        memset((void *)tp, 0, 0x80);
+                        *(int *)(tp + 0x00) = parent_x;
+                        *(int *)(tp + 0x04) = parent_x;
+                        *(int *)(tp + 0x08) = parent_y;
+                        *(int *)(tp + 0x0C) = parent_y;
+                        /* Spread velocity around parent direction */
+                        int jx = ((rand() & 0x1FFFF) - 0x10000);
+                        int jy = ((rand() & 0x1FFFF) - 0x10000);
+                        *(int *)(tp + 0x18) = parent_vx / 2 + jx;
+                        *(int *)(tp + 0x1C) = parent_vy / 2 + jy;
+                        *(unsigned char *)(tp + 0x21) = 0x6A; /* bomblet type */
+                        *(unsigned char *)(tp + 0x22) = own;
+                        *(unsigned char *)(tp + 0x26) = 0xFE;
+                        *(unsigned char *)(tp + 0x28) = 0xFF; /* long lifespan */
+                        *(int *)(tp + 0x38) = 6;  /* gravity */
+                        *(int *)(tp + 0x44) = *(int *)(ebase + 0x44) / 3; /* split damage */
+                        DAT_00489248++;
+                    }
+                    FUN_0040f9b0(0x65 + (rand() % 7), parent_x, parent_y);
+                    should_remove = 1;
+                }
+                break;
+            }
+
+            case 0x28: {
+                /* PIPEBOMB — bounces and settles. Detonates on lifespan expiry
+                 * (state 0xFA set by lifetime handler) or player collision.
+                 * Rotation: +0x30 = rotation speed, +0x3C = cumulative angle.
+                 * Renderer uses +0x3C with anim_data 0xCE for 16-dir sprite. */
+                /* Rotation: spin speed proportional to velocity.
+                 * +0x3C = angle, direction based on vel_x sign. */
+                {
+                    int vx = *(int *)(ebase + 0x18);
+                    int vy = *(int *)(ebase + 0x1C);
+                    int speed = (vx >> 10) * (vx >> 10) + (vy >> 10) * (vy >> 10);
+                    if (speed > 0) {
+                        /* Scale rotation to velocity — faster = spins faster */
+                        int spin = speed >> 8;
+                        if (spin < 1) spin = 1;
+                        if (spin > 0x15) spin = 0x15;
+                        int angle = *(int *)(ebase + 0x3C);
+                        if (vx >= 0)
+                            angle = (angle - spin) & 0x7FF;
+                        else
+                            angle = (angle + spin) & 0x7FF;
+                        *(int *)(ebase + 0x3C) = angle;
+                    }
+                }
+                if (*(unsigned char *)(ebase + 0x20) == 0xFA) {
+                    int det_x = *(int *)(ebase + 0x00);
+                    int det_y = *(int *)(ebase + 0x08);
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    int dtx = det_x >> 0x12;
+                    int dty = det_y >> 0x12;
+                    /* Tile damage / crater */
+                    FUN_004357b0(dtx, dty, 6, 0, '\0',
+                                 0, 0, 0, 0, 0, '\0', own);
+                    /* Area knockback */
+                    FUN_00437cf0(det_x, det_y, 100, own, 100);
+                    /* Explosion sound */
+                    FUN_0040f9b0(0x65 + (rand() % 7), det_x, det_y);
+                    /* Spawn fire/flash particles */
+                    {
+                        int fc = (rand() & 1) + 3; /* 3-4 flash particles */
+                        for (int f = 0; f < fc && DAT_00489250 < 2000; f++) {
+                            int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                            *(int *)(pbase + 0x00) = det_x;
+                            *(int *)(pbase + 0x04) = det_y;
+                            *(int *)(pbase + 0x08) = ((rand() & 0xFFFF) - 0x8000) * 4;
+                            *(int *)(pbase + 0x0C) = ((rand() & 0xFFFF) - 0x8000) * 4;
+                            *(unsigned char *)(pbase + 0x10) = (rand() & 3) + 1;
+                            *(unsigned char *)(pbase + 0x11) = 0;
+                            *(unsigned char *)(pbase + 0x12) = 2;
+                            *(unsigned char *)(pbase + 0x13) = 0xC8;
+                            *(unsigned char *)(pbase + 0x14) = own;
+                            *(unsigned char *)(pbase + 0x15) = 0;
+                            DAT_00489250++;
+                        }
+                    }
+                    should_remove = 1;
+                }
+                break;
+            }
+
+            case 0x29:   /* BASIC TURRET */
+            case 0x2A: { /* ICE TURRET */
+                /* Turrets: gravity drop until wall collision sets state 0xFA.
+                 * Once deployed (state 0xFA): fire ONE turret entity, then die.
+                 * Original uses prev_x/prev_y for position, team from player
+                 * record, and health = damage * 1600. */
+                if (*(unsigned char *)(ebase + 0x20) == 0xFA) {
+                    int turr_x = *(int *)(ebase + 0x04);  /* prev_x */
+                    int turr_y = *(int *)(ebase + 0x0C);  /* prev_y */
+                    unsigned char turr_etype = *(unsigned char *)(ebase + 0x21);
+                    unsigned char turr_sub = *(unsigned char *)(ebase + 0x40);
+                    unsigned char turr_raw_owner = *(unsigned char *)(ebase + 0x22);
+                    /* Get team byte from player record */
+                    unsigned char turr_team = *(unsigned char *)(
+                        (int)DAT_00487810 + (unsigned int)turr_raw_owner * 0x598 + 0x2C);
+
+                    char sprite = 0;
+                    int dmg;
+                    if (turr_etype == 0x29) {
+                        /* BASIC TURRET params by level */
+                        if (turr_sub == 0) { sprite = 0; dmg = 0x258; }       /* 600 */
+                        else if (turr_sub == 1) { sprite = 1; dmg = 0x1F4; }  /* 500 */
+                        else { sprite = 5; dmg = 0x2EE; }                     /* 750 */
+                    } else {
+                        /* ICE TURRET params by level */
+                        if (turr_sub == 0) { sprite = 2; dmg = 0x12C; }       /* 300 */
+                        else if (turr_sub == 1) { sprite = 3; dmg = 0x12C; }  /* 300 */
+                        else if (turr_sub == 2) { sprite = 4; dmg = 0x352; }  /* 850 */
+                        else { sprite = 6; dmg = 0x384; }                     /* 900 */
+                    }
+                    /* Health = damage * 125 * 64 = damage * 8000
+                     * Original: lea eax,[edx+edx*4] (x5), lea eax,[eax+eax*4] (x25),
+                     * lea edx,[eax+eax*4] (x125), shl edx,6 (x8000) */
+                    int health = dmg * 125 * 64;
+                    FUN_00406d20(turr_x, turr_y, sprite, health, turr_team, 0);
+                    should_remove = 1;
+                }
+                break;
+            }
+
+            case 0x0B: { /* NUCLEAR BARREL — damage-triggered detonation.
+                * Entity-entity collision (FUN_00437120 cat 0) accumulates damage at +0x28.
+                * When damage >= threshold, state +0x20 is set to 0xFA → explosion.
+                * Original callback 0x431650: KB(0x190=400, -1), two particle loops. */
+                unsigned char nb_state = *(unsigned char *)(ebase + 0x20);
+                if (nb_state == 0xFA) {
+                    int det_x = *(int *)(ebase + 0x00);
+                    int det_y = *(int *)(ebase + 0x08);
+                    int det_vx = *(int *)(ebase + 0x18);
+                    int det_vy = *(int *)(ebase + 0x1C);
+                    unsigned char own = *(unsigned char *)(ebase + 0x22);
+                    unsigned char sub = *(unsigned char *)(ebase + 0x40);
+                    int dtx = det_x >> 0x12;
+                    int dty = det_y >> 0x12;
+                    int *sc = (int *)DAT_00487ab0;
+                    int *tt = (int *)DAT_00487abc;
+
+                    /* Tile damage */
+                    FUN_004357b0(dtx, dty, 6, 0, '\0',
+                                 0, 0, 0, 0, 0, '\0', own);
+                    /* Area knockback: radius 400, power -1 (all players) */
+                    FUN_00437cf0(det_x, det_y, 0x190, own, -1);
+                    FUN_0040f9b0(0x65 + (rand() % 7), det_x, det_y);
+
+                    /* Particle count based on level */
+                    int base_count = (sub == 1) ? 30 : 40;
+
+                    /* Loop 1: Fire debris (entity_type 0) */
+                    {
+                        int count1 = (int)((float)DAT_0048385c * (float)base_count);
+                        if (count1 < 1) count1 = 1;
+                        if (count1 > base_count) count1 = base_count;
+                        int angle_step = 0x0445C000 / (count1 > 0 ? count1 : 1);
+                        for (int dp = 0; dp < count1 && DAT_00489248 < 0x9C4; dp++) {
+                            unsigned int dir = rand() & 0x7FF;
+                            int spd = rand() % 70;
+                            int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            *(int *)(ep + 0x00) = det_x;
+                            *(int *)(ep + 0x08) = det_y;
+                            *(int *)(ep + 0x18) = (sc[dir] * spd >> 6) + (det_vx >> 5);
+                            *(int *)(ep + 0x1C) = (sc[0x200 + dir] * spd >> 6) + (det_vy >> 5) - 0x57800;
+                            *(int *)(ep + 0x04) = det_x;
+                            *(int *)(ep + 0x0C) = det_y;
+                            *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                            *(unsigned char *)(ep + 0x21) = 0;
+                            *(short *)(ep + 0x24) = (short)(rand() % 6);
+                            *(unsigned char *)(ep + 0x20) = 0;
+                            *(unsigned char *)(ep + 0x26) = 0;
+                            *(unsigned char *)(ep + 0x22) = own;
+                            *(int *)(ep + 0x28) = 0;
+                            *(int *)(ep + 0x38) = tt[0x26];
+                            *(int *)(ep + 0x48) = 0;
+                            *(unsigned char *)(ep + 0x54) = 0;
+                            *(unsigned char *)(ep + 0x40) = (sub == 1) ? 3 : 4;
+                            *(int *)(ep + 0x34) = tt[0];
+                            *(int *)(ep + 0x3c) = 0;
+                            *(unsigned char *)(ep + 0x5c) = 0;
+                            DAT_00489248++;
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 90;
+                            {
+                                int ci = rand() % 10;
+                                unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
+                                unsigned short r5 = (pal >> 10) & 0x1F;
+                                unsigned short g5 = (pal >> 5) & 0x1F;
+                                unsigned short b5 = pal & 0x1F;
+                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                            }
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = angle_step;
+                        }
+                    }
+
+                    /* Loop 2: Mushroom fire (entity_type 0x64, team 0xFF) */
+                    {
+                        int count2 = (int)((float)DAT_0048385c * (float)(base_count * 2));
+                        if (count2 < 1) count2 = 1;
+                        if (count2 > base_count * 2) count2 = base_count * 2;
+                        for (int mp = 0; mp < count2 && DAT_00489248 < 0x9C4; mp++) {
+                            unsigned int dir = rand() & 0x7FF;
+                            int spd = rand() % 70;
+                            int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            *(int *)(ep + 0x00) = det_x;
+                            *(int *)(ep + 0x08) = det_y;
+                            *(int *)(ep + 0x18) = (sc[dir] * spd >> 6) + (det_vx >> 5);
+                            *(int *)(ep + 0x1C) = (sc[0x200 + dir] * spd >> 6) + (det_vy >> 5) - 0x57800;
+                            *(int *)(ep + 0x04) = det_x;
+                            *(int *)(ep + 0x0C) = det_y;
+                            *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                            *(unsigned char *)(ep + 0x21) = 0x64;
+                            *(short *)(ep + 0x24) = (short)(rand() % 6);
+                            *(unsigned char *)(ep + 0x20) = 0;
+                            *(unsigned char *)(ep + 0x26) = 0xFF;
+                            *(unsigned char *)(ep + 0x22) = 0xFF;
+                            *(int *)(ep + 0x28) = 0;
+                            *(int *)(ep + 0x38) = tt[0x347A];
+                            *(int *)(ep + 0x44) = tt[0x3489];
+                            *(int *)(ep + 0x48) = 0;
+                            *(int *)(ep + 0x4C) = tt[0x3495];
+                            *(unsigned char *)(ep + 0x54) = 0;
+                            *(unsigned char *)(ep + 0x40) = 0;
+                            *(int *)(ep + 0x34) = tt[0x3458];
+                            *(int *)(ep + 0x3c) = 0;
+                            *(unsigned char *)(ep + 0x5c) = 0;
+                            DAT_00489248++;
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 90;
+                            {
+                                int ci = rand() % 10;
+                                unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
+                                unsigned short r5 = (pal >> 10) & 0x1F;
+                                unsigned short g5 = (pal >> 5) & 0x1F;
+                                unsigned short b5 = pal & 0x1F;
+                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                            }
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
+                        }
+                    }
+
+                    /* Flash particle */
+                    if (DAT_00489250 < 2000) {
+                        int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                        *(int *)(fp + 0x00) = det_x;
+                        *(int *)(fp + 0x04) = det_y;
+                        *(int *)(fp + 0x08) = 0;
+                        *(int *)(fp + 0x0C) = 0;
+                        *(unsigned char *)(fp + 0x10) = 0;
+                        *(unsigned char *)(fp + 0x11) = 0;
+                        *(unsigned char *)(fp + 0x12) = 0;
+                        *(unsigned char *)(fp + 0x13) = 1;
+                        *(unsigned char *)(fp + 0x14) = 0xFF;
+                        *(unsigned char *)(fp + 0x15) = 1;
+                        DAT_00489250++;
+                    }
+                    should_remove = 1;
+                }
+                break;
+            }
+
+            /* Type 0x22 turret deployer: turret spawning is handled in the
+             * wall collision section (on solid wall hit). No fuse/timer logic needed.
+             * The deployer flies straight until wall collision. */
+
+            /* PILOT DISRUPTOR (0x18): handled entirely in behavior phase above */
+
+            default:
+                break;
+            }
+        }
+
+        /* Wall collision for all projectile entities. */
+        if (!should_remove && is_projectile && !is_debris) {
             int tx = pos_x >> 0x12;
             int ty = pos_y >> 0x12;
             if (tx > 0 && ty > 0 && tx < (int)DAT_004879f0 && ty < (int)DAT_004879f4) {
@@ -2168,7 +3049,9 @@ void FUN_00434310(void)
                         case 0x18:                        /* silent KB */
                         case 0x22:                        /* turret spawner */
                         case 0x24: case 0x25:             /* shotgun/spawner */
+                        case 0x2B: case 0x6A:             /* homing mine/shot (silent) */
                         case 0x28: case 0x29: case 0x2A:  /* grenades */
+                        case 0x0C:                        /* DIGGER — silent */
                             break; /* silent */
                         case 0x01:
                             FUN_0040f9b0(0x32, bx, by); break;
@@ -2203,11 +3086,16 @@ void FUN_00434310(void)
                     *tile_hp -= proj_damage;
                 }
 
-                /* Wall collision (original callback at 0x43889E + 0x438906-0x438A1B).
-                 * Only check pass2 (walkable), NOT pass10 (flyable). Original checks
-                 * these independently. When a projectile hits a solid wall (pass2 == 0),
-                 * call FUN_004357b0 to deform/destroy tiles (create craters). */
-                if (!should_remove && pass2 == 0) {
+                /* Crater: trigger when tile byte+0 != 0 (tile is active/occupied).
+                 * Tile 0 (air) has byte+0 = 1 but is excluded by tile != 0 check.
+                 * Ground tiles (64+) have byte+0 = 1.
+                 * This matches the original's behavior where projectiles crater
+                 * on any non-air tile they encounter. */
+                /* Crater check: pass2==0 for solid walls (all weapon types),
+                 * OR for basic bullets: any non-air, non-water tile.
+                 * Water tiles (byte+4 == 1) are excluded so bullets work underwater. */
+                unsigned char tile_is_water = *(unsigned char *)((unsigned int)tile * 0x20 + 4 + (int)DAT_00487928);
+                if (pass2 == 0 || (ent_type == 0x00 && tile != 0 && tile_is_water == 0)) {
                     /* Compute explosion level from sub_type and entity state
                      * (original at 0x43897B-0x4389B5) */
                     unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
@@ -2237,78 +3125,186 @@ void FUN_00434310(void)
                     /* Per-type wall collision effects.
                      * Each weapon type has specific effects matching the original
                      * behavior callbacks mapped by FUN_0041fe70. */
+                    int did_bounce = 0;
                     {
                         int prev_x = *(int *)(ebase + 0x04);
                         int prev_y = *(int *)(ebase + 0x0C);
                         unsigned char sub_t = *(unsigned char *)(ebase + 0x40);
                         int flash_count = 0;
 
+                        /* Bounce axis detection: compare previous tile vs current tile
+                         * to determine which axis the projectile crossed into a wall. */
+                        int prev_tx = prev_x >> 0x12;
+                        int prev_ty = prev_y >> 0x12;
+
                         switch (ent_type) {
-                        /* Callback 0x438010: only type 0x12 gets flash + sound.
-                         * Types 0x00 and 0x69 exit early in original (0x438A33):
-                         * ent_type != 0x69 && ent_type != 0x12 → skip to end. */
-                        case 0x00: /* Basic bullet — tile damage only, no sound */
+                        /* Callback 0x438010: wall hit returns at 0x438D81
+                         * WITHOUT calling FUN_004357b0. No tile damage on
+                         * wall hit for 0x00/0x69. Only 0x12 gets flash+sound. */
+                        case 0x00: /* Basic bullet — tile damage + flash particle */
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
                                          0, 0, 0, 0, 0, '\0', owner);
+                            if (DAT_00489250 < 2000) {
+                                int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                *(int *)(pbase + 0x00) = prev_x;
+                                *(int *)(pbase + 0x04) = prev_y;
+                                *(int *)(pbase + 0x08) = 0;
+                                *(int *)(pbase + 0x0C) = 0;
+                                *(unsigned char *)(pbase + 0x10) = 1;
+                                *(unsigned char *)(pbase + 0x11) = 0;
+                                *(unsigned char *)(pbase + 0x12) = 2;
+                                *(unsigned char *)(pbase + 0x13) = 0xC8;
+                                *(unsigned char *)(pbase + 0x14) = owner;
+                                *(unsigned char *)(pbase + 0x15) = 0;
+                                DAT_00489250++;
+                            }
                             break;
-                        case 0x12: /* Pipebomb — tile damage + flash + sound 0x11 */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
+                        case 0x12: /* Pipebomb — flash + sound 0x11 */
                             flash_count = (rand() & 1) + 3;
                             FUN_0040f9b0(0x11, prev_x, prev_y);
                             break;
-                        case 0x69: /* Mine — tile damage only, no sound */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
+                        case 0x69: /* Mine — small particles, no sound */
+                            flash_count = 1;
+                            break;
+                        case 0x0C: /* DIGGER — silent death, no fire/crater */
                             break;
 
-                        /* Callback 0x438D90: tile damage + KB + sound 0x32 */
-                        case 0x01: /* Bounce missile */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
-                            FUN_0040f9b0(0x32, prev_x, prev_y);
+                        /* Callback 0x438D90: BOUNCE with 50% energy retention.
+                         * Bounce counter at +0x3C. On last bounce: detonate. */
+                        case 0x01: { /* Bounce missile */
+                            int bc = *(int *)(ebase + 0x3C);
+                            if (bc > 0) {
+                                /* Bounce: reflect velocity, halve speed */
+                                if (prev_tx != tx) *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18) / 2);
+                                if (prev_ty != ty) *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C) / 2);
+                                *(int *)(ebase + 0x3C) = bc - 1;
+                                FUN_0040f9b0(0x32, prev_x, prev_y);
+                                did_bounce = 1;
+                            } else {
+                                /* Final bounce: full detonation */
+                                FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                             0, 0, 0, 0, 0, '\0', owner);
+                                FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                                FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                                flash_count = (rand() & 1) + 3;
+                            }
                             break;
+                        }
 
                         /* Callback 0x439880: tile damage + KB + random sound */
-                        case 0x05: /* Big explosion */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
-                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                        case 0x05: { /* COLLAPSER — crater size 23, TERRAIN mode + violent debris */
+                            int cl_x = *(int *)(ebase + 0x00);
+                            int cl_y = *(int *)(ebase + 0x08);
+                            int *sc = (int *)DAT_00487ab0;
+                            FUN_004357b0(tx, ty, 0x17, stored_tile, is_water,
+                                         cl_x, cl_y,
+                                         *(int *)(ebase + 0x04), *(int *)(ebase + 0x0C),
+                                         '\x02', '\0', owner);
+                            /* Extra ground-colored debris — spray in projectile direction */
+                            {
+                                int cl_vx = *(int *)(ebase + 0x18);
+                                int cl_vy = *(int *)(ebase + 0x1C);
+                                unsigned int impact_angle = (unsigned int)FUN_004257e0(0, 0, cl_vx, cl_vy);
+                            for (int cd = 0; cd < 12 && DAT_00489248 < 0x9C4; cd++) {
+                                /* Bias angle toward impact direction with spread +/- 0x200 (~90 degrees) */
+                                unsigned int cdir = (impact_angle + (rand() % 0x400 - 0x200)) & 0x7FF;
+                                int cspd = rand() % 200 + 100;
+                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep + 0x00) = cl_x;
+                                *(int *)(ep + 0x08) = cl_y;
+                                *(int *)(ep + 0x18) = (sc[cdir] * cspd) >> 7;
+                                *(int *)(ep + 0x1C) = ((sc[0x200 + cdir] * cspd) >> 7) - 0x20000;
+                                *(int *)(ep + 0x04) = cl_x;
+                                *(int *)(ep + 0x0C) = cl_y;
+                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                *(unsigned char *)(ep + 0x21) = 100; /* type 100 = debris */
+                                *(short *)(ep + 0x24) = (short)(rand() % 6);
+                                *(unsigned char *)(ep + 0x20) = 0;
+                                *(unsigned char *)(ep + 0x26) = 0xFF;
+                                *(unsigned char *)(ep + 0x22) = owner;
+                                *(int *)(ep + 0x28) = 0;
+                                *(int *)(ep + 0x38) = *(int *)((int)DAT_00487abc + 0xD1E8);
+                                *(int *)(ep + 0x44) = *(int *)((int)DAT_00487abc + 0xD224);
+                                *(int *)(ep + 0x48) = 0;
+                                *(int *)(ep + 0x4C) = *(int *)((int)DAT_00487abc + 0xD254);
+                                *(unsigned char *)(ep + 0x54) = 0;
+                                *(unsigned char *)(ep + 0x40) = 0;
+                                *(int *)(ep + 0x34) = *(int *)((int)DAT_00487abc + 0xD160);
+                                *(int *)(ep + 0x3C) = 0;
+                                *(unsigned char *)(ep + 0x5C) = 0;
+                                DAT_00489248++;
+                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 50 + 40;
+                                /* Ground-colored: sample pixel at impact point */
+                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    *(unsigned short *)((int)DAT_00481f50 +
+                                        ((ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx) * 2) + 30000;
+                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
+                            }
+                            } /* end impact_angle scope */
+                            FUN_00437cf0(cl_x, cl_y, 200, owner, 800);
+                            FUN_0040f9b0(0x65 + (rand() % 7), cl_x, cl_y);
                             break;
+                        }
 
-                        /* Callback 0x43CC20: silent, original spawns 0x67 shrapnel */
+                        /* Callback 0x43CC20: 0x08 orbits (no wall collision in original).
+                         * 0x09 bounces/re-enters up to 4 times, silent. */
                         case 0x08:
-                        case 0x09:
+                            /* Orbiting ring passes through walls — shouldn't reach here
+                             * normally but handle gracefully */
+                            did_bounce = 1;
                             break;
-
-                        /* Callback 0x431650: tile damage + KB + random sound */
-                        case 0x0B:
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
-                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                        case 0x09: { /* Gravity arc shrapnel — bounce up to 4x */
+                            int bc = *(int *)(ebase + 0x3C);
+                            if (bc < 4) {
+                                if (prev_tx != tx) *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18));
+                                if (prev_ty != ty) *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C));
+                                *(int *)(ebase + 0x3C) = bc + 1;
+                                did_bounce = 1;
+                            }
+                            /* else: 4th hit, remove silently */
                             break;
+                        }
 
-                        /* Callback 0x430DC0: silent, original spawns shrapnel */
+                        /* Callback 0x431650: bounce with 1/8 energy, X reversed.
+                         * Detonation is sprite-driven (when sprite reaches 0xFA) —
+                         * handled in Phase 3 timer section. Keep bouncing until then. */
+                        case 0x0B: {
+                            if (prev_tx != tx) *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18) / 8);
+                            if (prev_ty != ty) *(int *)(ebase + 0x1C) = *(int *)(ebase + 0x1C) / 8;
+                            did_bounce = 1;
+                            break;
+                        }
+
+                        /* Callback 0x430DC0: MOVING SUCKER — silent death.
+                         * NO knockback, NO sound, NO tile damage.
+                         * Just spawns type 0x67 debris and dies. */
                         case 0x0E:
+                            /* Silent — debris spawned by default flash_count (already 0) */
+                            flash_count = 3;  /* small debris burst only */
                             break;
 
-                        /* Callback 0x4330C0: tile damage + KB + random sound */
+                        /* Callback 0x4330C0: FULL STOP on first bounce (zero energy).
+                         * Fuse timer at +0x60 handles detonation (Phase 3).
+                         * Just drop dead where it hits. */
                         case 0x0F:
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
-                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            *(int *)(ebase + 0x18) = 0;  /* zero velocity */
+                            *(int *)(ebase + 0x1C) = 0;
+                            *(int *)(ebase + 0x38) = 0;  /* kill gravity too */
+                            did_bounce = 1;
                             break;
 
-                        /* Callback 0x441AA0: tile damage + flash + sound 0x11 */
-                        case 0x11: /* Spread shot */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            flash_count = (rand() & 1) + 2;
-                            FUN_0040f9b0(0x11, prev_x, prev_y);
+                        /* Callback 0x441AA0: for NORMAL FIREBALL weapon (#17) this
+                         * does tile damage. But for FIRESTORM's type 0x11 particles
+                         * (guard=0x14), just die silently — no crater/volcano. */
+                        case 0x11:
+                            if (*(unsigned char *)(ebase + 0x26) != 0x14) {
+                                /* Normal fireball weapon — tile damage + flash + sound */
+                                FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                             0, 0, 0, 0, 0, '\0', owner);
+                                flash_count = (rand() & 1) + 2;
+                                FUN_0040f9b0(0x11, prev_x, prev_y);
+                            }
+                            /* FIRESTORM particles (guard=0x14): silent death */
                             break;
 
                         /* Callback 0x43A4B0: type-specific sound, no tile damage */
@@ -2337,16 +3333,39 @@ void FUN_00434310(void)
                             FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
                             break;
 
-                        /* Callback 0x433C80: KB only, silent */
+                        /* PILOT DISRUPTOR — deploy on wall hit. Stop + set state 0xFA.
+                         * Set lifetime at +0x60 so it stays alive for ~100 seconds. */
                         case 0x18:
-                            FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
+                            *(int *)(ebase + 0x18) = 0;
+                            *(int *)(ebase + 0x1C) = 0;
+                            *(unsigned char *)(ebase + 0x20) = 0xFA;
+                            *(int *)(ebase + 0x60) = 6000; /* ~100 sec at 60fps */
+                            did_bounce = 1; /* prevent removal */
                             break;
 
-                        /* Callback 0x443420: flash + random sound (bouncing) */
-                        case 0x19:
-                            flash_count = (rand() & 1) + 2;
-                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                        /* Callback 0x443420: BOUNCE with deceleration.
+                         * Bounce counter at +0x3C. Speed decays each bounce.
+                         * On last bounce: detonate with flash + sound. */
+                        case 0x19: {
+                            int bc = *(int *)(ebase + 0x3C);
+                            if (bc > 0) {
+                                /* Bounce: reflect and decelerate */
+                                int vx = *(int *)(ebase + 0x18);
+                                int vy = *(int *)(ebase + 0x1C);
+                                if (prev_tx != tx) vx = -vx;
+                                if (prev_ty != ty) vy = -vy;
+                                /* Decelerate: reduce speed by ~25% each bounce */
+                                *(int *)(ebase + 0x18) = (vx * 3) / 4;
+                                *(int *)(ebase + 0x1C) = (vy * 3) / 4;
+                                *(int *)(ebase + 0x3C) = bc - 1;
+                                did_bounce = 1;
+                            } else {
+                                /* Final bounce: detonate */
+                                flash_count = (rand() & 1) + 2;
+                                FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            }
                             break;
+                        }
 
                         /* Callback 0x443B10: tile damage + KB(150/255) + sound */
                         case 0x1B:
@@ -2363,55 +3382,326 @@ void FUN_00434310(void)
                             break;
 
                         /* Callback 0x43C0B0: tile damage + sound; KB for 0x1D only */
-                        case 0x1D: /* Heavy — KB(400/500) */
+                        case 0x1D: { /* MEGABOMB — KB + tile damage + fire debris + mushroom fire */
+                            int mb_x = *(int *)(ebase + 0x00);
+                            int mb_y = *(int *)(ebase + 0x08);
+                            int mb_vx = *(int *)(ebase + 0x18);
+                            int mb_vy = *(int *)(ebase + 0x1C);
+                            int *sc = (int *)DAT_00487ab0;
+                            int *tt = (int *)DAT_00487abc;
+
+                            /* Area knockback */
+                            FUN_00437cf0(mb_x, mb_y, 400, owner, 500);
+
+                            /* Tile damage */
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            FUN_00437cf0(prev_x, prev_y, 400, owner, 500);
-                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                                         mb_x, mb_y, *(int *)(ebase + 0x04), *(int *)(ebase + 0x0C),
+                                         '\0', '\0', owner);
+
+                            /* Loop 1: Fire debris (entity_type 0, render_mode 4) */
+                            {
+                                int count1 = (int)((float)DAT_0048385c * 80.0f);
+                                if (count1 < 1) count1 = 1;
+                                if (count1 > 40) count1 = 40;
+                                int angle_step = 0x0445C000 / count1;
+                                for (int dp = 0; dp < count1 && DAT_00489248 < 0x9C4; dp++) {
+                                    unsigned int dir = rand() & 0x7FF;
+                                    int spd = rand() % 80;
+                                    int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                    *(int *)(ep + 0x00) = mb_x;
+                                    *(int *)(ep + 0x08) = mb_y;
+                                    *(int *)(ep + 0x18) = (sc[dir] * spd >> 6) + (mb_vx >> 5);
+                                    *(int *)(ep + 0x1C) = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
+                                    *(int *)(ep + 0x04) = mb_x;
+                                    *(int *)(ep + 0x0C) = mb_y;
+                                    *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                    *(unsigned char *)(ep + 0x21) = 0;
+                                    *(short *)(ep + 0x24) = (short)(rand() % 6);
+                                    *(unsigned char *)(ep + 0x20) = 0;
+                                    *(unsigned char *)(ep + 0x26) = 0;
+                                    *(unsigned char *)(ep + 0x22) = owner;
+                                    *(int *)(ep + 0x28) = 0;
+                                    *(int *)(ep + 0x38) = tt[0x26];
+                                    *(int *)(ep + 0x48) = 0;
+                                    *(unsigned char *)(ep + 0x54) = 0;
+                                    *(unsigned char *)(ep + 0x40) = 4;
+                                    *(int *)(ep + 0x34) = tt[0];
+                                    *(int *)(ep + 0x3c) = 0;
+                                    *(unsigned char *)(ep + 0x5c) = 0;
+                                    DAT_00489248++;
+                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 120;
+                                    {
+                                        int ci = rand() % 10;
+                                        unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
+                                        unsigned short r5 = (pal >> 10) & 0x1F;
+                                        unsigned short g5 = (pal >> 5) & 0x1F;
+                                        unsigned short b5 = pal & 0x1F;
+                                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                            (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                                    }
+                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = angle_step;
+                                }
+                            }
+
+                            /* Loop 2: Mushroom fire (entity_type 0x64, render_mode 0) */
+                            {
+                                int count2 = (int)((float)DAT_0048385c * 150.0f);
+                                if (count2 < 1) count2 = 1;
+                                if (count2 > 80) count2 = 80;
+                                for (int mp = 0; mp < count2 && DAT_00489248 < 0x9C4; mp++) {
+                                    unsigned int dir = rand() & 0x7FF;
+                                    int spd = rand() % 80;
+                                    int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                    *(int *)(ep + 0x00) = mb_x;
+                                    *(int *)(ep + 0x08) = mb_y;
+                                    *(int *)(ep + 0x18) = (sc[dir] * spd >> 6) + (mb_vx >> 5);
+                                    *(int *)(ep + 0x1C) = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
+                                    *(int *)(ep + 0x04) = mb_x;
+                                    *(int *)(ep + 0x0C) = mb_y;
+                                    *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                    *(unsigned char *)(ep + 0x21) = 0x64;
+                                    *(short *)(ep + 0x24) = (short)(rand() % 6);
+                                    *(unsigned char *)(ep + 0x20) = 0;
+                                    *(unsigned char *)(ep + 0x26) = 0xFF;
+                                    *(unsigned char *)(ep + 0x22) = 0xFF;
+                                    *(int *)(ep + 0x28) = 0;
+                                    *(int *)(ep + 0x38) = tt[0x347A];
+                                    *(int *)(ep + 0x44) = tt[0x3489];
+                                    *(int *)(ep + 0x48) = 0;
+                                    *(int *)(ep + 0x4C) = tt[0x3495];
+                                    *(unsigned char *)(ep + 0x54) = 0;
+                                    *(unsigned char *)(ep + 0x40) = 0;
+                                    *(int *)(ep + 0x34) = tt[0x3458];
+                                    *(int *)(ep + 0x3c) = 0;
+                                    *(unsigned char *)(ep + 0x5c) = 0;
+                                    DAT_00489248++;
+                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 120;
+                                    {
+                                        int ci = rand() % 10;
+                                        unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
+                                        unsigned short r5 = (pal >> 10) & 0x1F;
+                                        unsigned short g5 = (pal >> 5) & 0x1F;
+                                        unsigned short b5 = pal & 0x1F;
+                                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                            (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                                    }
+                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
+                                }
+                            }
+
+                            /* Flash particle + sound */
+                            if (DAT_00489250 < 2000) {
+                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                *(int *)(fp + 0x00) = mb_x;
+                                *(int *)(fp + 0x04) = mb_y;
+                                *(int *)(fp + 0x08) = 0;
+                                *(int *)(fp + 0x0C) = 0;
+                                *(unsigned char *)(fp + 0x10) = 0;
+                                *(unsigned char *)(fp + 0x11) = 0;
+                                *(unsigned char *)(fp + 0x12) = 0;
+                                *(unsigned char *)(fp + 0x13) = 1;
+                                *(unsigned char *)(fp + 0x14) = 0xFF;
+                                *(unsigned char *)(fp + 0x15) = 1;
+                                DAT_00489250++;
+                            }
+                            FUN_0040f9b0(0x65 + (rand() % 7), mb_x, mb_y);
                             break;
-                        case 0x1E: /* Light — no KB */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         0, 0, 0, 0, 0, '\0', owner);
-                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                        }
+                        case 0x1E: /* PHOTON FLUX — pure anti-ship, NOTHING on wall hit.
+                            * Silently vanishes. Only damages via entity hit (FUN_004348a0). */
                             break;
 
-                        /* Callback 0x43B370: unique sound 0x70, no tile damage */
-                        case 0x1F:
-                            FUN_0040f9b0(0x70, prev_x, prev_y);
+                        /* Callback 0x43B370: BOUNCE with full reflection, up to 30 times.
+                         * Sound 0x70 on each bounce. Counter at +0x3C (counting up). */
+                        case 0x1F: {
+                            int bc = *(int *)(ebase + 0x3C);
+                            if (bc < 30) {
+                                if (prev_tx != tx) *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18));
+                                if (prev_ty != ty) *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C));
+                                *(int *)(ebase + 0x3C) = bc + 1;
+                                FUN_0040f9b0(0x70, prev_x, prev_y);
+                                did_bounce = 1;
+                            }
+                            /* else: 30th bounce reached, remove */
                             break;
+                        }
 
-                        /* Callback 0x4442F0: turret spawner, silent */
-                        case 0x22:
+                        /* Callback 0x4442F0: Turret deployer — on solid wall hit,
+                         * spawn a type 0x67 turret entity at impact point.
+                         * Revert position to prev, zero velocity. */
+                        case 0x22: {
+                            /* Revert to previous position (impact point) */
+                            *(int *)(ebase + 0x00) = prev_x;
+                            *(int *)(ebase + 0x08) = prev_y;
+                            *(int *)(ebase + 0x18) = 0;
+                            *(int *)(ebase + 0x1C) = 0;
+                            /* Spawn turret entity (type 0x67) at impact */
+                            if (DAT_00489248 < 0x9C4) {
+                                int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                memset((void *)tp, 0, 0x80);
+                                *(int *)(tp + 0x00) = prev_x;
+                                *(int *)(tp + 0x04) = prev_x;
+                                *(int *)(tp + 0x08) = prev_y;
+                                *(int *)(tp + 0x0C) = prev_y;
+                                /* Turret heading: parent heading + random offset + 0x3C0 */
+                                int t_heading = (*(int *)(ebase + 0x3C) + (rand() & 0x7F) + 0x3C0) & 0x7FF;
+                                int t_speed = (rand() % 20) + 10;
+                                int *slut = (int *)DAT_00487ab0;
+                                *(int *)(tp + 0x18) = (slut[t_heading & 0x7FF] * t_speed) >> 6;
+                                *(int *)(tp + 0x1C) = (slut[((t_heading & 0x7FF) + 0x200) & 0x7FF] * t_speed) >> 6;
+                                *(unsigned char *)(tp + 0x21) = 0x67;  /* turret entity type */
+                                *(unsigned char *)(tp + 0x22) = owner; /* inherit owner */
+                                *(unsigned char *)(tp + 0x26) = 0xFF;  /* team = neutral */
+                                *(int *)(tp + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);  /* gravity */
+                                *(int *)(tp + 0x44) = *(int *)((int)DAT_00487abc + 0xD86C);  /* damage */
+                                *(int *)(tp + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);  /* callback */
+                                *(unsigned char *)(tp + 0x5C) = 1;
+                                unsigned char fire_idx = (unsigned char)((rand() % 12) + 20);
+                                *(unsigned char *)(tp + 0x65) = fire_idx;
+                                *(unsigned char *)(tp + 0x64) = 0x12;
+                                if (DAT_00487aa8 != NULL)
+                                    *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[fire_idx] + 0x7530;
+                                DAT_00489248++;
+                            }
+                            /* Play impact sound */
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
                             break;
+                        }
 
                         /* Callback 0x4457B0: heavy impact sound only */
                         case 0x23:
                             FUN_0040f9b0(0x11C, prev_x, prev_y);
                             break;
 
-                        /* Callback 0x447A70: shotgun scatter, silent */
-                        case 0x24:
+                        /* Callback 0x447A70: Flechette burst — spawn cone of 0x67 pellets.
+                         * Wall hit is SILENT. Pellet burst IS the weapon. */
+                        case 0x24: {
+                            int parent_x = *(int *)(ebase + 0x04);
+                            int parent_y = *(int *)(ebase + 0x0C);
+                            unsigned char own = *(unsigned char *)(ebase + 0x22);
+                            int pvx = *(int *)(ebase + 0x18);
+                            int pvy = *(int *)(ebase + 0x1C);
+                            for (int s = 0; s < 10 && DAT_00489248 < 0x9c4; s++) {
+                                int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                memset((void *)tp, 0, 0x80);
+                                *(int *)(tp + 0x00) = parent_x;
+                                *(int *)(tp + 0x04) = parent_x;
+                                *(int *)(tp + 0x08) = parent_y;
+                                *(int *)(tp + 0x0C) = parent_y;
+                                /* Cone spread: parent velocity + angular jitter */
+                                int jx = ((rand() & 0x1FFFF) - 0x10000);
+                                int jy = ((rand() & 0x1FFFF) - 0x10000);
+                                *(int *)(tp + 0x18) = pvx / 3 + jx;
+                                *(int *)(tp + 0x1C) = pvy / 3 + jy;
+                                *(unsigned char *)(tp + 0x21) = 0x67;
+                                *(unsigned char *)(tp + 0x22) = own;
+                                *(unsigned char *)(tp + 0x26) = 0xFE;
+                                *(unsigned char *)(tp + 0x28) = 0x40; /* short lifespan */
+                                *(unsigned char *)(tp + 0x40) = 2;
+                                *(unsigned char *)(tp + 0x5C) = 2;
+                                unsigned char pidx = (unsigned char)(rand() % 12 + 20);
+                                *(unsigned char *)(tp + 0x65) = pidx;
+                                *(unsigned char *)(tp + 0x64) = 0x12;
+                                if (DAT_00487aa8 != NULL)
+                                    *(int *)(tp + 0x4C) = (int)((unsigned short *)DAT_00487aa8)[pidx] + 30000;
+                                *(unsigned short *)(tp + 0x24) = (unsigned short)(rand() % 5);
+                                *(int *)(tp + 0x38) = 4;
+                                *(int *)(tp + 0x44) = *(int *)(ebase + 0x44) / 5; /* split damage */
+                                DAT_00489248++;
+                            }
                             break;
+                        }
 
-                        /* Callback 0x446130: spawns 0x6A entities, silent */
-                        case 0x25:
+                        /* Callback 0x446130: cluster bomb wall hit — spawns 0x6A bomblets.
+                         * (Main split handled in fuse/timer section above, but also
+                         * detonates on wall impact with sub-munitions.) */
+                        case 0x25: {
+                            int parent_x = *(int *)(ebase + 0x04);
+                            int parent_y = *(int *)(ebase + 0x0C);
+                            unsigned char own = *(unsigned char *)(ebase + 0x22);
+                            for (int s = 0; s < 6 && DAT_00489248 < 0x9c4; s++) {
+                                int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                memset((void *)tp, 0, 0x80);
+                                *(int *)(tp + 0x00) = parent_x;
+                                *(int *)(tp + 0x04) = parent_x;
+                                *(int *)(tp + 0x08) = parent_y;
+                                *(int *)(tp + 0x0C) = parent_y;
+                                int jx = ((rand() & 0x1FFFF) - 0x10000);
+                                int jy = ((rand() & 0x1FFFF) - 0x10000);
+                                *(int *)(tp + 0x18) = jx;
+                                *(int *)(tp + 0x1C) = jy - 0x8000; /* upward bias */
+                                *(unsigned char *)(tp + 0x21) = 0x6A;
+                                *(unsigned char *)(tp + 0x22) = own;
+                                *(unsigned char *)(tp + 0x26) = 0xFE;
+                                *(unsigned char *)(tp + 0x28) = 0xFF;
+                                *(int *)(tp + 0x38) = 6;
+                                *(int *)(tp + 0x44) = *(int *)(ebase + 0x44) / 3;
+                                DAT_00489248++;
+                            }
+                            FUN_0040f9b0(0x65 + (rand() % 7), parent_x, parent_y);
                             break;
+                        }
 
                         /* Callback 0x43DBD0: flash burst only, no sound */
                         case 0x26:
                             flash_count = (rand() & 1) + 4;
                             break;
 
-                        /* Callback 0x43E070: 1 flash + sound 0x65 */
+                        /* Callback 0x43E070: BOUNCE with 20% die chance per bounce.
+                         * On death: 1 flash + sound 0x65. */
                         case 0x27:
-                            flash_count = 1;
-                            FUN_0040f9b0(0x65, prev_x, prev_y);
+                            if (rand() % 5 != 0) {
+                                /* Survive: bounce */
+                                if (prev_tx != tx) *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18));
+                                if (prev_ty != ty) *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C));
+                                did_bounce = 1;
+                            } else {
+                                /* Die: 1 flash + sound */
+                                flash_count = 1;
+                                FUN_0040f9b0(0x65, prev_x, prev_y);
+                            }
                             break;
 
-                        /* Callback 0x43E890: grenade bounce, silent */
-                        case 0x28:
+                        /* Callback 0x43E890: PIPEBOMB bounce.
+                         * Hit axis: negate and /4 (strong dampening).
+                         * Cross axis: *0.8 (mild dampening).
+                         * Corner: both negate and /8.
+                         * Matches original at 0x43E9A0-0x43EA80. */
+                        case 0x28: {
+                            int hit_x = (prev_tx != tx);
+                            int hit_y = (prev_ty != ty);
+                            if (hit_x && hit_y) {
+                                /* Corner: both axes negate + /8 */
+                                *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18) >> 3);
+                                *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C) >> 3);
+                            } else if (hit_y) {
+                                /* Floor/ceiling: vel_y = -vel_y/4, vel_x *= 0.8 */
+                                int vy = *(int *)(ebase + 0x1C);
+                                int vx = *(int *)(ebase + 0x18);
+                                *(int *)(ebase + 0x1C) = -(vy >> 2);
+                                *(int *)(ebase + 0x18) = (int)((float)vx * 0.8f);
+                            } else if (hit_x) {
+                                /* Wall: vel_x = -vel_x/4, vel_y *= 0.8 */
+                                int vx = *(int *)(ebase + 0x18);
+                                int vy = *(int *)(ebase + 0x1C);
+                                *(int *)(ebase + 0x18) = -(vx >> 2);
+                                *(int *)(ebase + 0x1C) = (int)((float)vy * 0.8f);
+                            }
+                            *(int *)(ebase + 0x00) = *(int *)(ebase + 0x04);
+                            *(int *)(ebase + 0x08) = *(int *)(ebase + 0x0C);
+                            did_bounce = 1;
+                            break;
+                        }
+
+                        /* Callback 0x43E890: TURRETS deploy on landing (NO bounce) */
                         case 0x29:
                         case 0x2A:
+                            *(int *)(ebase + 0x18) = 0;
+                            *(int *)(ebase + 0x1C) = 0;
+                            *(int *)(ebase + 0x00) = *(int *)(ebase + 0x04);
+                            *(int *)(ebase + 0x08) = *(int *)(ebase + 0x0C);
+                            *(unsigned char *)(ebase + 0x20) = 0xFA;
+                            did_bounce = 1;
                             break;
 
                         /* Machinegun: tile damage only, no extra effects */
@@ -2424,6 +3714,15 @@ void FUN_00434310(void)
                         case 0x2E:
                             flash_count = 1;
                             FUN_0040f9b0(0x65, prev_x, prev_y);
+                            break;
+
+                        /* Callback 0x4427e0: heavy guided missile — explosion stamp */
+                        case 0x66:
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 150);
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
+                            flash_count = (rand() & 1) + 3;
                             break;
 
                         /* Unknown types: conservative — tile damage only */
@@ -2453,7 +3752,14 @@ void FUN_00434310(void)
                         }
                     }
 
-                    should_remove = 1;
+                    if (!did_bounce) {
+                        should_remove = 1;
+                    } else {
+                        /* Revert position to pre-collision for bounced entities.
+                         * This prevents the entity from getting stuck inside the wall. */
+                        *(int *)(ebase + 0x00) = *(int *)(ebase + 0x04);
+                        *(int *)(ebase + 0x08) = *(int *)(ebase + 0x0C);
+                    }
                 }
             } else {
             }
@@ -2579,8 +3885,46 @@ void FUN_00434310(void)
                             }
                         }
 
-                        should_remove = 1;
+                        /* PHOTON FLUX: confusion effect — set +0xD0 timer to 240 ticks.
+                         * Causes aim jitter (+/-64/tick), forced movement, HUD hidden. */
+                        if (ent_type == 0x1E) {
+                            *(int *)(poff + 0xD0 + DAT_00487810) = 0xF0;
+                        }
+
+                        /* MOVING SUCKER: does NOT die on player hit — keeps flying.
+                         * Suction effect is applied by FUN_0044e3b0 in player update. */
+                        if (ent_type == 0x0E) {
+                            /* no removal, no detonation — entity stays alive */
+                        }
+                        /* PIPEBOMB: trigger detonation instead of silent removal */
+                        else if (ent_type == 0x28) {
+                            *(unsigned char *)(ebase + 0x20) = 0xFA;
+                        } else {
+                            should_remove = 1;
+                        }
                         break;
+                    }
+                }
+            }
+        }
+
+        /* PERSUADERTRON (type 0x0A): convert enemy troopers to shooter's team.
+         * Each tick, scan nearby troopers. On proximity hit, change team. */
+        if (ent_type == 0x0A && !should_remove && DAT_0048924c > 0) {
+            unsigned char shooter_team = *(unsigned char *)(ebase + 0x22);
+            int ex = *(int *)(ebase + 0x00);
+            int ey = *(int *)(ebase + 0x08);
+            for (int v = 0; v < DAT_0048924c; v++) {
+                int toff = v * 0x40;
+                unsigned char t_team = *(unsigned char *)(toff + 0x1C + (int)DAT_00487884);
+                if (t_team != shooter_team && t_team != 0xFF) {
+                    int tx = *(int *)(toff + (int)DAT_00487884);
+                    int ty = *(int *)(toff + 8 + (int)DAT_00487884);
+                    int dx = (ex - tx) >> 0x12;
+                    int dy = (ey - ty) >> 0x12;
+                    if (dx * dx + dy * dy < 400) {
+                        *(unsigned char *)(toff + 0x1C + (int)DAT_00487884) = shooter_team;
+                        should_remove = 1;
                     }
                 }
             }
@@ -2722,7 +4066,12 @@ void FUN_00434310(void)
                 lifetime--;
                 *(int *)(ebase + 0x28) = lifetime;
                 if (lifetime <= 0) {
-                    should_remove = 1;
+                    /* PIPEBOMB: trigger detonation instead of silent removal */
+                    if (ent_type == 0x28) {
+                        *(unsigned char *)(ebase + 0x20) = 0xFA;
+                    } else {
+                        should_remove = 1;
+                    }
                 }
             } else if (ent_state == 5 || ent_type == 2 || ent_type >= 0x6C) {
                 /* Debris with no lifetime — expire immediately */
@@ -3081,7 +4430,7 @@ void FUN_004527e0(void)
                     FUN_00451e70(i, base_damage);
                 }
 
-                /* Vehicle collision (grid_byte bit 2) */
+                /* Vehicle/trooper collision (grid_byte bit 2) */
                 if ((grid_byte & 4) == 4 && DAT_0048924c > 0) {
                     int voff = 0;
                     int veh_base = (int)DAT_00487884;
@@ -3106,6 +4455,7 @@ void FUN_004527e0(void)
                         voff += 0x40;
                     }
                 }
+
             }
         }
 
@@ -4080,8 +5430,11 @@ void FUN_00458010(void)
                 *(int *)(off + 0x10 + (int)DAT_00481f28) = 2000000000;
             }
 
-            /* Set gravity for this weapon type */
+            /* Set gravity for this weapon type.
+             * TEMP: Force low gravity (< 0x50) to use direct atan2 aiming
+             * instead of ballistic LUT, which may have interpolation bugs. */
             DAT_00481ed0 = -(int)((unsigned int)(*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x06')) & DAT_00483828;
+            if (DAT_00481ed0 >= 0x50) DAT_00481ed0 = 0x4F;
 
             /* Increment animation counter */
             char *anim_ctr = (char *)(off + 0x23 + (int)DAT_00481f28);

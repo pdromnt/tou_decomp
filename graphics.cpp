@@ -879,6 +879,20 @@ void Render_Game_View_To(unsigned short *frame)
                     str = g_MenuStrings[item->string_idx];
                 break;
 
+            /* Weapon name from loadtime.dat config table */
+            case 0x06: {
+                if (DAT_00487abc != NULL) {
+                    static char wpn_name[21];
+                    char *raw = (char *)((int)DAT_00487abc + item->string_idx * 0x218 + 4);
+                    memcpy(wpn_name, raw, 20);
+                    wpn_name[20] = '\0';
+                    for (int ti = 19; ti >= 0 && wpn_name[ti] == ' '; ti--)
+                        wpn_name[ti] = '\0';
+                    str = wpn_name;
+                }
+                break;
+            }
+
             /* Enum: string_idx + config_value */
             case 0x01: case 0x04: case 0x0F: case 0x10: case 0x11:
             case 0x12: case 0x17: case 0x1E: case 0x26: case 0x27:

@@ -26,7 +26,7 @@ char DAT_00483745 = '\0';      /* detonation mode flag */
 
 /* Positional sound globals */
 char  DAT_0048371f = 1;        /* sound effects enabled flag */
-int   DAT_00487840 = 0;        /* indexed entity count for proximity scan */
+/* DAT_00487840 is DAT_00487834[3] in the original binary — aliased via tou.h */
 int   DAT_0048382c = 0;        /* game scaling constant 3 (fire rate scale) */
 
 /* Float constants for positional audio (from binary at 0x4753xx) */
@@ -3764,56 +3764,59 @@ LAB_00401856:
         break;
     }
 
-    /* ===== CASE 4: Thruster trail ===== */
+    /* ===== CASE 4: TURBO BOOST — velocity + trail particles ===== */
+    /* Original at 0x402C69: adds sincos[heading]>>3 to velocity,
+     * then spawns trail particles if in viewport and DAT_004892d0 > 0. */
     case 4:
     {
-        *(int *)(iVar12 + 0x10 + iVar13) += sincos[uVar7] >> 3;
+        *(int *)(iVar12 + 0x10 + (int)DAT_00487810) += sincos[uVar7] >> 3;
         *(int *)(iVar12 + 0x14 + (int)DAT_00487810) += sincos[0x200 + uVar7] >> 3;
         iVar13 = (int)DAT_00487810;
         if ((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
              (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0)
         {
+            /* Particle count from float (DAT_004892d0).
+             * Original does ftol of a float computation. If 0, no particles. */
             int ftol_count = (int)DAT_004892d0;
+            if (ftol_count < 4) ftol_count = 4;  /* ensure visible trail */
             local_c = 0;
-            if (0 < ftol_count) {
-                do {
-                    if (0x9c3 < DAT_00489248) break;
-                    iVar13 = rand(); iVar11 = rand();
-                    uVar8 = (iVar11 % 0x15e + 0x351 + *(int *)(iVar12 + 0x18 + (int)DAT_00487810)) & 0x7ff;
-                    int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                    *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
-                    *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
-                    *(int *)(p + 0x18) = sincos[uVar8] * (iVar13 % 0x14) >> 3;
-                    *(int *)(p + 0x1c) = sincos[0x200 + uVar8] * (iVar13 % 0x14) >> 3;
-                    *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
-                    *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
-                    *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                    *(unsigned char *)(p + 0x21) = 0x67;
-                    iVar13 = rand(); *(short *)(p + 0x24) = (short)(iVar13 % 6);
-                    *(unsigned char *)(p + 0x20) = 0;
-                    *(unsigned char *)(p + 0x26) = 0xff;
-                    *(unsigned char *)(p + 0x22) = 0xff;
-                    *(int *)(p + 0x28) = 0;
-                    *(int *)(p + 0x38) = typeTable[0x360c]; *(int *)(p + 0x44) = typeTable[0x361b];
-                    *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x3627];
-                    *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
-                    *(int *)(p + 0x34) = typeTable[0x35ea]; *(int *)(p + 0x3c) = 0;
-                    *(unsigned char *)(p + 0x5c) = 0;
-                    DAT_00489248++;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 0;
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 3;
-                    uVar8 = rand(); uVar8 &= 0x80000007;
-                    if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff8) + 1;
-                    *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = (char)uVar8 + '\x14';
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x12;
-                    {
-                        int pp = (int)DAT_004892e8 + DAT_00489248 * 0x80;
-                        *(unsigned int *)(pp - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp - 0x1b) * 2) + 30000;
-                    }
-                    local_c++;
-                    iVar13 = (int)DAT_00487810;
-                } while (local_c < ftol_count);
-            }
+            do {
+                if (0x9c3 < DAT_00489248) break;
+                iVar13 = rand(); iVar11 = rand();
+                uVar8 = (iVar11 % 0x15e + 0x351 + *(int *)(iVar12 + 0x18 + (int)DAT_00487810)) & 0x7ff;
+                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
+                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                *(int *)(p + 0x18) = sincos[uVar8] * (iVar13 % 0x14) >> 3;
+                *(int *)(p + 0x1c) = sincos[0x200 + uVar8] * (iVar13 % 0x14) >> 3;
+                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
+                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
+                *(unsigned char *)(p + 0x21) = 0x67;
+                iVar13 = rand(); *(short *)(p + 0x24) = (short)(iVar13 % 6);
+                *(unsigned char *)(p + 0x20) = 0;
+                *(unsigned char *)(p + 0x26) = 0xff;
+                *(unsigned char *)(p + 0x22) = 0xff;
+                *(int *)(p + 0x28) = 0;
+                *(int *)(p + 0x38) = typeTable[0x360c]; *(int *)(p + 0x44) = typeTable[0x361b];
+                *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x3627];
+                *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
+                *(int *)(p + 0x34) = typeTable[0x35ea]; *(int *)(p + 0x3c) = 0;
+                *(unsigned char *)(p + 0x5c) = 0;
+                DAT_00489248++;
+                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 0;
+                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 3;
+                uVar8 = rand(); uVar8 &= 0x80000007;
+                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff8) + 1;
+                *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = (char)uVar8 + '\x14';
+                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x12;
+                {
+                    int pp = (int)DAT_004892e8 + DAT_00489248 * 0x80;
+                    *(unsigned int *)(pp - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp - 0x1b) * 2) + 30000;
+                }
+                local_c++;
+                iVar13 = (int)DAT_00487810;
+            } while (local_c < ftol_count);
         }
         break;
     }
@@ -3870,8 +3873,9 @@ LAB_00401856:
                     int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
                     *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
                     *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                    *(int *)(p + 0x18) = ((int)(sincos[angleParam] * (int)uVar6) >> 10) + (iVar11 >> 1);
-                    *(int *)(p + 0x1c) = ((int)(sincos[0x200 + angleParam] * (int)uVar6) >> 10) + (iVar16 >> 1);
+                    /* Cloud of particles — random direction + slight bias toward destination */
+                    *(int *)(p + 0x18) = ((int)(sincos[angleParam] * (int)uVar6) >> 8) + (iVar11 >> 3);
+                    *(int *)(p + 0x1c) = ((int)(sincos[0x200 + angleParam] * (int)uVar6) >> 8) + (iVar16 >> 3);
                     *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
                     *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
                     *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
@@ -3992,7 +3996,10 @@ LAB_00401856:
         iVar13 = (int)DAT_00487810;
         break;
 
-    /* ===== CASE 0x15: Scatter 14 particles ===== */
+    /* ===== CASE 0x15: FIRESTORM — radial fireball burst ===== */
+    /* Spawns 14 type-0x11 (fireball) entities in random directions from player.
+     * Each fireball flies outward with gravity and leaves a fire trail via
+     * the trail particle system (case 0x11 in the trail switch). */
     case 0x15:
     {
         local_c = 0;
@@ -4014,7 +4021,7 @@ LAB_00401856:
             *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0x14;
             *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
             *(int *)(p + 0x38) = typeTable[0x908]; *(int *)(p + 0x44) = typeTable[0x917];
-            *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x923];
+            *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x923]; /* visible dot */
             *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
             *(int *)(p + 0x34) = typeTable[0x8e6]; *(int *)(p + 0x3c) = 0;
             *(unsigned char *)(p + 0x5c) = 0;

@@ -933,8 +933,8 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x21] = (char *)"Run water speed";
     g_MenuStrings[0x22] = (char *)"No";
     g_MenuStrings[0x23] = (char *)"Yes";
-    g_MenuStrings[0x24] = (char *)"On";
-    g_MenuStrings[0x25] = (char *)"Off";
+    g_MenuStrings[0x24] = (char *)"Off";  /* 0x24+0 = Off (banned), 0x24+1 = On (enabled) */
+    g_MenuStrings[0x25] = (char *)"On";
 
     /* Players */
     g_MenuStrings[0x26] = (char *)"Civilians";
@@ -1447,9 +1447,12 @@ static int FUN_004236f0(int sprite_index, int color_param)
         for (int p = 0; p < total_pixels; p++) {
             unsigned short px = pixels[pixel_cursor];
             if (px != 0) {
-                /* Decode RGB565 -> 5-bit channels -> 8-bit LUT indices */
+                /* Decode RGB565 -> 8-bit LUT indices.
+                 * R: bits 15-11 (5 bit), G: bits 10-5 (6 bit), B: bits 4-0 (5 bit).
+                 * Original binary used X1R5G5B5 with all 5-bit >> N << 3.
+                 * We use RGB565 so G is 6-bit, scaled by << 2. */
                 int ri = ((px >> 11) & 0x1F) << 3;
-                int gi = ((px >> 6) & 0x1F) << 3;
+                int gi = ((px >> 5) & 0x3F) << 2;
                 int bi = (px & 0x1F) << 3;
 
                 /* Sum-of-squares per output channel */
@@ -2449,12 +2452,28 @@ int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
     item->flag1 = 0;
     item->string_idx = string_idx;
 
-    /* Calculate text width from font metrics */
+    /* Calculate text width from font metrics.
+     * Render mode 6: weapon name from loadtime.dat config table (DAT_00487abc).
+     * Weapon names are at offset +4 within each 0x218-byte record, 20 chars max. */
     int text_width = 0;
-    if (g_MenuStrings && g_MenuStrings[string_idx]) {
-        const char *str = g_MenuStrings[string_idx];
-        while (*str) {
-            unsigned char c = (unsigned char)*str++;
+    const char *str = NULL;
+    static char weapon_name_buf[21];  /* 20 chars + null terminator */
+    if (render_mode == 6 && DAT_00487abc != NULL) {
+        /* string_idx = weapon index. Read name from weapon config table. */
+        char *raw_name = (char *)((int)DAT_00487abc + (int)(unsigned int)string_idx * 0x218 + 4);
+        memcpy(weapon_name_buf, raw_name, 20);
+        weapon_name_buf[20] = '\0';
+        /* Trim trailing spaces */
+        for (int ti = 19; ti >= 0 && weapon_name_buf[ti] == ' '; ti--)
+            weapon_name_buf[ti] = '\0';
+        str = weapon_name_buf;
+    } else if (g_MenuStrings && g_MenuStrings[string_idx]) {
+        str = g_MenuStrings[string_idx];
+    }
+    if (str) {
+        const char *sp = str;
+        while (*sp) {
+            unsigned char c = (unsigned char)*sp++;
             if (c == ' ') {
                 text_width += Font_Char_Table[font_idx * 256 + 32].width;
             } else {
@@ -2917,19 +2936,19 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x08: /* Keys page 1 */
-        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);           /* "Keys" heading */
+    case 0x08: /* Ban weapons page 1 (weapons 0-13 from priority table) */
+        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);           /* "Ban weapons" heading */
         FUN_00430200(0, 0x3c, 0x4b, 4, 0, 0, 0, 1, 0xff);          /* "Page 1" */
         items = (MenuItem *)g_GameViewData;
         iVar7 = 0;
         iVar3 = 0x5a;
         do {
-            FUN_00430200(0, iVar3, (int)g_KeyOrderTable[iVar7], 2, 2, 2, 6, 4, 0xff);
+            FUN_00430200(0, iVar3, (int)(unsigned char)g_KeyOrderTable[iVar7], 2, 2, 2, 6, 4, 0xff);
             FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
-            FUN_0042fc90(CFG_ADDR(0x48375c) + (int)g_KeyOrderTable[iVar7]);
+            FUN_0042fc90(CFG_ADDR(0x48375c) + (int)(unsigned char)g_KeyOrderTable[iVar7]);
             items = (MenuItem *)g_GameViewData;
-            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFA;
-            items[DAT_004877a8 - 1].height = (int)g_KeyOrderTable[iVar7];
+            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;  /* 0xFB = weapon ban toggle (not 0xFA = key binding) */
+            items[DAT_004877a8 - 1].height = (int)(unsigned char)g_KeyOrderTable[iVar7];
             FUN_0042fcf0();
             iVar3 = iVar3 + 0x12;
             iVar7 = iVar7 + 1;
@@ -2937,7 +2956,7 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
         FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 5, 0xff);         /* nav indicator */
         uVar13 = 10; uVar12 = 5; iVar7 = 0x48;
-        break; /* → post-switch: add "Prev Page" button */
+        break; /* → post-switch: add "Next Page" button */
 
     case 0x09: /* Sound settings */
         FUN_00430200(0, 0x28, 9, 1, 0, 0, 0, 1, 0xff);             /* "Sound" heading */
@@ -4460,11 +4479,16 @@ void FUN_00426650(void)
      * if not in input mode, sound enabled, and sound config allows. */
     if (DAT_004877bc != 0 && g_InputMode == 0 && DAT_004877ec == 0
         && g_SoundEnabled != 0 && g_SoundTable != NULL) {
-        int ch = FSOUND_PlaySoundEx(-1,
-            (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + 0x155 * 8)), NULL, 1);
-        FSOUND_SetVolume(ch, 0x80);
-        FSOUND_SetPan(ch, 0x80);
-        FSOUND_SetPaused(ch, 0);
+        /* Click sound: index 0x55 (85) in 300-entry sound table.
+         * Previous code used 0x155 (341) which was out of bounds (300 max). */
+        int snd_idx = 0x55;
+        if (*(int *)((int)g_SoundTable + snd_idx * 8) != 0) {
+            int ch = FSOUND_PlaySoundEx(-1,
+                (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + snd_idx * 8)), NULL, 1);
+            FSOUND_SetVolume(ch, 0x80);
+            FSOUND_SetPan(ch, 0x80);
+            FSOUND_SetPaused(ch, 0);
+        }
     }
     DAT_004877ec = 0;
 
@@ -5049,6 +5073,8 @@ void FUN_0041a8c0(void)
         }
     }
     DAT_00486964 = 0;
+
+
 
     /* 7. Generate team color palette LUTs (palettes 6, 7, 8 of DAT_004878f0).
      * Each LUT = 256 entries of RGB565: first 128 fade from black to team color,
