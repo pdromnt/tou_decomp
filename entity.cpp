@@ -5143,20 +5143,22 @@ void FUN_0044e510(int *ent)
 }
 
 /* ===== FUN_0044e3b0 — Force Field Attraction/Repulsion ===== */
-/* Scans category-6 indexed entities (force field projectiles) for the first
- * enemy projectile within range.  If the projectile's flag at +0x40 is set,
- * attract the entity towards it; otherwise repel. */
+/* Scans for type 0x0E (MOVING SUCKER) entities directly in the entity array.
+ * Original used tracking list (DAT_0048781c + 0x18000) which goes stale
+ * after entity swap-removal. Direct scan avoids stale index bugs. */
 static void FUN_0044e3b0(int *ent)
 {
     int ex = ent[0];
     int ey = ent[1];
-    unsigned int i = 0;
 
-    if (DAT_0048784c == 0) return;
+    if (DAT_00489248 <= 0) return;
 
-    int *pIdx = (int *)((int)DAT_0048781c + 0x18000);
-    for (;;) {
-        int *proj = (int *)(*pIdx * 0x80 + (int)DAT_004892e8);
+    /* Scan entity array for type 0x0E */
+    for (int i = 0; i < DAT_00489248; i++) {
+        int *proj = (int *)(i * 0x80 + (int)DAT_004892e8);
+
+        /* Must be type 0x0E (MOVING SUCKER) */
+        if (*(unsigned char *)((int)proj + 0x21) != 0x0E) continue;
 
         /* Check: different team AND within ±0x1040000 on both axes */
         if (*(char *)((int)DAT_00487810 + 0x2c +
@@ -5165,29 +5167,23 @@ static void FUN_0044e3b0(int *ent)
             ex - 0x1040000 < *proj && *proj < ex + 0x1040000 &&
             ey - 0x1040000 < proj[2] && proj[2] < ey + 0x1040000)
         {
-            break;  /* found matching enemy projectile */
+            /* Found matching enemy sucker — compute angle and apply force */
+            int off = i * 0x80;
+            unsigned long long angle = FUN_004257e0(
+                *(int *)(off + (int)DAT_004892e8),
+                *(int *)(off + 8 + (int)DAT_004892e8),
+                ex, ey);
+            int a = (int)angle;
+
+            if (*(char *)(off + 0x40 + (int)DAT_004892e8) != '\0') {
+                ent[4] += *(int *)((int)DAT_00487ab0 + a * 4) >> 2;
+                ent[5] += *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 2;
+            } else {
+                ent[4] -= *(int *)((int)DAT_00487ab0 + a * 4) >> 1;
+                ent[5] -= *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 1;
+            }
+            return;
         }
-
-        i++;
-        pIdx++;
-        if (DAT_0048784c <= i) return;  /* no match found */
-    }
-
-    int off = *pIdx * 0x80;
-    unsigned long long angle = FUN_004257e0(
-        *(int *)(off + (int)DAT_004892e8),
-        *(int *)(off + 8 + (int)DAT_004892e8),
-        ex, ey);
-    int a = (int)angle;
-
-    if (*(char *)(off + 0x40 + (int)DAT_004892e8) != '\0') {
-        /* Attract: pull entity towards projectile (weaker force) */
-        ent[4] += *(int *)((int)DAT_00487ab0 + a * 4) >> 2;
-        ent[5] += *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 2;
-    } else {
-        /* Repel: push entity away from projectile (stronger force) */
-        ent[4] -= *(int *)((int)DAT_00487ab0 + a * 4) >> 1;
-        ent[5] -= *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 1;
     }
 }
 

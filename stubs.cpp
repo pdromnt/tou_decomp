@@ -1930,6 +1930,12 @@ void FUN_00434310(void)
             }
         }
 
+        /* Force type 0x13 turret bullets: zero gravity + zero acceleration every tick.
+         * Direct aim is correct at spawn but something keeps modifying velocity. */
+        if (ent_type == 0x13 && *(unsigned char *)(ebase + 0x22) >= 0x50) {
+            *(int *)(ebase + 0x38) = 0;
+        }
+
         /* === Entity behavior (inline replacement for callback at +0x34) === */
 
         /* Entity category flags.
@@ -1954,10 +1960,9 @@ void FUN_00434310(void)
             if (*(int *)(ebase + 0x18) != 0 || *(int *)(ebase + 0x1c) != 0) {
                 is_projectile = 1;
             }
-            /* Force is_projectile for entity types that need processing with zero velocity:
-             * Turrets (0x29/0x2A), PILOT DISRUPTOR (0x18), INSECTS (0x1F), TOURNAILLER (0x08). */
+            /* Force is_projectile for zero-velocity entity types. */
             if (ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
-                ent_type == 0x1F || ent_type == 0x08) {
+                ent_type == 0x1F || ent_type == 0x08 || ent_type == 0x28) {
                 is_projectile = 1;
             }
         }
@@ -2070,7 +2075,12 @@ void FUN_00434310(void)
          *   ... pos_y += vy            ; uses updated vy
          * entity[+0x38] = 6 for all turret projectiles (set at spawn). */
         if (is_projectile && !is_debris && ent_type != 0x22) {
-            *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
+            /* Skip gravity for turret-owned projectiles — we use direct aim,
+             * not ballistic trajectory, so gravity curves bullets away. */
+            unsigned char grav_owner = *(unsigned char *)(ebase + 0x22);
+            if (grav_owner < 0x50) {
+                *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
+            }
         }
 
         /* === Homing/guidance + special movement — per-type ===
@@ -2233,7 +2243,10 @@ void FUN_00434310(void)
 
             case 0x13: case 0x14: case 0x6B: {
                 /* Seeking/spiral pattern. 0x14 also homes toward nearest enemy.
-                 * Rotate heading by a fixed increment each tick for spiral. */
+                 * Skip spiral for turret-owned bullets (owner >= 0x50). */
+                unsigned char spiral_owner = *(unsigned char *)(ebase + 0x22);
+                if (spiral_owner >= 0x50) break; /* turret bullet — fly straight */
+                /* Rotate heading by a fixed increment each tick for spiral. */
                 int vx = *(int *)(ebase + 0x18);
                 int vy = *(int *)(ebase + 0x1C);
                 /* Spiral: rotate velocity by ~2 degrees per tick.
@@ -3233,7 +3246,8 @@ void FUN_00434310(void)
                  * OR for basic bullets: any non-air, non-water tile.
                  * Water tiles (byte+4 == 1) are excluded so bullets work underwater. */
                 unsigned char tile_is_water = *(unsigned char *)((unsigned int)tile * 0x20 + 4 + (int)DAT_00487928);
-                if (pass2 == 0 || (ent_type == 0x00 && tile != 0 && tile_is_water == 0)) {
+                unsigned char wall_owner = *(unsigned char *)(ebase + 0x22);
+                if (pass2 == 0 || (ent_type == 0x00 && tile != 0 && tile_is_water == 0 && wall_owner < 0x50)) {
                     /* Compute explosion level from sub_type and entity state
                      * (original at 0x43897B-0x4389B5) */
                     unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
@@ -5233,17 +5247,20 @@ void FUN_00454b00(void)
                         /* Update barrel direction to match shot */
                         t[0xc] = fire_angle & 0x7ff;
 
-                        /* Determine projectile type */
+                        /* Determine projectile type based on building type at +0x1C (t[7]).
+                         * Type 0 (basic turret): entity type 0x00 (basic bullet)
+                         * Type 1 (ice turret): entity type 0x13 (freeze projectile)
+                         * Type 2 (floor turret): entity type 0x00 */
                         int proj_type = 0;
                         int proj_subtype = 2;
+                        char btype = (char)t[7]; /* building type at +0x1C */
 
-                        char ttype = *(char *)((int)t + 0x25);
-                        if (ttype == '\0' || (char)t[7] == (char)-2 || ttype == '\x02') {
-                            proj_type = 0;
+                        if (btype == 1) {
+                            proj_type = 0x13; /* ICE: freeze projectile */
+                            proj_subtype = 0;
+                        } else {
+                            proj_type = 0; /* BASIC/FLOOR: standard bullet */
                             proj_subtype = 2;
-                        } else if (ttype == '\x01') {
-                            proj_type = 1;
-                            proj_subtype = 1;
                         }
 
                         /* Owner byte */
@@ -5339,7 +5356,7 @@ void FUN_00454b00(void)
                             }
                         }
 
-                        /* Set entity behavior type */
+                        /* Set entity gravity (offset -0x48 = entity +0x38). */
                         *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x48) = 6;
 
                         /* Store turret position as projectile origin */
