@@ -291,9 +291,17 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             iVar6 = iVar15;
             iVar17 = iVar8;
 
-            /* Play random fire sound */
-            iVar7 = rand();
-            FUN_0040f9b0(iVar7 % 7 + 0x65, iVar6, iVar17);
+            /* Play random fire sound — limit to 1 per call to prevent
+             * deafening volume when many tiles explode simultaneously */
+            {
+                static int snd_count = 0;
+                if (snd_count == 0) {
+                    iVar7 = rand();
+                    FUN_0040f9b0(iVar7 % 7 + 0x65, iVar6, iVar17);
+                }
+                snd_count++;
+                if (snd_count > 3) snd_count = 0;
+            }
 
             *(unsigned char *)(DAT_00489250 * 0x20 + -0xb + (int)DAT_00481f34) = 1;
 
@@ -2241,43 +2249,15 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x13: case 0x14: case 0x6B: {
-                /* Seeking/spiral pattern. 0x14 also homes toward nearest enemy.
-                 * Skip spiral for turret-owned bullets (owner >= 0x50). */
-                unsigned char spiral_owner = *(unsigned char *)(ebase + 0x22);
-                if (spiral_owner >= 0x50) break; /* turret bullet — fly straight */
-                /* Rotate heading by a fixed increment each tick for spiral. */
+            case 0x6B: {
+                /* Spiral flight — type 0x6B ONLY (ROMAN CANDLE sub-projectile).
+                 * Types 0x13/0x14 are standard ballistic, do NOT spiral. */
                 int vx = *(int *)(ebase + 0x18);
                 int vy = *(int *)(ebase + 0x1C);
                 /* Spiral: rotate velocity by ~2 degrees per tick.
                  * cos(2°)≈1, sin(2°)≈0.035 → vx' = vx - vy/29, vy' = vy + vx/29 */
                 int nvx = vx - vy / 29;
                 int nvy = vy + vx / 29;
-                if (ent_type == 0x14) {
-                    /* Active homing: also nudge toward nearest enemy */
-                    unsigned char own = *(unsigned char *)(ebase + 0x22);
-                    int mx = *(int *)(ebase + 0x00);
-                    int my = *(int *)(ebase + 0x08);
-                    int best_dist = 0x7FFFFFFF;
-                    int found = 0;
-                    int tgt_x = mx, tgt_y = my;
-                    for (int p = 0; p < DAT_00489240; p++) {
-                        if ((unsigned char)p == own) continue;
-                        int poff = p * 0x598;
-                        if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
-                        int px = *(int *)(poff + DAT_00487810);
-                        int py = *(int *)(poff + 4 + DAT_00487810);
-                        int dx = px - mx; int dy = py - my;
-                        int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
-                        if (dist < best_dist) {
-                            best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
-                        }
-                    }
-                    if (found) {
-                        nvx += (tgt_x - mx) / 128;
-                        nvy += (tgt_y - my) / 128;
-                    }
-                }
                 *(int *)(ebase + 0x18) = nvx;
                 *(int *)(ebase + 0x1C) = nvy;
                 break;
@@ -2492,9 +2472,8 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x16: case 0x2B: {
-                /* Deployed weapon / homing mine — tracking behavior.
-                 * Type 0x6A (KOMET stars) does NOT home — removed from this case. */
+            /* REPAIR MAKER (0x2B): no behavior — falls with gravity, deploys on wall hit */
+            if (0) {
                 unsigned char own = *(unsigned char *)(ebase + 0x22);
                 int mx = *(int *)(ebase + 0x00);
                 int my = *(int *)(ebase + 0x08);
@@ -3209,8 +3188,7 @@ void FUN_00434310(void)
                             FUN_0040f9b0(0x32, bx, by); break;
                         case 0x13:
                             FUN_0040f9b0(0x10B, bx, by); break;
-                        case 0x14:
-                            FUN_0040f9b0(0x10C, bx, by); break;
+                        case 0x14: break; /* PLASTIC — silent (was too loud) */
                         case 0x16:
                             FUN_0040f9b0(0x10D, bx, by); break;
                         case 0x1F: break; /* INSECTS — silent on building hit */
@@ -3484,20 +3462,167 @@ void FUN_00434310(void)
                             break;
 
                         /* Callback 0x43A4B0: type-specific sound, no tile damage */
-                        case 0x13: /* Freeze */
-                            FUN_0040f9b0(0x10B, prev_x, prev_y);
-                            break;
-                        case 0x14: /* Homing freeze */
-                            FUN_0040f9b0(0x10C, prev_x, prev_y);
-                            break;
-
-                        /* Callback 0x439B90: tile damage, sound for 0x16 only */
-                        case 0x16:
+                        case 0x13: { /* ICEBALL — ice tint terrain painting.
+                            * Double palette remap + tile set to 4 (frozen).
+                            * From Ghidra 0x43AB94. */
+                            unsigned char sub13 = *(unsigned char *)(ebase + 0x40);
+                            int sp_idx = 0x191;
+                            int sp_w = (int)*(unsigned char *)((int)DAT_00489e8c + sp_idx);
+                            int sp_h = (int)*(unsigned char *)((int)DAT_00489e88 + sp_idx);
+                            int cx = (prev_x >> 0x12) - sp_w / 2;
+                            int cy = (prev_y >> 0x12) - sp_h / 2;
+                            int sp_off = *(int *)((int)DAT_00489234 + sp_idx * 4);
+                            unsigned char *sp_data = (unsigned char *)DAT_00489e94;
+                            unsigned short *fb = (unsigned short *)DAT_00481f50;
+                            unsigned char *tmap = (unsigned char *)DAT_0048782c;
+                            int map_w = (int)DAT_004879f0;
+                            unsigned char tshift = (unsigned char)DAT_00487a18;
+                            if (sp_data && fb && tmap) {
+                                for (int py2 = 0; py2 < sp_h; py2++) {
+                                    for (int px2 = 0; px2 < sp_w; px2++) {
+                                        int wx = cx + px2;
+                                        int wy = cy + py2;
+                                        if (wx < 0 || wy < 0 || wx >= map_w || wy >= (int)DAT_004879f4) continue;
+                                        unsigned char gray = sp_data[sp_off + py2 * sp_w + px2];
+                                        if (gray == 0) continue;
+                                        unsigned char t_val = tmap[(wy << tshift) + wx];
+                                        unsigned char *tp = (unsigned char *)((int)DAT_00487928 + (unsigned int)t_val * 0x20);
+                                        if (tp[0x0B] != 0 || tp[4] != 0 || t_val == 10 || t_val == 16 || tp[0x18] != 0) continue;
+                                        if (gray >= 0xC0 && DAT_00489230 != NULL) {
+                                            unsigned short cur = fb[(wy << tshift) + wx];
+                                            unsigned short remap = ((unsigned short *)DAT_00489230)[cur];
+                                            fb[(wy << tshift) + wx] = remap;
+                                        }
+                                        if (tp[0x0E] != 0x40) {
+                                            tmap[(wy << tshift) + wx] = 4;
+                                        }
+                                    }
+                                }
+                            }
+                            /* Area freeze on nearby enemy players */
+                            for (int p = 0; p < DAT_00489240; p++) {
+                                int poff = p * 0x598;
+                                if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                                int px13 = *(int *)(poff + DAT_00487810);
+                                int py13 = *(int *)(poff + 4 + DAT_00487810);
+                                int dx13 = prev_x - px13; if (dx13 < 0) dx13 = -dx13;
+                                int dy13 = prev_y - py13; if (dy13 < 0) dy13 = -dy13;
+                                if (dx13 < 0x800000 && dy13 < 0x800000) { /* ~32 tile range */
+                                    if (*(unsigned char *)(poff + 0xc6 + DAT_00487810) == 0) {
+                                        *(unsigned char *)(poff + 0xc6 + DAT_00487810) = 5;
+                                        *(char *)(poff + 0xc7 + DAT_00487810) = (char)(rand() % 3);
+                                    }
+                                }
+                            }
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
                                          0, 0, 0, 0, 0, '\0', owner);
+                            FUN_0040f9b0(0x10B, prev_x, prev_y);
+                            break;
+                        }
+                        case 0x14: { /* PLASTIC EXPLOSIVES — converts tiles to 0x15 (explosive).
+                            * Paints red explosive pixel + sets tile type. When shot, they explode.
+                            * From Ghidra 0x43ADE0: tile = 0x15, pixel from DAT_00487ab4. */
+                            unsigned char sub14 = *(unsigned char *)(ebase + 0x40);
+                            int sp_idx14 = (sub14 == 0) ? (0x194 + rand() % 3) : (0x42 + rand() % 3);
+                            int sp_w14 = (int)*(unsigned char *)((int)DAT_00489e8c + sp_idx14);
+                            int sp_h14 = (int)*(unsigned char *)((int)DAT_00489e88 + sp_idx14);
+                            int cx14 = (prev_x >> 0x12) - sp_w14 / 2;
+                            int cy14 = (prev_y >> 0x12) - sp_h14 / 2;
+                            int sp_off14 = *(int *)((int)DAT_00489234 + sp_idx14 * 4);
+                            unsigned char *sp_data14 = (unsigned char *)DAT_00489e94;
+                            unsigned short *fb14 = (unsigned short *)DAT_00481f50;
+                            unsigned short *px_data14 = (unsigned short *)DAT_00487ab4;
+                            unsigned char *tmap14 = (unsigned char *)DAT_0048782c;
+                            int map_w14 = (int)DAT_004879f0;
+                            unsigned char tshift14 = (unsigned char)DAT_00487a18;
+                            if (sp_data14 && fb14 && tmap14 && px_data14) {
+                                for (int py2 = 0; py2 < sp_h14; py2++) {
+                                    for (int px2 = 0; px2 < sp_w14; px2++) {
+                                        int wx = cx14 + px2;
+                                        int wy = cy14 + py2;
+                                        if (wx < 0 || wy < 0 || wx >= map_w14 || wy >= (int)DAT_004879f4) continue;
+                                        int sp_pixel = sp_off14 + py2 * sp_w14 + px2;
+                                        unsigned char gray = sp_data14[sp_pixel];
+                                        if (gray == 0) continue;
+                                        unsigned char t_val = tmap14[(wy << tshift14) + wx];
+                                        unsigned char *tp = (unsigned char *)((int)DAT_00487928 + (unsigned int)t_val * 0x20);
+                                        if (tp[0x0B] != 0 || tp[4] != 0 || t_val == 10 || t_val == 16 || tp[0x18] != 0) continue;
+                                        if (gray >= 0xC0 && t_val != 0) {
+                                            unsigned char *tp14 = (unsigned char *)((int)DAT_00487928 + (unsigned int)t_val * 0x20);
+                                            if (tp14[4] == 0) { /* skip water */
+                                                /* Paint explosive color — reddish brown */
+                                                fb14[(wy << tshift14) + wx] = (0x14 << 11) | (0x14 << 5) | 0x08;
+                                                /* Set tile: 7 for normal, 0x12 for reinforced */
+                                                if (tp14[0x0E] >= 0x40)
+                                                    tmap14[(wy << tshift14) + wx] = 0x12;
+                                                else
+                                                    tmap14[(wy << tshift14) + wx] = 7;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            /* Sound 0x10C already played by building collision */
+                            break;
+                        }
+
+                        /* Callback 0x439B90: BRICKWALL terrain darkening */
+                        case 0x16: { /* BRICKWALL — paint brick texture onto terrain.
+                            * Fixed radius, reads brick color from DAT_00487ab4 sprite.
+                            * Only paints on ground tiles (not air, not water). */
+                            /* Area size from sprite 0x192. Texture from sprite 22. */
+                            int sp_w16 = (int)*(unsigned char *)((int)DAT_00489e8c + 0x192);
+                            int sp_h16 = (int)*(unsigned char *)((int)DAT_00489e88 + 0x192);
+                            int tex_w16 = (int)*(unsigned char *)((int)DAT_00489e8c + 22);
+                            int tex_h16 = (int)*(unsigned char *)((int)DAT_00489e88 + 22);
+                            int tex_off16 = *(int *)((int)DAT_00489234 + 22 * 4);
+                            unsigned short *sp_rgb16 = (unsigned short *)DAT_00487ab4;
+                            unsigned short *fb16 = (unsigned short *)DAT_00481f50;
+                            unsigned char *tmap16 = (unsigned char *)DAT_0048782c;
+                            unsigned char tshift16 = (unsigned char)DAT_00487a18;
+                            int cx16 = (prev_x >> 0x12) - sp_w16 / 2;
+                            int cy16 = (prev_y >> 0x12) - sp_h16 / 2;
+                            if (sp_rgb16 && fb16 && tmap16 && sp_w16 > 0 && sp_h16 > 0) {
+                                int bk_rad = (sp_w16 < sp_h16 ? sp_w16 : sp_h16) / 2;
+                                for (int py2 = 0; py2 < sp_h16; py2++) {
+                                    for (int px2 = 0; px2 < sp_w16; px2++) {
+                                        /* Circular mask */
+                                        int dx16 = px2 - sp_w16 / 2;
+                                        int dy16 = py2 - sp_h16 / 2;
+                                        if (dx16 * dx16 + dy16 * dy16 > bk_rad * bk_rad) continue;
+                                        int wx = cx16 + px2;
+                                        int wy = cy16 + py2;
+                                        if (wx < 0 || wy < 0 || wx >= (int)DAT_004879f0 || wy >= (int)DAT_004879f4) continue;
+                                        unsigned char t_val = tmap16[(wy << tshift16) + wx];
+                                        if (t_val == 0) continue; /* skip air */
+                                        unsigned char *tp16 = (unsigned char *)((int)DAT_00487928 + (unsigned int)t_val * 0x20);
+                                        if (tp16[4] != 0) continue; /* skip water */
+                                        /* Tile sprite 22 texture across the area */
+                                        int tpx = (tex_w16 > 0) ? (px2 % tex_w16) : 0;
+                                        int tpy = (tex_h16 > 0) ? (py2 % tex_h16) : 0;
+                                        int tex_pix = tex_off16 + tpy * tex_w16 + tpx;
+                                        unsigned short tgt = sp_rgb16[tex_pix];
+                                        if (tgt == 0) continue; /* skip transparent */
+                                        /* Direct write — stamp brick texture onto terrain */
+                                        fb16[(wy << tshift16) + wx] = tgt;
+                                        /* Set tile: 0x0A for normal, 0x10 for reinforced */
+                                        if (tp16[0x0E] >= 0x40)
+                                            tmap16[(wy << tshift16) + wx] = 0x10;
+                                        else
+                                            tmap16[(wy << tshift16) + wx] = 0x0A;
+                                    }
+                                }
+                            }
                             FUN_0040f9b0(0x10D, prev_x, prev_y);
                             break;
-                        case 0x2B:
+                        }
+                        case 0x2B: /* REPAIR MAKER — build structure tiles.
+                            * Calls FUN_00440ba0 to stamp building tiles from sprite stencil. */
+                            FUN_00440ba0((prev_x >> 0x12), (prev_y >> 0x12),
+                                         *(unsigned char *)(ebase + 0x22), '\0');
+                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                                         0, 0, 0, 0, 0, '\0', owner);
+                            break;
                         case 0x6A:
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
                                          0, 0, 0, 0, 0, '\0', owner);
@@ -4405,35 +4530,30 @@ void FUN_004527e0(void)
                 goto remove_particle;
             }
 
-            /* Entity proximity deflection */
-            if (DAT_00489288 == '\0' && DAT_0048784c != 0) {
-                int *link_ptr = (int *)((int)DAT_0048781c + 0x18000);
-                for (unsigned int ei = 0; ei < (unsigned int)DAT_0048784c; ei++) {
-                    int eidx = *link_ptr;
+            /* Entity proximity deflection — scan entity array directly for type 0x0E
+             * (MOVING SUCKER). Original used tracking list which goes stale. */
+            if (DAT_00489288 == '\0') {
+                for (int ei = 0; ei < DAT_00489248; ei++) {
+                    int eidx = ei;
                     int *ent = (int *)(eidx * 0x80 + (int)DAT_004892e8);
-                    /* Check team differs */
+                    if (*(unsigned char *)((int)ent + 0x21) != 0x0E) continue;
                     unsigned char ent_owner = *(unsigned char *)((int)ent + 0x22);
                     unsigned char ent_team = *(unsigned char *)(DAT_00487810 + 0x2C + (unsigned int)ent_owner * 0x598);
                     if (ent_team != (unsigned char)owner_team) {
-                        /* Proximity check: ±0x12C0000 in each axis */
                         if (new_x - 0x12C0000 < ent[0] && ent[0] < new_x + 0x12C0000 &&
                             new_y - 0x12C0000 < ent[2] && ent[2] < new_y + 0x12C0000) {
-                            /* Deflect velocity toward/away from entity */
                             int angle = FUN_004257e0(ent[0], *(int *)(eidx * 0x80 + 8 + (int)DAT_004892e8),
                                                      new_x, new_y);
                             if (*(char *)(eidx * 0x80 + 0x40 + (int)DAT_004892e8) == '\0') {
-                                /* Attract: subtract LUT/2 from velocity */
                                 part[2] -= *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
                                 part[3] -= *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
                             } else {
-                                /* Repel: add LUT/4 to velocity */
                                 part[2] += *(int *)((int)DAT_00487ab0 + angle * 4) >> 2;
                                 part[3] += *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 2;
                             }
                             break;
                         }
                     }
-                    link_ptr++;
                 }
             }
 
@@ -6314,46 +6434,33 @@ void FUN_00453cd0(void)
                 particle_team = (char)-5;
             }
 
-            unsigned int link_idx = 0;
-            if ((unsigned int)DAT_0048784c != 0) {
-                int *link_table = (int *)((int)DAT_0048781c + 0x18000);
-                do {
-                    int ent_idx = link_table[link_idx];
-                    int *ent = (int *)(ent_idx * 0x80 + (int)DAT_004892e8);
-
-                    /* Check team differs */
-                    unsigned char ent_owner = *(unsigned char *)((int)ent + 0x22);
-                    char ent_team = *(char *)(DAT_00487810 + 0x2c + (unsigned int)ent_owner * 0x598);
-
-                    if (ent_team != particle_team) {
-                        /* AABB check: particle within +/- 0x12C0000 of entity */
-                        if (((int)(new_x - 0x12C0000) < ent[0]) &&
-                            (ent[0] < (int)(new_x + 0x12C0000)) &&
-                            ((int)(new_y - 0x12C0000) < ent[2]) &&
-                            (ent[2] < (int)(new_y + 0x12C0000)))
-                        {
-                            int ent_off = ent_idx * 0x80;
-                            int angle = FUN_004257e0(
-                                *(int *)(ent_off + (int)DAT_004892e8),
-                                *(int *)(ent_off + 8 + (int)DAT_004892e8),
-                                (int)new_x, (int)new_y);
-
-                            if (*(char *)(ent_off + 0x40 + (int)DAT_004892e8) == '\0') {
-                                /* Repel: vel -= lut[angle] >> 1 */
-                                p[2] = (unsigned int)((int)p[2] - (*(int *)((int)DAT_00487ab0 + angle * 4) >> 1));
-                                p[3] = (unsigned int)((int)p[3] - (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1));
-                            }
-                            else {
-                                /* Attract: vel += lut[angle] >> 2 */
-                                p[2] = (unsigned int)((int)p[2] + (*(int *)((int)DAT_00487ab0 + angle * 4) >> 2));
-                                p[3] = (unsigned int)((int)p[3] + (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 2));
-                            }
-                            break;
+            /* Particle deflection from MOVING SUCKER — scan entity array directly */
+            for (int ei = 0; ei < DAT_00489248; ei++) {
+                int *ent = (int *)(ei * 0x80 + (int)DAT_004892e8);
+                if (*(unsigned char *)((int)ent + 0x21) != 0x0E) continue;
+                unsigned char ent_owner = *(unsigned char *)((int)ent + 0x22);
+                char ent_team = *(char *)(DAT_00487810 + 0x2c + (unsigned int)ent_owner * 0x598);
+                if (ent_team != particle_team) {
+                    if (((int)(new_x - 0x12C0000) < ent[0]) &&
+                        (ent[0] < (int)(new_x + 0x12C0000)) &&
+                        ((int)(new_y - 0x12C0000) < ent[2]) &&
+                        (ent[2] < (int)(new_y + 0x12C0000)))
+                    {
+                        int ent_off = ei * 0x80;
+                        int angle = FUN_004257e0(
+                            *(int *)(ent_off + (int)DAT_004892e8),
+                            *(int *)(ent_off + 8 + (int)DAT_004892e8),
+                            (int)new_x, (int)new_y);
+                        if (*(char *)(ent_off + 0x40 + (int)DAT_004892e8) == '\0') {
+                            p[2] = (unsigned int)((int)p[2] - (*(int *)((int)DAT_00487ab0 + angle * 4) >> 1));
+                            p[3] = (unsigned int)((int)p[3] - (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1));
+                        } else {
+                            p[2] = (unsigned int)((int)p[2] + (*(int *)((int)DAT_00487ab0 + angle * 4) >> 2));
+                            p[3] = (unsigned int)((int)p[3] + (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 2));
                         }
+                        break;
                     }
-
-                    link_idx++;
-                } while (link_idx < (unsigned int)DAT_0048784c);
+                }
             }
         }
 
