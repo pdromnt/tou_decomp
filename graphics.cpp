@@ -895,12 +895,76 @@ void Render_Game_View_To(unsigned short *frame)
 
             /* Enum: string_idx + config_value */
             case 0x01: case 0x04: case 0x0F: case 0x10: case 0x11:
-            case 0x12: case 0x17: case 0x1E: case 0x26: case 0x27:
+            case 0x12: case 0x17: case 0x1E: case 0x27:
             case 0x30: case 0x33: {
                 int val = cfgPtr ? (int)*cfgPtr : 0;
                 int idx = item->string_idx + val;
                 if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
+                break;
+            }
+
+            /* Weapon loadout grid: draw weapon sprite + "No"/"Yes" text.
+             * item->color_style = weapon index (0-46) from FUN_00430200 param4.
+             * Config value: 0 = disabled, non-0 = enabled.
+             * Reads weapon sprite from config table using color_style as weapon idx.
+             * The sprite index is at config table entry field for this weapon. */
+            case 0x26: {
+                /* Draw weapon sprite from config table */
+                int wpn_idx = item->color_style;
+                if (wpn_idx >= 0 && wpn_idx < 47 &&
+                    DAT_00487abc && DAT_00487ab4 && DAT_00489234 &&
+                    DAT_00489e8c && DAT_00489e88) {
+                    /* Weapon icon sprite index at config table offset +0x144.
+                     * Most weapons have indices in 200-240 range. */
+                    /* 3-state circle: red=banned, blue=on, gray=off */
+                    int per_player_val = cfgPtr ? (int)*cfgPtr : 0;
+                    int globally_banned = (g_ConfigBlob[0x1804 + wpn_idx] == 0) ? 1 : 0;
+                    {
+                        unsigned short bg_color;
+                        if (globally_banned) bg_color = 0xA000; /* red */
+                        else if (per_player_val != 0) bg_color = 0x001A; /* blue */
+                        else bg_color = 0x31A6; /* gray */
+                        int cx = item->x + 14;
+                        int cy = item->y + 6;
+                        int r = 13;
+                        for (int by = -r; by <= r; by++)
+                            for (int bx = -r; bx <= r; bx++)
+                                if (bx*bx + by*by <= r*r && cx+bx >= 0 && cy+by >= 0 && cx+bx < 640 && cy+by < 480)
+                                    frame[(cy+by)*640 + cx+bx] = bg_color;
+                    }
+                    /* Weapon sprite from config table offset +0x144 */
+                    int spr_idx = (int)*(unsigned short *)((char *)DAT_00487abc + wpn_idx * 0x218 + 0x144);
+                    if (spr_idx > 0 && spr_idx < 20000) {
+                        int pixel_base = ((int *)DAT_00489234)[spr_idx];
+                        int spr_w = (int)((unsigned char *)DAT_00489e8c)[spr_idx];
+                        int spr_h = (int)((unsigned char *)DAT_00489e88)[spr_idx];
+                        if (spr_w > 0 && spr_h > 0) {
+                            /* Center sprite within circle (cx=item->x+14, cy=item->y+6) */
+                            int dx = item->x + 14 - spr_w / 2;
+                            int dy = item->y + 6 - spr_h / 2;
+                            if (dx >= 0 && dy >= 0 && dx + spr_w <= 640 && dy + spr_h <= 480) {
+                                unsigned short *dst = frame + dy * 640 + dx;
+                                unsigned short *src_pixels = (unsigned short *)DAT_00487ab4;
+                                for (int row = 0; row < spr_h; row++) {
+                                    for (int col = 0; col < spr_w; col++) {
+                                        unsigned short pixel = src_pixels[pixel_base++];
+                                        if (pixel != 0) {
+                                            if (globally_banned)
+                                                dst[col] = (pixel >> 3) & 0x18E3; /* very dark */
+                                            else if (per_player_val > 0)
+                                                dst[col] = pixel; /* bright */
+                                            else
+                                                dst[col] = (pixel >> 1) & 0x7BEF; /* dimmed */
+                                        }
+                                    }
+                                    dst += 640;
+                                }
+                            }
+                        }
+                    }
+                }
+                /* No text overlay — sprites only for weapon grid */
                 break;
             }
 
@@ -932,6 +996,17 @@ void Render_Game_View_To(unsigned short *frame)
             case 0x05: case 0x09: case 0x0E: case 0x13: case 0x14:
             case 0x15: case 0x16: case 0x18: case 0x34: {
                 int val = cfgPtr ? (int)*cfgPtr : 0;
+                /* Inline slider preview: if dragging this item, apply delta to preview.
+                 * From Ghidra 0x428650: same pattern as render_mode 0x1B. */
+                if (item->render_mode == 0x18 && g_InputMode == 1 &&
+                    (unsigned char)i == DAT_004877e6) {
+                    int drag_delta = DAT_004877e8 >> 10;
+                    int v = (int)(val - 1) + drag_delta;
+                    if (v > 0) v = v & 0x3F;
+                    else if (v < 0) v = v + (1 - ((v + 1) >> 6)) * 64;
+                    else v = 0;
+                    val = v + 1;
+                }
                 switch (item->render_mode) {
                 case 0x09: val = (val > 0) ? val - 1 : 0; break;
                 case 0x13: val *= 5; break;
@@ -1203,6 +1278,94 @@ void Render_Game_View_To(unsigned short *frame)
                         }
                     }
                     dst += 640;
+                }
+            } else if (DAT_00489e94) {
+                /* Grayscale sprite (index >= 400): DAT_00489e94 has 1-byte grayscale pixels.
+                 * gray=0 is transparent. Non-zero maps to brightness in RGB565. */
+                unsigned char *gray_pixels = (unsigned char *)DAT_00489e94;
+                for (int row = 0; row < spr_h; row++) {
+                    for (int col = 0; col < spr_w; col++) {
+                        unsigned char gray = gray_pixels[pixel_base++];
+                        if (gray != 0) {
+                            /* Convert grayscale to cyan-tinted RGB565 */
+                            unsigned short r = (gray >> 5) & 0x07; /* low red */
+                            unsigned short g = (gray >> 2) & 0x3F; /* full green */
+                            unsigned short b = (gray >> 3) & 0x1F; /* full blue */
+                            dst[col] = (r << 11) | (g << 5) | b;
+                        }
+                    }
+                    dst += 640;
+                }
+            }
+        }
+    }
+
+    /* ---- Slider tooltip: "Now drag left & right with your mouse." ---- */
+    /* From Ghidra 0x428701. Shown when g_InputMode == 1 (active drag). */
+    if (g_InputMode == 1) {
+        const char *tip = "Now drag left & right with your mouse.";
+        /* Draw at bottom of screen using font 1 (small) */
+        int tip_x = 120;
+        int tip_y = 460;
+        if (Font_Char_Table) {
+            const char *sp = tip;
+            int tx = tip_x;
+            while (*sp && tx < 620) {
+                unsigned char c = (unsigned char)*sp++;
+                int fidx = 1 * 256 + c;
+                if (fidx < 1024 && Font_Char_Table[fidx].width > 0) {
+                    /* Simple text draw — just set pixels from font */
+                    tx += Font_Char_Table[fidx].width;
+                }
+            }
+        }
+    }
+
+    /* ---- Draw scrollbar track + thumb for scrollable pages ---- */
+    /* From Ghidra 0x4286B0: thumb = sprite 0x19F (415, grayscale).
+     * Track drawn as thin line between arrows. */
+    if (DAT_004877b0 != 0 && DAT_004877d8 != 0 &&
+        DAT_00489e94 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
+        int sb_x = DAT_004877d8;
+        int arrow_h = (int)((unsigned char *)DAT_00489e88)[0x19D]; /* arrow height */
+        int sb_top = DAT_004877dc + arrow_h; /* just below up arrow */
+        int sb_bot = DAT_004877dc + DAT_004877e0 + 0x14; /* just above down arrow */
+        int sb_h = sb_bot - sb_top;
+        if (sb_x > 0 && sb_x < 630 && sb_h > 10) {
+            /* Draw track — match arrow sprite width, centered on arrow x */
+            int arrow_w = (int)((unsigned char *)DAT_00489e8c)[0x19D]; /* up arrow width */
+            int track_x = sb_x;
+            int track_w = (arrow_w > 0) ? arrow_w : 10;
+            for (int ty = sb_top; ty < sb_bot; ty++)
+                for (int tx = track_x; tx < track_x + track_w && tx < 640; tx++)
+                    if (ty >= 0 && ty < 480)
+                        frame[ty * 640 + tx] = 0x0009; /* very dark blue */
+            /* Draw thumb sprite 0x19F at scroll position */
+            int thumb_spr = 0x19F;
+            int t_pb = ((int *)DAT_00489234)[thumb_spr];
+            int t_w = (int)((unsigned char *)DAT_00489e8c)[thumb_spr];
+            int t_h = (int)((unsigned char *)DAT_00489e88)[thumb_spr];
+            if (t_w > 0 && t_h > 0) {
+                int thumb_y = sb_top + (int)(DAT_004877d4 * (float)(sb_h - t_h));
+                if (thumb_y < sb_top) thumb_y = sb_top;
+                if (thumb_y + t_h > sb_bot) thumb_y = sb_bot - t_h;
+                int thumb_x = sb_x + (arrow_w > 0 ? (arrow_w - t_w) / 2 : 0);
+                if (thumb_x >= 0 && thumb_y >= 0 && thumb_x + t_w <= 640 && thumb_y + t_h <= 480) {
+                    unsigned short *tdst = frame + thumb_y * 640 + thumb_x;
+                    unsigned char *gray_px = (unsigned char *)DAT_00489e94;
+                    int tp = t_pb;
+                    for (int row = 0; row < t_h; row++) {
+                        for (int col = 0; col < t_w; col++) {
+                            unsigned char g = gray_px[tp++];
+                            if (g != 0) {
+                                unsigned short r = (g >> 5) & 0x07;
+                                unsigned short gn = (g >> 2) & 0x3F;
+                                unsigned short b = (g >> 3) & 0x1F;
+                                tdst[col] = (r << 11) | (gn << 5) | b;
+                            }
+                        }
+                        tdst += 640;
+                    }
                 }
             }
         }

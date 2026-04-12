@@ -3217,14 +3217,24 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x1b8, 0xf, 2, 0, 1, 0, 1, 0);             /* "Back" → main menu */
         FUN_00430200(0, 0x19a, 0xef, 2, 0, 1, 0, 1, 0x1a);         /* → page 0x1A */
         DAT_004877ac = DAT_004877a8;
-        FUN_00430200(0, 0x2d, 0xed, 2, 2, 2, 0, 4, 0xff);          /* label */
+        FUN_00430200(0, 0x2d, 0xed, 2, 2, 2, 0, 4, 0xff);          /* "Player amount" label */
         FUN_00430200(0, 0x2d, 0, 2, 2, 1, 0x18, 5, 0xff);          /* value */
         FUN_0042fc90(CFG_ADDR(0x48227c));
         FUN_0042fcf0();
-        FUN_00430200(0, 0x41, 0xee, 2, 2, 2, 0, 4, 0xff);
-        FUN_00430200(0, 0x41, 0x12f, 2, 2, 1, 0x33, 5, 0xff);
+        /* Force-align player count to x=530 */
+        if (DAT_004877a8 >= 2) {
+            MenuItem *aitems = (MenuItem *)g_GameViewData;
+            aitems[DAT_004877a8 - 1].x = 530;
+        }
+        FUN_00430200(0, 0x41, 0xee, 2, 2, 2, 0, 4, 0xff);          /* "Human amount" label */
+        FUN_00430200(0, 0x41, 0x12f, 2, 2, 1, 0x33, 5, 0xff);      /* value */
         FUN_0042fc90(CFG_ADDR(0x48227d));
         FUN_0042fcf0();
+        /* Force-align human count to same x */
+        if (DAT_004877a8 >= 2) {
+            MenuItem *aitems = (MenuItem *)g_GameViewData;
+            aitems[DAT_004877a8 - 1].x = 530;
+        }
         FUN_00430200(0x32, 0x5a, 0x5e, 2, 1, 0, 0, 0, 0xff);      /* column headers */
         FUN_00430200(0x6f, 0x5a, 0x60, 4, 1, 1, 0x20, 0, 0xff);
         FUN_00430200(0xbe, 0x5a, 0x61, 2, 1, 1, 0x21, 0, 0xff);
@@ -3507,10 +3517,12 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x2d, 0, 2, 2, 1, 0x18, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x48227c));
         FUN_0042fcf0();
+        if (DAT_004877a8 >= 2) { MenuItem *ai = (MenuItem *)g_GameViewData; ai[DAT_004877a8 - 1].x = 530; }
         FUN_00430200(0, 0x41, 0xee, 2, 2, 2, 0, 4, 0xff);
         FUN_00430200(0, 0x41, 0x12f, 2, 2, 1, 0x33, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x48227d));
         FUN_0042fcf0();
+        if (DAT_004877a8 >= 2) { MenuItem *ai = (MenuItem *)g_GameViewData; ai[DAT_004877a8 - 1].x = 530; }
         FUN_00430200(10, 0x5a, 0x5e, 2, 1, 0, 0, 0, 0xff);
         FUN_00430200(0x6f, 0x5a, 0xf0, 4, 1, 1, 0x25, 0, 0xff);
         DAT_004877d4 = 0;
@@ -3733,6 +3745,10 @@ void FUN_00427df0(int param_1, char param_2)
     unsigned char bVar11 = item->render_mode;
 
     switch (bVar11) {
+    case 0x26: { /* Weapon loadout toggle — simple 0↔1 */
+        *data = (*data == 0) ? 1 : 0;
+        break;
+    }
     case 1: { /* Toggle (0↔1) */
         *data = (*data == 0) ? 1 : 0;
         /* Key binding pages: flag1==0xFA means this toggles a key enable/disable */
@@ -3943,27 +3959,7 @@ void FUN_00427df0(int param_1, char param_2)
         break;
     }
 
-    case 0x26: { /* Key binding toggle with auto-assignment */
-        unsigned char wasZero = (*data == 0) ? 1 : 0;
-        *data = wasZero;
-        unsigned char *keyBindings = &g_ConfigBlob[0x1776]; /* DAT_004836ce */
-        unsigned char actionIdx = item->flag1;
-        if (wasZero) {
-            /* Toggled on: if binding is unbound, auto-assign */
-            if (keyBindings[actionIdx] == 0x2F) {
-                FUN_004265e0((int)actionIdx);
-                return;
-            }
-        } else {
-            /* Toggled off: if scan code matches binding, reassign */
-            unsigned int scanCode = (unsigned int)item->height;
-            if (scanCode == (unsigned int)keyBindings[actionIdx]) {
-                FUN_004265e0((int)actionIdx);
-                return;
-            }
-        }
-        break;
-    }
+    /* case 0x26 is handled earlier in this switch (weapon loadout toggle) */
 
     case 0x27: { /* Cycle 0-3 */
         unsigned char val = *data + cVar9;
@@ -4168,11 +4164,17 @@ void FUN_00427a70(int param_1)
         break;
     }
 
-    case 0x18: { /* Range 1-64 (player count) — fixed sensitivity */
-        int v = (int)(*data - 1) + (delta > 0 ? 1 : (delta < 0 ? -1 : 0));
-        if (v >= 63) v = 0;      /* wrap 64 → 1 */
-        if (v < 0) v = 63;       /* wrap 0 → 64 */
-        *data = (unsigned char)(v + 1);
+    case 0x18: { /* Range 1-64 (player count) */
+        int v = (int)(*data - 1) + delta;
+        if (v > 0) {
+            v = v & 0x3F;  /* mod 64 */
+            *data = (unsigned char)(v + 1);
+        } else if (v < 0) {
+            v = v + (1 - ((v + 1) >> 6)) * 64;
+            *data = (unsigned char)(v + 1);
+        } else {
+            *data = 1;
+        }
         break;
     }
 
@@ -4452,7 +4454,7 @@ void FUN_00426650(void)
             }
         }
 
-        unsigned int maxVisible = 3;
+        unsigned int maxVisible = 3; /* max 3 visible (350 item limit / ~50 items per player) */
         int scrollOff = 0;
 
         if (playerCount > maxVisible) {
@@ -4469,7 +4471,7 @@ void FUN_00426650(void)
         if (maxVisible > 0) {
             unsigned char *actionMapBase = &g_ConfigBlob[0x4B6 + scrollOff * 0x3C];
             int playerNum = scrollOff + 1;
-            int yPos = 0x6D;
+            int yPos = 0x82; /* shifted down to clear header text */
             int strIdx = 0x71;
             int numKeys = (int)(DAT_00481d84 & 0xFF);
 
@@ -4483,25 +4485,29 @@ void FUN_00426650(void)
                 /* Key binding grid for this player */
                 int col = 0;
                 for (int k = 0; k < numKeys; k++) {
-                    int xPos = col * 0x20 + 0x32;
-                    /* Label background */
-                    FUN_00430200(xPos, yPos - 7, 0xE6, 2, 2, 2, 0, 0, 0xFF);
-                    /* Key binding value (render_mode 0x26, clickable) */
-                    FUN_00430200(xPos, yPos, 0x22, k, 2, 1, 0x26, 0, 0xFF);
-                    FUN_0042fcb0();
-                    /* Set item dimensions and metadata */
-                    if (g_GameViewData && DAT_004877a8 > 0) {
-                        MenuItem *ditems = (MenuItem *)g_GameViewData;
-                        ditems[DAT_004877a8 - 1].width = 0x20;
-                        ditems[DAT_004877a8 - 1].height = 0x28;
-                        ditems[DAT_004877a8 - 1].x = 0;
-                        ditems[DAT_004877a8 - 1].flag1 = (unsigned char)scrollOff;
-                        ditems[DAT_004877a8 - 1].linked_item = k;
+                    int xPos = col * 0x20 + 0x32; /* from Ghidra: col*32 + 50 */
+                    /* Single weapon icon item (render_mode 0x26, clickable).
+                     * NO background item, NO FUN_0042fcb0 linking — each icon independent.
+                     * Circle background drawn by renderer based on state. */
+                    {
+                        /* Check global ban: banned weapons are non-clickable */
+                        int is_banned = (g_ConfigBlob[0x1804 + k] == 0) ? 1 : 0;
+                        unsigned char click = is_banned ? 0 : 1;
+                        FUN_00430200(xPos, yPos, 0x22, k, 2, click, 0x26, 0, 0xFF);
+                        if (g_GameViewData && DAT_004877a8 > 0) {
+                            MenuItem *ditems = (MenuItem *)g_GameViewData;
+                            ditems[DAT_004877a8 - 1].width = 0x20;
+                            ditems[DAT_004877a8 - 1].height = 0x20;
+                            ditems[DAT_004877a8 - 1].x = xPos;
+                            ditems[DAT_004877a8 - 1].y = yPos;
+                            ditems[DAT_004877a8 - 1].flag1 = (unsigned char)scrollOff;
+                            ditems[DAT_004877a8 - 1].color_style = k;
+                        }
                     }
                     FUN_0042fc90((int)(uintptr_t)actionMapBase);
 
                     col++;
-                    if (col > 0x10) {
+                    if (col > 0x10) { /* 17 columns per row */
                         col = 0;
                         yPos += 0x20;
                     }
