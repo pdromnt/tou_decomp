@@ -978,7 +978,7 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x46] = (char *)"Yes";
     g_MenuStrings[0x47] = (char *)"No";
     g_MenuStrings[0x48] = (char *)"Next";
-    g_MenuStrings[0x49] = (char *)"Last";
+    g_MenuStrings[0x49] = (char *)"Previous";
     g_MenuStrings[0x4A] = (char *)"Page";
     g_MenuStrings[0x4B] = (char *)"Page 1";
     g_MenuStrings[0x4C] = (char *)"Page 2";
@@ -2936,27 +2936,75 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x08: /* Ban weapons page 1 (weapons 0-13 from priority table) */
+    case 0x08: /* Ban weapons page 1 (weapons 0-15) */
         FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);           /* "Ban weapons" heading */
         FUN_00430200(0, 0x3c, 0x4b, 4, 0, 0, 0, 1, 0xff);          /* "Page 1" */
         items = (MenuItem *)g_GameViewData;
-        iVar7 = 0;
+        iVar7 = 0; /* weapon index starts at 0 */
         iVar3 = 0x5a;
         do {
-            FUN_00430200(0, iVar3, (int)(unsigned char)g_KeyOrderTable[iVar7], 2, 2, 2, 6, 4, 0xff);
-            FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
-            FUN_0042fc90(CFG_ADDR(0x48375c) + (int)(unsigned char)g_KeyOrderTable[iVar7]);
+            FUN_00430200(0, iVar3, iVar7, 2, 2, 2, 6, 4, 0xff);    /* weapon name (render_mode 6) */
+            FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);     /* On/Off toggle */
+            FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);               /* config: g_ConfigBlob[0x1804 + weapon] */
             items = (MenuItem *)g_GameViewData;
-            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;  /* 0xFB = weapon ban toggle (not 0xFA = key binding) */
-            items[DAT_004877a8 - 1].height = (int)(unsigned char)g_KeyOrderTable[iVar7];
+            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;
+            items[DAT_004877a8 - 1].height = iVar7;                 /* weapon index for toggle */
             FUN_0042fcf0();
             iVar3 = iVar3 + 0x12;
             iVar7 = iVar7 + 1;
         } while (iVar3 < 0x17a);
         FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
         FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 5, 0xff);         /* nav indicator */
-        uVar13 = 10; uVar12 = 5; iVar7 = 0x48;
-        break; /* → post-switch: add "Next Page" button */
+        uVar13 = 0x0D; uVar12 = 5; iVar7 = 0x48;                   /* Next → page 0x0D (ban page 2) */
+        break;
+
+    case 0x0D: /* Ban weapons page 2 (weapons 16-31) */
+        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);           /* "Ban weapons" heading */
+        FUN_00430200(0, 0x3c, 0x4c, 4, 0, 0, 0, 1, 0xff);          /* "Page 2" */
+        items = (MenuItem *)g_GameViewData;
+        iVar7 = 16;
+        iVar3 = 0x5a;
+        do {
+            FUN_00430200(0, iVar3, iVar7, 2, 2, 2, 6, 4, 0xff);
+            FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
+            FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);
+            items = (MenuItem *)g_GameViewData;
+            items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;
+            items[DAT_004877a8 - 1].height = iVar7;
+            FUN_0042fcf0();
+            iVar3 = iVar3 + 0x12;
+            iVar7 = iVar7 + 1;
+        } while (iVar3 < 0x17a);
+        FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);              /* "Back" → Options */
+        FUN_00430200(0, 0x196, 0x49, 2, 0, 1, 0, 4, 0x08);          /* "Last" → ban page 1 */
+        FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 5, 0xff);
+        uVar13 = 0x0E; uVar12 = 5; iVar7 = 0x48;                   /* Next → page 0x0E */
+        break;
+
+    case 0x0E: /* Ban weapons page 3 (weapons 32-46) */
+        FUN_00430200(0, 0x28, 0xe, 1, 0, 0, 0, 1, 0xff);           /* "Ban weapons" heading */
+        FUN_00430200(0, 0x3c, 0x4d, 4, 0, 0, 0, 1, 0xff);          /* "Page 3" */
+        items = (MenuItem *)g_GameViewData;
+        iVar7 = 32;
+        iVar3 = 0x5a;
+        do {
+            if (iVar7 < 47) {
+                FUN_00430200(0, iVar3, iVar7, 2, 2, 2, 6, 4, 0xff);
+                FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);
+                FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);
+                items = (MenuItem *)g_GameViewData;
+                items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;
+                items[DAT_004877a8 - 1].height = iVar7;
+                FUN_0042fcf0();
+            }
+            iVar3 = iVar3 + 0x12;
+            iVar7 = iVar7 + 1;
+        } while (iVar3 < 0x17a);
+        FUN_00430200(0, 0x1a9, 0xf, 2, 0, 1, 0, 1, 1);              /* "Back" → Options */
+        FUN_00430200(0, 0x196, 0x49, 2, 0, 1, 0, 4, 0x0D);          /* "Last" → ban page 2 */
+        FUN_00430200(0, 0x1a9, 0x4a, 2, 0, 1, 0, 5, 0xff);
+        uVar13 = 0x08; uVar12 = 5; iVar7 = 0x48;                   /* Next → wrap to page 1 */
+        break;
 
     case 0x09: /* Sound settings */
         FUN_00430200(0, 0x28, 9, 1, 0, 0, 0, 1, 0xff);             /* "Sound" heading */
@@ -4120,17 +4168,11 @@ void FUN_00427a70(int param_1)
         break;
     }
 
-    case 0x18: { /* Range 1-64 (player count) */
-        int v = (int)(*data - 1) + delta;
-        if (v > 0) {
-            v = v & 0x3F;  /* mod 64 (power of 2) */
-            *data = (unsigned char)(v + 1);
-        } else if (v < 0) {
-            v = v + (1 - ((v + 1) >> 6)) * 64;
-            *data = (unsigned char)(v + 1);
-        } else {
-            *data = 1;
-        }
+    case 0x18: { /* Range 1-64 (player count) — fixed sensitivity */
+        int v = (int)(*data - 1) + (delta > 0 ? 1 : (delta < 0 ? -1 : 0));
+        if (v >= 63) v = 0;      /* wrap 64 → 1 */
+        if (v < 0) v = 63;       /* wrap 0 → 64 */
+        *data = (unsigned char)(v + 1);
         break;
     }
 
