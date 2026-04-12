@@ -3546,10 +3546,11 @@ static void FUN_00401000_impl(int idx)
             iVar13 = rand();
             uVar8 = iVar13 % 100 + 0x14;
             {
-                /* Grayscale particle color: original X1R5G5B5 (*0x421), converted to RGB565 (*0x841) */
+                /* Grayscale particle color: X1R5G5B5 packing (gray5 * 0x421).
+                 * Renderer subtracts 30000 then decodes as X1R5G5B5→RGB565. */
                 unsigned int gray5 = uVar8 >> 3;
                 *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                    ((gray5 << 11) | (gray5 << 6) | gray5) + 30000;
+                    ((gray5 << 10) | (gray5 << 5) | gray5) + 30000;
             }
             iVar13 = rand();
             *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = iVar13 % 0x32 + 0x50;

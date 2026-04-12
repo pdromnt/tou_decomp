@@ -1961,7 +1961,8 @@ void FUN_00434310(void)
          *   - 0x2D laser — instant beam trace, handled above
          *   - 0x67 machinegun/firework trail — lifecycle managed below, no collision
          *   - 0x65 water splash particles — cosmetic, no collision */
-        int is_debris = (ent_type == 2 || ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
+        /* Type 2 is Organic Waste (NOT debris) — has its own behavior case below. */
+        int is_debris = (ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
 
         /* Type 0x67 lifecycle: decrement lifespan, apply drag, remove when expired.
          * These are trail/bullet particles spawned by MINISHIP (0x1C), LANDMINE
@@ -2007,7 +2008,7 @@ void FUN_00434310(void)
              *   0x29 TURRET (gun) — falls with gravity, needs wall collision to deploy
              *   0x2A TURRET (ice) — falls with gravity, needs wall collision to deploy
              *   0x2E SMOKING NALLE— sits still (vx=vy=0), needs wall/player collision */
-            if (ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
+            if (ent_type == 0x02 || ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
                 ent_type == 0x1F || ent_type == 0x08 || ent_type == 0x28 ||
                 ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x24 ||
                 ent_type == 0x25 || ent_type == 0x26 || ent_type == 0x2E) {
@@ -3611,6 +3612,154 @@ void FUN_00434310(void)
                 break;
             }
 
+            case 0x02: { /* ORGANIC WASTE power 1 — terrain-growing projectile.
+                * Ghidra callback: 0x4427e0. Entity type 2, state 0x0A.
+                * Phase 1: fly with gravity until speed drops below threshold.
+                * Phase 2 (state 0x0A): drip down through air, paint terrain tiles,
+                * color cycle, then die. */
+                int ow_life = *(int *)(ebase + 0x28);
+                if (ow_life > 0) {
+                    ow_life--;
+                    *(int *)(ebase + 0x28) = ow_life;
+                    if (ow_life <= 1) {
+                        *(int *)(ebase + 0x5C) = 0;
+                        should_remove = 1;
+                        break;
+                    }
+                }
+                /* Decrement sprite animation counter */
+                if (*(unsigned char *)(ebase + 0x26) > 0)
+                    *(unsigned char *)(ebase + 0x26) = *(unsigned char *)(ebase + 0x26) - 1;
+
+                unsigned char ow_state = *(unsigned char *)(ebase + 0x20);
+                if (ow_state != 0x0A) {
+                    /* Flying phase: check if speed is low enough to land.
+                     * Threshold: (vx>>9)^2 + (vy>>9)^2 <= 1000 (0x3E8) */
+                    int svx = *(int *)(ebase + 0x18) >> 9;
+                    int svy = *(int *)(ebase + 0x1C) >> 9;
+                    if (svx * svx + svy * svy <= 0x3E8) {
+                        /* Transition to ground-growing mode */
+                        *(unsigned char *)(ebase + 0x20) = 0x0A;
+                        *(int *)(ebase + 0x5C) = 0x14; /* growth timer = 20 ticks */
+                        *(int *)(ebase + 0x28) = rand() % 400 + 150;
+                    }
+                } else {
+                    /* Growing phase (state 0x0A): drip down through air tiles,
+                     * paint terrain, color cycle. Original at 0x442cd0-0x4433a9. */
+                    int ow_x = *(int *)(ebase + 0x00);
+                    int ow_y = *(int *)(ebase + 0x08);
+                    int ow_tx = ow_x >> 0x12;
+                    int ow_ty = ow_y >> 0x12;
+
+                    /* Phase A: drip down through air (scan up to 6 tiles below).
+                     * If tile below has prop[+1]==0 (solid underneath), move down. */
+                    if (ow_ty > 0 && ow_ty < (int)DAT_004879f4 - 1 &&
+                        ow_tx > 0 && ow_tx < (int)DAT_004879f0) {
+                        int shift2 = DAT_00487a18;
+                        int drip_count = 0;
+                        int cy = ow_ty + 1;
+                        while (drip_count < 6 && cy < (int)DAT_004879f4) {
+                            int toff2 = (cy << shift2) + ow_tx;
+                            unsigned char below_tile = *(unsigned char *)((int)DAT_0048782c + toff2);
+                            unsigned char below_pass = *(unsigned char *)((unsigned int)below_tile * 0x20 + 1 + (int)DAT_00487928);
+                            if (below_pass == 0) break; /* solid ground found */
+                            cy++;
+                            drip_count++;
+                        }
+                        if (drip_count > 0 && cy > ow_ty + 1) {
+                            /* Drip down to just above solid ground */
+                            *(int *)(ebase + 0x08) = (cy - 1) << 0x12;
+                            ow_ty = cy - 1;
+                        }
+                        if (ow_ty <= 5) {
+                            should_remove = 1; break; /* fell off bottom */
+                        }
+
+                        /* Phase B: paint terrain tiles in a small region around entity.
+                         * Scan rectangular area: ~9 columns, 2 rows per pass.
+                         * For each passable tile (prop[+1]==1), write tile type from
+                         * tile_prop[+0x0F] and paint framebuffer with waste color. */
+                        unsigned int ow_color = *(unsigned int *)(ebase + 0x4C);
+                        unsigned short ow_rgb = (unsigned short)(ow_color - 30000);
+                        int paint_cx = ow_tx - 4;
+                        if (paint_cx < 1) paint_cx = 1;
+                        int paint_ex = ow_tx + 5;
+                        if (paint_ex >= (int)DAT_004879f0) paint_ex = (int)DAT_004879f0 - 1;
+                        for (int py = ow_ty; py >= ow_ty - 1 && py >= 1; py--) {
+                            for (int px = paint_cx; px < paint_ex; px++) {
+                                int ptoff = (py << shift2) + px;
+                                unsigned char ptile = *(unsigned char *)((int)DAT_0048782c + ptoff);
+                                unsigned char pprop1 = *(unsigned char *)((unsigned int)ptile * 0x20 + 1 + (int)DAT_00487928);
+                                if (pprop1 == 1) { /* passable tile — fill with waste */
+                                    unsigned char fill_tile = *(unsigned char *)((unsigned int)ptile * 0x20 + 0x0F + (int)DAT_00487928);
+                                    *(unsigned char *)((int)DAT_0048782c + ptoff) = fill_tile;
+                                    if (DAT_00481f50 != NULL) {
+                                        *(unsigned short *)((int)DAT_00481f50 + ptoff * 2) = ow_rgb;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    /* Phase C: color cycle and timer.
+                     * Decrement +0x5C each tick. Randomize color each tick.
+                     * When timer reaches 0, remove entity. */
+                    int ow_timer = *(int *)(ebase + 0x5C);
+                    if (ow_timer > 0) {
+                        ow_timer--;
+                        *(int *)(ebase + 0x5C) = ow_timer;
+                        /* Randomize team and palette color each tick */
+                        *(unsigned char *)(ebase + 0x24) = (unsigned char)(rand() % 6);
+                        int *pal = (int *)DAT_00487aa8;
+                        if (pal) {
+                            *(unsigned int *)(ebase + 0x4C) = (unsigned int)pal[rand() % 16 + 0xA0] + 30000;
+                        }
+                        if (ow_timer == 0) {
+                            should_remove = 1;
+                        }
+                    }
+                    /* Set slow downward velocity for drip effect */
+                    *(int *)(ebase + 0x18) = (rand() % 0x5A) * ((rand() & 1) ? 1 : -1);
+                    *(int *)(ebase + 0x1C) = 0x32;
+                }
+                break;
+            }
+
+            case 0x14: { /* ORGANIC WASTE power 2 (Sticky Waste) — wobble flight.
+                * Ghidra callback: 0x43a4b0. Entity type 0x14, sub_type 1.
+                * Wobbles via oscillating heading at +0x3C. Timer at +0x2C controls
+                * direction flip frequency. +0x20 direction: 0=CW, 1=CCW. */
+                int sw_life = *(int *)(ebase + 0x28);
+                if (sw_life > 0) {
+                    sw_life--;
+                    *(int *)(ebase + 0x28) = sw_life;
+                    if (sw_life == 0) { should_remove = 1; break; }
+                }
+                /* Direction flip timer at +0x2C */
+                int sw_timer = *(int *)(ebase + 0x2C);
+                sw_timer--;
+                if (sw_timer <= 0) {
+                    sw_timer = rand() % 25 + 10;
+                    *(unsigned char *)(ebase + 0x20) = (unsigned char)(rand() & 1);
+                }
+                *(int *)(ebase + 0x2C) = sw_timer;
+                /* Oscillate heading at +0x3C: +/-4 per tick based on direction */
+                int sw_heading = *(int *)(ebase + 0x3C);
+                if (*(unsigned char *)(ebase + 0x20) == 0)
+                    sw_heading += 4;
+                else
+                    sw_heading -= 4;
+                sw_heading &= 0x7FF;
+                *(int *)(ebase + 0x3C) = sw_heading;
+                /* Move via sincos table (1.5x speed, direct position movement) */
+                int *sw_sc = (int *)DAT_00487ab0;
+                int sw_sx = sw_sc[sw_heading];
+                int sw_cy = sw_sc[sw_heading + 0x200];
+                *(int *)(ebase + 0x18) = (sw_sx * 3) >> 1;
+                *(int *)(ebase + 0x1C) = (sw_cy * 3) >> 1;
+                break;
+            }
+
             default:
                 break;
             }
@@ -3676,13 +3825,12 @@ void FUN_00434310(void)
                     default: continue;
                 }
                 if (*(unsigned char *)(tbase + 0x20) == 0xFA) continue;
-                /* Skip friendly fire: don't let own projectiles hit own tracked entities.
-                 * Exception: type 0x17 (nucleus) — player shoots OWN trail dots to
-                 * detonate them, so friendly fire MUST be allowed for nucleus targets. */
-                if (t_type != 0x17 && proj_team < 0x50 && *(unsigned char *)(tbase + 0x22) == proj_team) continue;
-                /* Original has same-team immunity while +0x5C > 0, but the
-                 * barrel's +0x5C never decrements in our code (no callback).
-                 * Skip the team check — barrel should be hittable by anyone. */
+                /* Friendly fire check with immunity timer (original FUN_00437120):
+                 * When +0x5C == 0, collision is ALWAYS allowed (no team check).
+                 * When +0x5C > 0, same-team projectiles are blocked.
+                 * Exception: type 0x17 (nucleus) always allows friendly fire. */
+                if (t_type != 0x17 && *(unsigned char *)(tbase + 0x5C) != 0 &&
+                    proj_team < 0x50 && *(unsigned char *)(tbase + 0x22) == proj_team) continue;
                 int tx = *(int *)(tbase + 0x00);
                 int ty = *(int *)(tbase + 0x08);
                 if (proj_x < tx - hx || proj_x > tx + hx) continue;
@@ -4085,6 +4233,9 @@ void FUN_00434310(void)
                 * Entity-entity collision (FUN_00437120 cat 0) accumulates damage at +0x28.
                 * When damage >= threshold, state +0x20 is set to 0xFA → explosion.
                 * Original callback 0x431650: KB(0x190=400, -1), two particle loops. */
+                /* Decrement immunity timer (original at 0x431800) */
+                if (*(unsigned char *)(ebase + 0x5C) > 0)
+                    *(unsigned char *)(ebase + 0x5C) = *(unsigned char *)(ebase + 0x5C) - 1;
                 unsigned char nb_state = *(unsigned char *)(ebase + 0x20);
                 if (nb_state == 0xFA) {
                     int det_x = *(int *)(ebase + 0x00);
@@ -4300,12 +4451,14 @@ void FUN_00434310(void)
                  * Ground tiles (64+) have byte+0 = 1.
                  * This matches the original's behavior where projectiles crater
                  * on any non-air tile they encounter. */
-                /* Crater check: pass2==0 for solid walls (all weapon types),
-                 * OR for basic bullets: any non-air, non-water tile.
-                 * Water tiles (byte+4 == 1) are excluded so bullets work underwater. */
+                /* Wall collision gate (original per-type callbacks at ~0x438890):
+                 * - pass2==0: solid wall hit (all weapon types)
+                 * - type 0x22 turret bullets: any non-air, non-water tile (broad cratering)
+                 * - type 0x1D megabomb: building hit (DAT_00481e8f set by FUN_004355d0)
+                 * Shotgun (type 0x00) only collides with solid walls (pass2==0). */
                 unsigned char tile_is_water = *(unsigned char *)((unsigned int)tile * 0x20 + 4 + (int)DAT_00487928);
                 unsigned char wall_owner = *(unsigned char *)(ebase + 0x22);
-                if (pass2 == 0 || ((ent_type == 0x00 || ent_type == 0x22) && tile != 0 && tile_is_water == 0 && wall_owner < 0x50)) {
+                if (pass2 == 0 || (ent_type == 0x22 && tile != 0 && tile_is_water == 0 && wall_owner < 0x50) || (ent_type == 0x1D && DAT_00481e8f != 0)) {
                     /* Compute explosion level from sub_type and entity state
                      * (original at 0x43897B-0x4389B5) */
                     unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
@@ -4516,6 +4669,17 @@ void FUN_00434310(void)
                             /* Silent — debris spawned by default flash_count (already 0) */
                             flash_count = 3;  /* small debris burst only */
                             break;
+
+                        /* Callback 0x4427e0: ORGANIC WASTE — bounce with energy loss.
+                         * Random divisor (rand()&7)+6, sign flip on axis.
+                         * On slow enough speed, transitions to growing in behavior case. */
+                        case 0x02: {
+                            int div = (rand() & 7) + 6;
+                            if (prev_tx != tx) *(int *)(ebase + 0x18) = -(*(int *)(ebase + 0x18) / div);
+                            if (prev_ty != ty) *(int *)(ebase + 0x1C) = *(int *)(ebase + 0x1C) / div;
+                            did_bounce = 1;
+                            break;
+                        }
 
                         /* Callback 0x4330C0: FULL STOP on first bounce (zero energy).
                          * Fuse timer at +0x60 handles detonation (Phase 3).
