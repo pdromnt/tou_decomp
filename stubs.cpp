@@ -8096,16 +8096,204 @@ void FUN_00455d50(void)
                             *(int *)(poff + 0x20 + DAT_00487810) = max_hp;
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x00;
                         } else if (roll < 42) {
-                            /* Booby trap — stub: HUD notification only */
+                            /* Booby trap — damages player, spawns 16 bullets + 75 shrapnel.
+                             * Original jump table case 1, at 0x455d50. */
+                            *(int *)(poff + 0x20 + DAT_00487810) += (int)0xFFD8F000; /* damage player */
+                            FUN_00437cf0(item_x, item_y, 0x12C, 0xFF, 0); /* explosion KB */
+                            int *bt_sc = (int *)DAT_00487ab0;
+                            int *bt_tt = (int *)DAT_00487abc;
+                            /* 16 bullets in a ring */
+                            for (int bt = 0; bt < 16 && DAT_00489248 < 0x9C4; bt++) {
+                                int bt_ang = bt * 0x80; /* 0x2000/16 = 0x80 per step (index into sincos) */
+                                int bt_rand = rand() % 3;
+                                int bt_spd = (rand() % 3) + 5;
+                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
+                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
+                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                *(int *)(ep + 0x18) = (bt_sc[bt_ang] << bt_spd) >> 6;
+                                *(int *)(ep + 0x1C) = (bt_sc[bt_ang + 0x200] << bt_spd) >> 6;
+                                *(unsigned char *)(ep + 0x20) = 0;
+                                *(unsigned char *)(ep + 0x21) = 0x01;
+                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
+                                *(short *)(ep + 0x24) = 0;
+                                *(unsigned char *)(ep + 0x26) = 0x1E;
+                                *(int *)(ep + 0x28) = 0;
+                                *(int *)(ep + 0x34) = bt_tt[0x218/4];
+                                *(int *)(ep + 0x38) = bt_tt[(0x2A0 + bt_rand * 4) / 4];
+                                *(int *)(ep + 0x3C) = 0;
+                                *(unsigned char *)(ep + 0x40) = (unsigned char)bt_rand;
+                                *(int *)(ep + 0x44) = bt_tt[(0x2DC + bt_rand * 4) / 4];
+                                *(int *)(ep + 0x48) = 0;
+                                *(int *)(ep + 0x4C) = bt_tt[(0x30C + bt_rand * 4) / 4];
+                                *(unsigned char *)(ep + 0x54) = 0;
+                                *(unsigned char *)(ep + 0x5C) = 0;
+                                DAT_00489248++;
+                            }
+                            /* Flash particle */
+                            if (DAT_00489250 < 2000) {
+                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                *(int *)(fp + 0x00) = item_x; *(int *)(fp + 0x04) = item_y;
+                                *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
+                                *(unsigned char *)(fp + 0x10) = (unsigned char)((rand() & 3) + 7);
+                                *(unsigned char *)(fp + 0x11) = 0;
+                                *(unsigned char *)(fp + 0x12) = 0;
+                                *(unsigned char *)(fp + 0x13) = 1;
+                                *(unsigned char *)(fp + 0x14) = 0xFF;
+                                *(unsigned char *)(fp + 0x15) = 0;
+                                DAT_00489250++;
+                            }
+                            /* 75 shrapnel pieces */
+                            for (int sh = 0; sh < 75 && DAT_00489248 < 0x9C4; sh++) {
+                                unsigned int sh_ang = rand() & 0x7FF;
+                                int sh_spd = rand() % 50;
+                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
+                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
+                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                *(int *)(ep + 0x18) = (bt_sc[sh_ang] * sh_spd) >> 6;
+                                *(int *)(ep + 0x1C) = (bt_sc[sh_ang + 0x200] * sh_spd) >> 6;
+                                *(unsigned char *)(ep + 0x20) = 0;
+                                *(unsigned char *)(ep + 0x21) = 0x67;
+                                *(unsigned char *)(ep + 0x22) = 0xFF;
+                                *(short *)(ep + 0x24) = 0;
+                                *(unsigned char *)(ep + 0x26) = 0xFF;
+                                *(int *)(ep + 0x28) = 0;
+                                *(int *)(ep + 0x34) = bt_tt[0xD7A8/4];
+                                *(int *)(ep + 0x38) = bt_tt[0xD830/4];
+                                *(int *)(ep + 0x3C) = 0;
+                                *(unsigned char *)(ep + 0x40) = 0;
+                                *(int *)(ep + 0x44) = bt_tt[0xD86C/4];
+                                *(int *)(ep + 0x48) = 0;
+                                *(unsigned char *)(ep + 0x54) = 0;
+                                DAT_00489248++;
+                                /* Post-increment trailing writes */
+                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(unsigned char *)(ep2 - 0x24) = 6; /* +0x5C */
+                                unsigned char sh_pal = (unsigned char)((rand() % 12) + 0x14);
+                                *(unsigned char *)(ep2 - 0x1B) = sh_pal; /* +0x65 */
+                                *(unsigned char *)(ep2 - 0x1C) = 0x12; /* +0x64 */
+                                unsigned short *pal_s = (unsigned short *)DAT_00487aa8;
+                                if (pal_s) *(unsigned int *)(ep2 - 0x34) = (unsigned int)pal_s[sh_pal] + 30000; /* +0x4C */
+                            }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x01;
                         } else if (roll < 142) {
-                            /* Death Ring — stub: HUD notification only */
+                            /* Death Ring — 32 bullets in a ring around crate.
+                             * Original jump table case 2. */
+                            int *dr_sc = (int *)DAT_00487ab0;
+                            int *dr_tt = (int *)DAT_00487abc;
+                            for (int dr = 0; dr < 32 && DAT_00489248 < 0x9C4; dr++) {
+                                int dr_ang = dr * 0x40; /* 0x800/32 = 0x40 per step */
+                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
+                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
+                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                *(int *)(ep + 0x18) = (dr_sc[dr_ang] * 90) >> 6;
+                                *(int *)(ep + 0x1C) = (dr_sc[dr_ang + 0x200] * 90) >> 6;
+                                *(unsigned char *)(ep + 0x20) = 0xC2;
+                                *(unsigned char *)(ep + 0x21) = 0x00;
+                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
+                                *(short *)(ep + 0x24) = 6;
+                                *(unsigned char *)(ep + 0x26) = 0xFF;
+                                *(int *)(ep + 0x28) = 0;
+                                *(int *)(ep + 0x34) = dr_tt[0];
+                                *(int *)(ep + 0x38) = dr_tt[0x90/4];
+                                *(int *)(ep + 0x3C) = 0;
+                                *(unsigned char *)(ep + 0x40) = 2;
+                                *(int *)(ep + 0x44) = dr_tt[0xCC/4];
+                                *(int *)(ep + 0x48) = 0;
+                                *(int *)(ep + 0x4C) = dr_tt[0xFC/4];
+                                *(unsigned char *)(ep + 0x54) = 0;
+                                *(unsigned char *)(ep + 0x5C) = 0;
+                                DAT_00489248++;
+                                /* Post-increment trailing writes */
+                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                unsigned short *pal_dr = (unsigned short *)DAT_00487aa8;
+                                if (pal_dr) *(unsigned int *)(ep2 - 0x34) = (unsigned int)pal_dr[7] + 30000; /* +0x4C */
+                                *(int *)(ep2 - 0x58) = (rand() & 7) + 0x96; /* +0x28: lifespan 150-157 */
+                            }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x02;
                         } else if (roll < 242) {
-                            /* 4 Miniships — stub: HUD notification only */
+                            /* 4 Miniships — allied to collecting player.
+                             * Original jump table case 3. Type 0x1C, 4 cardinal directions. */
+                            int *ms_sc = (int *)DAT_00487ab0;
+                            int *ms_tt = (int *)DAT_00487abc;
+                            unsigned char plr_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
+                            for (int ms = 0; ms < 4 && DAT_00489248 < 0x9C4; ms++) {
+                                int ms_ang = (ms * 0x200 + 0x100) & 0x7FF;
+                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
+                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
+                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                *(int *)(ep + 0x18) = ms_sc[ms_ang] >> 1;
+                                *(int *)(ep + 0x1C) = ms_sc[ms_ang + 0x200] >> 1;
+                                *(unsigned char *)(ep + 0x20) = 0;
+                                *(unsigned char *)(ep + 0x21) = 0x1C;
+                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
+                                *(short *)(ep + 0x24) = 0;
+                                *(unsigned char *)(ep + 0x26) = 0xFF;
+                                *(int *)(ep + 0x28) = 0;
+                                *(int *)(ep + 0x34) = ms_tt[0x3AA0/4];
+                                *(int *)(ep + 0x38) = ms_tt[0x3B28/4];
+                                *(int *)(ep + 0x3C) = 0;
+                                *(unsigned char *)(ep + 0x40) = 0;
+                                *(int *)(ep + 0x44) = ms_tt[0x3B64/4];
+                                *(int *)(ep + 0x48) = 0;
+                                *(int *)(ep + 0x4C) = ms_tt[0x3B94/4];
+                                *(unsigned char *)(ep + 0x54) = 0;
+                                *(unsigned char *)(ep + 0x5C) = 0x20; /* spawn immunity (team check bypass) */
+                                DAT_00489248++;
+                                /* Post-increment trailing writes */
+                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep2 - 0x44) = ms_ang; /* +0x3C: heading */
+                                *(int *)(ep2 - 0x54) = 0x0A; /* +0x2C: fire rate */
+                                *(int *)(ep2 - 0x20) = 0x157C; /* +0x60: lifetime 5500 */
+                                *(int *)(ep2 - 0x34) += (int)plr_team * 100; /* +0x4C: team sprite */
+                                /* Register in tracking list (category 5 = miniships) */
+                                *(int *)((int)DAT_0048781c + (5 * 0x1000 + DAT_00487834[5]) * 4) = DAT_00489248 - 1;
+                                *(int *)(ep2 - 0x30) = DAT_00487834[5]; /* +0x50: tracking slot */
+                                DAT_00487834[5]++;
+                            }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x03;
                         } else if (roll < 342) {
-                            /* 6 Insects — stub: HUD notification only */
+                            /* 6 Insects — allied to collecting player.
+                             * Original jump table case 4. Type 0x1F, zero initial velocity. */
+                            int *in_tt = (int *)DAT_00487abc;
+                            unsigned char plr_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
+                            for (int in = 0; in < 6 && DAT_00489248 < 0x9C4; in++) {
+                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
+                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
+                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                                *(int *)(ep + 0x18) = 0; *(int *)(ep + 0x1C) = 0;
+                                *(unsigned char *)(ep + 0x20) = 0;
+                                *(unsigned char *)(ep + 0x21) = 0x1F;
+                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
+                                *(short *)(ep + 0x24) = 0;
+                                *(unsigned char *)(ep + 0x26) = 0xFF;
+                                *(int *)(ep + 0x28) = 0;
+                                *(int *)(ep + 0x34) = in_tt[0x40E8/4];
+                                *(int *)(ep + 0x38) = in_tt[0x4170/4];
+                                *(int *)(ep + 0x3C) = 0;
+                                *(unsigned char *)(ep + 0x40) = 0;
+                                *(int *)(ep + 0x44) = in_tt[0x41AC/4];
+                                *(int *)(ep + 0x48) = 0;
+                                *(int *)(ep + 0x4C) = in_tt[0x41DC/4];
+                                *(unsigned char *)(ep + 0x54) = 0;
+                                *(unsigned char *)(ep + 0x5C) = 0x20; /* spawn immunity (team check bypass) */
+                                DAT_00489248++;
+                                /* Post-increment trailing writes */
+                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                *(unsigned char *)(ep2 - 0x5A) = 0xFF; /* +0x26 (redundant) */
+                                *(int *)(ep2 - 0x54) = 0; /* +0x2C */
+                                *(unsigned char *)(ep2 - 0x1B) = 0; /* +0x65 */
+                                *(int *)(ep2 - 0x34) += (int)plr_team * 100; /* +0x4C: team sprite */
+                                *(int *)(ep2 - 0x20) = 0x9C4; /* +0x60: lifetime 2500 */
+                                /* Register in tracking list (category 4 = insects) */
+                                *(int *)((int)DAT_0048781c + (4 * 0x1000 + DAT_00487834[4]) * 4) = DAT_00489248 - 1;
+                                *(int *)(ep2 - 0x30) = DAT_00487834[4]; /* +0x50: tracking slot */
+                                DAT_00487834[4]++;
+                            }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x04;
                         } else if (roll < 442) {
                             /* Faster special gun — decrease fire rate delay, min 8 */

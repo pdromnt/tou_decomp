@@ -1191,11 +1191,12 @@ void Render_Game_View_To(unsigned short *frame)
                     colorVal = (unsigned char)((char)colorVal + (char)(DAT_004877e8 >> 8));
                 }
 
-                /* Draw 25x25 rectangle using DAT_00481f4c palette */
+                /* Draw 25x25 rectangle using DAT_00481f4c palette (X1R5G5B5→RGB565) */
                 int sx = item->x;
                 int sy = item->y;
                 if (DAT_00481f4c && sx >= 0 && sy >= 0 && sx + 25 <= 640 && sy + 25 <= 480) {
-                    unsigned short fillColor = ((unsigned short *)DAT_00481f4c)[colorVal];
+                    unsigned short x1col = ((unsigned short *)DAT_00481f4c)[colorVal];
+                    unsigned short fillColor = ((x1col & 0x7C00) << 1) | ((x1col & 0x03E0) << 1) | (x1col & 0x001F);
                     for (int row = 0; row < 25; row++) {
                         for (int col = 0; col < 25; col++) {
                             frame[(sy + row) * 640 + sx + col] = fillColor;
@@ -1394,23 +1395,133 @@ void Render_Game_View_To(unsigned short *frame)
         }
     }
 
-    /* ---- Slider tooltip: "Now drag left & right with your mouse." ---- */
-    /* From Ghidra 0x428701. Shown when g_InputMode == 1 (active drag). */
-    if (g_InputMode == 1) {
-        const char *tip = "Now drag left & right with your mouse.";
-        /* Draw at bottom of screen using font 1 (small) */
-        int tip_x = 120;
-        int tip_y = 460;
-        if (Font_Char_Table) {
-            const char *sp = tip;
-            int tx = tip_x;
-            while (*sp && tx < 620) {
-                unsigned char c = (unsigned char)*sp++;
-                int fidx = 1 * 256 + c;
-                if (fidx < 1024 && Font_Char_Table[fidx].width > 0) {
-                    /* Simple text draw — just set pixels from font */
-                    tx += Font_Char_Table[fidx].width;
+    /* ---- Drag popup: palette strip for color selector (0x1B), or tooltip for others ---- */
+    /* From Ghidra FUN_00428650 post-loop section. */
+    if (g_InputMode == 1 && g_GameViewData) {
+        MenuItem *drag_items = (MenuItem *)g_GameViewData;
+        int drag_idx = (int)(unsigned int)DAT_004877e6;
+        if (drag_idx >= 0 && drag_idx < DAT_004877a8) {
+            unsigned char drag_rm = drag_items[drag_idx].render_mode;
+            if (drag_rm == 0x1B) {
+                /* Color selector: draw 256-color palette strip near cursor.
+                 * Original at 0x428650 post-loop: 256x16 strip with sprite 0x1B cursors. */
+                unsigned char *drag_cfg = (unsigned char *)(uintptr_t)drag_items[drag_idx].extra_data;
+                unsigned char colorVal = drag_cfg ? *drag_cfg : 0;
+                colorVal = (unsigned char)((char)colorVal + (char)(DAT_004877e8 >> 8));
+
+                /* Position strip at the ITEM location (stays fixed during drag).
+                 * In the original, DAT_004877b4/b8 freeze at drag-start position. */
+                int strip_x = drag_items[drag_idx].x - 0x80;
+                if (strip_x < 4) strip_x = 4;
+                if (strip_x + 0x104 > 640) strip_x = 640 - 0x104;
+                int strip_y = drag_items[drag_idx].y;
+
+                /* Draw dark border outline (259 x 17) */
+                int bx0 = strip_x - 2, by0 = strip_y + 13;
+                int bx1 = bx0 + 259, by1 = by0 + 17;
+                if (by0 >= 0 && by1 <= 480 && bx0 >= 0 && bx1 <= 640) {
+                    for (int bx = bx0; bx < bx1; bx++) { frame[by0 * 640 + bx] = 0; frame[(by1-1) * 640 + bx] = 0; }
+                    for (int by = by0; by < by1; by++) { frame[by * 640 + bx0] = 0; frame[by * 640 + bx1-1] = 0; }
                 }
+                /* Draw filled background (257 x 19) */
+                int fx0 = strip_x - 1, fy0 = strip_y + 12;
+                if (fy0 >= 0 && fy0 + 19 <= 480 && fx0 >= 0 && fx0 + 257 <= 640) {
+                    for (int fy = fy0; fy < fy0 + 19; fy++)
+                        for (int fx = fx0; fx < fx0 + 257; fx++)
+                            frame[fy * 640 + fx] = 0;
+                }
+
+                /* Draw 256-color palette strip (256 x 16) */
+                unsigned short *pal_strip = (unsigned short *)DAT_00481f4c;
+                if (pal_strip) {
+                    int py_start = strip_y + 14;
+                    if (py_start >= 0 && py_start + 16 <= 480 && strip_x >= 0 && strip_x + 256 <= 640) {
+                        for (int pr = 0; pr < 16; pr++) {
+                            unsigned short *row_dst = frame + (py_start + pr) * 640 + strip_x;
+                            for (int pc = 0; pc < 256; pc++) {
+                                /* X1R5G5B5 → RGB565: shift R and G left by 1 */
+                                unsigned short x1 = pal_strip[pc];
+                                row_dst[pc] = ((x1 & 0x7C00) << 1) | ((x1 & 0x03E0) << 1) | (x1 & 0x001F);
+                            }
+                        }
+                    }
+                }
+
+                /* Draw cursor sprites (sprite 0x1B) above and below the strip */
+                int cur_spr = 0x1B;
+                int cur_pb = ((int *)DAT_00489234)[cur_spr];
+                int cur_w = (int)((unsigned char *)DAT_00489e8c)[cur_spr];
+                int cur_h = (int)((unsigned char *)DAT_00489e88)[cur_spr];
+                if (cur_w > 0 && cur_h > 0 && DAT_00487ab4) {
+                    unsigned short *cur_src = (unsigned short *)DAT_00487ab4;
+                    /* Top cursor: at (strip_x + colorVal - 2, strip_y + 10) */
+                    int cx1 = strip_x + (int)colorVal - cur_w / 2;
+                    int cy1 = strip_y + 10;
+                    if (cx1 >= 0 && cy1 >= 0 && cx1 + cur_w <= 640 && cy1 + cur_h <= 480) {
+                        int cp = cur_pb;
+                        for (int cr = 0; cr < cur_h; cr++) {
+                            for (int cc = 0; cc < cur_w; cc++) {
+                                unsigned short px = cur_src[cp++];
+                                if (px != 0) frame[(cy1 + cr) * 640 + cx1 + cc] = px;
+                            }
+                        }
+                    }
+                    /* Bottom cursor: at (strip_x + colorVal - 2, strip_y + 32) */
+                    int cx2 = strip_x + (int)colorVal - cur_w / 2;
+                    int cy2 = strip_y + 32;
+                    if (cx2 >= 0 && cy2 >= 0 && cx2 + cur_w <= 640 && cy2 + cur_h <= 480) {
+                        int cp2 = cur_pb;
+                        for (int cr = 0; cr < cur_h; cr++) {
+                            for (int cc = 0; cc < cur_w; cc++) {
+                                unsigned short px = cur_src[cp2++];
+                                if (px != 0) frame[(cy2 + cr) * 640 + cx2 + cc] = px;
+                            }
+                        }
+                    }
+                }
+            } else {
+                /* Non-color sliders: "Hold & drag" tooltip with dark background.
+                 * Original uses FUN_00425f00 to draw two bordered boxes + text.
+                 * Position near drag item (frozen at drag start). */
+                int tt_x = drag_items[drag_idx].x - 0x28;
+                int tt_y = drag_items[drag_idx].y + 8;
+                if (tt_x < 2) tt_x = 2;
+                if (tt_x + 0x61 > 638) tt_x = 638 - 0x61;
+                if (tt_y < 2) tt_y = 2;
+                if (tt_y + 0x26 > 478) tt_y = 478 - 0x26;
+
+                /* Measure text to size the box around it */
+                int tw1 = 0, tw2 = 0, th = 14;
+                if (Font_Char_Table) {
+                    const char *s1 = "Hold &"; while (*s1) { tw1 += Font_Char_Table[2*256 + (unsigned char)*s1].width; s1++; }
+                    const char *s2 = "drag";   while (*s2) { tw2 += Font_Char_Table[2*256 + (unsigned char)*s2].width; s2++; }
+                }
+                int box_w = ((tw1 > tw2) ? tw1 : tw2) + 16;
+                int box_h = th * 2 + 20;
+                /* Dark filled background */
+                for (int fy = tt_y; fy < tt_y + box_h && fy < 480; fy++)
+                    for (int fx = tt_x; fx < tt_x + box_w && fx < 640; fx++)
+                        frame[fy * 640 + fx] = 0;
+                /* Outline border */
+                int ox = tt_x - 1, oy = tt_y - 1;
+                int ow = box_w + 2, oh = box_h + 2;
+                if (ox >= 0 && oy >= 0 && ox + ow <= 640 && oy + oh <= 480) {
+                    for (int bx = ox; bx < ox + ow; bx++) {
+                        frame[oy * 640 + bx] = 0x4208;
+                        frame[(oy + oh - 1) * 640 + bx] = 0x4208;
+                    }
+                    for (int by = oy; by < oy + oh; by++) {
+                        frame[by * 640 + ox] = 0x4208;
+                        frame[by * 640 + ox + ow - 1] = 0x4208;
+                    }
+                }
+                /* Center text in box */
+                int tx1 = tt_x + (box_w - tw1) / 2;
+                int tx2 = tt_x + (box_w - tw2) / 2;
+                Draw_Text_To_Buffer((const char *)"Hold &",
+                    2, 0, frame + (tt_y + 4) * 640 + tx1, 640, 0, 0, 0);
+                Draw_Text_To_Buffer((const char *)"drag",
+                    2, 0, frame + (tt_y + 4 + th + 2) * 640 + tx2, 640, 0, 0, 0);
             }
         }
     }

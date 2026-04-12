@@ -178,7 +178,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         hWnd = CreateWindowExA(
             0,                      /* dwExStyle */
             STR_CLASSNAME,          /* "TOU" */
-            STR_TITLE,              /* "TOU v0.1" */
+            STR_TITLE,              /* "Window Title" */
             dwStyle,
             posX, posY, winW, winH, /* Centered, client area = 640x480 */
             NULL,                   /* parent */
