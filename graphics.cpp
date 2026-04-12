@@ -1038,15 +1038,71 @@ void Render_Game_View_To(unsigned short *frame)
             /* Numeric: sprintf the config value (with scaling) */
             case 0x05: case 0x09: case 0x0E: case 0x13: case 0x14:
             case 0x15: case 0x16: case 0x18: case 0x34: {
-                int val = cfgPtr ? (int)*cfgPtr : 0;
-                /* Inline slider preview: if dragging ANY numeric item, apply delta.
-                 * From Ghidra 0x428650: same pattern as render_mode 0x1B. */
+                int val = cfgPtr ? (int)(unsigned int)*cfgPtr : 0;
+                /* Inline slider preview: apply drag delta with per-mode wrapping.
+                 * From Ghidra FUN_00428650: each render_mode has its own range. */
                 if (g_InputMode == 1 && (unsigned char)i == DAT_004877e6) {
-                    int drag_delta = DAT_004877e8 >> 10;
-                    val = (unsigned char)((char)val + (char)drag_delta);
+                    switch (item->render_mode) {
+                    case 0x05: /* unbounded byte add */
+                        val = (unsigned char)((char)(DAT_004877e8 >> 10) + (unsigned char)val);
+                        break;
+                    case 0x09: { /* range 1-200 */
+                        int v = val + (DAT_004877e8 >> 10);
+                        v = v - 1;
+                        if (v > 0) val = (v % 200) + 1;
+                        else if (v < 0) val = v + (1 - (v + 1) / 200) * 200 + 1;
+                        else val = 1;
+                        break;
+                    }
+                    case 0x0E: { /* range 0-100 */
+                        int v = val + (DAT_004877e8 >> 10);
+                        if (v > 0) val = v % 0x65;
+                        else if (v < 0) val = v + (1 - (v + 1) / 0x65) * 0x65;
+                        else val = 0;
+                        break;
+                    }
+                    case 0x13: { /* range 0-80 */
+                        int v = val + (DAT_004877e8 >> 10);
+                        if (v > 0) val = v % 0x51;
+                        else if (v < 0) val = v + (1 - (v + 1) / 0x51) * 0x51;
+                        else val = 0;
+                        break;
+                    }
+                    case 0x14: { /* range 0-20, uses >> 0xb */
+                        int v = val + (DAT_004877e8 >> 0xb);
+                        if (v > 0) val = v % 0x15;
+                        else if (v < 0) val = v + (1 - (v + 1) / 0x15) * 0x15;
+                        else val = 0;
+                        break;
+                    }
+                    case 0x15: { /* range 1-250 */
+                        int v = val + (DAT_004877e8 >> 10);
+                        v = v - 1;
+                        if (v > 0) val = (v % 0xFA) + 1;
+                        else if (v < 0) val = v + (1 - (v + 1) / 0xFA) * 0xFA + 1;
+                        else val = 1;
+                        break;
+                    }
+                    case 0x16: case 0x34: { /* range 0-250 */
+                        int v = val + (DAT_004877e8 >> 10);
+                        if (v > 0) val = v % 0xFB;
+                        else if (v < 0) val = v + (1 - (v + 1) / 0xFB) * 0xFB;
+                        else val = 0;
+                        break;
+                    }
+                    case 0x18: { /* range 1-64 (player count) */
+                        int v = val + (DAT_004877e8 >> 10);
+                        v = v - 1;
+                        if (v > 0) { v = v & 0x3F; val = v + 1; }
+                        else if (v < 0) { v = v + (1 - ((v + 1) >> 6)) * 64; val = v + 1; }
+                        else val = 1;
+                        break;
+                    }
+                    }
                 }
+                /* Scaling multipliers per render_mode */
                 switch (item->render_mode) {
-                case 0x09: break; /* display config value directly (was off-by-one with val-1) */
+                case 0x09: break; /* display config value directly */
                 case 0x13: val *= 5; break;
                 case 0x14: val *= 25; break;
                 case 0x15: val *= 5; break;

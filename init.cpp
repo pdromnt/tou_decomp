@@ -3656,7 +3656,10 @@ void FUN_0042a470(void)
         return;
 
     case 0xFE: /* Exit - save options and shutdown */
-        Sync_Config_To_Blob();
+        /* Original at 0042d541 calls Save_Options_Config directly.
+         * No Sync_Config_To_Blob needed: menu writes directly to g_ConfigBlob
+         * via CFG_ADDR pointers, so the blob already has correct values.
+         * (In the original binary, config globals ARE the blob — aliases.) */
         Save_Options_Config();
         g_GameState = 0xFE;
         DAT_004877b1 = 0;
@@ -5077,10 +5080,12 @@ void FUN_0041a8c0(void)
         FUN_0045adc0();
     }
 
-    /* 3. Save current config (preserves menu changes), then reload.
-     * Original at 0x0041a946 does: Sync_Config_To_Blob → Save → Load → Sync_From.
-     * Without the save, in-memory level list changes are lost on reload. */
-    Sync_Config_To_Blob();
+    /* 3. Save current config, then reload.
+     * Original at 0x0041a946 writes DAT_00483732 then calls Save_Options_Config.
+     * No full Sync_Config_To_Blob: that would clobber menu's direct blob writes.
+     * Only sync the two globals that code above just modified. */
+    *(unsigned short *)&g_ConfigBlob[0x18C8] = DAT_00483820;
+    g_ConfigBlob[0x17DA] = (unsigned char)DAT_00483732;
     Save_Options_Config();
     Load_Options_Config();
     Sync_Config_From_Blob();
@@ -6032,6 +6037,7 @@ void Sync_Config_From_Blob(void)
  * g_ConfigBlob before Save_Options_Config writes it to disk. */
 void Sync_Config_To_Blob(void)
 {
+    g_ConfigBlob[0x17C6]                          = (unsigned char)DAT_0048371e;
     g_ConfigBlob[0x17C7]                          = (unsigned char)DAT_0048371f;
     memcpy(&g_ConfigBlob[0x17C8], DAT_00483720, 8);
     memcpy(&g_ConfigBlob[0x17CC], DAT_00483724, 4);
