@@ -3614,9 +3614,9 @@ void FUN_00434310(void)
 
             case 0x02: { /* ORGANIC WASTE power 1 — terrain-growing projectile.
                 * Ghidra callback: 0x4427e0. Entity type 2, state 0x0A.
-                * Phase 1: fly with gravity until speed drops below threshold.
-                * Phase 2 (state 0x0A): drip down through air, paint terrain tiles,
-                * color cycle, then die. */
+                * Spawns with state 0x0A but still FLIES first — speed check is the
+                * primary gate, not state. When speed drops below threshold, starts
+                * terrain-growing behavior. */
                 int ow_life = *(int *)(ebase + 0x28);
                 if (ow_life > 0) {
                     ow_life--;
@@ -3631,66 +3631,110 @@ void FUN_00434310(void)
                 if (*(unsigned char *)(ebase + 0x26) > 0)
                     *(unsigned char *)(ebase + 0x26) = *(unsigned char *)(ebase + 0x26) - 1;
 
-                unsigned char ow_state = *(unsigned char *)(ebase + 0x20);
-                if (ow_state != 0x0A) {
-                    /* Flying phase: check if speed is low enough to land.
-                     * Threshold: (vx>>9)^2 + (vy>>9)^2 <= 1000 (0x3E8) */
-                    int svx = *(int *)(ebase + 0x18) >> 9;
-                    int svy = *(int *)(ebase + 0x1C) >> 9;
-                    if (svx * svx + svy * svy <= 0x3E8) {
-                        /* Transition to ground-growing mode */
-                        *(unsigned char *)(ebase + 0x20) = 0x0A;
-                        *(int *)(ebase + 0x5C) = 0x14; /* growth timer = 20 ticks */
-                        *(int *)(ebase + 0x28) = rand() % 400 + 150;
+                /* Speed check: primary gate for flying vs growing.
+                 * Threshold: (vx>>9)^2 + (vy>>9)^2 > 1000 = still flying.
+                 * At/below 1000 = landed, start growing. */
+                int svx = *(int *)(ebase + 0x18) >> 9;
+                int svy = *(int *)(ebase + 0x1C) >> 9;
+                int ow_speed_sq = svx * svx + svy * svy;
+
+                /* Speed check + ground proximity: must be slow AND near solid ground.
+                 * Original checks speed first, then Phase A scans for ground below.
+                 * If no solid ground within 6 tiles below, keep flying. */
+                int ow_tx = *(int *)(ebase + 0x00) >> 0x12;
+                int ow_ty = *(int *)(ebase + 0x08) >> 0x12;
+                int has_ground = 0;
+
+                if (ow_speed_sq <= 0x3E8 && ow_tx > 0 && ow_tx < (int)DAT_004879f0 &&
+                    ow_ty > 0 && ow_ty < (int)DAT_004879f4 - 1) {
+                    /* Scan up to 6 tiles below for solid ground (prop[+1]==0) */
+                    int shift2 = DAT_00487a18;
+                    int cy = ow_ty + 1;
+                    int drip_count = 0;
+                    while (drip_count < 6 && cy < (int)DAT_004879f4) {
+                        int toff2 = (cy << shift2) + ow_tx;
+                        unsigned char below_tile = *(unsigned char *)((int)DAT_0048782c + toff2);
+                        unsigned char below_pass = *(unsigned char *)((unsigned int)below_tile * 0x20 + 1 + (int)DAT_00487928);
+                        if (below_pass == 0) { has_ground = 1; break; }
+                        cy++;
+                        drip_count++;
                     }
-                } else {
-                    /* Growing phase (state 0x0A): drip down through air tiles,
-                     * paint terrain, color cycle. Original at 0x442cd0-0x4433a9. */
-                    int ow_x = *(int *)(ebase + 0x00);
-                    int ow_y = *(int *)(ebase + 0x08);
-                    int ow_tx = ow_x >> 0x12;
-                    int ow_ty = ow_y >> 0x12;
+                }
 
-                    /* Phase A: drip down through air (scan up to 6 tiles below).
-                     * If tile below has prop[+1]==0 (solid underneath), move down. */
-                    if (ow_ty > 0 && ow_ty < (int)DAT_004879f4 - 1 &&
-                        ow_tx > 0 && ow_tx < (int)DAT_004879f0) {
-                        int shift2 = DAT_00487a18;
-                        int drip_count = 0;
-                        int cy = ow_ty + 1;
-                        while (drip_count < 6 && cy < (int)DAT_004879f4) {
+                if (ow_speed_sq > 0x3E8 || !has_ground) {
+                    /* Still flying: gravity + integration handled by generic code.
+                     * Bounce via wall collision case 0x02. */
+                    break;
+                }
+
+                /* === Growing phase === (slow + ground below)
+                 * Initialize growth timer on first transition */
+                if (*(int *)(ebase + 0x5C) == 0) {
+                    *(int *)(ebase + 0x5C) = 0x14; /* growth timer = 20 ticks */
+                    *(int *)(ebase + 0x28) = rand() % 400 + 150;
+                }
+
+                {
+                    int shift2 = DAT_00487a18;
+
+                    /* Growth movement: move UP one tile + random sideways step per tick.
+                     * Direct position modification (original 0x443016), not velocity-based.
+                     * This builds the waste mound upward over many ticks. */
+                    *(int *)(ebase + 0x08) -= 0x40000; /* one tile UP */
+                    int gdir = (rand() & 1) ? 1 : -1;
+                    *(int *)(ebase + 0x00) += gdir * (rand() % 3 + 1) * 0x40000; /* 1-3 tiles sideways */
+                    *(int *)(ebase + 0x18) = 0; /* zero velocity — movement is direct */
+                    *(int *)(ebase + 0x1C) = 0;
+
+                    /* Recompute tile position after movement */
+                    ow_tx = *(int *)(ebase + 0x00) >> 0x12;
+                    ow_ty = *(int *)(ebase + 0x08) >> 0x12;
+
+                    /* Phase A: if we moved into air (no ground below within 6 tiles),
+                     * drop back down to just above solid ground. This lets waste land
+                     * on itself (painted tiles with prop[+1]==0 act as ground). */
+                    if (ow_tx > 0 && ow_tx < (int)DAT_004879f0 &&
+                        ow_ty > 0 && ow_ty < (int)DAT_004879f4) {
+                        int cy = ow_ty;
+                        while (cy < (int)DAT_004879f4) {
                             int toff2 = (cy << shift2) + ow_tx;
-                            unsigned char below_tile = *(unsigned char *)((int)DAT_0048782c + toff2);
-                            unsigned char below_pass = *(unsigned char *)((unsigned int)below_tile * 0x20 + 1 + (int)DAT_00487928);
-                            if (below_pass == 0) break; /* solid ground found */
+                            unsigned char cur_tile = *(unsigned char *)((int)DAT_0048782c + toff2);
+                            unsigned char cur_pass = *(unsigned char *)((unsigned int)cur_tile * 0x20 + 1 + (int)DAT_00487928);
+                            if (cur_pass == 0) {
+                                /* Found solid tile — place entity one tile above */
+                                ow_ty = cy - 1;
+                                *(int *)(ebase + 0x08) = ow_ty << 0x12;
+                                break;
+                            }
                             cy++;
-                            drip_count++;
                         }
-                        if (drip_count > 0 && cy > ow_ty + 1) {
-                            /* Drip down to just above solid ground */
-                            *(int *)(ebase + 0x08) = (cy - 1) << 0x12;
-                            ow_ty = cy - 1;
-                        }
-                        if (ow_ty <= 5) {
-                            should_remove = 1; break; /* fell off bottom */
-                        }
+                    }
 
-                        /* Phase B: paint terrain tiles in a small region around entity.
-                         * Scan rectangular area: ~9 columns, 2 rows per pass.
-                         * For each passable tile (prop[+1]==1), write tile type from
-                         * tile_prop[+0x0F] and paint framebuffer with waste color. */
-                        unsigned int ow_color = *(unsigned int *)(ebase + 0x4C);
-                        unsigned short ow_rgb = (unsigned short)(ow_color - 30000);
-                        int paint_cx = ow_tx - 4;
-                        if (paint_cx < 1) paint_cx = 1;
-                        int paint_ex = ow_tx + 5;
-                        if (paint_ex >= (int)DAT_004879f0) paint_ex = (int)DAT_004879f0 - 1;
-                        for (int py = ow_ty; py >= ow_ty - 1 && py >= 1; py--) {
-                            for (int px = paint_cx; px < paint_ex; px++) {
+                    if (ow_ty <= 1 || ow_ty >= (int)DAT_004879f4 - 1 ||
+                        ow_tx <= 0 || ow_tx >= (int)DAT_004879f0) {
+                        should_remove = 1; break;
+                    }
+
+                    /* Phase B: paint terrain in expanding triangle (0x442ec0).
+                     * 4 rows: widths 1, 3, 5, 7. Starts 1-2 tiles above entity Y.
+                     * Each row one lower + one wider. Different color each tick = texture. */
+                    unsigned int ow_color = *(unsigned int *)(ebase + 0x4C);
+                    unsigned short ow_rgb = (unsigned short)(ow_color - 30000);
+                    int paint_start_y = ow_ty - (rand() % 2) - 1;
+                    int col_count = 1;
+                    int prow = 0;
+                    while (col_count < 9) {
+                        int row_y = paint_start_y + prow;
+                        int row_x = ow_tx - prow;
+                        for (int c = 0; c < col_count; c++) {
+                            int px = row_x + c;
+                            int py = row_y;
+                            if (px > 0 && px < (int)DAT_004879f0 &&
+                                py > 0 && py < (int)DAT_004879f4) {
                                 int ptoff = (py << shift2) + px;
                                 unsigned char ptile = *(unsigned char *)((int)DAT_0048782c + ptoff);
                                 unsigned char pprop1 = *(unsigned char *)((unsigned int)ptile * 0x20 + 1 + (int)DAT_00487928);
-                                if (pprop1 == 1) { /* passable tile — fill with waste */
+                                if (pprop1 == 1) {
                                     unsigned char fill_tile = *(unsigned char *)((unsigned int)ptile * 0x20 + 0x0F + (int)DAT_00487928);
                                     *(unsigned char *)((int)DAT_0048782c + ptoff) = fill_tile;
                                     if (DAT_00481f50 != NULL) {
@@ -3699,66 +3743,27 @@ void FUN_00434310(void)
                                 }
                             }
                         }
+                        prow++;
+                        col_count += 2;
                     }
+                }
 
-                    /* Phase C: color cycle and timer.
-                     * Decrement +0x5C each tick. Randomize color each tick.
-                     * When timer reaches 0, remove entity. */
-                    int ow_timer = *(int *)(ebase + 0x5C);
-                    if (ow_timer > 0) {
-                        ow_timer--;
-                        *(int *)(ebase + 0x5C) = ow_timer;
-                        /* Randomize team and palette color each tick */
-                        *(unsigned char *)(ebase + 0x24) = (unsigned char)(rand() % 6);
-                        int *pal = (int *)DAT_00487aa8;
-                        if (pal) {
-                            *(unsigned int *)(ebase + 0x4C) = (unsigned int)pal[rand() % 16 + 0xA0] + 30000;
-                        }
-                        if (ow_timer == 0) {
-                            should_remove = 1;
-                        }
+                /* Phase C: color cycle every tick for mottled texture.
+                 * DAT_00487aa8 is a short array (entity.cpp:3702 confirms). */
+                *(unsigned char *)(ebase + 0x24) = (unsigned char)(rand() % 6);
+                {
+                    unsigned short *pal = (unsigned short *)DAT_00487aa8;
+                    if (pal) {
+                        *(unsigned int *)(ebase + 0x4C) = (unsigned int)pal[0xA0 + rand() % 16] + 30000;
                     }
-                    /* Set slow downward velocity for drip effect */
-                    *(int *)(ebase + 0x18) = (rand() % 0x5A) * ((rand() & 1) ? 1 : -1);
-                    *(int *)(ebase + 0x1C) = 0x32;
                 }
                 break;
             }
 
-            case 0x14: { /* ORGANIC WASTE power 2 (Sticky Waste) — wobble flight.
-                * Ghidra callback: 0x43a4b0. Entity type 0x14, sub_type 1.
-                * Wobbles via oscillating heading at +0x3C. Timer at +0x2C controls
-                * direction flip frequency. +0x20 direction: 0=CW, 1=CCW. */
-                int sw_life = *(int *)(ebase + 0x28);
-                if (sw_life > 0) {
-                    sw_life--;
-                    *(int *)(ebase + 0x28) = sw_life;
-                    if (sw_life == 0) { should_remove = 1; break; }
-                }
-                /* Direction flip timer at +0x2C */
-                int sw_timer = *(int *)(ebase + 0x2C);
-                sw_timer--;
-                if (sw_timer <= 0) {
-                    sw_timer = rand() % 25 + 10;
-                    *(unsigned char *)(ebase + 0x20) = (unsigned char)(rand() & 1);
-                }
-                *(int *)(ebase + 0x2C) = sw_timer;
-                /* Oscillate heading at +0x3C: +/-4 per tick based on direction */
-                int sw_heading = *(int *)(ebase + 0x3C);
-                if (*(unsigned char *)(ebase + 0x20) == 0)
-                    sw_heading += 4;
-                else
-                    sw_heading -= 4;
-                sw_heading &= 0x7FF;
-                *(int *)(ebase + 0x3C) = sw_heading;
-                /* Move via sincos table (1.5x speed, direct position movement) */
-                int *sw_sc = (int *)DAT_00487ab0;
-                int sw_sx = sw_sc[sw_heading];
-                int sw_cy = sw_sc[sw_heading + 0x200];
-                *(int *)(ebase + 0x18) = (sw_sx * 3) >> 1;
-                *(int *)(ebase + 0x1C) = (sw_cy * 3) >> 1;
-                break;
-            }
+            /* Type 0x14 (Organic Waste power 2 / Plastic Explosives):
+             * Standard projectile — no special behavior case needed.
+             * Generic gravity + integration + wall collision case 0x14
+             * handles everything (goo/explosive painting on impact). */
 
             default:
                 break;
@@ -4454,11 +4459,12 @@ void FUN_00434310(void)
                 /* Wall collision gate (original per-type callbacks at ~0x438890):
                  * - pass2==0: solid wall hit (all weapon types)
                  * - type 0x22 turret bullets: any non-air, non-water tile (broad cratering)
+                 * - type 0x14 plastic/organic waste: any non-air tile (paints goo/explosive)
                  * - type 0x1D megabomb: building hit (DAT_00481e8f set by FUN_004355d0)
                  * Shotgun (type 0x00) only collides with solid walls (pass2==0). */
                 unsigned char tile_is_water = *(unsigned char *)((unsigned int)tile * 0x20 + 4 + (int)DAT_00487928);
                 unsigned char wall_owner = *(unsigned char *)(ebase + 0x22);
-                if (pass2 == 0 || (ent_type == 0x22 && tile != 0 && tile_is_water == 0 && wall_owner < 0x50) || (ent_type == 0x1D && DAT_00481e8f != 0)) {
+                if (pass2 == 0 || (ent_type == 0x22 && tile != 0 && tile_is_water == 0 && wall_owner < 0x50) || (ent_type == 0x14 && tile != 0) || (ent_type == 0x1D && DAT_00481e8f != 0)) {
                     /* Compute explosion level from sub_type and entity state
                      * (original at 0x43897B-0x4389B5) */
                     unsigned char sub_type = *(unsigned char *)(ebase + 0x40);
@@ -4763,9 +4769,10 @@ void FUN_00434310(void)
                             FUN_0040f9b0(0x10B, prev_x, prev_y);
                             break;
                         }
-                        case 0x14: { /* PLASTIC EXPLOSIVES — converts tiles to 0x15 (explosive).
-                            * Paints red explosive pixel + sets tile type. When shot, they explode.
-                            * From Ghidra 0x43ADE0: tile = 0x15, pixel from DAT_00487ab4. */
+                        case 0x14: { /* PLASTIC EXPLOSIVES (sub 0) / ORGANIC WASTE (sub 1).
+                            * Sub 0: converts tiles to destructible + paints red explosive color.
+                            * Sub 1: paints green goo blob ON TOP of terrain (framebuffer only).
+                            * From Ghidra 0x43ADE0. */
                             unsigned char sub14 = *(unsigned char *)(ebase + 0x40);
                             int sp_idx14 = (sub14 == 0) ? (0x194 + rand() % 3) : (0x42 + rand() % 3);
                             int sp_w14 = (int)*(unsigned char *)((int)DAT_00489e8c + sp_idx14);
@@ -4773,40 +4780,72 @@ void FUN_00434310(void)
                             int cx14 = (prev_x >> 0x12) - sp_w14 / 2;
                             int cy14 = (prev_y >> 0x12) - sp_h14 / 2;
                             int sp_off14 = *(int *)((int)DAT_00489234 + sp_idx14 * 4);
-                            unsigned char *sp_data14 = (unsigned char *)DAT_00489e94;
+                            unsigned char *sp_gray14 = (unsigned char *)DAT_00489e94;
                             unsigned short *fb14 = (unsigned short *)DAT_00481f50;
-                            unsigned short *px_data14 = (unsigned short *)DAT_00487ab4;
+                            unsigned short *px_rgb14 = (unsigned short *)DAT_00487ab4;
                             unsigned char *tmap14 = (unsigned char *)DAT_0048782c;
                             int map_w14 = (int)DAT_004879f0;
                             unsigned char tshift14 = (unsigned char)DAT_00487a18;
-                            if (sp_data14 && fb14 && tmap14 && px_data14) {
+                            /* Sprite 0x2F (47): tiled texture source for plastic (< 400, RGB565).
+                             * Used by original at 0x43AF30 for the reddish-brown texture. */
+                            int tex_idx14 = 0x2F;
+                            int tex_w14 = (int)*(unsigned char *)((int)DAT_00489e8c + tex_idx14);
+                            int tex_h14 = (int)*(unsigned char *)((int)DAT_00489e88 + tex_idx14);
+                            int tex_off14 = *(int *)((int)DAT_00489234 + tex_idx14 * 4);
+                            if (fb14 && tmap14) {
                                 for (int py2 = 0; py2 < sp_h14; py2++) {
                                     for (int px2 = 0; px2 < sp_w14; px2++) {
                                         int wx = cx14 + px2;
                                         int wy = cy14 + py2;
                                         if (wx < 0 || wy < 0 || wx >= map_w14 || wy >= (int)DAT_004879f4) continue;
                                         int sp_pixel = sp_off14 + py2 * sp_w14 + px2;
-                                        unsigned char gray = sp_data14[sp_pixel];
-                                        if (gray == 0) continue;
-                                        unsigned char t_val = tmap14[(wy << tshift14) + wx];
+                                        int toff14 = (wy << tshift14) + wx;
+                                        unsigned char t_val = tmap14[toff14];
                                         unsigned char *tp = (unsigned char *)((int)DAT_00487928 + (unsigned int)t_val * 0x20);
-                                        if (tp[0x0B] != 0 || tp[4] != 0 || t_val == 10 || t_val == 16 || tp[0x18] != 0) continue;
-                                        if (gray >= 0xC0 && t_val != 0) {
-                                            unsigned char *tp14 = (unsigned char *)((int)DAT_00487928 + (unsigned int)t_val * 0x20);
-                                            if (tp14[4] == 0) { /* skip water */
-                                                /* Paint explosive color — reddish brown */
-                                                fb14[(wy << tshift14) + wx] = (0x14 << 11) | (0x14 << 5) | 0x08;
-                                                /* Set tile: 7 for normal, 0x12 for reinforced */
-                                                if (tp14[0x0E] >= 0x40)
-                                                    tmap14[(wy << tshift14) + wx] = 0x12;
-                                                else
-                                                    tmap14[(wy << tshift14) + wx] = 7;
+                                        if (sub14 == 0) {
+                                            /* PLASTIC: tiled texture from sprite 0x2F, alpha from shape sprite.
+                                             * Original at 0x43ADE0: gray==0 skip, >=0xF0 opaque, else blend. */
+                                            if (!sp_gray14) continue;
+                                            unsigned char gray = sp_gray14[sp_pixel];
+                                            if (gray == 0) continue;
+                                            /* Tile property checks (original 0x43AEC8) */
+                                            if (tp[0] != 0 || tp[4] != 0 || tp[0x0B] != 0 || tp[0x18] != 0) continue;
+                                            if (t_val == 7 || t_val == 10 || t_val == 16) continue;
+                                            /* Get tiled texture color from sprite 0x2F */
+                                            int tc = tex_off14 + (py2 % tex_h14) * tex_w14 + (px2 % tex_w14);
+                                            unsigned short src_col = px_rgb14 ? px_rgb14[tc] : 0;
+                                            if (gray >= 0xF0) {
+                                                /* Fully opaque */
+                                                fb14[toff14] = src_col;
+                                            } else {
+                                                /* Alpha blend: dst + (src - dst) * gray / 256 */
+                                                unsigned short dst_col = fb14[toff14];
+                                                int dr = (dst_col >> 11) & 0x1F, sr = (src_col >> 11) & 0x1F;
+                                                int dg = (dst_col >> 5) & 0x3F, sg = (src_col >> 5) & 0x3F;
+                                                int db = dst_col & 0x1F, sb = src_col & 0x1F;
+                                                int r = dr + ((sr - dr) * gray >> 8);
+                                                int g = dg + ((sg - dg) * gray >> 8);
+                                                int b = db + ((sb - db) * gray >> 8);
+                                                fb14[toff14] = (unsigned short)((r << 11) | (g << 5) | b);
                                             }
+                                            /* Set tile to destructible */
+                                            if (tp[0x0E] >= 0x40)
+                                                tmap14[toff14] = 0x12;
+                                            else
+                                                tmap14[toff14] = 7;
+                                        } else {
+                                            /* ORGANIC WASTE: spawn goo ON TOP — fill AIR tiles
+                                             * above the surface, creating new destructible terrain.
+                                             * Only paint on passable tiles (prop[+1]==1, includes air). */
+                                            if (tp[1] != 1) continue; /* skip solid tiles */
+                                            unsigned short rgb_pixel = px_rgb14[sp_pixel];
+                                            if (rgb_pixel == 0) continue;
+                                            fb14[toff14] = rgb_pixel;
+                                            tmap14[toff14] = 7; /* destructible — rammable */
                                         }
                                     }
                                 }
                             }
-                            /* Sound 0x10C already played by building collision */
                             break;
                         }
 
