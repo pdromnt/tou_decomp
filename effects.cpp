@@ -1185,23 +1185,25 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 
                     unsigned short color = (unsigned short)(*(short *)(ent_base + 0x4c + ent_off) + (short)0x8ad0);
 
+                    /* COMPAT: Convert X1R5G5B5 → RGB565 BEFORE the darkness/water LUT lookup.
+                     * The raw color from entity[0x4C]+0x8AD0 is X1R5G5B5 format (from
+                     * DAT_00487aa8 palette or X1R5G5B5 packing formula). The original binary
+                     * runs entirely in X1R5G5B5 so this worked natively, but our decomp uses
+                     * RGB565 for the remap table (DAT_00489230) and all LUTs. Feeding an
+                     * X1R5G5B5 value into the RGB565 remap produces a wrong 12-bit index,
+                     * causing entities on water tiles (darkness != 0) to render as black. */
+                    {
+                        unsigned short r5 = (color >> 10) & 0x1F;
+                        unsigned short g5 = (color >> 5) & 0x1F;
+                        unsigned short b5 = color & 0x1F;
+                        color = (r5 << 11) | (g5 << 6) | b5;
+                    }
+
                     /* Check darkness */
                     unsigned char tile = ((unsigned char *)DAT_0048782c)[(py << ((unsigned char)DAT_00487a18 & 0x1f)) + px];
                     if (((char *)DAT_00487928)[(unsigned int)tile * 0x20 + 4] != '\0') {
                         unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)color];
                         color = ((unsigned short *)DAT_004876a4[28])[remap]; /* DAT_00487714 = palette[28] */
-                    }
-
-                    /* Convert X1R5G5B5 → RGB565 for exhaust types (0x65, 0x67).
-                     * Their colors come from DAT_00487aa8 (pal.col) which is X1R5G5B5.
-                     * Other types (0x66 bubbles, etc.) sample colors from the level
-                     * background (DAT_00481f50) which is already RGB565 in our decomp. */
-                    unsigned char dot_type = *(unsigned char *)(ent_base + 0x21 + ent_off);
-                    if (dot_type == 0x65 || dot_type == 0x67) {
-                        unsigned short r5 = (color >> 10) & 0x1F;
-                        unsigned short g5 = (color >> 5) & 0x1F;
-                        unsigned short b5 = color & 0x1F;
-                        color = (r5 << 11) | (g5 << 6) | b5;
                     }
 
                     /* Shape patterns based on entry[0x24] */
