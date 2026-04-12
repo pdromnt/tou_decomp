@@ -1964,7 +1964,13 @@ void FUN_00434310(void)
         int is_debris = (ent_type == 2 || ent_type == 100 || ent_type >= 0x6C || ent_state == 5);
 
         /* Type 0x67 lifecycle: decrement lifespan, apply drag, remove when expired.
-         * These are trail particles that need to fade and die but don't collide. */
+         * These are trail/bullet particles spawned by MINISHIP (0x1C), LANDMINE
+         * ring burst (0x19 mode 2), ROMAN CANDLE shrapnel (0x25), and other weapons.
+         * They need to fade and die but don't participate in wall/player collision.
+         * Two categories:
+         *   +0x28 > 0: firework/bullet trail — countdown + drag + gravity + removal
+         *   +0x28 == 0: cosmetic exhaust (ship trail) — left untouched, faded by
+         *               palette system in the 0x67 fading block below */
         if (ent_type == 0x67) {
             int t67_life = *(int *)(ebase + 0x28);
             if (t67_life > 0) {
@@ -1986,10 +1992,25 @@ void FUN_00434310(void)
             if (*(int *)(ebase + 0x18) != 0 || *(int *)(ebase + 0x1c) != 0) {
                 is_projectile = 1;
             }
-            /* Force is_projectile for zero-velocity entity types. */
+            /* Force is_projectile for entity types that start with zero velocity
+             * but still need gravity, wall collision, and/or player collision.
+             * Without this, they would be skipped by the velocity-based detection.
+             *   0x08 TOURNAILLER  — orbit mode starts stationary, needs wall collision
+             *   0x17 NUCLEUS      — trail dots sit still, need entity-entity collision
+             *   0x18 PILOT DISRUP — deploys on ground, needs wall collision to deploy
+             *   0x19 LANDMINE     — modes 1/2 are stationary mines, need player collision
+             *   0x1F INSECTS      — direct position movement (no velocity), need collision
+             *   0x24 ETNA         — deploys on ground, needs wall collision to deploy
+             *   0x25 ROMAN CANDLE — deploys on ground, needs wall collision to deploy
+             *   0x26 MORNING STAR — spinning fire, needs wall collision to explode
+             *   0x28 PIPEBOMB     — can reach zero velocity mid-bounce, needs collision
+             *   0x29 TURRET (gun) — falls with gravity, needs wall collision to deploy
+             *   0x2A TURRET (ice) — falls with gravity, needs wall collision to deploy
+             *   0x2E SMOKING NALLE— sits still (vx=vy=0), needs wall/player collision */
             if (ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
                 ent_type == 0x1F || ent_type == 0x08 || ent_type == 0x28 ||
-                ent_type == 0x17 || ent_type == 0x19) {
+                ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x24 ||
+                ent_type == 0x25 || ent_type == 0x26 || ent_type == 0x2E) {
                 is_projectile = 1;
             }
         }
@@ -2100,7 +2121,9 @@ void FUN_00434310(void)
          *   add  edi, edx              ; vy += gravity (applied FIRST)
          *   add  ecx, eax              ; pos_x += vx
          *   ... pos_y += vy            ; uses updated vy
-         * entity[+0x38] = 6 for all turret projectiles (set at spawn). */
+         * entity[+0x38] = 6 for all turret projectiles (set at spawn).
+         * Type 0x22 excluded: wavy fireworks overwrite velocity from heading each
+         * tick (gravity would accumulate and distort the wave pattern). */
         if (is_projectile && !is_debris && ent_type != 0x22) {
             /* Skip gravity for turret-owned projectiles — we use direct aim,
              * not ballistic trajectory, so gravity curves bullets away. */
@@ -2305,11 +2328,24 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x17: { /* NUCLEUS — from Ghidra callback 0x432C80.
-                * Mode 1 (+0x40==1): countdown +0x28, when 0 → state 0xFA.
-                * State 0xFA (triggered): spawn ~12 type-0x00 entities in ring burst.
-                * Entity-entity collision sets state=0xFA when HP (threshold=1) exceeded.
-                * Mode 0 (+0x40==0): sits until shot. No per-tick behavior. */
+            case 0x17: { /* NUCLEUS (Batch 8) — trail weapon, entity type 0x17.
+                * Ghidra callback: 0x432C80. Verified at 0x432C80-0x433020.
+                *
+                * The nucleus weapon fires a stream of stationary dots (type 0x17)
+                * that sit in place until detonated. Two detonation modes:
+                *   Mode 0 (+0x40==0): passive — waits to be shot by any projectile.
+                *     Entity-entity collision accumulates damage at +0x28; threshold=1
+                *     means ANY hit sets state=0xFA (ring explosion).
+                *   Mode 1 (+0x40==1): timed — countdown at +0x60 (not +0x28 to avoid
+                *     conflict with damage accumulation), auto-detonates when 0.
+                *
+                * State 0xFA (triggered): spawns ~12 type-0x00 entities in a ring burst
+                * with random start angle. Ring spacing 0xAA in 0x800 range = ~12 entities.
+                * Flash particle + explosion sound. Damage depends on mode:
+                *   mode 0: 0x4B000 (higher), mode 1: 0x32000 (lower).
+                *
+                * Invulnerability timer at +0x5C prevents instant self-detonation
+                * from the player's own bullets right after spawning. */
                 /* Zero velocity — nucleus dots are stationary trail */
                 *(int *)(ebase + 0x18) = 0;
                 *(int *)(ebase + 0x1C) = 0;
@@ -2405,11 +2441,23 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x19: { /* LANDMINE — from Ghidra callback 0x443420.
-                * Lifespan +0x28 countdown → detonation at 0.
-                * Mode 0 (+0x40==0): velocity deceleration + self position integration.
-                * Mode 1/2 (+0x40!=0): while guard>0, save position. Guard==0: bobbing.
-                * Detonation for +0x40==2: spawn ring of type 0x67 bullets. */
+            case 0x19: { /* LANDMINE (Batch 8) — entity type 0x19.
+                * Ghidra callback: 0x443420. Verified at 0x443420-0x443950.
+                *
+                * Three modes based on weapon level (+0x40):
+                *   Mode 0: flying beam — decelerates (sqrt speed cap at 256),
+                *     self-integrates position. Skipped from shared integration.
+                *   Mode 1: stationary mine — guard countdown at +0x26, then bobbing
+                *     oscillation using sincos LUT. Proximity scan for enemy players
+                *     within 0x180000 (~6px). Sets +0x28=1 to trigger detonation.
+                *   Mode 2: stationary mine + ring burst — same as mode 1 but
+                *     detonation spawns ring of 128 type 0x67 bullets (0x2000/0x40 steps).
+                *
+                * Lifespan at +0x28 counts down each tick. At 0: detonation with
+                * flash particle + explosion sound. All modes die on detonation.
+                *
+                * Position integration skipped in shared code because mode 0 does
+                * its own with deceleration, and modes 1/2 are stationary. */
                 /* Lifespan countdown */
                 int lm_life = *(int *)(ebase + 0x28);
                 if (lm_life > 0) {
@@ -2607,9 +2655,32 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x1C: { /* MINISHIP — from Ghidra callback 0x440E20.
-                * Autonomous ship: heading-based steering, boundary revert+clamp,
-                * fires type 0x67 bullets every ~10 ticks. Self-integrates position. */
+            case 0x1C: { /* MINISHIP (Batch 8) — entity type 0x1C.
+                * Ghidra callback: 0x440E20. Verified at 0x440E20-0x441A00.
+                *
+                * Autonomous AI-controlled ship that chases the nearest enemy player.
+                * Self-integrates position (skipped from shared integration).
+                *
+                * AI steering:
+                *   - Scans all players, finds closest enemy (different team)
+                *   - Distance threshold: 22500 pixel^2 (~150px). From Ghidra 0x57E4.
+                *   - Turn rate: +/-0x2A per tick (~7.4 degrees). Heading at +0x3C.
+                *   - When no enemy in range: decelerate (vx/vy *= 0.97)
+                *   - When chasing: accumulate velocity from sincos[heading]>>5 + gravity
+                *   - Speed cap: normalize if speed^2 > 0x225510
+                *
+                * Bullet firing: every 10 ticks (counter at +0x2C), spawns one type
+                * 0x00 bullet in heading direction with half parent velocity added.
+                * Only fires when actively chasing an enemy in range.
+                *
+                * Boundary handling: if position goes off-map, revert to backup pos
+                * (+0x04/+0x0C), zero velocity, clamp to (0..map-8) tiles.
+                *
+                * Death: state 0xFA (from entity-entity collision) or lifetime +0x60
+                * expiring. Both produce warm fire flash + KB(150) + sound.
+                *
+                * Skipped from player collision — damages via bullets, not contact.
+                * Skipped from shared position integration — does its own. */
                 /* Killed by enemy fire (state 0xFA) — from Ghidra 0x441926.
                  * Flash particle (warm fire) + small KB + sound. No terrain damage. */
                 if (*(unsigned char *)(ebase + 0x20) == 0xFA) {
@@ -2956,6 +3027,398 @@ void FUN_00434310(void)
                 break;
             }
 
+            case 0x24: { /* ETNA (Batch 9) — deploy+spray weapon, entity type 0x24.
+                * Ghidra callback: 0x447A70. Verified at 0x447A70-0x447D00.
+                *
+                * Flies with gravity until wall hit, then deploys (state 0xC8).
+                * Wall collision sets state=0xC8, zeroes velocity, sets +0x60=900
+                * (~15 seconds lifetime), +0x3C=-80 (startup delay).
+                *
+                * When deployed: sprays one flechette upward per tick.
+                * Flechette heading: rand()&0xFF + 0x380 (upward arc, range 0x380-0x47F).
+                * Headings near straight down (0x3F8-0x408) are skipped.
+                * Flechette speed: rand()%60 + 20. Type 0x00 (basic bullet, yellow).
+                * Palette: fire range (indices 246-255 from X1R5G5B5 palette).
+                *
+                * Startup delay: counter at +0x3C counts from -80 to 0 before
+                * spraying begins. Dies with small flash when +0x60 timer expires. */
+                if (*(unsigned char *)(ebase + 0x20) == 0xC8) {
+                    int et_life = *(int *)(ebase + 0x60);
+                    if (et_life > 0) {
+                        *(int *)(ebase + 0x60) = et_life - 1;
+                    } else {
+                        /* Timer expired: small explosion + die */
+                        int ex = *(int *)(ebase + 0x00);
+                        int ey = *(int *)(ebase + 0x08);
+                        if (DAT_00489250 < 2000) {
+                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                            *(int *)(fp + 0x00) = ex; *(int *)(fp + 0x04) = ey;
+                            *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
+                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 3;
+                            *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
+                            *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
+                            *(unsigned char *)(fp + 0x15) = 0;
+                            DAT_00489250++;
+                        }
+                        FUN_0040f9b0(0x65 + (rand() % 7), ex, ey);
+                        should_remove = 1;
+                        break;
+                    }
+                    /* Startup delay: counter at +0x3C counts from -80 to 0 */
+                    {
+                        int et_delay = *(int *)(ebase + 0x3C);
+                        if (et_delay < 0) { *(int *)(ebase + 0x3C) = et_delay + 1; break; }
+                    }
+                    /* Spray one flechette upward */
+                    if (DAT_00489248 < 0x9C4) {
+                        int *sc = (int *)DAT_00487ab0;
+                        int h = (rand() & 0xFF) + 0x380;
+                        /* Skip heading near straight down (0x3F8 to 0x408) */
+                        if (h >= 0x3F8 && h <= 0x408) break;
+                        h &= 0x7FF;
+                        int spd = (rand() % 60) + 20;
+                        int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                        *(int *)(ep + 0x00) = *(int *)(ebase + 0x00);
+                        *(int *)(ep + 0x08) = *(int *)(ebase + 0x08);
+                        *(int *)(ep + 0x04) = *(int *)(ebase + 0x00);
+                        *(int *)(ep + 0x0C) = *(int *)(ebase + 0x08);
+                        *(int *)(ep + 0x18) = (sc[h] * spd) >> 6;
+                        *(int *)(ep + 0x1C) = (sc[(h + 0x200) & 0x7FF] * spd) >> 6;
+                        *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                        *(unsigned char *)(ep + 0x21) = 0x00; /* type 0x00 for player collision, yellow from palette */
+                        *(unsigned short *)(ep + 0x24) = 0;
+                        *(unsigned char *)(ep + 0x20) = 0;
+                        *(unsigned char *)(ep + 0x26) = 0;
+                        *(unsigned char *)(ep + 0x22) = *(unsigned char *)(ebase + 0x22);
+                        *(int *)(ep + 0x28) = 0;
+                        *(int *)(ep + 0x38) = ((int *)DAT_00487abc)[0x24];
+                        *(int *)(ep + 0x44) = ((int *)DAT_00487abc)[0x33];
+                        *(int *)(ep + 0x48) = 0;
+                        *(int *)(ep + 0x4C) = ((int *)DAT_00487abc)[0x3F];
+                        *(unsigned char *)(ep + 0x54) = 0;
+                        *(unsigned char *)(ep + 0x40) = 0;
+                        *(int *)(ep + 0x34) = ((int *)DAT_00487abc)[0];
+                        *(int *)(ep + 0x3C) = 0;
+                        *(unsigned char *)(ep + 0x5C) = 0;
+                        DAT_00489248++;
+                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 40; /* short lifespan */
+                        /* Yellow/fire palette */
+                        if (DAT_00487aa8 != NULL) {
+                            int ci = rand() % 10;
+                            unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
+                            unsigned short r5 = (pal >> 10) & 0x1F;
+                            unsigned short g5 = (pal >> 5) & 0x1F;
+                            unsigned short b5 = pal & 0x1F;
+                            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case 0x25: { /* ROMAN CANDLE (Batch 9) — deploy+spray weapon, entity type 0x25.
+                * Ghidra callback: 0x446130. Verified at 0x446130-0x447400.
+                *
+                * Flies with gravity until wall hit, then deploys (state 0xC8).
+                * Wall collision sets state=0xC8, +0x60=1200 (~20sec), +0x3C=-80.
+                *
+                * Three modes based on weapon level (+0x40):
+                *   Mode 0 (sub=0): colored balls. Every 0x50 (80) ticks, spawns one
+                *     type 0x6A entity upward (heading 0x380+rand()&0xFF, speed rand()%90+25).
+                *     Also sprays constant type 0x67 shrapnel every 2 ticks (yellow).
+                *     Offset: -1px X, -13px Y (above deployer).
+                *
+                *   Mode 1 (sub=1): wavy fireworks. Every 0x50 ticks, spawns one
+                *     type 0x22 (+0x40=0) wavy firework with random color from palette.
+                *
+                *   Mode 2 (sub=2): magic fireworks. Every 0xC8 (200) ticks, spawns one
+                *     type 0x22 (+0x40=2, state=0x6E, guard=0xFF) with team-colored palette
+                *     and short fuse (+0x60=50). Plays sound 0x11C on each launch.
+                *
+                * Dies with small flash when +0x60 timer expires. */
+                if (*(unsigned char *)(ebase + 0x20) == 0xC8) {
+                    /* Deployed: lifetime check */
+                    int rc_life = *(int *)(ebase + 0x60);
+                    if (rc_life > 0) {
+                        *(int *)(ebase + 0x60) = rc_life - 1;
+                    } else {
+                        /* Timer expired: small explosion + die */
+                        int ex = *(int *)(ebase + 0x00);
+                        int ey = *(int *)(ebase + 0x08);
+                        if (DAT_00489250 < 2000) {
+                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                            *(int *)(fp + 0x00) = ex; *(int *)(fp + 0x04) = ey;
+                            *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
+                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 3;
+                            *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
+                            *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
+                            *(unsigned char *)(fp + 0x15) = 0;
+                            DAT_00489250++;
+                        }
+                        FUN_0040f9b0(0x65 + (rand() % 7), ex, ey);
+                        should_remove = 1;
+                        break;
+                    }
+                    /* Constant shrapnel spray (every 2 ticks) while deployed */
+                    unsigned char rc_sub = *(unsigned char *)(ebase + 0x40);
+                    if (rc_sub == 0 && (rc_life & 1) == 0 && DAT_00489248 < 0x9C4) {
+                        int *sc = (int *)DAT_00487ab0;
+                        int sh = (rand() & 0xFF) + 0x380;
+                        if (!(sh >= 0x3F8 && sh <= 0x408)) {
+                            sh &= 0x7FF;
+                            int ss = (rand() % 40) + 10;
+                            int sx = *(int *)(ebase + 0x00) - 0x40000;
+                            int sy = *(int *)(ebase + 0x08) - 0x340000;
+                            int sp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            *(int *)(sp + 0x00) = sx; *(int *)(sp + 0x08) = sy;
+                            *(int *)(sp + 0x04) = sx; *(int *)(sp + 0x0C) = sy;
+                            *(int *)(sp + 0x18) = (sc[sh] * ss) >> 6;
+                            *(int *)(sp + 0x1C) = (sc[(sh + 0x200) & 0x7FF] * ss) >> 6;
+                            *(int *)(sp + 0x10) = 0; *(int *)(sp + 0x14) = 0;
+                            *(unsigned char *)(sp + 0x21) = 0x67;
+                            *(unsigned short *)(sp + 0x24) = 0; *(unsigned char *)(sp + 0x20) = 0;
+                            *(unsigned char *)(sp + 0x26) = 0;
+                            *(unsigned char *)(sp + 0x22) = *(unsigned char *)(ebase + 0x22);
+                            *(int *)(sp + 0x28) = 0; *(int *)(sp + 0x38) = 0;
+                            *(int *)(sp + 0x44) = 0; *(int *)(sp + 0x48) = 0;
+                            *(unsigned char *)(sp + 0x54) = 0; *(unsigned char *)(sp + 0x40) = 0;
+                            *(int *)(sp + 0x34) = 0; *(int *)(sp + 0x3C) = 0;
+                            *(unsigned char *)(sp + 0x5C) = 0;
+                            DAT_00489248++;
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 25;
+                            /* Fixed yellow: RGB565 yellow = (31<<11)|(63<<5)|0 = 0xFFE0 */
+                            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                (unsigned int)0xFFE0 + 30000;
+                        }
+                    }
+                    /* Counter at +0x3C: increment, spawn ball/firework every 80 ticks */
+                    int rc_cnt = *(int *)(ebase + 0x3C);
+                    rc_cnt++;
+                    *(int *)(ebase + 0x3C) = rc_cnt;
+                    int rc_threshold = (rc_sub >= 2) ? 0xC8 : 0x50; /* mode 3 waits longer */
+                    if (rc_cnt > rc_threshold && DAT_00489248 < 0x9C4) {
+                        *(int *)(ebase + 0x3C) = 0;
+                        unsigned char rc_sub = *(unsigned char *)(ebase + 0x40);
+                        int rc_h = (rand() & 0xFF) + 0x380;
+                        if (rc_h >= 0x3F8 && rc_h <= 0x408) break;
+                        rc_h &= 0x7FF;
+                        int *sc = (int *)DAT_00487ab0;
+                        int rc_x = *(int *)(ebase + 0x00) - 0x40000;
+                        int rc_y = *(int *)(ebase + 0x08) - 0x340000;
+                        if (rc_sub == 0) {
+                            /* Mode 1: colored ball (type 0x6A) + flash particle spray */
+                            int rc_spd = (rand() % 90) + 25;
+                            int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            *(int *)(ep + 0x00) = rc_x; *(int *)(ep + 0x08) = rc_y;
+                            *(int *)(ep + 0x04) = rc_x; *(int *)(ep + 0x0C) = rc_y;
+                            *(int *)(ep + 0x18) = (sc[rc_h] * rc_spd) >> 6;
+                            *(int *)(ep + 0x1C) = (sc[(rc_h + 0x200) & 0x7FF] * rc_spd) >> 6;
+                            *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
+                            *(unsigned char *)(ep + 0x21) = 0x6A;
+                            *(unsigned short *)(ep + 0x24) = 0;
+                            *(unsigned char *)(ep + 0x20) = 0;
+                            *(unsigned char *)(ep + 0x26) = 0;
+                            *(unsigned char *)(ep + 0x22) = *(unsigned char *)(ebase + 0x22);
+                            *(int *)(ep + 0x28) = 0;
+                            *(int *)(ep + 0x38) = ((int *)DAT_00487abc)[0x24];
+                            *(int *)(ep + 0x44) = ((int *)DAT_00487abc)[0x33];
+                            *(int *)(ep + 0x48) = 0;
+                            *(unsigned char *)(ep + 0x54) = 0;
+                            *(unsigned char *)(ep + 0x40) = 1; /* sub_type 1 = bigger visual */
+                            *(int *)(ep + 0x34) = ((int *)DAT_00487abc)[0];
+                            *(int *)(ep + 0x3C) = 0;
+                            *(unsigned char *)(ep + 0x5C) = 0;
+                            DAT_00489248++;
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 1200; /* long lifespan */
+                            /* Random bright color from full palette range */
+                            if (DAT_00487aa8 != NULL) {
+                                int ci = rand() % 128;
+                                unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
+                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    (unsigned int)pal + 0x7530;
+                            }
+                            /* Shrapnel spray is now constant (above), not per-ball */
+                        } else if (rc_sub == 1) {
+                            /* Mode 2: spawn wavy firework (type 0x22, +0x40=0). */
+                            int rc_spd = (rand() % 60) + 30;
+                            int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            memset((void *)ep, 0, 0x80);
+                            *(int *)(ep + 0x00) = rc_x; *(int *)(ep + 0x08) = rc_y;
+                            *(int *)(ep + 0x04) = rc_x; *(int *)(ep + 0x0C) = rc_y;
+                            *(int *)(ep + 0x18) = (sc[rc_h] * rc_spd) >> 6;
+                            *(int *)(ep + 0x1C) = (sc[(rc_h + 0x200) & 0x7FF] * rc_spd) >> 6;
+                            *(unsigned char *)(ep + 0x21) = 0x22;
+                            *(unsigned char *)(ep + 0x20) = (unsigned char)(rand() & 1);
+                            *(unsigned char *)(ep + 0x22) = *(unsigned char *)(ebase + 0x22);
+                            *(unsigned char *)(ep + 0x40) = 0;
+                            *(int *)(ep + 0x3C) = rc_h;
+                            *(int *)(ep + 0x30) = rand() % 10 + 1;
+                            *(int *)(ep + 0x38) = ((int *)DAT_00487abc)[0x24];
+                            *(int *)(ep + 0x34) = ((int *)DAT_00487abc)[0];
+                            *(int *)(ep + 0x44) = ((int *)DAT_00487abc)[0x33];
+                            DAT_00489248++;
+                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 600;
+                            if (DAT_00487aa8 != NULL) {
+                                int ci = rand() % 32 + 20;
+                                unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
+                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    (unsigned int)pal + 0x7530;
+                            }
+                        } else {
+                            /* Mode 3 (sub_type 2): "magic fireworks" — from Ghidra 0x447102.
+                             * Type 0x22, state 0xC8, +0x40=2, heading 0x400, lifespan ~115. */
+                            int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            memset((void *)ep, 0, 0x80);
+                            *(int *)(ep + 0x00) = rc_x; *(int *)(ep + 0x08) = rc_y;
+                            *(int *)(ep + 0x04) = rc_x; *(int *)(ep + 0x0C) = rc_y;
+                            /* Match Fire_Secondary for type 0x22 level 2 exactly */
+                            int rc_spd2 = (rand() % 50) + 20;
+                            *(int *)(ep + 0x18) = (sc[rc_h] * rc_spd2) >> 6;
+                            *(int *)(ep + 0x1C) = (sc[(rc_h + 0x200) & 0x7FF] * rc_spd2) >> 6;
+                            *(unsigned char *)(ep + 0x21) = 0x22;
+                            *(unsigned char *)(ep + 0x20) = 0x6E; /* state: same as Fire_Secondary level 2 */
+                            *(unsigned char *)(ep + 0x22) = *(unsigned char *)(ebase + 0x22);
+                            *(unsigned char *)(ep + 0x26) = 0xFF; /* guard: same as Fire_Secondary level 2 */
+                            *(unsigned char *)(ep + 0x40) = 2; /* +0x40=2 for magic fireworks sprite */
+                            *(int *)(ep + 0x3C) = rc_h;
+                            /* Read palette from weapon config: type 0x22, level 2 */
+                            {
+                                int *tt = (int *)DAT_00487abc;
+                                int typeOff = 0x22 * 0x86; /* type 0x22 config offset */
+                                *(int *)(ep + 0x38) = tt[2 + typeOff + 0x22]; /* gravity */
+                                *(int *)(ep + 0x44) = tt[2 + typeOff + 0x31]; /* damage */
+                                *(int *)(ep + 0x4C) = tt[2 + typeOff + 0x3d]; /* palette */
+                                *(int *)(ep + 0x34) = tt[typeOff]; /* callback */
+                                /* Add team color offset (from LAB_00406a71) */
+                                unsigned char own = *(unsigned char *)(ebase + 0x22);
+                                unsigned char team = *(unsigned char *)((int)own * 0x598 + 0x2C + (int)DAT_00487810);
+                                *(int *)(ep + 0x4C) += (int)team * 100;
+                            }
+                            *(int *)(ep + 0x60) = 50; /* short fuse — explode soon after launch */
+                            DAT_00489248++;
+                        }
+                        FUN_0040f9b0(0x11C, *(int *)(ebase + 0x00), *(int *)(ebase + 0x08));
+                    }
+                }
+                break;
+            }
+
+            case 0x2E: /* SMOKING NALLE (Batch 9) — entity type 0x2E (NOT 0x26).
+                * Sits completely still. Zero velocity forced each tick.
+                * No behavior logic — just waits for wall/player collision.
+                * Wall collision: small flash + sound 0x65 + die.
+                * NOTE: entity type 0x2E is the NALLE, 0x26 is MORNING STAR.
+                * The type numbering does NOT match the weapon menu order. */
+                *(int *)(ebase + 0x18) = 0;
+                *(int *)(ebase + 0x1C) = 0;
+                break;
+
+            case 0x26: { /* MORNING STAR (Batch 9) — entity type 0x26 (NOT 0x2E).
+                * Ghidra callback: 0x43DBD0 (wall collision).
+                * NOTE: entity type 0x26 is MORNING STAR, 0x2E is SMOKING NALLE.
+                *
+                * Spinning fire weapon. Heading at +0x3C rotates by +0x08 per tick.
+                * Four fire tips spaced 90 degrees apart (fi * 0x200 in 0x800 range).
+                * Each tip emits a flash particle with outward velocity (flamethrower).
+                *
+                * Direct player damage: scans all players each tick within 0x800000
+                * (~32px) of center. Applies 10000 HP damage + hit feedback to any
+                * player in range regardless of team. Sets attacker ID at +0x4A1.
+                *
+                * Movement depends on weapon level (velocity set at spawn).
+                * Dies on wall hit with flash burst (4-5 particles). */
+                {
+                    /* Rotate heading each tick for spinning */
+                    int ms_heading = *(int *)(ebase + 0x3C);
+                    ms_heading += 0x08; /* slower spin */
+                    ms_heading &= 0x7FF;
+                    *(int *)(ebase + 0x3C) = ms_heading;
+                    /* Flamethrower-style fire from spinning tips.
+                     * 2 flash particles per tick ejecting outward from heading direction. */
+                    {
+                        int *sc = (int *)DAT_00487ab0;
+                        int cx = *(int *)(ebase + 0x00);
+                        int cy = *(int *)(ebase + 0x08);
+                        for (int fi = 0; fi < 4 && DAT_00489250 < 2000; fi++) {
+                            int tip_dir = (ms_heading + fi * 0x200) & 0x7FF; /* 4 tips, 90° apart */
+                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                            *(int *)(fp + 0x00) = cx + sc[tip_dir] * 4;
+                            *(int *)(fp + 0x04) = cy + sc[(tip_dir + 0x200) & 0x7FF] * 4;
+                            /* Strong outward velocity — like flamethrower */
+                            *(int *)(fp + 0x08) = sc[tip_dir] >> 1;
+                            *(int *)(fp + 0x0C) = sc[(tip_dir + 0x200) & 0x7FF] >> 1;
+                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 1) + 1;
+                            *(unsigned char *)(fp + 0x11) = 0;
+                            *(unsigned char *)(fp + 0x12) = 2;
+                            *(unsigned char *)(fp + 0x13) = 0x80; /* long fire stream */
+                            *(unsigned char *)(fp + 0x14) = *(unsigned char *)(ebase + 0x22);
+                            *(unsigned char *)(fp + 0x15) = 0; /* fire */
+                            DAT_00489250++;
+                        }
+                    }
+                    /* Damaging bullet per tick in heading direction */
+                    /* Direct fire damage — check players near each fire tip */
+                    {
+                        int *sc = (int *)DAT_00487ab0;
+                        int cx = *(int *)(ebase + 0x00);
+                        int cy = *(int *)(ebase + 0x08);
+                        unsigned char ms_own = *(unsigned char *)(ebase + 0x22);
+                        int fire_range = 0x800000; /* ~32 pixels along fire stream */
+                        for (int p = 0; p < DAT_00489240; p++) {
+                            int poff = p * 0x598;
+                            if (*(int *)(poff + 0x20 + (int)DAT_00487810) <= 0) continue;
+                            int px = *(int *)(poff + (int)DAT_00487810);
+                            int py = *(int *)(poff + 4 + (int)DAT_00487810);
+                            int dx = px - cx; if (dx < 0) dx = -dx;
+                            int dy = py - cy; if (dy < 0) dy = -dy;
+                            if (dx < fire_range && dy < fire_range) {
+                                /* Player in fire range — apply damage + hit feedback + sound */
+                                *(int *)(poff + 0x20 + (int)DAT_00487810) -= 10000;
+                                *(unsigned char *)(poff + 0xa3 + (int)DAT_00487810) = 1;
+                                *(unsigned char *)(poff + 0x4a1 + (int)DAT_00487810) = ms_own;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
+            case 0x23: { /* GAMMA BOOM (Batch 9) — entity type 0x23.
+                * Ghidra callback: 0x4457B0. Verified at 0x4457B0-0x445A00.
+                *
+                * Heavy slow-moving projectile that decelerates over time.
+                * Speed deceleration: same sqrt-based cap as landmine mode 0 —
+                * if speed^2 > 0x10000, normalize to 256.0 magnitude.
+                * Uses shared position integration (NOT in skip list).
+                *
+                * Fuse counter at +0x3C: increments each tick, plays warning sound
+                * 0x11C every 36 ticks (0x24). Creates a ticking-bomb effect.
+                *
+                * No trail particles (explicitly excluded in trail switch).
+                * Explodes on wall hit with large flash cluster + KB. */
+                /* Speed deceleration */
+                int gb_vx = *(int *)(ebase + 0x18) >> 8;
+                int gb_vy = *(int *)(ebase + 0x1C) >> 8;
+                int gb_spd = gb_vx * gb_vx + gb_vy * gb_vy;
+                if (gb_spd > 0x10000) {
+                    double mag = sqrt((double)gb_spd);
+                    *(int *)(ebase + 0x18) = (int)((double)gb_vx * 256.0 / mag) << 8;
+                    *(int *)(ebase + 0x1C) = (int)((double)gb_vy * 256.0 / mag) << 8;
+                }
+                /* Fuse counter: sound every 36 ticks */
+                {
+                    int fuse = *(int *)(ebase + 0x3C);
+                    fuse++;
+                    *(int *)(ebase + 0x3C) = fuse;
+                    if (fuse >= 0x24) {
+                        *(int *)(ebase + 0x3C) = 0;
+                        FUN_0040f9b0(0x11C, *(int *)(ebase + 0x00), *(int *)(ebase + 0x08));
+                    }
+                }
+                break;
+            }
+
             case 0x66: { /* Guided missile (heavy) — active steering + speed cap.
                 * Per WEAPONS.md: 5x gravity, active steering, speed capped.
                 * 5x gravity is handled by field +0x38 at spawn.
@@ -3005,15 +3468,86 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x22: { /* Entity type 0x22 is shared: turret deployer AND wavy fireworks.
-                * Turret deployer: +0x40 >= 1 from weapon 41/42 spawn. Straight flight.
-                * Wavy fireworks: +0x40 == 0 from weapon 34. Oscillating heading. */
+            case 0x22: { /* WAVY FIREWORKS / TURRET DEPLOYER (Batch 8) — entity type 0x22.
+                * Entity type 0x22 is shared between two weapon systems:
+                *
+                * Mode 0 (+0x40==0): WAVY FIREWORKS — weapon 34.
+                *   Ghidra: 0x4442F0. Verified at 0x4442F0-0x4445A0.
+                *   Oscillating sine-wave flight. Heading at +0x3C oscillates +/-10/tick,
+                *   direction flips every rand()%15+5 ticks (timer at +0x30). State byte
+                *   +0x20 toggles 0/1 to control oscillation direction.
+                *   Movement: velocity set from sincos[heading]*3 each tick, applied by
+                *   shared integration. Overwrites gravity (wavy fireworks don't fall).
+                *   Lifespan at +0x28 counts down; dies at 0. State 0xFA = killed.
+                *
+                * Modes 2-4 (+0x40==1,2,3): from Roman Candle spawned sub-entities.
+                *   Ghidra: 0x444873. Active flight phase with state decrementing each
+                *   tick. Accelerates from heading (fast if +0x28!=0, slow otherwise).
+                *   Fuse timer at +0x60: when expired, spawns colorful mid-air explosion
+                *   (8 type-0x00 sub-munitions with random colors + flash + sound 0x114).
+                *
+                * Turret deployer (+0x40>=1 from weapon 41/42) flies straight until
+                * wall collision deploys the turret — handled in wall collision switch. */
                 unsigned char wf_sub = *(unsigned char *)(ebase + 0x40);
                 if (wf_sub != 0) {
-                    /* Modes 2-4: active flight phase from Ghidra 0x444873.
-                     * State starts at 0x6E (110), decrements each tick.
-                     * While state > 0: accelerate velocity from heading.
-                     * +0x28 != 0: vx += sincos>>5 (fast). +0x28 == 0: vx += sincos*3>>6 (slow). */
+                    /* Modes 2-4 (+0x40==1,2,3): active flight phase from Ghidra 0x444873.
+                     * State at +0x20 decrements each tick (fuel counter). While state > 0,
+                     * velocity accelerates from heading: fast (>>5) if +0x28!=0, slow
+                     * (*3>>6) otherwise. Fuse at +0x60 (for Roman Candle spawned 0x22
+                     * sub-entities): when expired, spawns 8 type-0x00 colorful balls in
+                     * random directions + flash particle + sound 0x114. */
+                    int wf24_fuse = *(int *)(ebase + 0x60);
+                    if (wf24_fuse > 0) {
+                        wf24_fuse--;
+                        *(int *)(ebase + 0x60) = wf24_fuse;
+                        if (wf24_fuse == 0) {
+                            int ex = *(int *)(ebase + 0x00);
+                            int ey = *(int *)(ebase + 0x08);
+                            /* Fire flash from Ghidra 0x445670 */
+                            if (DAT_00489250 < 2000) {
+                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                *(int *)(fp + 0x00) = ex; *(int *)(fp + 0x04) = ey;
+                                *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
+                                *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 13;
+                                *(unsigned char *)(fp + 0x11) = 0;
+                                *(unsigned char *)(fp + 0x12) = 0;
+                                *(unsigned char *)(fp + 0x13) = 0;
+                                *(unsigned char *)(fp + 0x14) = 0xFF;
+                                *(unsigned char *)(fp + 0x15) = 0;
+                                DAT_00489250++;
+                            }
+                            /* Colored ball sub-munitions from Ghidra 0x447102.
+                             * Spawn 3 type 0x00 entities with random colors + directions. */
+                            {
+                                int *bsc = (int *)DAT_00487ab0;
+                                for (int bi = 0; bi < 8 && DAT_00489248 < 0x9C4; bi++) {
+                                    int bh = rand() & 0x7FF;
+                                    int bs = (rand() % 40) + 15;
+                                    int bp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                    memset((void *)bp, 0, 0x80);
+                                    *(int *)(bp + 0x00) = ex; *(int *)(bp + 0x08) = ey;
+                                    *(int *)(bp + 0x04) = ex; *(int *)(bp + 0x0C) = ey;
+                                    *(int *)(bp + 0x18) = (bsc[bh] * bs) >> 6;
+                                    *(int *)(bp + 0x1C) = (bsc[(bh + 0x200) & 0x7FF] * bs) >> 6;
+                                    *(unsigned char *)(bp + 0x21) = 0x00;
+                                    *(unsigned char *)(bp + 0x22) = *(unsigned char *)(ebase + 0x22);
+                                    *(int *)(bp + 0x38) = ((int *)DAT_00487abc)[0x24];
+                                    *(int *)(bp + 0x34) = ((int *)DAT_00487abc)[0];
+                                    *(int *)(bp + 0x44) = ((int *)DAT_00487abc)[0x33];
+                                    DAT_00489248++;
+                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 60;
+                                    if (DAT_00487aa8 != NULL) {
+                                        int ci = rand() % 128;
+                                        unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
+                                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                            (unsigned int)pal + 0x7530;
+                                    }
+                                }
+                            }
+                            FUN_0040f9b0(0x114, ex, ey);
+                            should_remove = 1; break;
+                        }
+                    }
                     unsigned char wf_state = *(unsigned char *)(ebase + 0x20);
                     if (wf_state > 0) {
                         wf_state--;
@@ -3033,11 +3567,13 @@ void FUN_00434310(void)
                         }
                     }
                 } else {
-                    /* WAVY FIREWORKS — from Ghidra 0x4442F0.
-                     * Lifespan +0x28 countdown, when 1 → set collision flag.
-                     * Heading oscillates ±10/tick, direction flips every rand()%15+5 ticks.
-                     * DIRECT position modification: x += sincos[heading]*3 (NOT velocity).
-                     * Original moves ~6px/tick. Gravity in vy is harmless since we zero it. */
+                    /* WAVY FIREWORKS mode 0 — from Ghidra 0x4442F0.
+                     * Lifespan +0x28 countdown; dies at 0. State 0xFA = instant death.
+                     * Heading at +0x3C oscillates +/-10/tick. Direction (state +0x20)
+                     * flips every rand()%15+5 ticks (timer at +0x30).
+                     * Velocity set from sincos[heading]*3 each tick (~6px/tick).
+                     * This overwrites any gravity accumulated by shared gravity code
+                     * (wavy fireworks don't fall — matches original behavior). */
                     /* Lifespan countdown — die when reaches 0 */
                     int wf_life = *(int *)(ebase + 0x28);
                     if (wf_life > 0) {
@@ -3081,7 +3617,12 @@ void FUN_00434310(void)
         }
 
         /* Position integration: pos += vel
-         * Skip for laser (0x2d, instant trace) and KAMIKAZE MEN (0x1b, callback does its own). */
+         * Skipped for types that do their own integration in the behavior switch:
+         *   0x19 LANDMINE   — mode 0 self-integrates with deceleration; modes 1/2
+         *                     are stationary (bobbing uses direct position writes)
+         *   0x1B KAMIKAZE   — self-integrates at top of its behavior case
+         *   0x1C MINISHIP   — self-integrates after boundary revert+clamp logic
+         *   0x2D LASER      — instant beam trace, no per-tick movement */
         if (ent_type != 0x2d && ent_type != 0x1b && ent_type != 0x1C && ent_type != 0x19) {
             *(int *)(ebase + 0x00) += *(int *)(ebase + 0x18);
             *(int *)(ebase + 0x08) += *(int *)(ebase + 0x1C);
@@ -3090,7 +3631,19 @@ void FUN_00434310(void)
         /* Entity-vs-tracked-entity collision (FUN_00437120 equivalent).
          * Runs AFTER position integration but BEFORE wall collision, so the
          * projectile position is at the wall-hit location (near tracked entities
-         * sitting on walls/ground), not reverted to pre-collision. */
+         * sitting on walls/ground), not reverted to pre-collision.
+         *
+         * Skipped types (friendly fire exceptions):
+         *   0x17 NUCLEUS  — passive trail target; player shoots OWN nucleus dots
+         *                   to detonate them. Allowing collision here would let
+         *                   enemy bullets trigger the ring burst unintentionally.
+         *   0x19 LANDMINE — proximity detonation handled in behavior switch;
+         *                   entity-entity collision would bypass the team check
+         *                   and cause mines to detonate on allied tracked entities.
+         *   0x65          — water splash particles, cosmetic only
+         *   0x67          — trail/exhaust particles, cosmetic only
+         *   is_debris     — debris particles, no collision
+         *   state >= 0xFA — already dead/detonating */
         if (ent_type != 0x67 && ent_type != 0x65 && !is_debris &&
             ent_type != 0x17 && ent_type != 0x19 &&
             *(unsigned char *)(ebase + 0x20) < 0xFA) {
@@ -3105,22 +3658,27 @@ void FUN_00434310(void)
                 unsigned char t_type = *(unsigned char *)(tbase + 0x21);
                 int hp_threshold = 0;
                 int hx = 0, hy_lo = 0, hy_hi = 0;
+                /* Tracked entity hitbox table: types that can be hit by projectiles.
+                 * hp_threshold = damage needed to trigger state 0xFA (detonation).
+                 * hx/hy_lo/hy_hi = AABB half-extents for collision detection.
+                 * Types NOT in this table are invisible to entity-entity collision. */
                 switch (t_type) {
-                    case 0x0B: hp_threshold = 0x25800; hx = 0x100000; hy_lo = 0x040000; hy_hi = 0x140000; break;
-                    case 0x17: hp_threshold = 1; hx = 0x100000; hy_lo = 0x100000; hy_hi = 0x100000; break;
-                    case 0x0F: hp_threshold = 0x271000; hx = 0x140000; hy_lo = 0x040000; hy_hi = 0x200000; break;
-                    case 0x18: hp_threshold = 0x7d000; hx = 0x140000; hy_lo = 0x040000; hy_hi = 0x1c0000; break;
-                    case 0x1F: hp_threshold = 0xbb800; hx = 0x140000; hy_lo = 0x0c0000; hy_hi = 0x0c0000; break;
-                    case 0x1C: hp_threshold = 0x138800; hx = 0x1c0000; hy_lo = 0x1c0000; hy_hi = 0x1c0000; break;
-                    case 0x0E: hp_threshold = (*(char *)(tbase + 0x40) == 0) ? 12800000 : 0x70800;
+                    case 0x0B: hp_threshold = 0x25800; hx = 0x100000; hy_lo = 0x040000; hy_hi = 0x140000; break;  /* NUCLEAR BARREL */
+                    case 0x17: hp_threshold = 1; hx = 0x100000; hy_lo = 0x100000; hy_hi = 0x100000; break;        /* NUCLEUS — threshold=1: ANY hit detonates */
+                    case 0x0F: hp_threshold = 0x271000; hx = 0x140000; hy_lo = 0x040000; hy_hi = 0x200000; break; /* BONE CRUSHER */
+                    case 0x18: hp_threshold = 0x7d000; hx = 0x140000; hy_lo = 0x040000; hy_hi = 0x1c0000; break;  /* PILOT DISRUPTOR */
+                    case 0x1F: hp_threshold = 0xbb800; hx = 0x140000; hy_lo = 0x0c0000; hy_hi = 0x0c0000; break;  /* INSECTS */
+                    case 0x1C: hp_threshold = 0x138800; hx = 0x1c0000; hy_lo = 0x1c0000; hy_hi = 0x1c0000; break; /* MINISHIP — large hitbox */
+                    case 0x0E: hp_threshold = (*(char *)(tbase + 0x40) == 0) ? 12800000 : 0x70800;                 /* MOVING SUCKER — mode-dependent HP */
                         hx = 0x100000; hy_lo = 0x100000; hy_hi = 0x100000; break;
-                    case 0x2E: hp_threshold = 0x465000; hx = 0x180000; hy_lo = 0x200000; hy_hi = 0x200000; break;
-                    case 0x27: hp_threshold = 0xfa000; hx = 0x140000; hy_lo = 0x140000; hy_hi = 0x140000; break;
+                    case 0x2E: hp_threshold = 0x465000; hx = 0x180000; hy_lo = 0x200000; hy_hi = 0x200000; break;  /* SMOKING NALLE — high HP, big hitbox */
+                    case 0x27: hp_threshold = 0xfa000; hx = 0x140000; hy_lo = 0x140000; hy_hi = 0x140000; break;   /* KOMET BOMB */
                     default: continue;
                 }
                 if (*(unsigned char *)(tbase + 0x20) == 0xFA) continue;
                 /* Skip friendly fire: don't let own projectiles hit own tracked entities.
-                 * Exception: type 0x17 (nucleus) — player shoots own trail to detonate it. */
+                 * Exception: type 0x17 (nucleus) — player shoots OWN trail dots to
+                 * detonate them, so friendly fire MUST be allowed for nucleus targets. */
                 if (t_type != 0x17 && proj_team < 0x50 && *(unsigned char *)(tbase + 0x22) == proj_team) continue;
                 /* Original has same-team immunity while +0x5C > 0, but the
                  * barrel's +0x5C never decrements in our code (no callback).
@@ -3237,14 +3795,7 @@ void FUN_00434310(void)
                 break;
             case 0x1F: /* INSECTS — no trail */
                 break;
-            case 0x23: /* Mortar — thick smoke trail (5 particles per tick) */
-                trail_type = 0x67;
-                trail_vel_div = 8;
-                trail_pal_lo = 70;
-                trail_pal_hi = 85;
-                trail_pal_die = 0x46;
-                trail_grav = 1;
-                trail_count = 5;
+            case 0x23: /* GAMMA BOOM — no trail */
                 break;
             case 0x11: /* Normal Fireball / Firestorm — short fire trail */
                 if (DAT_00489250 < 2000) {
@@ -3262,9 +3813,11 @@ void FUN_00434310(void)
                     DAT_00489250++;
                 }
                 break;
-            case 0x22: { /* WAVY FIREWORKS trail — from Ghidra.
-                * Mode 1 (+0x40=0): fire-colored trail every 2 ticks.
-                * Mode 2 (+0x40=1): sparkle trail every 3 ticks (density-gated in original). */
+            case 0x22: { /* WAVY FIREWORKS / type 0x22 trail particles.
+                * Mode 0 (+0x40=0): sparkle trail every 5 ticks.
+                * Mode 1 (+0x40=1): sparkle trail every 3 ticks.
+                * Spawns type 0x67 particle with random heading + half parent velocity.
+                * State 0x0A on spawned particles = cosmetic (no wall collision). */
                 unsigned char wf_trail_sub = *(unsigned char *)(ebase + 0x40);
                 unsigned char wf_tick = *(unsigned char *)(ebase + 0x54);
                 /* Mode 1: every 5 ticks, Mode 2: every 3 ticks — same sparkle trail */
@@ -3426,43 +3979,7 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x25: { /* Cluster bomb — split into bomblets after countdown.
-                * Timer at +0x28. After reaching 0: spawn 0x6A bomblets. */
-                int timer = *(int *)(ebase + 0x28);
-                if (timer > 0) {
-                    *(int *)(ebase + 0x28) = timer - 1;
-                } else if (timer == 0) {
-                    /* Split: spawn bomblet sub-munitions */
-                    int parent_x = *(int *)(ebase + 0x00);
-                    int parent_y = *(int *)(ebase + 0x08);
-                    unsigned char own = *(unsigned char *)(ebase + 0x22);
-                    int parent_vx = *(int *)(ebase + 0x18);
-                    int parent_vy = *(int *)(ebase + 0x1C);
-                    for (int s = 0; s < 6 && DAT_00489248 < 0x9c4; s++) {
-                        int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                        memset((void *)tp, 0, 0x80);
-                        *(int *)(tp + 0x00) = parent_x;
-                        *(int *)(tp + 0x04) = parent_x;
-                        *(int *)(tp + 0x08) = parent_y;
-                        *(int *)(tp + 0x0C) = parent_y;
-                        /* Spread velocity around parent direction */
-                        int jx = ((rand() & 0x1FFFF) - 0x10000);
-                        int jy = ((rand() & 0x1FFFF) - 0x10000);
-                        *(int *)(tp + 0x18) = parent_vx / 2 + jx;
-                        *(int *)(tp + 0x1C) = parent_vy / 2 + jy;
-                        *(unsigned char *)(tp + 0x21) = 0x6A; /* bomblet type */
-                        *(unsigned char *)(tp + 0x22) = own;
-                        *(unsigned char *)(tp + 0x26) = 0xFE;
-                        *(unsigned char *)(tp + 0x28) = 0xFF; /* long lifespan */
-                        *(int *)(tp + 0x38) = 6;  /* gravity */
-                        *(int *)(tp + 0x44) = *(int *)(ebase + 0x44) / 3; /* split damage */
-                        DAT_00489248++;
-                    }
-                    FUN_0040f9b0(0x65 + (rand() % 7), parent_x, parent_y);
-                    should_remove = 1;
-                }
-                break;
-            }
+            /* NOTE: case 0x25 ROMAN CANDLE fuse/timer — handled in behavior switch now */
 
             case 0x28: {
                 /* PIPEBOMB — bounces and settles. Detonates on lifespan expiry
@@ -3730,35 +4247,37 @@ void FUN_00434310(void)
                     FUN_004355d0(i);
                     if (DAT_00481e8f != 0) {
                         /* Play per-type sound on building hit.
-                         * Silent types (shrapnel spawners, turret, shotgun,
-                         * grenades) skip the sound entirely. */
+                         * Silent types skip the sound entirely.
+                         * Batch 8/9 types: 0x17 NUCLEUS, 0x19 LANDMINE, 0x1C MINISHIP,
+                         * 0x23 GAMMA BOOM, 0x2E NALLE all play explosion sounds.
+                         * 0x22 (turret/fireworks), 0x24 ETNA, 0x25 ROMAN CANDLE are silent. */
                         int bx = *(int *)(ebase + 0x04);
                         int by = *(int *)(ebase + 0x0C);
                         switch (ent_type) {
-                        case 0x00:                        /* basic bullet */
-                        case 0x69:                        /* mine */
-                        case 0x08: case 0x09: case 0x0E: /* shrapnel spawners */
-                        case 0x18:                        /* silent KB */
-                        case 0x22:                        /* turret spawner */
-                        case 0x24: case 0x25:             /* shotgun/spawner */
-                        case 0x2B: case 0x6A:             /* homing mine/shot (silent) */
-                        case 0x28: case 0x29: case 0x2A:  /* grenades */
+                        case 0x00:                        /* basic bullet — silent */
+                        case 0x69:                        /* mine — silent */
+                        case 0x08: case 0x09: case 0x0E: /* shrapnel spawners — silent */
+                        case 0x18:                        /* PILOT DISRUPTOR — silent */
+                        case 0x22:                        /* turret/fireworks — silent */
+                        case 0x24: case 0x25:             /* ETNA/ROMAN CANDLE — silent (deploy) */
+                        case 0x2B: case 0x6A:             /* homing mine/shot — silent */
+                        case 0x28: case 0x29: case 0x2A:  /* grenades/turrets — silent */
                         case 0x0C:                        /* DIGGER — silent */
                             break; /* silent */
                         case 0x01:
                             FUN_0040f9b0(0x32, bx, by); break;
                         case 0x13:
                             FUN_0040f9b0(0x10B, bx, by); break;
-                        case 0x14: break; /* PLASTIC — silent (was too loud) */
+                        case 0x14: break; /* PLASTIC — silent */
                         case 0x16:
                             FUN_0040f9b0(0x10D, bx, by); break;
                         case 0x1F: break; /* INSECTS — silent on building hit */
-                        case 0x23:
+                        case 0x23:                        /* GAMMA BOOM — warning whistle */
                             FUN_0040f9b0(0x11C, bx, by); break;
-                        case 0x05: case 0x0B: case 0x0F:
-                        case 0x17: case 0x19: case 0x1B:
-                        case 0x1C: case 0x1D: case 0x1E:
-                        case 0x27: case 0x2E:
+                        case 0x05: case 0x0B: case 0x0F: /* various heavy weapons */
+                        case 0x17: case 0x19: case 0x1B: /* NUCLEUS, LANDMINE, KAMIKAZE */
+                        case 0x1C: case 0x1D: case 0x1E: /* MINISHIP, MEGABOMB, PHOTON */
+                        case 0x27: case 0x2E:             /* KOMET, SMOKING NALLE */
                             FUN_0040f9b0(0x65 + (rand() % 7), bx, by); break;
                         default:
                             FUN_0040f9b0(0x11, bx, by); break;
@@ -4189,7 +4708,9 @@ void FUN_00434310(void)
                                          0, 0, 0, 0, 0, '\0', owner);
                             break;
 
-                        /* Callback 0x432C80: KB + random sound, no tile damage */
+                        /* NUCLEUS wall collision — Ghidra callback 0x432C80.
+                         * KB(200, range=100) + random explosion sound. No tile damage.
+                         * Nucleus dots that hit walls just explode harmlessly. */
                         case 0x17:
                             FUN_00437cf0(prev_x, prev_y, 200, owner, 100);
                             FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
@@ -4205,9 +4726,14 @@ void FUN_00434310(void)
                             did_bounce = 1; /* prevent removal */
                             break;
 
-                        /* Callback 0x443420: BOUNCE with deceleration.
-                         * Bounce counter at +0x3C. Speed decays each bounce.
-                         * On last bounce: detonate with flash + sound. */
+                        /* LANDMINE wall collision — Ghidra callback 0x443420.
+                         * Bounce with deceleration. Bounce counter at +0x3C counts
+                         * down each hit. Speed decays ~25% per bounce (vx/vy *= 3/4).
+                         * Axis reflection: negate velocity on the axis that crossed
+                         * a tile boundary (prev_tx!=tx or prev_ty!=ty).
+                         * When counter reaches 0: final detonation with flash + sound.
+                         * This lets mines mode 0 (flying beams) bounce off walls
+                         * before settling and detonating. */
                         case 0x19: {
                             int bc = *(int *)(ebase + 0x3C);
                             if (bc > 0) {
@@ -4276,10 +4802,11 @@ void FUN_00434310(void)
                             break;
                         }
 
-                        /* Callback 0x440E20: KB(150/255) + sound, no tile damage */
+                        /* MINISHIP wall collision — Ghidra callback 0x440E20.
+                         * Bounces off walls like player ships. No tile damage, no sound.
+                         * Revert position to backup (+0x04/+0x0C), reflect velocity on
+                         * the axis that crossed a tile boundary. Stays alive (did_bounce). */
                         case 0x1C: {
-                            /* MINISHIP: bounce off walls like player ships.
-                             * Revert position, reflect velocity, stay alive. */
                             *(int *)(ebase + 0x00) = *(int *)(ebase + 0x04);
                             *(int *)(ebase + 0x08) = *(int *)(ebase + 0x0C);
                             int ms_vx = *(int *)(ebase + 0x18);
@@ -4429,14 +4956,15 @@ void FUN_00434310(void)
                             did_bounce = 1; /* stay alive */
                             break;
 
-                        /* Callback 0x4442F0: Turret deployer — on solid wall hit,
-                         * spawn a type 0x67 turret entity at impact point.
-                         * Revert position to prev, zero velocity. */
+                        /* Type 0x22 wall collision — dispatches on +0x40 sub_type.
+                         * Mode 0: WAVY FIREWORKS wall hit.
+                         * Modes 1-3: turret deployer / Roman Candle sub-entity wall hit. */
                         case 0x22: {
                             unsigned char wc22_sub = *(unsigned char *)(ebase + 0x40);
                             if (wc22_sub == 0) {
-                                /* WAVY FIREWORKS mode 1 wall hit — from Ghidra 0x4443ED.
-                                 * Flash particle + small KB + sound. Firework bounces. */
+                                /* WAVY FIREWORKS (mode 0) wall hit — Ghidra 0x4443ED.
+                                 * Flash particle (fire) + small KB(100, range=100) + sound.
+                                 * Firework dies on wall hit (no bounce). */
                                 FUN_00437cf0(prev_x, prev_y, 100, owner, 100);
                                 if (DAT_00489250 < 2000) {
                                     int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
@@ -4456,10 +4984,11 @@ void FUN_00434310(void)
                                 /* Firework dies on wall hit */
                                 break;
                             }
-                            /* Modes 2-4 wall collision — from Ghidra 0x44490B.
-                             * During active phase (state > 0): spawn sub-entity + bounce.
-                             * After active phase (state == 0): silent death. */
-                            /* Modes 2-4: flash cluster + per-mode sound from Ghidra 0x4455ED */
+                            /* Modes 2-4 (+0x40==1,2,3) wall collision — Ghidra 0x44490B.
+                             * Spawns cluster of 5 flash particles (fire, spread randomly)
+                             * for a bigger visual explosion effect.
+                             * Per-mode sound: +0x40=1,2 plays 0x114 (sparkle),
+                             * +0x40=3 plays 0x112 (deeper boom). Entity dies. */
                             {
                                 unsigned char wc_sub = *(unsigned char *)(ebase + 0x40);
                                 /* Spawn cluster of 5 flash particles with larger sprite for bigger visual */
@@ -4486,14 +5015,49 @@ void FUN_00434310(void)
                             break;
                         }
 
-                        /* Callback 0x4457B0: heavy impact sound only */
+                        /* GAMMA BOOM wall collision — Ghidra callback 0x4457B0.
+                         * Large flash cluster: 8 fire particles with big sprite (8-11).
+                         * KB(200, range=255) + random explosion sound. Entity dies.
+                         * No tile damage (pure energy weapon). */
                         case 0x23:
-                            FUN_0040f9b0(0x11C, prev_x, prev_y);
+                            FUN_00437cf0(prev_x, prev_y, 200, owner, 255);
+                            for (int gi = 0; gi < 8 && DAT_00489250 < 2000; gi++) {
+                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                *(int *)(fp + 0x00) = prev_x;
+                                *(int *)(fp + 0x04) = prev_y;
+                                *(int *)(fp + 0x08) = 0;
+                                *(int *)(fp + 0x0C) = 0;
+                                *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 8; /* bigger explosion sprite */
+                                *(unsigned char *)(fp + 0x11) = 0;
+                                *(unsigned char *)(fp + 0x12) = 0;
+                                *(unsigned char *)(fp + 0x13) = 0;
+                                *(unsigned char *)(fp + 0x14) = 0xFF;
+                                *(unsigned char *)(fp + 0x15) = 0; /* fire */
+                                DAT_00489250++;
+                            }
+                            FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
                             break;
 
-                        /* Callback 0x447A70: Flechette burst — spawn cone of 0x67 pellets.
-                         * Wall hit is SILENT. Pellet burst IS the weapon. */
+                        /* ETNA wall collision — Ghidra callback 0x447A70.
+                         * Deploy on solid ground (once only). Reverts position to backup,
+                         * zeroes velocity, sets state=0xC8 (deployed), lifetime=900 (~15s),
+                         * startup delay +0x3C=-80 (counts up to 0 before spraying starts).
+                         * Stays alive via did_bounce. Spraying handled in behavior switch. */
                         case 0x24: {
+                            if (*(unsigned char *)(ebase + 0x20) != 0xC8) {
+                                *(int *)(ebase + 0x00) = *(int *)(ebase + 0x04);
+                                *(int *)(ebase + 0x08) = *(int *)(ebase + 0x0C);
+                                *(int *)(ebase + 0x18) = 0;
+                                *(int *)(ebase + 0x1C) = 0;
+                                *(unsigned char *)(ebase + 0x20) = 0xC8;
+                                *(int *)(ebase + 0x60) = 900;
+                                *(int *)(ebase + 0x3C) = -80; /* startup delay */
+                            }
+                            did_bounce = 1;
+                            break;
+                        }
+                        /* DEAD CODE — old burst, replaced by deploy+spray */
+                        if (0) {
                             int parent_x = *(int *)(ebase + 0x04);
                             int parent_y = *(int *)(ebase + 0x0C);
                             unsigned char own = *(unsigned char *)(ebase + 0x22);
@@ -4506,7 +5070,6 @@ void FUN_00434310(void)
                                 *(int *)(tp + 0x04) = parent_x;
                                 *(int *)(tp + 0x08) = parent_y;
                                 *(int *)(tp + 0x0C) = parent_y;
-                                /* Cone spread: parent velocity + angular jitter */
                                 int jx = ((rand() & 0x1FFFF) - 0x10000);
                                 int jy = ((rand() & 0x1FFFF) - 0x10000);
                                 *(int *)(tp + 0x18) = pvx / 3 + jx;
@@ -4530,37 +5093,28 @@ void FUN_00434310(void)
                             break;
                         }
 
-                        /* Callback 0x446130: cluster bomb wall hit — spawns 0x6A bomblets.
-                         * (Main split handled in fuse/timer section above, but also
-                         * detonates on wall impact with sub-munitions.) */
+                        /* ROMAN CANDLE wall collision — Ghidra callback 0x446130.
+                         * Deploy on solid ground (once only). Same deploy pattern as ETNA:
+                         * revert position, zero velocity, state=0xC8, lifetime=1200 (~20s),
+                         * startup delay +0x3C=-80. Stays alive via did_bounce.
+                         * Spray logic handled in behavior switch (mode-dependent). */
                         case 0x25: {
-                            int parent_x = *(int *)(ebase + 0x04);
-                            int parent_y = *(int *)(ebase + 0x0C);
-                            unsigned char own = *(unsigned char *)(ebase + 0x22);
-                            for (int s = 0; s < 6 && DAT_00489248 < 0x9c4; s++) {
-                                int tp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                memset((void *)tp, 0, 0x80);
-                                *(int *)(tp + 0x00) = parent_x;
-                                *(int *)(tp + 0x04) = parent_x;
-                                *(int *)(tp + 0x08) = parent_y;
-                                *(int *)(tp + 0x0C) = parent_y;
-                                int jx = ((rand() & 0x1FFFF) - 0x10000);
-                                int jy = ((rand() & 0x1FFFF) - 0x10000);
-                                *(int *)(tp + 0x18) = jx;
-                                *(int *)(tp + 0x1C) = jy - 0x8000; /* upward bias */
-                                *(unsigned char *)(tp + 0x21) = 0x6A;
-                                *(unsigned char *)(tp + 0x22) = own;
-                                *(unsigned char *)(tp + 0x26) = 0xFE;
-                                *(unsigned char *)(tp + 0x28) = 0xFF;
-                                *(int *)(tp + 0x38) = 6;
-                                *(int *)(tp + 0x44) = *(int *)(ebase + 0x44) / 3;
-                                DAT_00489248++;
+                            if (*(unsigned char *)(ebase + 0x20) != 0xC8) {
+                                *(int *)(ebase + 0x00) = *(int *)(ebase + 0x04);
+                                *(int *)(ebase + 0x08) = *(int *)(ebase + 0x0C);
+                                *(int *)(ebase + 0x18) = 0;
+                                *(int *)(ebase + 0x1C) = 0;
+                                *(unsigned char *)(ebase + 0x20) = 0xC8;
+                                *(int *)(ebase + 0x60) = 1200; /* ~20 seconds */
+                                *(int *)(ebase + 0x3C) = -80;
                             }
-                            FUN_0040f9b0(0x65 + (rand() % 7), parent_x, parent_y);
+                            did_bounce = 1; /* always stay alive */
                             break;
                         }
 
-                        /* Callback 0x43DBD0: flash burst only, no sound */
+                        /* MORNING STAR wall collision — Ghidra callback 0x43DBD0.
+                         * Flash burst (4-5 particles), no sound, no tile damage.
+                         * Entity dies. The spinning fire stops on impact. */
                         case 0x26:
                             flash_count = (rand() & 1) + 4;
                             break;
@@ -4654,7 +5208,9 @@ void FUN_00434310(void)
                                          0, 0, 0, 0, 0, '\0', owner);
                             break;
 
-                        /* Callback 0x432220: 1 flash + sound 0x65 */
+                        /* SMOKING NALLE wall collision — entity type 0x2E (NOT 0x26).
+                         * Small flash (1 particle) + sound 0x65 + die.
+                         * Minimal explosion — the nalle just pops. */
                         case 0x2E:
                             flash_count = 1;
                             FUN_0040f9b0(0x65, prev_x, prev_y);
@@ -4712,9 +5268,17 @@ void FUN_00434310(void)
              * The original behavior callback calls FUN_004348a0 which iterates
              * ALL players (no spatial grid pre-check) and uses AABB dimensions
              * from the type config table + player ship size.
-             * Type 0x19 (landmine): allow collision but skip self/allies via guard.
-             * Type 0x1C (miniship): skip — damages via bullets (0x67), not contact.
-             * Type 0x17 (nucleus): skip — passive target, no player damage. */
+             *
+             * Skipped types:
+             *   0x17 NUCLEUS  — passive trail target, does not damage players.
+             *                   Players shoot the dots to trigger the ring burst.
+             *   0x1C MINISHIP — autonomous ship, damages players via its spawned
+             *                   type 0x67 bullets, not by direct body contact.
+             *
+             * Special handling (NOT skipped, but guarded):
+             *   0x19 LANDMINE — enters this block but has an early team check
+             *                   below that skips self/allies. Only detonates on
+             *                   enemy player contact (Ghidra 0x443862). */
             if (!should_remove && DAT_00489240 > 0 &&
                 ent_type != 0x1C && ent_type != 0x17) {
                 unsigned char raw_owner = *(unsigned char *)(ebase + 0x22);
@@ -4755,7 +5319,10 @@ void FUN_00434310(void)
                     }
                     if (byte_26 != 0 && guard_team == player_id) continue;
 
-                    /* LANDMINE: skip collision entirely for self/allies */
+                    /* LANDMINE player collision — early team check (Ghidra 0x443862).
+                     * Skip collision entirely for self and allied players. The mine
+                     * should only detonate on ENEMY contact. Without this guard, a
+                     * player's own landmine would blow them up on deployment. */
                     if (ent_type == 0x19 && raw_owner < 0x50) {
                         unsigned char mine_team = *(unsigned char *)((int)raw_owner * 0x598 + 0x2C + (int)DAT_00487810);
                         unsigned char p_team = *(unsigned char *)(poff + 0x2C + (int)DAT_00487810);
@@ -4850,7 +5417,10 @@ void FUN_00434310(void)
                         if (ent_type == 0x0E) {
                             /* no removal — entity stays alive */
                         }
-                        /* LANDMINE: skip hitting self or allies. Mine only damages enemies. */
+                        /* LANDMINE hit result — Ghidra 0x443862.
+                         * Second team check at hit resolution (redundant with pre-check
+                         * above, but kept for safety). On enemy contact: flash particle
+                         * (warm fire, sprite 17-19) + explosion sound + die. */
                         else if (ent_type == 0x19 && raw_owner < 0x50) {
                             unsigned char mine_team = *(unsigned char *)((int)raw_owner * 0x598 + 0x2C + (int)DAT_00487810);
                             unsigned char player_team = *(unsigned char *)(poff + 0x2C + (int)DAT_00487810);
