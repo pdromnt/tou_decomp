@@ -4545,7 +4545,7 @@ LAB_00406a71:
                     *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
                 }
                 else if (local_14 == 0x17 && *(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x19;
+                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x3C; /* 60 ticks, use +0x60 to avoid +0x28 collision conflict */
             }
         }
 
