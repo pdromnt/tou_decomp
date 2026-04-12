@@ -826,6 +826,9 @@ void FUN_0041aea0(void)
         /* Set heading to 0 (pointing right) */
         *(int *)(DAT_00487810 + poff + 0x18) = 0;
 
+        /* Apply start weapon from loadout grid (right-click selection) */
+        *(int *)(DAT_00487810 + poff + 0x34) = (int)g_StartWeapon[i];
+
         /* Default key bindings (overwritten by FUN_0041a8c0 from config blob).
          * These serve as initial fallback values during level loading. */
         if (i == 0) {
@@ -1014,6 +1017,7 @@ int           DAT_00483830 = 100;      /* starting health */
 void         *DAT_0048780c = NULL;     /* ship stats table */
 unsigned char DAT_0048236e[80] = {0};  /* ship type per player */
 char          DAT_004836ce[80] = {0};  /* player config ship IDs */
+unsigned char g_StartWeapon[64] = {0}; /* per-player start weapon (set in weapon grid) */
 char          DAT_0048378e[9] = {0};   /* ship-taken flags */
 void         *DAT_00489eac[4] = {0};   /* per-player visibility buffers */
 int           DAT_00487788[4] = {0};   /* per-player stat counters */

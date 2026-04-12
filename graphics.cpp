@@ -943,7 +943,7 @@ void Render_Game_View_To(unsigned short *frame)
                         else color_state = 0; /* red/banned */
                         /* Check if currently selected weapon for this player */
                         unsigned char player_idx = item->flag1;
-                        if (wpn_idx == (int)(unsigned char)g_ConfigBlob[0x1776 + player_idx])
+                        if (wpn_idx == (int)g_StartWeapon[player_idx])
                             color_state = 1; /* blue = selected */
                         /* Check if weapon exists */
                         if (g_ConfigBlob[0x1804 + wpn_idx] == 0)

@@ -518,6 +518,9 @@ extern char                  DAT_0048371f;       /* sound effects enabled flag *
 /* ===== Wall Particle System ===== */
 void FUN_0044f630(int x, int y, int velX, int velY, float scale, int maxDist, int spread, char direction); /* wall segment ripple */
 
+/* ===== Per-player start weapon (set in weapon loadout grid via right-click) ===== */
+extern unsigned char g_StartWeapon[64];
+
 /* ===== Debug Logging (enabled with --logging launch arg) ===== */
 extern int g_LogEnabled;
 void Log(const char *format, ...);

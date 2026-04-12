@@ -3748,8 +3748,19 @@ void FUN_00427df0(int param_1, char param_2)
     unsigned char bVar11 = item->render_mode;
 
     switch (bVar11) {
-    case 0x26: { /* Weapon loadout toggle — simple 0↔1 */
-        *data = (*data == 0) ? 1 : 0;
+    case 0x26: { /* Weapon loadout grid — left: toggle, right: set start weapon */
+        if (param_2 == 1) {
+            /* Left click: toggle enable/disable */
+            *data = (*data == 0) ? 1 : 0;
+        } else {
+            /* Right click: set as start weapon (only if enabled + not banned) */
+            MenuItem *click_item = &((MenuItem *)g_GameViewData)[param_1];
+            int wpn_idx = click_item->color_style;
+            unsigned char player_idx = click_item->flag1;
+            if (*data != 0 && g_ConfigBlob[0x1804 + wpn_idx] != 0) {
+                g_StartWeapon[(int)player_idx] = (unsigned char)wpn_idx;
+            }
+        }
         break;
     }
     case 1: { /* Toggle (0↔1) */
