@@ -898,6 +898,20 @@ void Render_Game_View_To(unsigned short *frame)
             case 0x12: case 0x17: case 0x1E: case 0x27:
             case 0x30: case 0x33: {
                 int val = cfgPtr ? (int)*cfgPtr : 0;
+                /* Inline slider preview for enum items during drag — clamp to valid range */
+                if (g_InputMode == 1 && (unsigned char)i == DAT_004877e6) {
+                    int drag_delta = DAT_004877e8 >> 10;
+                    int v = val + drag_delta;
+                    if (v < 0) v = 0;
+                    /* Clamp to max valid enum index based on render_mode */
+                    int max_val = 4; /* default */
+                    if (item->render_mode == 0x33) max_val = 4;
+                    else if (item->render_mode == 0x01) max_val = 1;
+                    else if (item->render_mode == 0x12) max_val = 7;
+                    else if (item->render_mode == 0x17) max_val = 3;
+                    if (v > max_val) v = max_val;
+                    val = v;
+                }
                 int idx = item->string_idx + val;
                 if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
@@ -1025,19 +1039,14 @@ void Render_Game_View_To(unsigned short *frame)
             case 0x05: case 0x09: case 0x0E: case 0x13: case 0x14:
             case 0x15: case 0x16: case 0x18: case 0x34: {
                 int val = cfgPtr ? (int)*cfgPtr : 0;
-                /* Inline slider preview: if dragging this item, apply delta to preview.
+                /* Inline slider preview: if dragging ANY numeric item, apply delta.
                  * From Ghidra 0x428650: same pattern as render_mode 0x1B. */
-                if (item->render_mode == 0x18 && g_InputMode == 1 &&
-                    (unsigned char)i == DAT_004877e6) {
+                if (g_InputMode == 1 && (unsigned char)i == DAT_004877e6) {
                     int drag_delta = DAT_004877e8 >> 10;
-                    int v = (int)(val - 1) + drag_delta;
-                    if (v > 0) v = v & 0x3F;
-                    else if (v < 0) v = v + (1 - ((v + 1) >> 6)) * 64;
-                    else v = 0;
-                    val = v + 1;
+                    val = (unsigned char)((char)val + (char)drag_delta);
                 }
                 switch (item->render_mode) {
-                case 0x09: val = (val > 0) ? val - 1 : 0; break;
+                case 0x09: break; /* display config value directly (was off-by-one with val-1) */
                 case 0x13: val *= 5; break;
                 case 0x14: val *= 25; break;
                 case 0x15: val *= 5; break;

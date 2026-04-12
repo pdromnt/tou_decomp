@@ -3815,7 +3815,7 @@ void FUN_00427df0(int param_1, char param_2)
 
     case 5: case 9: case 0x0E:
     case 0x13: case 0x14: case 0x15: case 0x16:
-    case 0x18: case 0x1B: case 0x34:
+    case 0x18: case 0x1B: case 0x33: case 0x34:
     { /* Enter slider/drag input mode */
         if ((DAT_004877bd & 1) != 0) {
             DAT_004877bd ^= 1;
@@ -4047,26 +4047,7 @@ void FUN_00427df0(int param_1, char param_2)
         break;
     }
 
-    case 0x33: { /* Cycle 0-4 with player config update */
-        unsigned char val = *data + cVar9;
-        *data = val;
-        if (val == 0xFF) *data = 4;
-        else if (val > 4) *data = 0;
-        /* Update player enable flags based on player count */
-        unsigned char playerCount = g_ConfigBlob[0x325]; /* byte at DAT_0048227c+1 */
-        unsigned char *playerEnable = &g_ConfigBlob[0x376]; /* DAT_004822ce */
-        int i = 0;
-        if (playerCount != 0) {
-            do {
-                playerEnable[i] = 1;
-                i++;
-            } while (i < (int)(unsigned int)playerCount);
-        }
-        if ((unsigned int)playerCount < 0x40) {
-            memset(&playerEnable[playerCount], 0, 0x40 - playerCount);
-        }
-        return;
-    }
+    /* case 0x33 now enters slider mode (handled in slider handler below) */
 
     default:
         break;
@@ -4181,6 +4162,23 @@ void FUN_00427a70(int param_1)
     case 0x1B: { /* Color swatch: direct add with >> 8 delta */
         int d1b = DAT_004877e8 >> 8;
         *data = (unsigned char)((char)*data + (char)d1b);
+        break;
+    }
+
+    case 0x33: { /* Human amount: cycle 0-4 via drag + update player config */
+        int v = (int)*data + delta;
+        if (v < 0) v = 4;
+        else if (v > 4) v = 0;
+        *data = (unsigned char)v;
+        /* Update player enable flags */
+        unsigned char playerCount = g_ConfigBlob[0x325];
+        unsigned char *playerEnable = &g_ConfigBlob[0x376];
+        int j = 0;
+        if (playerCount != 0) {
+            do { playerEnable[j] = 1; j++; } while (j < (int)(unsigned int)playerCount);
+        }
+        if ((unsigned int)playerCount < 0x40)
+            memset(&playerEnable[playerCount], 0, 0x40 - playerCount);
         break;
     }
 
