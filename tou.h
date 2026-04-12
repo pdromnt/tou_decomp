@@ -9,7 +9,7 @@
 #include <dinput.h>
 #include <mmsystem.h>
 
-#include "fmod_mock.h"
+#include "fmod.h"
 
 /* ===== Error Strings (matching binary string table) ===== */
 /* 0047F0EC */ #define STR_ERR_DDRAW_INSTALL  "DirectDraw Init FAILED.\nInstall DirectX 7.0 to play TOU.\n\nRead readme.txt for more\ninformation."
@@ -518,7 +518,8 @@ extern char                  DAT_0048371f;       /* sound effects enabled flag *
 /* ===== Wall Particle System ===== */
 void FUN_0044f630(int x, int y, int velX, int velY, float scale, int maxDist, int spread, char direction); /* wall segment ripple */
 
-/* ===== Debug Logging ===== */
+/* ===== Debug Logging (enabled with --logging launch arg) ===== */
+extern int g_LogEnabled;
 void Log(const char *format, ...);
 #define LOG Log
 

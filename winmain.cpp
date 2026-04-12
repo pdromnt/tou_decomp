@@ -134,6 +134,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     WNDCLASSA wc;
     MSG msg;
 
+    /* Check for --logging flag */
+    if (lpCmdLine && strstr(lpCmdLine, "--logging")) {
+        g_LogEnabled = 1;
+    }
+
     /* 1. Early init - before anything else */
     Early_Init_Vars();
 
