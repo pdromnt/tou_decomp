@@ -920,18 +920,47 @@ void Render_Game_View_To(unsigned short *frame)
                     /* 3-state circle: red=banned, blue=on, gray=off */
                     int per_player_val = cfgPtr ? (int)*cfgPtr : 0;
                     int globally_banned = (g_ConfigBlob[0x1804 + wpn_idx] == 0) ? 1 : 0;
+                    /* Circle background sprites — from Ghidra FUN_0040aaf0.
+                     * 4 states: 0xC8=red(banned), 0xD4=blue(selected), 0xEE=normal, 0xEF=gray(nonexistent).
+                     * Priority: gray > blue > red/normal. */
                     {
-                        unsigned short bg_color;
-                        if (globally_banned) bg_color = 0xA000; /* red */
-                        else if (per_player_val != 0) bg_color = 0x001A; /* blue */
-                        else bg_color = 0x31A6; /* gray */
-                        int cx = item->x + 14;
-                        int cy = item->y + 6;
-                        int r = 13;
-                        for (int by = -r; by <= r; by++)
-                            for (int bx = -r; bx <= r; bx++)
-                                if (bx*bx + by*by <= r*r && cx+bx >= 0 && cy+by >= 0 && cx+bx < 640 && cy+by < 480)
-                                    frame[(cy+by)*640 + cx+bx] = bg_color;
+                        int color_state;
+                        if (per_player_val != 0) color_state = 2; /* normal/enabled */
+                        else color_state = 0; /* red/banned */
+                        /* Check if currently selected weapon for this player */
+                        unsigned char player_idx = item->flag1;
+                        if (wpn_idx == (int)(unsigned char)g_ConfigBlob[0x1776 + player_idx])
+                            color_state = 1; /* blue = selected */
+                        /* Check if weapon exists */
+                        if (g_ConfigBlob[0x1804 + wpn_idx] == 0)
+                            color_state = 3; /* gray = nonexistent/globally banned */
+                        int circle_spr;
+                        switch (color_state) {
+                            case 0: circle_spr = 0xC8; break; /* red */
+                            case 1: circle_spr = 0xD4; break; /* blue */
+                            case 2: circle_spr = 0xEE; break; /* normal */
+                            default: circle_spr = 0xEF; break; /* gray */
+                        }
+                        /* Draw circle sprite centered at item + 12, 12 */
+                        int c_pb = ((int *)DAT_00489234)[circle_spr];
+                        int c_w = (int)((unsigned char *)DAT_00489e8c)[circle_spr];
+                        int c_h = (int)((unsigned char *)DAT_00489e88)[circle_spr];
+                        if (c_w > 0 && c_h > 0) {
+                            int c_x = item->x + 12 - c_w / 2;
+                            int c_y = item->y + 12 - c_h / 2;
+                            if (c_x >= 0 && c_y >= 0 && c_x + c_w <= 640 && c_y + c_h <= 480) {
+                                unsigned short *cdst = frame + c_y * 640 + c_x;
+                                unsigned short *csrc = (unsigned short *)DAT_00487ab4;
+                                int cp = c_pb;
+                                for (int row = 0; row < c_h; row++) {
+                                    for (int col = 0; col < c_w; col++) {
+                                        unsigned short pixel = csrc[cp++];
+                                        if (pixel != 0) cdst[col] = pixel;
+                                    }
+                                    cdst += 640;
+                                }
+                            }
+                        }
                     }
                     /* Weapon sprite from config table offset +0x144 */
                     int spr_idx = (int)*(unsigned short *)((char *)DAT_00487abc + wpn_idx * 0x218 + 0x144);
@@ -940,9 +969,9 @@ void Render_Game_View_To(unsigned short *frame)
                         int spr_w = (int)((unsigned char *)DAT_00489e8c)[spr_idx];
                         int spr_h = (int)((unsigned char *)DAT_00489e88)[spr_idx];
                         if (spr_w > 0 && spr_h > 0) {
-                            /* Center sprite within circle (cx=item->x+14, cy=item->y+6) */
-                            int dx = item->x + 14 - spr_w / 2;
-                            int dy = item->y + 6 - spr_h / 2;
+                            /* Center sprite within circle — from Ghidra: center at item+12,+12 */
+                            int dx = item->x + 12 - spr_w / 2;
+                            int dy = item->y + 12 - spr_h / 2;
                             if (dx >= 0 && dy >= 0 && dx + spr_w <= 640 && dy + spr_h <= 480) {
                                 unsigned short *dst = frame + dy * 640 + dx;
                                 unsigned short *src_pixels = (unsigned short *)DAT_00487ab4;
