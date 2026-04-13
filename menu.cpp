@@ -826,8 +826,12 @@ void FUN_0041aea0(void)
         /* Set heading to 0 (pointing right) */
         *(int *)(DAT_00487810 + poff + 0x18) = 0;
 
-        /* Apply start weapon from loadout grid (right-click selection) */
-        *(int *)(DAT_00487810 + poff + 0x34) = (int)g_StartWeapon[i];
+        /* Apply start weapon from loadout grid (right-click selection).
+         * Only on the first round of a match — subsequent levels keep the
+         * weapon the player selected during gameplay. */
+        if ((unsigned char)DAT_0048693c == 0) {
+            *(int *)(DAT_00487810 + poff + 0x34) = (int)g_StartWeapon[i];
+        }
 
         /* Default key bindings (overwritten by FUN_0041a8c0 from config blob).
          * These serve as initial fallback values during level loading. */

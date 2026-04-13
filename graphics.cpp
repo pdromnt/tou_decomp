@@ -685,9 +685,23 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                         FUN_004644af(text_buf, (const unsigned char *)"Team %d wins the round",
                                      (int)(unsigned char)DAT_00487640[0]);
                     }
-                    Draw_Text_To_Buffer(text_buf, 2, 1,
-                        buffer + (panel_y + 0x1c) * stride + panel_x + 0x14,
-                        stride, 0, 0xFA, 0);
+                    /* Two-line display: "Team N" + "wins the round" (font 1, centered) */
+                    if ((char)DAT_00487640[0] > 0 && (char)DAT_00487640[0] != (char)-1) {
+                        char line1[32], line2[32];
+                        FUN_004644af(line1, (const unsigned char *)"Team %d",
+                                     (int)(unsigned char)DAT_00487640[0]);
+                        strcpy(line2, "wins the round");
+                        Draw_Text_To_Buffer(line1, 1, 1,
+                            buffer + (panel_y + 0x1f) * stride + panel_x + 0x12,
+                            stride, 0, spr_w - 0x24, 0);
+                        Draw_Text_To_Buffer(line2, 1, 1,
+                            buffer + (panel_y + 0x2b) * stride + panel_x + 0x12,
+                            stride, 0, spr_w - 0x24, 0);
+                    } else {
+                        Draw_Text_To_Buffer(text_buf, 1, 1,
+                            buffer + (panel_y + 0x1e) * stride + panel_x + 0x12,
+                            stride, 0, spr_w - 0x24, 0);
+                    }
 
                     /* Team names and win counts */
                     unsigned char *slots = (unsigned char *)&DAT_0048693c;

@@ -368,6 +368,13 @@ static void Gameplay_Tick(void)
         /* Activation pair logic */
         if (DAT_004892a5 != 0) {
             DAT_004892a5++;
+            /* After 40 ticks of round-end countdown, trigger level transition.
+             * Original at 0x00461776: when DAT_004892a5 > 0x28, sets round phase
+             * to 0x65 (natural end). We set g_SubState = 101 which the existing
+             * handler at line 615 processes (stores winner, tallies scores). */
+            if (DAT_004892a5 > 0x28) {
+                g_SubState = 101;
+            }
         }
         if (DAT_004892a5 == 0 && DAT_004892a4 != 0 && DAT_0048373e == 0) {
             DAT_004892a5 = 1;

@@ -51,7 +51,11 @@ char         DAT_00489299   = 0;     /* sub-state 2 flag */
 /* Config globals (004207c0 area) */
 unsigned char g_ConfigBlob[6408]; /* 00481F58 - raw config data */
 
-/* Helper: map original binary address to config blob pointer (32-bit only) */
+/* Helper: map original binary address to config blob pointer (32-bit only).
+ * Menu items use this to write DIRECTLY into g_ConfigBlob, bypassing the
+ * separate globals (DAT_004837xx). This is why Sync_Config_To_Blob must NOT
+ * be called before saving — it would overwrite these direct writes with
+ * stale global values. See refactor notes in Sync_Config_To_Blob. */
 #define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
 
 /* Team color palette (RGB555 values, 4 entries) - init'd in Init_Game_Config */
@@ -3759,6 +3763,8 @@ void FUN_00427df0(int param_1, char param_2)
             unsigned char player_idx = click_item->flag1;
             if (*data != 0 && g_ConfigBlob[0x1804 + wpn_idx] != 0) {
                 g_StartWeapon[(int)player_idx] = (unsigned char)wpn_idx;
+                /* Persist to config blob so it survives restarts */
+                g_ConfigBlob[0x1870 + (int)player_idx] = (unsigned char)wpn_idx;
             }
         }
         break;
@@ -5952,9 +5958,18 @@ void Save_Options_Config(void)
 }
 
 /* ===== Sync_Config_From_Blob ===== */
-/* In the original binary, config globals at 0x00481F58-0x0048385F are
+/* REFACTOR NOTE: This function IS still needed (unlike Sync_Config_To_Blob).
+ *
+ * In the original binary, config globals at 0x00481F58-0x0048385F are
  * aliases into the config blob memory. Our decomp defines them as separate
- * variables, so we must sync after loading the blob from options.cfg. */
+ * variables, so we must sync after loading the blob from options.cfg.
+ *
+ * Called at startup after Load_Options_Config() and after level list reload.
+ * Game systems read these separate globals during gameplay — they MUST be
+ * kept in sync with the blob.
+ *
+ * IDEAL REFACTOR: Same as Sync_Config_To_Blob — convert globals to #define
+ * macros aliasing into g_ConfigBlob, then delete both Sync functions. */
 void Sync_Config_From_Blob(void)
 {
     /* Sound / display config */
@@ -6039,13 +6054,37 @@ void Sync_Config_From_Blob(void)
     /* Weather threshold */
     DAT_0048385c      = *(float *)&g_ConfigBlob[0x1904];
 
+    /* Per-player start weapon (stored at blob offset 0x1870, 64 bytes).
+     * Set by right-click in weapon loadout grid, persisted across restarts. */
+    memcpy(g_StartWeapon, &g_ConfigBlob[0x1870], 64);
+
     /* Player config: DAT_0048227c is now a macro alias into g_ConfigBlob[0x324],
      * so no copy needed (they're the same memory). */
 }
 
 /* ===== Sync_Config_To_Blob ===== */
-/* Reverse of Sync_Config_From_Blob: copies separate globals back into
- * g_ConfigBlob before Save_Options_Config writes it to disk. */
+/* REFACTOR NOTE: This function is largely DEAD CODE.
+ *
+ * In the original binary, config globals (DAT_0048371e, etc.) are aliases into
+ * g_ConfigBlob — same memory. Our decomp defines them as separate variables,
+ * so this function was created to bridge the gap before saving.
+ *
+ * However, the menu system writes directly to g_ConfigBlob via CFG_ADDR
+ * pointers. Calling Sync_Config_To_Blob before save would OVERWRITE those
+ * menu changes with stale separate globals (the config persistence bug).
+ *
+ * Current state:
+ *   - Removed from case 0xFE (exit/save) — menu writes blob directly.
+ *   - Only called from the level list reload path (~line 5083), where we
+ *     manually sync just the 2 modified globals instead of calling this.
+ *   - The function itself is complete but vestigial.
+ *
+ * Known gap: DAT_0048373f is NOT synced back (missing from this function),
+ * but this doesn't matter since we don't call it on the save path.
+ *
+ * IDEAL REFACTOR: Convert all DAT_004837xx globals to #define macros that
+ * alias into g_ConfigBlob (matching the original binary's memory layout).
+ * Then both Sync functions can be deleted entirely. */
 void Sync_Config_To_Blob(void)
 {
     g_ConfigBlob[0x17C6]                          = (unsigned char)DAT_0048371e;

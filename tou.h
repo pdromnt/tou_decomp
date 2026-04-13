@@ -711,10 +711,10 @@ void FUN_00460cf0(char a, unsigned char b); /* tile replacement helper */
 int  FUN_0044dfb0(int player);  /* find spawn point for player */
 
 /* ===== Function Prototypes: init.cpp (config) ===== */
-void Load_Options_Config(void);
-void Save_Options_Config(void);
-void Sync_Config_From_Blob(void);
-void Sync_Config_To_Blob(void);
+void Load_Options_Config(void);   /* reads options.cfg → g_ConfigBlob */
+void Save_Options_Config(void);   /* writes g_ConfigBlob → options.cfg */
+void Sync_Config_From_Blob(void); /* blob → separate globals (needed at load) */
+void Sync_Config_To_Blob(void);   /* globals → blob (DEAD CODE — see refactor note in init.cpp) */
 
 /* ===== Utility functions (init.cpp) ===== */
 void FUN_004644af(char *dest, const unsigned char *format, ...);
