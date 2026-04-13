@@ -265,101 +265,25 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     unsigned short *src = (unsigned short *)DAT_00481f50;
     int shift = DAT_00487a18 & 0x1F;
 
-    /* Viewport dimensions: full screen (single player) */
-    int vp_w = 640;
-    int vp_h = 480;
-
-    /* Clamp to available map area (minus 7-pixel borders each side) */
     int avail_w = (int)DAT_004879f0 - 14;
     int avail_h = (int)DAT_004879f4 - 14;
-    if (vp_w > avail_w) vp_w = avail_w;
-    if (vp_h > avail_h) vp_h = avail_h;
 
-    /* Camera: center viewport on player position (FUN_00407720 logic).
-     * Player position is in fixed-point 14.18 format (>> 18 = pixels).
-     * Falls back to map center if no active player. */
-    int vp_left, vp_top;
-    if (DAT_00487808 > 0 && DAT_00487810 != 0) {
-        int pidx = DAT_004877f8[0];
-        int poff = pidx * 0x598;
-        int player_x = *(int *)(DAT_00487810 + poff);       /* +0x00: X position */
-        int player_y = *(int *)(DAT_00487810 + poff + 4);   /* +0x04: Y position */
+    /* Number of viewports to render (1 for single player, 2+ for split-screen) */
+    int num_viewports = (DAT_00487808 > 0) ? DAT_00487808 : 1;
 
-        /* Read per-player viewport dimensions (if set) */
-        int pvp_w = *(int *)(DAT_00487810 + poff + 0x484);
-        int pvp_h = *(int *)(DAT_00487810 + poff + 0x488);
-        if (pvp_w > 0 && pvp_h > 0) {
-            vp_w = pvp_w;
-            vp_h = pvp_h;
-            if (vp_w > avail_w) vp_w = avail_w;
-            if (vp_h > avail_h) vp_h = avail_h;
-        }
-
-        /* Center viewport on player (>> 18 converts fixed-point to pixels) */
-        vp_left = (player_x >> 18) - vp_w / 2;
-        vp_top  = (player_y >> 18) - vp_h / 2;
-    } else {
-        /* Fallback: center on map */
-        vp_left = ((int)DAT_004879f0 - vp_w) / 2;
-        vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
-    }
-
-    /* Clamp to 7-pixel border (matches original clamping logic) */
-    if (vp_left < 7) vp_left = 7;
-    if (vp_top  < 7) vp_top  = 7;
-    if (vp_left + vp_w > (int)DAT_004879f0 - 7)
-        vp_left = (int)DAT_004879f0 - 7 - vp_w;
-    if (vp_top + vp_h > (int)DAT_004879f4 - 7)
-        vp_top = (int)DAT_004879f4 - 7 - vp_h;
-
-    /* Screen shake (if player +0xC4 flag set) */
-    if (DAT_00487808 > 0 && DAT_00487810 != 0) {
-        int poff = DAT_004877f8[0] * 0x598;
-        if (*(char *)(DAT_00487810 + poff + 0xC4) != 0) {
-            vp_left += (rand() % 6) - 3;
-            vp_top  += (rand() % 6) - 3;
-            /* Re-clamp after shake */
-            if (vp_left < 7) vp_left = 7;
-            if (vp_top  < 7) vp_top  = 7;
-            if (vp_left + vp_w > (int)DAT_004879f0 - 7)
-                vp_left = (int)DAT_004879f0 - 7 - vp_w;
-            if (vp_top + vp_h > (int)DAT_004879f4 - 7)
-                vp_top = (int)DAT_004879f4 - 7 - vp_h;
-        }
-    }
-
-    /* Force even viewport width */
-    if (vp_w & 1) vp_w--;
-
-    /* Set viewport globals (used by entity/particle renderers) */
-    DAT_004806d8 = vp_w;           /* viewport width */
-    DAT_004806e4 = vp_h;           /* viewport height */
-    DAT_004806dc = vp_left;        /* viewport left (map coords) */
-    DAT_004806e0 = vp_top;         /* viewport top (map coords) */
-    DAT_004806d0 = vp_left + vp_w; /* viewport right */
-    DAT_004806d4 = vp_top + vp_h;  /* viewport bottom */
-    DAT_004806ec = 0;              /* screen X offset (0 for single player) */
-    DAT_004806e8 = 0;              /* screen Y offset (0 for single player) */
-
-    /* Sky pattern fill — tiles a sprite across the entire buffer as background.
-     * In the original (FUN_00407720), this is a one-shot triggered by DAT_00489298
-     * because the DDraw surface persists between frames. Our decomp uses a fresh
-     * scratch buffer each frame, so we fill every frame.
-     *
+    /* Sky pattern fill — tiles a sprite across the entire buffer ONCE as background.
+     * MUST be before the viewport loop so it doesn't wipe per-viewport rendering.
      * Sky type (g_ConfigBlob[0x1803] = byte 3 of DAT_00483758):
      *   0 → sprite 0x40, 1 → sprite 0x45, 2 → sprite 0x46 (default)
      *   3 → solid color 0x446, ≥4 → black */
     {
         unsigned char sky_type = g_ConfigBlob[0x1803];
-        /* DIAG: Log sky fill state once */
         if (sky_type < 3 && DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
-            /* Tile a sprite across the buffer */
             int sky_sprite = (sky_type == 0) ? 0x40 : ((sky_type == 1) ? 0x45 : 0x46);
             int spr_w = (int)((unsigned char *)DAT_00489e8c)[sky_sprite];
             int spr_h = (int)((unsigned char *)DAT_00489e88)[sky_sprite];
             int spr_base = ((int *)DAT_00489234)[sky_sprite];
             unsigned short *spr_pixels = (unsigned short *)DAT_00487ab4;
-
             if (spr_w > 0 && spr_h > 0) {
                 int src_y = spr_base;
                 int src_y_end = spr_base + spr_w * spr_h;
@@ -369,29 +293,88 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                     for (int x = 0; x < 640; x++) {
                         *d++ = spr_pixels[src_x];
                         src_x++;
-                        if (src_x >= src_y + spr_w) {
-                            src_x = src_y;  /* wrap X */
-                        }
+                        if (src_x >= src_y + spr_w) src_x = src_y;
                     }
                     src_y += spr_w;
-                    if (src_y >= src_y_end) {
-                        src_y = spr_base;  /* wrap Y */
-                    }
+                    if (src_y >= src_y_end) src_y = spr_base;
                 }
             } else {
                 memset(buffer, 0, 640 * 480 * 2);
             }
         } else if (sky_type == 3) {
-            /* Type 3: solid black (original: -(ushort)(type!=3) & 0x446 = 0) */
             memset(buffer, 0, 640 * 480 * 2);
         } else {
-            /* Type >= 4: solid dark blue (original: 0xFFFF & 0x446 = 0x0446) */
             unsigned short *d = buffer;
-            for (int i = 0; i < 640 * 480; i++) {
-                *d++ = 0x0446;
-            }
+            for (int i = 0; i < 640 * 480; i++) *d++ = 0x0446;
         }
     }
+
+    /* === Per-viewport rendering loop ===
+     * For split-screen: renders once per active player viewport.
+     * Each iteration sets viewport globals then renders all entities + HUD.
+     * Entity renderers auto-clip to viewport bounds and offset to screen position. */
+    for (int vp = 0; vp < num_viewports; vp++) {
+
+    /* Compute per-player camera and viewport dimensions */
+    int vp_w = 640, vp_h = 480;
+    int vp_left, vp_top;
+    int screen_x_off = 0, screen_y_off = 0;
+    int pidx = 0;
+
+    if (DAT_00487808 > 0 && DAT_00487810 != 0) {
+        pidx = DAT_004877f8[vp];
+        int poff = pidx * 0x598;
+        int player_x = *(int *)(DAT_00487810 + poff);
+        int player_y = *(int *)(DAT_00487810 + poff + 4);
+
+        int pvp_w = *(int *)(DAT_00487810 + poff + 0x484);
+        int pvp_h = *(int *)(DAT_00487810 + poff + 0x488);
+        if (pvp_w > 0 && pvp_h > 0) {
+            vp_w = pvp_w;
+            vp_h = pvp_h;
+        } else if (num_viewports > 1) {
+            /* Fallback: split evenly if per-player dims not set */
+            vp_w = 640 / num_viewports;
+            vp_h = 480;
+        }
+        if (vp_w > avail_w) vp_w = avail_w;
+        if (vp_h > avail_h) vp_h = avail_h;
+
+        vp_left = (player_x >> 18) - vp_w / 2;
+        vp_top  = (player_y >> 18) - vp_h / 2;
+
+        /* Screen offset: each viewport placed side by side */
+        screen_x_off = vp * vp_w;
+        screen_y_off = 0;
+
+        /* Screen shake */
+        if (*(char *)(DAT_00487810 + poff + 0xC4) != 0) {
+            vp_left += (rand() % 6) - 3;
+            vp_top  += (rand() % 6) - 3;
+        }
+    } else {
+        vp_left = ((int)DAT_004879f0 - vp_w) / 2;
+        vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
+    }
+
+    /* Clamp to 7-pixel border */
+    if (vp_left < 7) vp_left = 7;
+    if (vp_top  < 7) vp_top  = 7;
+    if (vp_left + vp_w > (int)DAT_004879f0 - 7)
+        vp_left = (int)DAT_004879f0 - 7 - vp_w;
+    if (vp_top + vp_h > (int)DAT_004879f4 - 7)
+        vp_top = (int)DAT_004879f4 - 7 - vp_h;
+    if (vp_w & 1) vp_w--;
+
+    /* Set viewport globals (all entity renderers + HUD read these) */
+    DAT_004806d8 = vp_w;
+    DAT_004806e4 = vp_h;
+    DAT_004806dc = vp_left;
+    DAT_004806e0 = vp_top;
+    DAT_004806d0 = vp_left + vp_w;
+    DAT_004806d4 = vp_top + vp_h;
+    DAT_004806ec = screen_x_off;
+    DAT_004806e8 = screen_y_off;
 
     /* Blit level background from stride-aligned source to screen buffer.
      * Zero pixels (0x0000) in the level background represent empty/sky areas.
@@ -491,10 +474,8 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     }
 
     /* ---- HUD elements (per-player, only when alive) ---- */
-    /* Original FUN_00407720 draws these after entity renderers + spawn shield,
-     * inside the per-player viewport loop, gated by player_data[0xD0] == 0. */
+    /* Draws inside the per-viewport loop, using the current viewport's player. */
     if (DAT_00487808 > 0 && DAT_00487810 != 0) {
-        int pidx = DAT_004877f8[0];
         int poff = pidx * 0x598;
 
         /* Only draw HUD if player is alive (status field +0xD0 == 0) */
@@ -609,6 +590,8 @@ static void Render_Game_World(unsigned short *buffer, int stride)
             FUN_00409280((int)buffer, stride);
         }
     }
+
+    } /* end per-viewport loop */
 
     /* ---- Pause / overlay states (end of FUN_00407720) ---- */
     if (g_SubState != 0) {
@@ -1484,7 +1467,7 @@ void Render_Game_View_To(unsigned short *frame)
                  * Original uses FUN_00425f00 to draw two bordered boxes + text.
                  * Position near drag item (frozen at drag start). */
                 int tt_x = drag_items[drag_idx].x - 0x28;
-                int tt_y = drag_items[drag_idx].y + 8;
+                int tt_y = drag_items[drag_idx].y + 30;
                 if (tt_x < 2) tt_x = 2;
                 if (tt_x + 0x61 > 638) tt_x = 638 - 0x61;
                 if (tt_y < 2) tt_y = 2;
