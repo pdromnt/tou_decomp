@@ -9441,8 +9441,18 @@ void FUN_004533d0(void)
                     *(unsigned char *)(ebase + eidx * 0x80 + 0x5C) = 0;
                     DAT_00489248++;
                     *(int *)(ebase + DAT_00489248 * 0x80 - 0x58) = rand() % 60 + 40;
-                    *(unsigned int *)(ebase + DAT_00489248 * 0x80 - 0x34) =
-                        (DAT_0048384c & 0xFFFF) + 30000;
+                    /* DAT_0048384c is RGB565 in our decomp. Convert to X1R5G5B5
+                     * before adding 30000, so the renderer's X1R5G5B5→RGB565
+                     * conversion produces the correct water color. */
+                    {
+                        unsigned short wc = DAT_0048384c;
+                        unsigned short wr = (wc >> 11) & 0x1F;
+                        unsigned short wg = (wc >> 6) & 0x1F; /* 6-bit green → 5-bit */
+                        unsigned short wb = wc & 0x1F;
+                        unsigned short x1r5 = (wr << 10) | (wg << 5) | wb;
+                        *(unsigned int *)(ebase + DAT_00489248 * 0x80 - 0x34) =
+                            (unsigned int)x1r5 + 30000;
+                    }
                 }
             }
         }

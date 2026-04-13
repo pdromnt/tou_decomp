@@ -1089,7 +1089,7 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                     if (DAT_004806e0 <= py && py + 2 < DAT_004806d4 && sprite_idx != 130000) {
                         unsigned short *dst = (unsigned short *)(param_1 + 2 +
                             (((py - DAT_004806e0 + DAT_004806e8) * param_2 - DAT_004806dc + px + DAT_004806ec) * 2));
-                        /* Original writes raw 16-bit values (no X1R5G5B5→RGB565 conversion).
+                        /* Original writes raw 16-bit values.
                          * Values come from Load_Level_File / config blob. */
                         unsigned short cA = DAT_0048384e;
                         unsigned short cB = DAT_00483850;
@@ -1185,13 +1185,9 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 
                     unsigned short color = (unsigned short)(*(short *)(ent_base + 0x4c + ent_off) + (short)0x8ad0);
 
-                    /* COMPAT: Convert X1R5G5B5 → RGB565 BEFORE the darkness/water LUT lookup.
-                     * The raw color from entity[0x4C]+0x8AD0 is X1R5G5B5 format (from
-                     * DAT_00487aa8 palette or X1R5G5B5 packing formula). The original binary
-                     * runs entirely in X1R5G5B5 so this worked natively, but our decomp uses
-                     * RGB565 for the remap table (DAT_00489230) and all LUTs. Feeding an
-                     * X1R5G5B5 value into the RGB565 remap produces a wrong 12-bit index,
-                     * causing entities on water tiles (darkness != 0) to render as black. */
+                    /* COMPAT: Convert X1R5G5B5 → RGB565. All entity +0x4C values
+                     * should be X1R5G5B5 + 30000 (splash water colors are now converted
+                     * at spawn time in stubs.cpp to match this convention). */
                     {
                         unsigned short r5 = (color >> 10) & 0x1F;
                         unsigned short g5 = (color >> 5) & 0x1F;
@@ -1199,11 +1195,11 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         color = (r5 << 11) | (g5 << 6) | b5;
                     }
 
-                    /* Check darkness */
+                    /* Water tile tint: apply LUT for underwater darkening/coloring. */
                     unsigned char tile = ((unsigned char *)DAT_0048782c)[(py << ((unsigned char)DAT_00487a18 & 0x1f)) + px];
                     if (((char *)DAT_00487928)[(unsigned int)tile * 0x20 + 4] != '\0') {
                         unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)color];
-                        color = ((unsigned short *)DAT_004876a4[28])[remap]; /* DAT_00487714 = palette[28] */
+                        color = ((unsigned short *)DAT_004876a4[28])[remap];
                     }
 
                     /* Shape patterns based on entry[0x24] */
