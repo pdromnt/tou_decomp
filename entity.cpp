@@ -871,20 +871,32 @@ static void FUN_004498a0(int *param_1, int param_2)
     float dist_f = sqrtf((float)(dx_tile * dx_tile + dy_tile * dy_tile));
     float vel_scale = speed_f * _DAT_0047578c;
 
+    /* BUG FIX: steering formula verified from disassembly FPU stack trace at 0x004499c0.
+     * Original: target = waypoint_delta - velocity * (dist * 0.1 * scale / vel_scale)
+     * The velocity term is a distance-proportional damping of the current velocity.
+     * vel_scale = speed * DAT_0047578c; when speed=0, __ftol clamps infinity. */
     int target_x, target_y;
-    if (dist_f > 0.0f) {
-        target_x = (int)((float)dx_tile * _DAT_00475788 * speed_f / dist_f - (float)vx * _DAT_00475790);
-        target_y = (int)((float)dy_tile * _DAT_00475788 * speed_f / dist_f - (float)vy * _DAT_00475790);
+    if (vel_scale > 0.0f) {
+        float vel_damp = dist_f * _DAT_00475790 * _DAT_00475788 / vel_scale;
+        target_x = (int)((float)dx_tile - (float)vx * vel_damp);
+        target_y = (int)((float)dy_tile - (float)vy * vel_damp);
     } else {
-        target_x = (int)(-(float)vx * _DAT_00475790);
-        target_y = (int)(-(float)vy * _DAT_00475790);
+        target_x = dx_tile;
+        target_y = dy_tile;
     }
 
-    /* Compute combined distance metric */
-    int combined = target_x * target_x + target_y * target_y;
-    float combined_f = sqrtf((float)combined);
-    /* Subtract gravity influence */
-    target_y = (int)(combined_f * _DAT_00475784 * (float)target_y - (float)DAT_00483824);
+    /* BUG FIX: combined metric is target_y^2 + target_x (NOT target_x^2).
+     * Verified from disassembly at 0x004499f6: IMUL ECX,EAX then ADD ECX,EBP. */
+    int combined = target_y * target_y + target_x;
+    float combined_f = sqrtf((float)(combined > 0 ? combined : -combined));
+
+    /* BUG FIX: gravity correction subtracts gravity*combined_f*scale FROM target_y.
+     * Verified from FPU trace at 0x00449a09. */
+    target_y = (int)((float)target_y - (float)DAT_00483824 * combined_f * _DAT_00475784);
+
+    /* Conveyor scale factor: combined_f * DAT_00475784 (NOT vel_scale).
+     * This is the value remaining on the FPU stack after the gravity computation. */
+    float conv_scale = combined_f * _DAT_00475784;
 
     /* Check terrain tile type for conveyors/speed modifiers */
     unsigned char bVar1 = *(unsigned char *)(((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
@@ -892,33 +904,33 @@ static void FUN_004498a0(int *param_1, int param_2)
 
     /* Conveyor tile types 0x40-0x47, 0x64-0x73, 0x16-0x19 modify velocity */
     if (bVar1 == 0x40 || (99 < bVar1 && bVar1 < 0x68)) {
-        target_y = (int)(_DAT_00475780 * vel_scale + (float)target_y);
+        target_y = (int)(_DAT_00475780 * conv_scale + (float)target_y);
     }
     if (bVar1 == 0x41 || (0x67 < bVar1 && bVar1 < 0x6c)) {
-        target_y = (int)((float)target_y - _DAT_00475780 * vel_scale);
+        target_y = (int)((float)target_y - _DAT_00475780 * conv_scale);
     }
     if (bVar1 == 0x42 || (0x6b < bVar1 && bVar1 < 0x70)) {
-        target_x = (int)(_DAT_00475780 * vel_scale + (float)target_x);
+        target_x = (int)(_DAT_00475780 * conv_scale + (float)target_x);
     }
     if (bVar1 == 0x43 || (0x6f < bVar1 && bVar1 < 0x74)) {
-        target_x = (int)((float)target_x - _DAT_00475780 * vel_scale);
+        target_x = (int)((float)target_x - _DAT_00475780 * conv_scale);
     }
     if (bVar1 == 0x44) {
-        target_y = (int)(_DAT_0047577c * vel_scale + (float)target_y);
+        target_y = (int)(_DAT_0047577c * conv_scale + (float)target_y);
     } else if (bVar1 == 0x45) {
-        target_y = (int)((float)target_y - _DAT_0047577c * vel_scale);
+        target_y = (int)((float)target_y - _DAT_0047577c * conv_scale);
     } else if (bVar1 == 0x46) {
-        target_x = (int)(_DAT_0047577c * vel_scale + (float)target_x);
+        target_x = (int)(_DAT_0047577c * conv_scale + (float)target_x);
     } else if (bVar1 == 0x47) {
-        target_x = (int)((float)target_x - _DAT_0047577c * vel_scale);
+        target_x = (int)((float)target_x - _DAT_0047577c * conv_scale);
     } else if (bVar1 == 0x16) {
-        target_y = (int)(_DAT_00475778 * vel_scale + (float)target_y);
+        target_y = (int)(_DAT_00475778 * conv_scale + (float)target_y);
     } else if (bVar1 == 0x17) {
-        target_y = (int)((float)target_y - _DAT_00475778 * vel_scale);
+        target_y = (int)((float)target_y - _DAT_00475778 * conv_scale);
     } else if (bVar1 == 0x18) {
-        target_x = (int)(_DAT_00475778 * vel_scale + (float)target_x);
+        target_x = (int)(_DAT_00475778 * conv_scale + (float)target_x);
     } else if (bVar1 == 0x19) {
-        target_x = (int)((float)target_x - _DAT_00475778 * vel_scale);
+        target_x = (int)((float)target_x - _DAT_00475778 * conv_scale);
     }
 
     /* Compute angle to adjusted target and decide movement direction */
@@ -936,6 +948,10 @@ static void FUN_004498a0(int *param_1, int param_2)
     piVar4[0x2e] = (int)uVar6;
 
 LAB_00449c28:
+    /* Dead zone: skip turning when nearly aimed at target (±0x18 ≈ 5°).
+     * Prevents rapid left/right oscillation when heading is close to correct. */
+    if (uVar7 < 0x18 || uVar7 > 0x7E8)
+        return; /* close enough — don't turn */
     if (0x3ff < uVar7) {
         piVar4[0x2e] = piVar4[0x2e] | 1;  /* turn left */
         return;
@@ -2697,7 +2713,16 @@ static void FUN_0044f900_impl(int *ent, int idx)
         }
         iVar8 = (unsigned int)*(unsigned char *)((int)ent + 0x35) + (unsigned int)*pbVar14 * 0x86;
     } else {
-        /* AI weapon selection — pick random available weapon */
+        /* AI weapon selection — pick random available weapon.
+         * Throttle: only re-roll every ~100 ticks to prevent seizure-like switching.
+         * Uses ent[0x32] (offset +0xC8) as cooldown — AI path doesn't use it
+         * (only the player path sets it to 0xFA). */
+        if (ent[0x32] > 0) {
+            ent[0x32] = ent[0x32] - 1;
+            return; /* keep current weapon, skip re-roll */
+        }
+        ent[0x32] = 100 + (rand() % 50); /* re-roll in 100-150 ticks */
+
         unsigned int uVar9 = ent[0xe];
         if (uVar9 == 0) return;
         if (0 < (int)uVar9) {
@@ -5645,7 +5670,15 @@ void FUN_0044b0b0(void)
         /* Update positional sound */
         FUN_0040fb70_impl(i);
 
-        /* AI decision-making for non-human entities */
+        /* AI decision-making for non-human entities.
+         * FUN_0041b010 should set +0xDD from config, but may fail if counts
+         * are stale. Safety net: read difficulty from g_ConfigBlob[0x326+i]
+         * (written by the Players menu "Computer" column, render_mode 0x1F).
+         * Config value 0-4 → AI level 1-5 (config_val + 1). */
+        if (i >= DAT_00489244 && *(char *)((int)ent + 0xDD) == '\0') {
+            unsigned char cfg_diff = g_ConfigBlob[0x326 + i];
+            *(char *)((int)ent + 0xDD) = (cfg_diff > 0) ? (char)(cfg_diff + 1) : 1;
+        }
         if (*(char *)((int)ent + 0xDD) != '\0') {
             FUN_0044ad30((int *)ent, i);
         }

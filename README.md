@@ -14,7 +14,7 @@ A lot of things. A lot of things may be very buggy. The code I got is essentialy
 - Controls
 - Physics (Ships, Water, Collisions, Explosions, etc.)
 - Levels (including GG Levels)
-- Most subsystems (Enemy AI (partial), Spawns, Pickups, VFX, Weapons, etc.)
+- Most subsystems (Enemy AI, Spawns, Pickups, VFX, Weapons, etc.)
 
 I'd guesstimate we're 90% of the way there.
 
