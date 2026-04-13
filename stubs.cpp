@@ -2758,10 +2758,11 @@ void FUN_00434310(void)
                         if (*(int *)(ebase + 0x08) > max_y) *(int *)(ebase + 0x08) = max_y;
                     }
                 }
-                /* Invuln countdown */
+                /* Invuln countdown — keep minimum 1 so same-team bullets can't
+                 * damage this miniship via the +0x5C==0 friendly-fire bypass. */
                 {
                     unsigned char ms_inv = *(unsigned char *)(ebase + 0x5C);
-                    if (ms_inv > 0) { ms_inv--; *(unsigned char *)(ebase + 0x5C) = ms_inv; }
+                    if (ms_inv > 1) { ms_inv--; *(unsigned char *)(ebase + 0x5C) = ms_inv; }
                 }
                 /* Enemy scan: find closest enemy player (different team) */
                 unsigned char ms_own = *(unsigned char *)(ebase + 0x22);
@@ -2863,7 +2864,7 @@ void FUN_00434310(void)
                         *(int *)(bp + 0x48) = 0;
                         *(int *)(bp + 0x4C) = tt[0x3F]; /* palette */
                         *(unsigned char *)(bp + 0x54) = 0;
-                        *(unsigned char *)(bp + 0x40) = 0; /* sub_type 0 = normal bullet */
+                        *(unsigned char *)(bp + 0x40) = 3; /* sub_type 3 — verified from Ghidra 0x441690 */
                         *(int *)(bp + 0x34) = tt[0]; /* callback */
                         *(int *)(bp + 0x3C) = 0;
                         *(unsigned char *)(bp + 0x5C) = 0;
