@@ -527,38 +527,43 @@ void FUN_0040a9e0(int param_1, int param_2, int param_3)
 
     if (total_slots <= 0) return;
 
-    /* Compute starting slot: current slot's row - 2 rows */
-    int start_row = cur_slot / 6 - 2;
+    /* Compute starting row: current row - 2, wrap negative via total_rows.
+     * Original at 0x0040a9f8: start = cur_row - 2. If negative:
+     * start = cur_row - 1 + total_rows. Repeat if still negative. */
+    int cur_row = cur_slot / 6;
+    int total_rows = total_slots / 6;
+    int start_row = cur_row - 2;
+    if (start_row < 0) {
+        start_row = cur_row - 1 + total_rows;
+        if (start_row < 0) {
+            start_row = start_row + 1 + total_rows;
+            if (start_row < 0)
+                start_row = start_row + 1 + total_rows;
+        }
+    }
     int slot = start_row * 6;
 
-    /* Wrap negative indices */
-    if (slot < 0) {
-        int rows = total_slots / 6;
-        if (rows <= 0) rows = 1;
-        slot += rows * 6;
-        if (slot < 0) slot += rows * 6;
-        if (slot < 0) slot = 0;
-    }
-
-    /* Draw 3 rows x up to 6 columns */
+    /* Draw 5 rows x up to 6 columns */
     int y_pos = -0x48;
     do {
         if (total_slots > 5 || y_pos == 0 || total_slots > 5) {
             int x_col = 0;
             do {
-                if (slot >= 0 && slot < total_slots) {
-                    unsigned char weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + slot);
-                    char selected = (slot == cur_slot) ? 0 : 1;
+                /* Read weapon type and draw icon.
+                 * total_slots = max valid index (from +0x38). */
+                unsigned char weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + slot);
+                char selected = (slot != cur_slot);
 
-                    FUN_0040aaf0(param_1, param_2,
-                                 DAT_004806d8 / 2 + x_col - 0x5A + DAT_004806ec,
-                                 DAT_004806e4 / 2 + y_pos + DAT_004806e8,
-                                 (int)weapon_type, selected);
-                }
+                FUN_0040aaf0(param_1, param_2,
+                             DAT_004806d8 / 2 + x_col - 0x5A + DAT_004806ec,
+                             DAT_004806e4 / 2 + y_pos + DAT_004806e8,
+                             (int)weapon_type, selected);
 
                 slot++;
-                if (slot >= total_slots) {
+                /* Original uses JG + break: stop the row when past max index */
+                if (slot > total_slots) {
                     slot = 0;
+                    break;
                 }
                 x_col += 0x24;
             } while (x_col < 0xD8);
