@@ -6739,8 +6739,61 @@ void FUN_00454b00(void)
                         }
                     }
 
-                    /* Note: original also searches spatial grid (DAT_00487aa4) for
-                     * projectiles and other troopers. Simplified: skip those searches. */
+                    /* Phase 2: search buildings/projectiles (DAT_00481f28 via spatial grid).
+                     * For each enemy team, scan the projectile bucket in DAT_00487aa4. */
+                    if (!found_target && DAT_00487aa4 != NULL && DAT_00481f28 != NULL) {
+                        unsigned char own_team2 = (unsigned char)t[7];
+                        for (int ti = 0; ti < 4 && !found_target; ti++) {
+                            if ((unsigned char)ti == own_team2) continue;
+                            int grid_base = (int)DAT_00487aa4 + ti * 0x4000;
+                            int proj_count = *(int *)(grid_base + 0x100C);
+                            int *proj_indices = (int *)(grid_base + 0x1010);
+                            for (int pi2 = 0; pi2 < proj_count && pi2 < 500; pi2++) {
+                                int pidx2 = proj_indices[pi2];
+                                int pbase2 = (int)DAT_00481f28 + pidx2 * 0x40;
+                                int ppx = *(int *)(pbase2 + 0x00);
+                                int ppy = *(int *)(pbase2 + 0x04);
+                                if (ppx < range_x_hi && range_x_lo < ppx &&
+                                    ppy < range_y_hi && range_y_lo < ppy) {
+                                    int ddx = (ppx - *t) >> 0x12;
+                                    int ddy = (ppy - t[2]) >> 0x12;
+                                    int dd = ddx * ddx + ddy * ddy;
+                                    if (dd < 40000 && dd > 0) {
+                                        tgt_x = ppx; tgt_y = ppy;
+                                        found_target = 1; break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    /* Phase 3: search other troopers/vehicles (DAT_00487884 via spatial grid).
+                     * Enemy troopers are binned at grid offset +0x08 (count) / +0x0C (indices). */
+                    if (!found_target && DAT_00487aa4 != NULL && DAT_00487884 != NULL) {
+                        unsigned char own_team3 = (unsigned char)t[7];
+                        for (int ti2 = 0; ti2 < 4 && !found_target; ti2++) {
+                            if ((unsigned char)ti2 == own_team3) continue;
+                            int grid_base2 = (int)DAT_00487aa4 + ti2 * 0x4000;
+                            int troop_count = *(int *)(grid_base2 + 0x08);
+                            int *troop_indices = (int *)(grid_base2 + 0x0C);
+                            for (int tri = 0; tri < troop_count && tri < 500; tri++) {
+                                int tidx2 = troop_indices[tri];
+                                int tbase3 = (int)DAT_00487884 + tidx2 * 0x40;
+                                int ttx = *(int *)(tbase3 + 0x00);
+                                int tty = *(int *)(tbase3 + 0x08);
+                                if (ttx < range_x_hi && range_x_lo < ttx &&
+                                    tty < range_y_hi && range_y_lo < tty) {
+                                    int ddx = (ttx - *t) >> 0x12;
+                                    int ddy = (tty - t[2]) >> 0x12;
+                                    int dd = ddx * ddx + ddy * ddy;
+                                    if (dd < 40000 && dd > 0) {
+                                        tgt_x = ttx; tgt_y = tty;
+                                        found_target = 1; break;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (found_target) {
@@ -6766,17 +6819,13 @@ void FUN_00454b00(void)
                          * Type 0 (basic turret): entity type 0x00 (basic bullet)
                          * Type 1 (ice turret): entity type 0x13 (freeze projectile)
                          * Type 2 (floor turret): entity type 0x00 */
-                        int proj_type = 0;
-                        int proj_subtype = 2;
-                        char btype = (char)t[7]; /* building type at +0x1C */
-
-                        if (btype == 1) {
-                            proj_type = 0x13; /* ICE: freeze projectile */
-                            proj_subtype = 0;
-                        } else {
-                            proj_type = 0; /* BASIC/FLOOR: standard bullet */
-                            proj_subtype = 2;
-                        }
+                        /* Projectile type from trooper subtype at +0x25 (Ghidra 0x4555D4):
+                         * subtype 0 = infantry → type 0x00, sub 2
+                         * subtype 1 = cars/heavy → type 0x01 (DUMBFIRE), sub 1
+                         * subtype 2 = aerial    → type 0x00, sub 2 */
+                        char stype = *(char *)((int)t + 0x25);
+                        int proj_type = (stype == 1) ? 0x01 : 0x00;
+                        int proj_subtype = (stype == 1) ? 1 : 2;
 
                         /* Owner byte */
                         char owner;
