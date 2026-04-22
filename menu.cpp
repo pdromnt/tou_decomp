@@ -116,7 +116,7 @@ int Load_Level_Resources(void)
     DAT_00483960 = 0;      /* no swap file */
     DAT_004892e4 = 0;      /* no random mirror */
     DAT_004892e5 = 0;      /* no difficulty override */
-    DAT_0048764a = 0;      /* not network mode */
+    DAT_0048764a = 0;      /* no match in progress (returning to menu) */
     DAT_00489d7c[0] = '\0'; /* clear error buffer */
 
     /* Random mirror: g_ConfigBlob[1] enables X-flip randomization */

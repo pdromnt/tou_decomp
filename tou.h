@@ -392,7 +392,14 @@ extern void                 *DAT_00489e84;      /* edge record array */
 extern int                   DAT_00487810;      /* player data base address (int used as ptr) */
 extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
-extern int                   DAT_0048764a;      /* network/multiplayer flag */
+/* Match-in-progress flag. Set to 1 by the "Start match" menu action
+ * (init.cpp case 0x1E) and cleared when returning to menu / on app init.
+ * Gates: HUD stat layout (hud.cpp), team-base spawning (menu.cpp),
+ * end-of-match timer/warnings (graphics.cpp, stubs.cpp), and gates the
+ * FUN_0045c300 game-mode preset call (runs only while this is 0).
+ * Despite the old "network/tournament" label it is not about networking
+ * — this game only ships team deathmatch. */
+extern int                   DAT_0048764a;
 extern int                   DAT_0048764b;      /* result flag (tournament) */
 /* DAT_0048227c is a macro alias into g_ConfigBlob, not a separate variable.
  * In the original binary, address 0x0048227C = 0x00481F58 + 0x324, i.e. it's
@@ -535,10 +542,11 @@ void Early_Init_Vars(void);
 int  System_Init_Check(void);
 int  Init_DirectInput(void);
 void Init_Game_Config(void);
+void Set_Config_Defaults(void);      /* hardcoded defaults → g_ConfigBlob (no I/O) */
+void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → options.cfg → globals */
 void Init_Math_Tables(int *buffer, unsigned int count);
 void FUN_0041a8c0(void);          /* session/level init */
 void FUN_0045c300(void);          /* game mode presets (local) */
-void FUN_0045ba50(void);          /* game mode presets (tournament) */
 
 /* ===== Function Prototypes: memory.cpp ===== */
 void  Init_Memory_Pools(void);
@@ -725,9 +733,7 @@ void FUN_004265e0(int index);
 void FUN_0041eae0(void);
 /* FUN_0045a060 and FUN_0045b2a0 moved to effects.cpp prototypes above */
 void FUN_0041fc10(void);
-void FUN_0041fe70(void);
 void FUN_0041f900(void);
-void FUN_00422a10(void);
 void FUN_0042d8b0(void);  /* Session/UI init (init.cpp) */
 int  FUN_00422740(void);
 int  FUN_004252d0(void);    /* Load pal.col + shipal.col color palettes */

@@ -625,7 +625,6 @@ void FUN_0041fc10(void) {
     t[50] = 7; *(unsigned short *)(t + 51) = 0x11; /* type 0x19 */
     t[52] = 8; *(unsigned short *)(t + 53) = 0x11; /* type 0x1A */
 }
-void FUN_0041fe70(void) {}  /* Entity AI function pointers - not needed for intro rendering */
 /* ===== FUN_0041f900 - Weapon/Projectile Type Table Init (0041F900) ===== */
 /* Populates DAT_00487818 with definitions for 8 weapon types (0x20 bytes each).
  * Per-type layout:
@@ -714,7 +713,6 @@ void FUN_0041f900(void)
     w[61] = 0;
     wb[0xF8] = 0;
 }
-void FUN_00422a10(void) {}
 /* ===== FUN_0042d8b0 - Session/UI init (0042D8B0) ===== */
 /* Initializes game state for menu, allocates and fills the key name table
  * (256 DirectInput scan code → display string) and menu string table (~350 entries).
@@ -744,9 +742,6 @@ void FUN_0042d8b0(void)
 
     /* --- Allocate game view data (0x4718 = 18200 bytes) --- */
     g_GameViewData = Mem_Alloc(0x4718);
-
-    /* --- Load font data (needed before any menu page build) --- */
-    Load_Fonts();
 
     /* --- Key sort/priority table (DAT_00481d48..00481d76) --- */
     /* Maps an ordering index to DirectInput scan codes */
@@ -1246,6 +1241,7 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x144] = (char *)"Medium";
     g_MenuStrings[0x145] = (char *)"Large";
     g_MenuStrings[0x146] = (char *)"HUGE";
+    g_MenuStrings[0x147] = (char *)"Reset defaults";
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -2427,10 +2423,13 @@ void FUN_004644af(char *dest, const unsigned char *format, ...)
     va_end(args);
 }
 
-/* ===== FUN_00425840 — Campaign Briefing Page Builder (00425840) ===== */
-/* Builds the story-mode mission briefing menu page. Selects dialogue text
- * and NPC portrait based on campaign chapter/mission progress indices
- * (DAT_004837e4/e8). Not used in standard multiplayer mode. */
+/* ===== FUN_00425840 — Match-End / Briefing Page Builder (00425840) ===== */
+/* Page builder for menu case 0x1D. This page is never reached by any
+ * menu entry in the shipped build — unused briefing/tournament-end
+ * content that was cut before release. The body is empty; we leave
+ * the hook in place so any stray jump to 0x1D just produces a blank
+ * page rather than a crash. Do NOT wire a menu item to nav_target
+ * 0x1D: it will land here and render the unused page. */
 void FUN_00425840(void)
 {
 }
@@ -2630,9 +2629,55 @@ int FUN_0042fdf0(int param_y)
     return 8;
 }
 
-/* ===== FUN_0042a470 - Menu page builder (0042A470) ===== */
-/* Builds the menu item layout for the current page (DAT_004877a4).
- * Each page creates menu items in g_GameViewData via FUN_00430200. */
+/* Builds the Options submenu item layout. Extracted so both the
+ * normal Options navigation (case 0x01) and the "Reset defaults"
+ * action (case 0xFD) can produce the same page — the reset action
+ * runs its side effect and then rebuilds Options so the user stays
+ * on the page they clicked from. */
+static void Build_Options_Menu_Page(void)
+{
+    FUN_00430200(0, 0x28, 8, 1, 0, 0, 0, 1, 0xff);         /* "Options" heading */
+    FUN_00430200(0, 0x50, 9, 2, 0, 1, 0, 1, 9);            /* "Sound" → page 9 */
+    FUN_00430200(0, 0x72, 10, 2, 0, 1, 0, 1, 4);           /* "Video" → page 4 */
+    FUN_00430200(0, 0x94, 0xc, 0, 0, 1, 0, 1, 6);          /* "Game modes" → page 6 */
+    FUN_00430200(0, 0xb6, 0x3d, 2, 0, 1, 0, 1, 0x1f);      /* "Game" → page 0x1F */
+    FUN_00430200(0, 0xd8, 0xb, 2, 0, 1, 0, 1, 5);          /* "Controls" → page 5 */
+    FUN_00430200(0, 0xfa, 0xd, 2, 0, 1, 0, 1, 7);          /* "Keyboard" → page 7 */
+    FUN_00430200(0, 0x11c, 0xfe, 2, 0, 1, 0, 1, 0x1b);     /* "Network" → page 0x1B */
+    FUN_00430200(0, 0x13e, 0xe, 2, 0, 1, 0, 1, 8);         /* "Keys" → page 8 */
+    FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);      /* "Name" → page 0xC */
+    FUN_00430200(0, 0x182, 0x147, 2, 0, 1, 0, 1, 0xFD);    /* "Reset defaults" → case 0xFD action */
+    FUN_00430200(0, 0x1B6, 0xf, 2, 0, 1, 0, 1, 0);         /* "Back" → main menu (extra y-gap is the navigation separator) */
+    g_FrameIndex = 1;
+    DAT_004877c9 = 0;  /* ESC → main menu */
+    DAT_004877b1 = 0;
+}
+
+/* ===== FUN_0042a470 - Menu page builder (0042A470) =====
+ * Builds the menu item layout for the current page (DAT_004877a4).
+ * Each page creates menu items in g_GameViewData via FUN_00430200.
+ *
+ * TWO KINDS OF CASES live in this switch — don't confuse them:
+ *
+ *   1. Page builders (most cases): call FUN_00430200 multiple times to
+ *      populate items, end by setting g_FrameIndex/DAT_004877c9, return.
+ *      The switch is re-entered every time the user navigates to this
+ *      page, so items are rebuilt from scratch each frame.
+ *
+ *   2. Action cases (0x03 "Start game", 0x1C "Pause", 0x1E "Start match",
+ *      0xFD "Reset defaults", 0xFE "Exit"): mutate some global and return
+ *      without adding items. Most transition to a different g_GameState
+ *      or explicitly redirect DAT_004877a4 to a real page so the renderer
+ *      has something to draw. An action case that neither transitions nor
+ *      redirects leaves the user stranded on an item-less page — see the
+ *      0x1D booby trap below.
+ *
+ * BEWARE: case 0x1D is an UNUSED briefing/match-end page left in the
+ * shipped binary. Never wire a new menu entry to nav_target 0x1D — use a
+ * high unused ID (e.g. 0xFD) and add a new case that redirects to a real
+ * page if your entry is an action rather than a page.
+ *
+ * Item count is reset at the top of this function via DAT_004877a8 = 0. */
 void FUN_0042a470(void)
 {
     int iVar3, iVar4, iVar7 = 0;
@@ -2665,20 +2710,7 @@ void FUN_0042a470(void)
         return;
 
     case 0x01: /* Options submenu */
-        FUN_00430200(0, 0x28, 8, 1, 0, 0, 0, 1, 0xff);          /* "Options" heading */
-        FUN_00430200(0, 0x50, 9, 2, 0, 1, 0, 1, 9);             /* "Sound" → page 9 */
-        FUN_00430200(0, 0x72, 10, 2, 0, 1, 0, 1, 4);            /* "Video" → page 4 */
-        FUN_00430200(0, 0x94, 0xc, 0, 0, 1, 0, 1, 6);           /* "Game modes" → page 6 */
-        FUN_00430200(0, 0xb6, 0x3d, 2, 0, 1, 0, 1, 0x1f);       /* "Game" → page 0x1F */
-        FUN_00430200(0, 0xd8, 0xb, 2, 0, 1, 0, 1, 5);           /* "Controls" → page 5 */
-        FUN_00430200(0, 0xfa, 0xd, 2, 0, 1, 0, 1, 7);           /* "Keyboard" → page 7 */
-        FUN_00430200(0, 0x11c, 0xfe, 2, 0, 1, 0, 1, 0x1b);      /* "Network" → page 0x1B */
-        FUN_00430200(0, 0x13e, 0xe, 2, 0, 1, 0, 1, 8);          /* "Keys" → page 8 */
-        FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);       /* "Name" → page 0xC */
-        FUN_00430200(0, 0x194, 0xf, 2, 0, 1, 0, 1, 0);          /* "Back" → page 0 */
-        g_FrameIndex = 1;
-        DAT_004877c9 = 0;  /* ESC → main menu */
-        DAT_004877b1 = 0;
+        Build_Options_Menu_Page();
         return;
 
     case 0x02: /* Credits */
@@ -3591,7 +3623,8 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x1D: /* Reset defaults */
+    case 0x1D: /* Unused briefing / match-end page — never reached by shipped UI.
+                * FUN_00425840 is an empty hook; see its definition. */
         FUN_00425840();
         DAT_004877b1 = 0;
         return;
@@ -3657,6 +3690,18 @@ void FUN_0042a470(void)
         DAT_004877c9 = 1;
         g_FrameIndex = 1;
         DAT_004877b1 = 0;
+        return;
+
+    case 0xFD: /* "Reset defaults" action (wired from the Options page entry).
+                * Not a page in itself — does the reset as a side effect, then
+                * redirects DAT_004877a4 back to the Options page and rebuilds
+                * it so the user lands back where they clicked from. Using a
+                * high unused ID (0xFD) avoids the 0x1D pitfall — 0x1D is the
+                * unused briefing/match-end page and would render that screen
+                * instead of returning to Options. */
+        Reset_Config_To_Defaults();
+        DAT_004877a4 = 0x01;            /* Treat the rest of this frame as the Options page. */
+        Build_Options_Menu_Page();
         return;
 
     case 0xFE: /* Exit - save options and shutdown */
@@ -5059,10 +5104,6 @@ void FUN_0045c300(void)
     }
 }
 
-/* ===== FUN_0045ba50 — Tournament Mode Presets (0045BA50) ===== */
-/* Stub: only used in network/tournament mode (DAT_0048764a != 0). */
-void FUN_0045ba50(void) {}
-
 /* ===== FUN_0041a8c0 — Session/Level Init (0041A8C0) ===== */
 /* Called at the start of each game round. Sets up player counts, key bindings,
  * team assignments, ship type availability, team color LUTs, entity density,
@@ -5108,12 +5149,11 @@ void FUN_0041a8c0(void)
     Sync_Config_From_Blob();
     DAT_004892e5 = 0;
 
-    /* 4. Apply game mode presets */
+    /* 4. Apply game mode presets (only when not mid-match — the match-time
+     * branch in the original called a per-match preset hook that has no
+     * effect in this decomp). */
     if (DAT_0048764a == '\0') {
         FUN_0045c300();
-    } else {
-        FUN_0045ba50();
-        /* DAT_00487640[2] = DAT_00483724[1]; — disabled, see step 1 comment */
     }
 
     /* 5. Clear per-team stat counters (4 entries each) */
@@ -5734,8 +5774,13 @@ void Early_Init_Vars(void)
     g_MemoryTracker = 0;
 }
 
-/* ===== Init_Game_Config (004207C0) ===== */
-void Init_Game_Config(void)
+/* ===== Set_Config_Defaults =====
+ * Writes the hardcoded default values into g_ConfigBlob. Pure in-memory,
+ * no file I/O and no sync to runtime globals — callers decide what to do
+ * next. Used by:
+ *   - Init_Game_Config (boot path: defaults → load from disk → sync)
+ *   - FUN_00425840 "Reset defaults" menu action (defaults → save → sync) */
+void Set_Config_Defaults(void)
 {
     /* === Basic config (offsets 0-3) === */
     g_ConfigBlob[0] = 1;     /* DAT_00481f58: active level slots (1 = first slot active) */
@@ -5924,6 +5969,12 @@ void Init_Game_Config(void)
     *(int *)&g_ConfigBlob[0x18FC] = 0x3F800000; /* _DAT_00483854: float 1.0 */
     *(int *)&g_ConfigBlob[0x1900] = 0x3F800000; /* _DAT_00483858: float 1.0 */
     *(int *)&g_ConfigBlob[0x1904] = 0x3F800000; /* _DAT_0048385c: float 1.0 */
+}
+
+/* ===== Init_Game_Config (004207C0) ===== */
+void Init_Game_Config(void)
+{
+    Set_Config_Defaults();
 
     /* Load saved config from options.cfg (overwrites defaults above) */
     Load_Options_Config();
@@ -5931,6 +5982,23 @@ void Init_Game_Config(void)
     /* Final overrides (applied AFTER loading saved config) */
     DAT_00483838[3] = 0x6739;  /* Gray palette (will be overwritten to gold by FUN_0042d8b0) */
 
+    Sync_Config_From_Blob();
+}
+
+/* ===== Reset_Config_To_Defaults =====
+ * Called from the Options menu "Reset defaults" action (main menu
+ * switch case 0xFD). Restores hardcoded defaults in g_ConfigBlob,
+ * persists them to options.cfg so the reset survives a restart, and
+ * syncs the runtime globals that hold aliased copies of blob fields.
+ *
+ * Mirrors Init_Game_Config's boot sequence except it writes to disk
+ * instead of reading — the final team-4 palette override is applied
+ * here too so the post-reset state matches a fresh boot exactly. */
+void Reset_Config_To_Defaults(void)
+{
+    Set_Config_Defaults();
+    DAT_00483838[3] = 0x6739;
+    Save_Options_Config();
     Sync_Config_From_Blob();
 }
 
@@ -6236,7 +6304,9 @@ MainInit:
     *((unsigned char *)g_EntityConfig + 0x15) = 2;
 
     FUN_0041fc10();
-    FUN_0041fe70();
+    /* Original FUN_0041fe70 @ 0x0041FE70 populated the entity AI behavior table
+     * at runtime; in this decomp that table comes pre-filled via loadtime.dat
+     * (loaded by FUN_004254b0 into DAT_00487abc), so no runtime init is needed. */
     FUN_0041f900();
 
     /* Clear entity array: zero first byte of each 100-byte record */
@@ -6244,7 +6314,14 @@ MainInit:
         DAT_00487ac0[i * 100] = 0;
     }
 
-    FUN_00422a10();
+    /* Font loader — occupies the original FUN_00422a10 @ 0x00422A10 slot.
+     * The binary had a dedicated TGA-to-glyph parser here; we re-implemented
+     * that as Load_Fonts() in assets.cpp (it's clearer with filenames instead
+     * of pointer math). Keep the call ordered exactly where the original had
+     * it so downstream init (FUN_0042d8b0, FUN_00422740) sees populated font
+     * tables. Do not move Load_Fonts into later functions — menu page builds
+     * call back into the font metrics during FUN_0042d8b0. */
+    Load_Fonts();
     FUN_0042d8b0();
 
     iVar2 = FUN_00422740();

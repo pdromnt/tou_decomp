@@ -4493,8 +4493,8 @@ void FUN_00434310(void)
                     unsigned char owner = *(unsigned char *)(ebase + 0x22);
 
                     /* Per-type wall collision effects.
-                     * Each weapon type has specific effects matching the original
-                     * behavior callbacks mapped by FUN_0041fe70. */
+                     * Each weapon type has specific effects matching the behavior
+                     * callbacks pre-filled in DAT_00487abc (loaded from loadtime.dat). */
                     int did_bounce = 0;
                     {
                         int prev_x = *(int *)(ebase + 0x04);
