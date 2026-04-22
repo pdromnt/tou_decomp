@@ -60,11 +60,14 @@ char   DAT_00481ed8 = 0;
 
 /* ===== Utility functions ===== */
 /* ===== FUN_00410030 — Spawn Random Debris Particle from Top (00410030) ===== */
+/* Entity slot capacity is 0x9c4 (2500); every spawn path in this file uses the
+ * same guard. Position uses 18-bit fixed-point: tile*0x40000 = pixels<<18. */
 int FUN_00410030(void)
 {
     if (DAT_00489248 >= 0x9c4) return 0;
 
     int iVar1 = rand();
+    /* X in tile range [9, map_w-9], shifted left 18 bits to 18.14 fixed-point. */
     int iVar2 = (iVar1 % (DAT_004879f0 - 0x12) + 9) * 0x40000;
     int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
 
@@ -107,7 +110,9 @@ int FUN_00410030(void)
  * tile destruction. param_1/param_2 = tile x/y, param_3 = explosion size (sprite index),
  * param_4 = replacement tile type, param_5 = mode (-1/0/1/2), param_6..param_9 = ray origin/dir,
  * param_10 = damage mode (0=normal,1=count,2=scaled,3=special), param_11 = sound flag,
- * param_12 = team/owner index. */
+ * param_12 = team/owner index.
+ * DAT_0048385c is the weather/temperature scalar consulted for damage tier (Section 1);
+ * thresholds 0.2/0.4/0.6/1.1/1.3 are the temperature breakpoints. */
 void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, char param_5,
                   int param_6, int param_7, int param_8, int param_9,
                   char param_10, char param_11, unsigned char param_12)
@@ -157,10 +162,12 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
     /* Section 2: Random special explosion type */
     if (param_10 == '\0') {
         iVar6 = rand();
+        /* 1/50 chance: promote a normal explosion to the "special" mode (-1). */
         if (iVar6 % 0x32 == 0) {
             param_10 = -1;
         }
     }
+    /* Team-painted-tile mode only applies when DAT_00483836 (team-tiles enabled) is set. */
     if (DAT_00483836 == '\0') {
         param_4 = 0;
     }
@@ -187,10 +194,12 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             }
             param_2 = param_2 + 1;
         } while (param_2 < 0xc);
+        /* 0xC = max trace steps; if we exited early, a wall was hit — back up one step. */
         if (param_2 != 0xc) {
             param_6 = iVar17 - iVar15;
             param_7 = iVar6 - iVar7;
         }
+        /* >>0x12 converts 18-bit fixed-point back to tile coordinates. */
         param_1 = param_6 >> 0x12;
         param_2 = param_7 >> 0x12;
     }
@@ -283,7 +292,10 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             param_7_speed = 0x96;
         }
 
-        /* Spawn fire particle at center */
+        /* Spawn fire particle at center.
+         * DAT_00487814 is the coarse (16x16-tile) presence grid built each tick in
+         * FUN_00460660; bit 0x08 means "inside a player's viewport this tick" —
+         * off-screen tiles don't get visible fire particles. */
         if ((DAT_00489250 < 2000) &&
             ((*(unsigned char *)((param_1 >> 4) + (int)DAT_00487814 +
                 (param_2 >> 4) * DAT_004879f8) & 8) != 0)) {
@@ -799,7 +811,9 @@ LAB_00436bc6:
 /* Checks if a System 1 projectile (by index) collides with any structure in
  * DAT_00481f28 (stride 0x40, count DAT_00489260). On hit, subtracts damage
  * from the structure's health and sets DAT_00481e8f = 3 (or 4 if structure
- * type == 7) as a result flag for the caller. */
+ * type == 7) as a result flag for the caller.
+ * Owner byte encoding: 0x78..0x8B = teams 0..19 (byte - 0x78); anything else = 0xFB
+ * (unowned / environmental). */
 void FUN_004355d0(unsigned int param_1)
 {
     int *piVar5 = (int *)((int)DAT_004892e8 + param_1 * 0x80);
@@ -868,7 +882,9 @@ void FUN_004355d0(unsigned int param_1)
         }
     }
 
-    /* Apply damage and set damaged flag */
+    /* Apply damage and set damaged flag.
+     * Projectile +0x44 (piVar5[0x11]) is the damage value; structure +0x10 is its
+     * health. Structure +0x1e=1 is consumed by FUN_00458010 (shield animation). */
     *(int *)(iVar7 + 0x10 + (int)DAT_00481f28) -= piVar5[0x11]; /* subtract damage (offset 0x44) */
     *(unsigned char *)(iVar7 + 0x1e + (int)DAT_00481f28) = 1;   /* set damaged flag */
 }
@@ -876,7 +892,11 @@ void FUN_004355d0(unsigned int param_1)
 /* ===== FUN_00451e70 — Building/Structure Damage from Fire Particles (00451E70) ===== */
 /* Checks fire particle against 9 categories of indexed entities (structures/buildings).
  * Each category has different hitbox sizes and health thresholds.
- * param_1 = fire particle index, param_2 = damage amount */
+ * param_1 = fire particle index, param_2 = damage amount.
+ *
+ * DAT_00487834[i] is the per-category count; DAT_0048781c is a flat linkBase
+ * holding category-indexed entity indices in 0x1000-slot windows per category.
+ * Hitbox values like 0x200000 are in 18-bit fixed-point (= 8 pixels). */
 void FUN_00451e70(int param_1, int param_2)
 {
     int *piVar3, *piVar4, *piVar5;
@@ -1314,7 +1334,9 @@ post_timer:
  *   team_base + 0x08: trooper count for this team
  *   team_base + 0x100C: projectile count for this team
  *   team_base + 0x0C + team*0x1000*4: trooper index array
- *   team_base + 0x1010 + team*0x1000*4: projectile index array */
+ *   team_base + 0x1010 + team*0x1000*4: projectile index array
+ * Consumed by FUN_00458010 (turret targeting) which iterates the 4 team blocks
+ * at 0x4000 intervals — see the grid_offset += 0x4000 loop. */
 void FUN_004609e0(void)
 {
     int team_off;
@@ -5871,7 +5893,12 @@ void FUN_00434310(void)
  * +0x10 type, +0x11 frame, +0x12 sub_frame, +0x13 behavior, +0x14 owner, +0x15 color.
  * Moves particles, advances animation, handles wall collision/ricochet,
  * entity proximity deflection, damage to players/turrets/vehicles.
- * Expired particles are removed by swap-with-last. */
+ * Expired particles are removed by swap-with-last.
+ * Behavior byte (+0x13) ranges:
+ *   <0xC4  = pure visual (4-frame anim, no collision)
+ *   0xC4   = bubble — passes through walls but takes hits
+ *   0xC6/8/9/D = bullet variants (ricochet + damage)
+ *   >=200  = slow-anim (8-frame) decorative */
 void FUN_004527e0(void)
 {
     int i = 0;
@@ -7200,7 +7227,12 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 /* ===== FUN_00458010 — Turret_Targeting_LOS (00458010) ===== */
 /* Processes deployed weapons in DAT_00481f28 (stride 0x40, count DAT_00489260).
  * Full implementation: shield regen, target acquisition (player LOS + spatial grid),
- * aim slewing, predictive aim, projectile spawning, muzzle flash particles. */
+ * aim slewing, predictive aim, projectile spawning, muzzle flash particles.
+ * Weapon record layout (stride 0x40): +0x00 x, +0x04 y, +0x08 current_aim,
+ * +0x0C target_aim (0x801 = no-target sentinel), +0x10 hp, +0x14 reload,
+ * +0x18 dist-to-target, +0x1c type, +0x1d team, +0x1f barrel_state,
+ * +0x20 dbl-barrel toggle, +0x21 tracking (0=search, 1=player, 2=grid),
+ * +0x22 grid-sweep counter, +0x23 anim counter. */
 void FUN_00458010(void)
 {
     int i = 0;
@@ -7210,6 +7242,7 @@ void FUN_00458010(void)
         int off = i * 0x40;
         unsigned char type = *(unsigned char *)(off + 0x1c + (int)DAT_00481f28);
 
+        /* Weapon type 7 = team shield/generator; no aim/fire logic. */
         if (type == 7) {
             /* === Shield type: regen health, compute animation frame === */
             int health = *(int *)(off + 0x10 + (int)DAT_00481f28);
@@ -7230,6 +7263,9 @@ void FUN_00458010(void)
             /* === Non-shield weapon types === */
 
             /* Compute effective range sqrt: sqrt((range_config + 7) / 170.0) */
+            /* DAT_00487818 is the weapon-type table (stride 0x20); +0x08 holds the
+             * raw range config. fRange becomes the firing-speed scalar; _sq_thresh
+             * is used as a squared-distance cutoff for target acquisition below. */
             int range_cfg = *(int *)((unsigned int)type * 0x20 + 8 + (int)DAT_00487818) + 7;
             float fRange = sqrtf((float)range_cfg * (1.0f / 170.0f));
             int range_sq_thresh = range_cfg * range_cfg * 4;
@@ -7254,6 +7290,7 @@ void FUN_00458010(void)
             char *anim_ctr = (char *)(off + 0x23 + (int)DAT_00481f28);
             *anim_ctr = *anim_ctr + 1;
 
+            /* Every 10 ticks: re-run target acquisition (too expensive to run each tick). */
             if (*(unsigned char *)(off + 0x23 + (int)DAT_00481f28) > 10) {
                 *(unsigned char *)(off + 0x23 + (int)DAT_00481f28) = 0;
 
@@ -7384,6 +7421,9 @@ next_player:
                         best_dist = 2000000000;
                         best_side = 0;
                         unsigned int team_idx = 0;
+                        /* Iterate the 4 projectile team buckets built by FUN_004609e0.
+                         * 0x1010 skips past the trooper section; each team block is 0x4000 apart.
+                         * 0x11010 = 0x1010 + 4*0x4000 → end of team 3. */
                         int grid_offset = 0x1010;   /* start at team bucket 0, entry list */
 
                         do {
@@ -8137,8 +8177,10 @@ void FUN_00455d50(void)
                     FUN_0040f9b0(0x79, item_x, item_y);
                     DAT_00487228[p]++;
 
+                    /* Player +0xCA / +0xC9 = HUD pickup banner (type id + display timer);
+                     * the id feeds FUN_0040aca0 in hud.cpp which maps to a string. */
                     if (item_anim_type == 0) {
-                        /* Health pack */
+                        /* Small health pack — banner id 0x14. */
                         *(int *)(poff + 0x20 + DAT_00487810) += 0x5DC000;
                         *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x14;
                         *(unsigned char *)(poff + 0xC9 + DAT_00487810) = 200;
@@ -8408,7 +8450,10 @@ void FUN_00455d50(void)
 /* ===== FUN_004571f0 — Explosion_Knockback (004571F0) ===== */
 /* For each active explosion (DAT_00489e98 array, DAT_00489274 count), checks
  * nearby players and pushes them away using atan2 + cos/sin LUT knockback.
- * Also restores player health up to max. */
+ * Also restores player health up to max.
+ * NB: DAT_00489274 is the "static entity" / explosion count. Effects.cpp marks
+ * its renderer FUN_0040dbd0 as dead code (count never grows in this build), so
+ * this function effectively no-ops at runtime — kept for parity with original. */
 void FUN_004571f0(void)
 {
     if (DAT_00489274 <= 0) return;
@@ -8547,11 +8592,20 @@ void FUN_00453a80(void)
     }
 }
 /* ===== FUN_004573e0 — Trap_Door_Update (004573E0) ===== */
+/* Trap door / moving wall record (DAT_00489e80, stride 0x20):
+ *   +0x00 x, +0x04 y (anchor tile), +0x08 progress (extension in 18.14 fp),
+ *   +0x0C target/cooldown progress, +0x10 timer (200 = idle, 0 = move),
+ *   +0x15 direction (0=down,1=right,2=up,3=left), +0x16 oscillation delay,
+ *   +0x17 PhysicsParams index, +0x18 anim subframe (0..3, ticks once per call),
+ *   +0x19 owning team (3 = neutral), +0x1A sprite index for fill, +0x1B linked
+ *   record (0xFF if standalone — pairs both ends of an extending wall). */
 void FUN_004573e0(void)
 {
     int i, off;
 
-    /* Loop 1: Advance animation frame for all segments */
+    /* Loop 1: Advance animation frame for all segments.
+     * Animation runs at quarter speed: 4 calls = 1 visible frame; the loops
+     * below skip work on subframe != 0 to spread cost across the cycle. */
     for (i = 0; i < DAT_00489270; i++) {
         off = i * 0x20;
         int base = (int)DAT_00489e80;
@@ -8598,7 +8652,10 @@ void FUN_004573e0(void)
         }
         iVar8 = (int)DAT_00489e80;
 
-        /* Tile destruction when timer == 0 */
+        /* Tile destruction when timer == 0.
+         * 0xEF is the threshold: only "soft" tile types (>0xEF) get cleared by
+         * the moving door — solid map geometry is preserved. Door clears the
+         * corridor it's about to extend into. */
         if (*(int *)((int)DAT_00489e80 + off + 0x10) == 0) {
             unsigned int sprite_idx = (unsigned int)*(unsigned char *)((int)DAT_00489e80 + off + 0x1A);
             unsigned int w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + sprite_idx);
@@ -9351,6 +9408,11 @@ try_vertical:
     } while (loop_count < process_count);
 }
 /* ===== FUN_004533d0 — Update_Elevators (004533D0) ===== */
+/* Wave/elevator strip simulation. Each segment is a node in a 1D mass-spring
+ * chain; DAT_004892cc alternates +1/-1 each call so X and Y velocity updates
+ * happen on alternating ticks (Verlet-style). Tile type 0x40 = "active fluid
+ * surface tile" used to paint the strip; 0x40000 = 1 tile in 18.14 fp.
+ * Type byte: 0=head, 1=body, 2=anchor (zero velocity). */
 void FUN_004533d0(void)
 {
     int i, off;
@@ -9548,7 +9610,9 @@ void FUN_004533d0(void)
 /* Validates waypoint connectivity in DAT_00487820 (stride 0x1C per record,
  * DAT_004892c8 count). Each record has: +0x00 X, +0x04 Y, +0x10 forward flag,
  * +0x11 backward flag. Checks if adjacent waypoints are close (distance < 3 tiles)
- * and on walkable tile. Also checks if waypoint's own tile is blocked. */
+ * and on walkable tile. Also checks if waypoint's own tile is blocked.
+ * +0x10 == 2 (Pass 3 sentinel) marks "waypoint blocked by terrain" so the AI
+ * pathing in entity.cpp avoids it. */
 void FUN_00453230(void)
 {
     int shift = (unsigned char)DAT_00487a18 & 0x1F;
@@ -9628,6 +9692,11 @@ void FUN_00453230(void)
  *      resolution that is not needed for normal gameplay.            */
 void FUN_0045ddb2(void) { /* intentional no-op — see comment above */ }
 /* ===== FUN_0045fc00 — Update_Fluid_Spread (0045FC00) ===== */
+/* Cellular spread of water (tile type 6) and lava (tile type 0x14). New flowing
+ * source tiles are tagged 0x0B; finalized water tiles return to 0 (cleared),
+ * finalized lava tiles become 0x15 (cooled). Sources stored in DAT_00489e7c
+ * (stride 0x20, DAT_00489258 count); ticks at 1/9 the simulation rate via
+ * DAT_00487784 to slow the visible spread. */
 void FUN_0045fc00(void)
 {
     DAT_00487784++;
@@ -9859,9 +9928,16 @@ void FUN_0045fc00(void)
 }
 /* FUN_00437cf0 — Apply explosion knockback force to nearby players.
  * Pushes all players within a radius away from explosion center.
- * Params: x, y (fixed-point position), radius, palette_id, owner (-1 = environmental) */
+ * Params: x, y (fixed-point position), radius, palette_id, owner (-1 = environmental)
+ * palette_id encoding matches the owner-byte encoding used elsewhere:
+ *   <0x50 = player index (apply friendly-fire + kill-attribution rules)
+ *   0x50..0x63 = turret (+0x14 remap for attribution)
+ *   0x78..0x8B = team base (-0x14 remap)
+ *   >=0x8c  = environmental (0xFF sentinel). */
 void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
 {
+    /* -1 is a "use radius as damage" overload from callers that don't care about
+     * separating radius from falloff damage magnitude. */
     if (owner == -1) {
         owner = radius;
     }
@@ -9872,6 +9948,7 @@ void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
     if (0 < DAT_00489240) {
         do {
             int iVar2 = *(int *)(iVar6 + (int)DAT_00487810);
+            /* 0xf00000 = 60 tiles in 18.14 fixed-point → knockback scan radius. */
             if ((iVar2 - 0xf00000 < x) && (x < iVar2 + 0xf00000)) {
                 int iVar5 = *(int *)(iVar6 + 4 + (int)DAT_00487810);
                 if ((iVar5 - 0xf00000 < y) && (y < iVar5 + 0xf00000)) {
@@ -9879,6 +9956,7 @@ void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
                     iVar5 = (y - iVar5) >> 0x12;
                     iVar2 = iVar5 * iVar5 + dx * dx;
                     iVar2 = (int)(iVar2 + (iVar2 >> 0x1f & 0xfU)) >> 4;
+                    /* Minimum divisor 7 prevents explosion-at-position-zero infinity. */
                     if (iVar2 < 7) iVar2 = 7;
 
                     /* Apply knockback velocity */

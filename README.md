@@ -16,7 +16,7 @@ A lot of things. A lot of things may be very buggy. The code I got is essentialy
 - Levels (including GG Levels)
 - Most subsystems (Enemy AI, Spawns, Pickups, VFX, Weapons, etc.)
 
-I'd guesstimate we're 90% of the way there.
+I'd guesstimate we're 95% done. The 5% left are some inaccuracies that are hard to get correct and bugs. 
 
 ## Objective
 
@@ -36,9 +36,9 @@ If you know enough to help with the decomp, feel free to open a PR.
 
 ## Tools used
 - MinGW
-- Ghidra
-- Claude + BetterGhidraMCP
-- An old Pentium II running Windows 98 to run the original game.
+- Ghidra + BetterGhidraMCP
+- Various Clankers
+- An old battlestation to run the original game.
 
 ## License
 

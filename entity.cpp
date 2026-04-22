@@ -2097,6 +2097,12 @@ static void FUN_0044ca40_impl(int *ent, int idx)
     FUN_0040f9b0(snd_type + 0xD2, ent[0], ent[1], 0x14);
 }
 /* ===== FUN_0044d650 — Detonate Owned Projectiles (0044D650) ===== */
+/* Triggered when player presses the detonate button (button mask bit 0x20).
+ * Walks the entity array and forces matching owned projectiles to detonation
+ * state (0xFA = explode immediately, 0xFB = expire/cleanup). The player slot
+ * has 6 "deployed-weapon" counters (+0x464..+0x478), each gating one type:
+ *   +0x464 → 0x22 firework, +0x468 → 0x27 komet bomb, +0x46C → 0x2E nalle,
+ *   +0x470 → 0x0B nuke barrel, +0x474 → 0x28 pipebomb, +0x478 → 0x29/0x2A turret. */
 static void FUN_0044d650_impl(int *ent, int idx)
 {
     if (((*(unsigned char *)((int)ent + 0xb8) & 0x20) == 0) ||
@@ -2448,6 +2454,9 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
 }
 
 /* ===== FUN_0044f840 — Wall Bounce (0044F840) ===== */
+/* ent[4]/ent[5] = velocity X/Y; XOR-with-sign trick is the branchless abs idiom
+ * (a ^ s) - s where s = a>>31. Sound 0x119 = soft splash, 0x11A = hard splash;
+ * threshold 900000 ≈ 3.4 tiles/tick combined speed. */
 static void FUN_0044f840_impl(int *ent)
 {
     unsigned int absVelY = (unsigned int)(ent[5] ^ (ent[5] >> 0x1f)) - (unsigned int)(ent[5] >> 0x1f);
@@ -2457,6 +2466,7 @@ static void FUN_0044f840_impl(int *ent)
     int snd = (totalSpeed < 900000) ? 0x119 : 0x11a;
     FUN_0040f9b0(snd, ent[0], ent[1]);
 
+    /* Lose 1/3 of velocity per axis (drag), set splash refractory timer (+0x49E). */
     ent[5] = ent[5] - ent[5] / 3;
     *(unsigned char *)((int)ent + 0x49e) = 10;
     ent[4] = ent[4] - ent[4] / 3;
@@ -4953,7 +4963,9 @@ static void FUN_0044bbb0(int base)
 
 /* ===== FUN_0044bf20 — Heading_Rotation ===== */
 /* Rotates heading angle based on button flags (bits 1=left, 2=right).
- * Turn rate comes from ship stats table, halved during speed boost. */
+ * Turn rate comes from ship stats table, halved during speed boost.
+ * Player +0xB8 (button bitmask): bit 0=left, 1=right, 2=thrust, 3=fire1,
+ * 4=fire2, 5=menu/detonate, 6=brake. Heading at +0x18 in 0..0x7FF range. */
 static void FUN_0044bf20(int base, int player_idx)
 {
     unsigned int buttons = *(unsigned int *)(base + 0xB8);
@@ -5135,7 +5147,9 @@ static void FUN_0044bfa0(int *ent, int player_idx)
 
 /* ===== FUN_0044e510 — Boundary_Clamp ===== */
 /* Prevents entity from going off the map. Resets position to edge and
- * zeroes velocity if out of bounds. */
+ * zeroes velocity if out of bounds.
+ * ent[0]/[1] = pos x/y (18.14 fp), ent[2]/[3] = prev_x/prev_y, ent[4]/[5] = vel x/y.
+ * Restoring the *other* axis from prev avoids "popping" along the perpendicular. */
 void FUN_0044e510(int *ent)
 {
     /* Left boundary */
@@ -5309,7 +5323,14 @@ static void FUN_0044e1c0(int *ent)
     unsigned char tile = *(unsigned char *)((int)DAT_0048782c +
         (ty << ((unsigned char)DAT_00487a18 & 0x1F)) + tx);
 
-    /* Tile-based conveyor/force effects */
+    /* Tile-based conveyor/force effects.
+     * The four direction tile families are arranged sequentially:
+     *   0x40 up, 0x41 down, 0x42 left, 0x43 right (weak)
+     *   0x44..0x47 same order (strong, magnitude 0x7800)
+     *   0x16..0x19 same order (very strong, magnitude 0x8C00)
+     * The 0x64..0x73 range is animated/team-coloured variants of the weak set,
+     * grouped 4-per-direction; 0x67..0x6C overlaps because both up-low and
+     * down-low aliases share tile 0x67 — confirm via tile property table. */
     /* Weak conveyors (tiles 0x40-0x43, ranges 0x64-0x73) */
     if (tile == 0x40 || (tile >= 99 && tile < 0x68))
         ent[5] -= 0x2800;   /* push up */
@@ -5372,7 +5393,10 @@ static void FUN_0044e1c0(int *ent)
 /* Per-pixel sprite collision against tilemap using collision mask at sprite 0x19B.
  * Phase 1: Scan sprite footprint, count solid tile overlaps, accumulate collision normal.
  * Phase 2A (1-3 hits, entity alive): Replace solid tiles, apply drag, restore position.
- * Phase 2B (>3 hits or entity dead): Reflect velocity off surface, apply impact damage. */
+ * Phase 2B (>3 hits or entity dead): Reflect velocity off surface, apply impact damage.
+ * Tile prop offsets used here: [0]=passable-flag, [3]=ship-blocking,
+ * [7]=flying-blocking (alt path), [0xB]=indestructible flag (forces heavy path),
+ * [0xE]=replacement tile when crushed. Sprite 0x19B is the ship hitbox mask. */
 static void FUN_00450630(int *ent, int player_idx)
 {
     int col_x_sum = 0;   /* accumulated collision X offset */
@@ -5645,7 +5669,13 @@ heavy_collision:
 /* ===== FUN_0044b0b0 — Entity_Behavior_Loop ===== */
 /* Master per-tick entity update. Processes all players/ships:
  * saves positions, reads input, runs movement pipeline, handles
- * combat, pickups, death, and respawn. */
+ * combat, pickups, death, and respawn.
+ * Per-player slot is 0x598 bytes at DAT_00487810. Key offsets used here:
+ *   +0x18 heading, +0x20 health, +0x24 dead-flag, +0x28 score/kills,
+ *   +0x2C team byte, +0xB8 button bitmask, +0xDD AI level (0=human),
+ *   +0xCA/+0xC9 HUD pickup banner (id + display ticks), +0x47C alive flag,
+ *   +0x47D respawn freeze, +0x498 weapon-in-hand, +0x49D underwater flag,
+ *   +0x49F underwater exposure counter (drives blue-tint LUT in effects.cpp). */
 void FUN_0044b0b0(void)
 {
     int i;

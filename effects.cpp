@@ -33,7 +33,10 @@ unsigned short DAT_00483850 = 0;  /* laser pixel color B */
 /* ===== FUN_004257e0 - Angle calculation (atan2 to table index) ===== */
 /* Returns 11-bit angle index (0-2047) into sin/cos table.
  * Original uses x87 FPATAN(ST1=dx, ST0=dy) which is atan2(dx, dy),
- * then multiplies by 1024.0 * (1/PI) to convert radians to table index. */
+ * then multiplies by 1024.0 * (1/PI) to convert radians to table index.
+ * Convention: heading H means lut[H] = cos component, lut[H+0x200] = sin
+ * component. Adding 0x200 = +90°; XOR with 0x400 reverses (180°). The
+ * sincos table at DAT_00487ab0 is sized 0x800 (cos) + 0x800 (sin). */
 int FUN_004257e0(int cx, int cy, int px, int py)
 {
     double dx = (double)(px - cx);
@@ -1108,6 +1111,10 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         (int)DAT_00487abc + (unsigned int)*(unsigned char *)(ent_base + 0x40 + ent_off) +
                         0x124 + (unsigned int)anim_type * 0x218);
 
+                    /* anim_data is the entity-type "animation source" byte from
+                     * loadtime.dat (DAT_00487abc, stride 0x218, +0x124 + sub_type).
+                     * <200 = use frame counter at +0x48; 200..0xCF = special angle
+                     * or fuse drivers documented per-case below. */
                     if (anim_data < 200) {
                         sprite_idx += *(int *)(ent_base + 0x48 + ent_off);
                     } else if (anim_data == 200) {
@@ -1146,7 +1153,8 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         sprite_idx += (unsigned int)(((*(int *)(ent_base + 0x3c + ent_off)) << 2) >> 8) & 7;
                     }
 
-                    /* Render: shield bubble or sprite */
+                    /* sprite_idx 0x36 is the bubble shield placeholder — handled by
+                     * the alpha-mask renderer FUN_0040c940 instead of the sprite atlas. */
                     if (sprite_idx == 0x36) {
                         int shield_age = *(int *)(ent_base + 0x28 + ent_off);
                         int intensity = (shield_age < 0x20) ? (0x10 - shield_age / 2) : 0;
@@ -1195,7 +1203,10 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         color = (r5 << 11) | (g5 << 6) | b5;
                     }
 
-                    /* Water tile tint: apply LUT for underwater darkening/coloring. */
+                    /* Water tile tint: apply LUT for underwater darkening/coloring.
+                     * Tile property byte +4 is the "fluid" flag (set for water 0x0C
+                     * and lava-finalized 0x15). LUT index 28 is the underwater blue
+                     * highlight table generated in FUN_0045a060. */
                     unsigned char tile = ((unsigned char *)DAT_0048782c)[(py << ((unsigned char)DAT_00487a18 & 0x1f)) + px];
                     if (((char *)DAT_00487928)[(unsigned int)tile * 0x20 + 4] != '\0') {
                         unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)color];
