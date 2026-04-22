@@ -302,12 +302,12 @@ void FUN_0045e1f0(void)
 
     /* Troopers (DAT_00487884, stride 0x40): clear hit flag */
     for (i = 0; i < DAT_0048924c; i++) {
-        *(char *)(DAT_00487884 + i * 0x40 + 0x2C) = 0;
+        *(char *)((int)DAT_00487884 + i * 0x40 + 0x2C) = 0;
     }
 
     /* Projectiles (DAT_00481f28, stride 0x40): clear update flag */
     for (i = 0; i < DAT_00489260; i++) {
-        *(char *)(DAT_00481f28 + i * 0x40 + 0x1E) = 0;
+        *(char *)((int)DAT_00481f28 + i * 0x40 + 0x1E) = 0;
     }
 
     /* Players (DAT_00487810, stride 0x598): clear per-tick flags */
