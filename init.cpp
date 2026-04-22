@@ -125,6 +125,19 @@ char  DAT_00480740[256] = {0};  /* current GG theme name buffer */
 int   DAT_00486484 = 0;         /* GG theme count */
 void *DAT_00486488[300] = {0};  /* GG theme directory name strings */
 
+/* Hover metadata buffers for the Levels page corner display. These are
+ * pointed at by g_MenuStrings[0x149..0x14C] so that FUN_00430200 menu
+ * items render their current contents as ordinary text. Updated by
+ * Update_Level_Hover_Metadata whenever the user hovers a different
+ * level entry on the Levels menu (page 0x11). The idx cache prevents
+ * redundant work and (for regular .lev files) redundant disk reads. */
+static char s_HoverLevelName[128]   = "";
+static char s_HoverLevelAuthor[128] = "";
+static char s_HoverLevelEmail[128]  = "";
+static char s_HoverLevelType[32]    = "";
+static int  s_HoveredLevelIdx       = -1;
+static void Update_Level_Hover_Metadata(int level_idx);
+
 /* Music scanner */
 int   DAT_00485fcc = 0;         /* music file count */
 int   DAT_00485fd0 = 0;         /* selected music index */
@@ -1243,6 +1256,13 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x146] = (char *)"HUGE";
     g_MenuStrings[0x147] = (char *)"Reset defaults";
     g_MenuStrings[0x148] = (char *)"Defaults restored.";
+
+    /* --- Levels-page hover metadata (dynamic text, buffers updated by
+     *     Update_Level_Hover_Metadata each time the hovered level changes). --- */
+    g_MenuStrings[0x149] = s_HoverLevelName;
+    g_MenuStrings[0x14A] = s_HoverLevelAuthor;
+    g_MenuStrings[0x14B] = s_HoverLevelEmail;
+    g_MenuStrings[0x14C] = s_HoverLevelType;
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -2435,9 +2455,25 @@ void FUN_00425840(void)
 {
 }
 
-/* ===== FUN_00430200 - Create text menu item (00430200) ===== */
-/* Adds a text-based menu item to g_GameViewData.
- * Returns text_height - 4 (spacing for next item). */
+/* ===== FUN_00430200 - Create text menu item (00430200) =====
+ * Adds a text-based menu item to g_GameViewData.
+ * Returns text_height - 4 (spacing for next item).
+ *
+ * color_style → rendered color (font_idx 0-2; font_idx 3 small font
+ * follows the same table for plain-text items). Verified in-game 2026.
+ *
+ *   00  Bright yellow     08  Muted yellow
+ *   01  White             09  Red
+ *   02  Cyan              10  Orange
+ *   03  Darker yellow     11  Light cyan
+ *   04  Dark cyan         12  Dark cyan (same/near 04)
+ *   05  Light pink        13  Black
+ *   06  Magenta           14  Gold
+ *   07  Peach             15  Dark gold
+ *
+ * NOTE: some render_modes overload this field as an index (weapon id,
+ * sprite id, team slot) rather than a color. See graphics.cpp cases
+ * around line 919-1340 for the overloaded interpretations. */
 int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
                  int font_idx, unsigned char clickable, unsigned char render_mode,
                  unsigned char alignment, unsigned char nav_target)
@@ -2636,6 +2672,169 @@ int FUN_0042fdf0(int param_y)
  * persists for the immediate aftermath of the reset click, not across
  * unrelated navigations back to Options. */
 static char s_ResetDefaultsNotice = 0;
+
+/* Strip trailing \r / \n / whitespace from a string in place. Helper
+ * for the .lev / info.txt readers in Update_Level_Hover_Metadata. */
+static void Trim_Trailing_Whitespace(char *s)
+{
+    size_t len = strlen(s);
+    while (len > 0 && (s[len-1] == '\r' || s[len-1] == '\n' ||
+                       s[len-1] == ' '  || s[len-1] == '\t')) {
+        s[--len] = '\0';
+    }
+}
+
+/* Reads MAKER / EMAIL from ggstuff\<theme>\info.txt.
+ * Format: "/MAKER" (case-insensitive) or "/EMAIL" on one line, value on the
+ * next. See gg_gen.cpp:~350 for the canonical parser — we match the same
+ * convention (leading '/', case-insensitive keyword, value on the line
+ * right after). Only populates whichever fields are found; leaves the
+ * buffer empty on miss. */
+static void Read_GG_Theme_Info(const char *theme_name,
+                               char *maker_out, size_t maker_sz,
+                               char *email_out, size_t email_sz)
+{
+    maker_out[0] = '\0';
+    email_out[0] = '\0';
+    if (!theme_name || !theme_name[0]) return;
+
+    char path[300];
+    int n = snprintf(path, sizeof(path), "ggstuff\\%s\\info.txt", theme_name);
+    if (n <= 0 || n >= (int)sizeof(path)) return;
+
+    FILE *fp = fopen(path, "r");
+    if (!fp) return;
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) {
+        Trim_Trailing_Whitespace(line);
+        if (line[0] != '/') continue;
+
+        /* Case-insensitive match on the keyword after the slash. */
+        int want = 0;              /* 1 = maker, 2 = email */
+        if ((line[1] == 'M' || line[1] == 'm') &&
+            (line[2] == 'A' || line[2] == 'a') &&
+            (line[3] == 'K' || line[3] == 'k') &&
+            (line[4] == 'E' || line[4] == 'e') &&
+            (line[5] == 'R' || line[5] == 'r') &&
+            line[6] == '\0') {
+            want = 1;
+        } else if ((line[1] == 'E' || line[1] == 'e') &&
+                   (line[2] == 'M' || line[2] == 'm') &&
+                   (line[3] == 'A' || line[3] == 'a') &&
+                   (line[4] == 'I' || line[4] == 'i') &&
+                   (line[5] == 'L' || line[5] == 'l') &&
+                   line[6] == '\0') {
+            want = 2;
+        }
+        if (want == 0) continue;
+
+        if (!fgets(line, sizeof(line), fp)) break;
+        Trim_Trailing_Whitespace(line);
+
+        if (want == 1) {
+            strncpy(maker_out, line, maker_sz - 1);
+            maker_out[maker_sz - 1] = '\0';
+        } else {
+            strncpy(email_out, line, email_sz - 1);
+            email_out[email_sz - 1] = '\0';
+        }
+
+        /* Early exit once both are filled. */
+        if (maker_out[0] && email_out[0]) break;
+    }
+
+    fclose(fp);
+}
+
+/* Updates the s_HoverLevel* buffers for the hover metadata on the
+ * Levels page. Called from the per-frame hover loop in FUN_00426650
+ * whenever a level entry is under the cursor. Skips work when the
+ * hovered index hasn't changed, so disk reads only fire on transitions.
+ *
+ * Final strings include both label and value, matching the shipped
+ * format the user remembered from the original:
+ *   "LEVEL NAME: <name>"     or "GG THEME NAME: <name>"    (yellow)
+ *   "LEVEL AUTHOR: <author>" or "GG THEME AUTHOR: <author>" (white)
+ *   "AUTHOR'S EMAIL: <email>"                              (white)
+ *   "LEVEL TYPE: NORMAL LEVEL" or "LEVEL TYPE: GG THEME"   (cyan)
+ *
+ * Data sources:
+ *   name   = DAT_00485090[idx]  (filename or GG dir name, cached at startup)
+ *   type   = DAT_00485ea0[idx] == 2 → "GG THEME" else "NORMAL LEVEL"
+ *
+ *   For regular .lev:
+ *     author = DAT_00485540[idx]  (strcpy'd from cfg[0x00] at startup)
+ *     email  = live read of levels\<name>.LEV at file offset 0x22+0x80
+ *              — the startup strcpy stops at cfg[0x00]'s null terminator
+ *              and never reaches cfg[0x80], so the field was never cached.
+ *
+ *   For GG themes:
+ *     author, email = live read of ggstuff\<name>\info.txt via the /MAKER
+ *              and /EMAIL keywords. The DAT_00485540/DAT_004859f0 cache
+ *              slots populated at startup by FUN_00413d40 don't carry this
+ *              data: the original binary passed per-theme info through
+ *              DAT_004818e8/DAT_00481988 (one set of globals overwritten
+ *              each scan iteration), while the decomp's call site reads
+ *              from DAT_00483860[0x200/0x300] which is garbage for themes.
+ */
+static void Update_Level_Hover_Metadata(int level_idx)
+{
+    if (level_idx == s_HoveredLevelIdx) return;
+    s_HoveredLevelIdx = level_idx;
+
+    if (level_idx < 0 || level_idx >= DAT_00485088) {
+        s_HoverLevelName[0]   = '\0';
+        s_HoverLevelAuthor[0] = '\0';
+        s_HoverLevelEmail[0]  = '\0';
+        s_HoverLevelType[0]   = '\0';
+        return;
+    }
+
+    const char *name = (const char *)DAT_00485090[level_idx];
+    int is_gg = (DAT_00485ea0[level_idx] == 2);
+    const char *kind_label = is_gg ? "GG THEME" : "LEVEL";
+    const char *type_value = is_gg ? "GG THEME" : "NORMAL LEVEL";
+
+    char author_tmp[128] = "";
+    char email_tmp[128]  = "";
+
+    if (is_gg) {
+        Read_GG_Theme_Info(name,
+                           author_tmp, sizeof(author_tmp),
+                           email_tmp,  sizeof(email_tmp));
+    } else {
+        const char *cached_author = (const char *)DAT_00485540[level_idx];
+        if (cached_author) {
+            strncpy(author_tmp, cached_author, sizeof(author_tmp) - 1);
+            author_tmp[sizeof(author_tmp) - 1] = '\0';
+        }
+        if (name && name[0]) {
+            char path[300];
+            int n = snprintf(path, sizeof(path), "levels\\%s.LEV", name);
+            if (n > 0 && n < (int)sizeof(path)) {
+                FILE *fp = fopen(path, "rb");
+                if (fp) {
+                    if (fseek(fp, 0x22 + 0x80, SEEK_SET) == 0) {
+                        size_t got = fread(email_tmp, 1,
+                                           sizeof(email_tmp) - 1, fp);
+                        email_tmp[got] = '\0';
+                    }
+                    fclose(fp);
+                }
+            }
+        }
+    }
+
+    snprintf(s_HoverLevelName,   sizeof(s_HoverLevelName),
+             "%s NAME: %s",   kind_label, name ? name : "");
+    snprintf(s_HoverLevelAuthor, sizeof(s_HoverLevelAuthor),
+             "%s AUTHOR: %s", kind_label, author_tmp);
+    snprintf(s_HoverLevelEmail,  sizeof(s_HoverLevelEmail),
+             "AUTHOR'S EMAIL: %s", email_tmp);
+    snprintf(s_HoverLevelType,   sizeof(s_HoverLevelType),
+             "LEVEL TYPE: %s", type_value);
+}
 
 /* Builds the Options submenu item layout. Extracted so both the
  * normal Options navigation (case 0x01) and the "Reset defaults"
@@ -3254,6 +3453,19 @@ void FUN_0042a470(void)
                 (const unsigned char *)"You have %d levels and %d GG themes",
                 DAT_0048508c, DAT_00486484);
         FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
+
+        /* Hover metadata: 4 small-font lines stacked on the left edge just
+         * above the "You have X levels..." line, populated by
+         * Update_Level_Hover_Metadata (called from the hover loop in
+         * FUN_00426650). Colors per the FUN_00430200 table above: 0 =
+         * bright yellow (name), 1 = white (author, email), 2 = cyan
+         * (type). Same x=10, alignment=0, font_idx=3 as the level-count
+         * line so the block reads as one unit. Y packed tightly so 4
+         * small-font rows fit above y=0x1cc without crossing Back. */
+        FUN_00430200(10, 0x19c, 0x149, 0, 3, 0, 0, 0, 0xff);       /* hover: level name  (yellow) */
+        FUN_00430200(10, 0x1a8, 0x14A, 1, 3, 0, 0, 0, 0xff);       /* hover: author     (white)  */
+        FUN_00430200(10, 0x1b4, 0x14B, 1, 3, 0, 0, 0, 0xff);       /* hover: email      (white)  */
+        FUN_00430200(10, 0x1c0, 0x14C, 2, 3, 0, 0, 0, 0xff);       /* hover: level type (cyan)   */
         FUN_00430200(0, 100, 0x5d, 2, 2, 1, 0xc, 1, 0xff);         /* randomize */
         FUN_0042fdf0(0x7e);
         FUN_0042fdf0(0x182);
@@ -4645,6 +4857,17 @@ void FUN_00426650(void)
             {
                 /* Hover: set hover glow */
                 item->hover_state = 0x2580000;
+
+                /* Levels page: refresh the corner metadata buffers when
+                 * the cursor is over a level entry. render_mode 8 is the
+                 * level-row cycling item, whose extra_data points at a
+                 * slot in the g_ConfigBlob level-order indirection table
+                 * (see level-list population in FUN_00426650 / case 0x11).
+                 * Dereferencing that pointer yields the level index. */
+                if (DAT_004877a4 == 0x11 && item->render_mode == 8 &&
+                    item->extra_data != 0) {
+                    Update_Level_Hover_Metadata(*(int *)(uintptr_t)item->extra_data);
+                }
 
                 /* Propagate hover to linked item */
                 int linked = item->linked_item;
