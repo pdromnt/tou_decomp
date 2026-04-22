@@ -1,5 +1,5 @@
 @echo off
-set TARGET=tou_decomp.exe
+set TARGET=tou.exe
 
 echo Checking for running instances...
 tasklist /FI "IMAGENAME eq %TARGET%" 2>NUL | find /I /N "%TARGET%">NUL

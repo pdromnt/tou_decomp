@@ -6,7 +6,7 @@ LDFLAGS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32
 
 SRCS = winmain.cpp sound.cpp assets.cpp gameloop.cpp memory.cpp init.cpp graphics.cpp intro.cpp menu.cpp level.cpp math.cpp stubs.cpp utils.cpp effects.cpp entity.cpp hud.cpp gg_gen.cpp
 OBJS = $(SRCS:.cpp=.o) stb_image.o fmod_loader.o
-TARGET = tou_decomp.exe
+TARGET = TOU.exe
 
 all: $(TARGET)
 
