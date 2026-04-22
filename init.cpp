@@ -1242,6 +1242,7 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x145] = (char *)"Large";
     g_MenuStrings[0x146] = (char *)"HUGE";
     g_MenuStrings[0x147] = (char *)"Reset defaults";
+    g_MenuStrings[0x148] = (char *)"Defaults restored.";
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -2629,6 +2630,13 @@ int FUN_0042fdf0(int param_y)
     return 8;
 }
 
+/* Feedback flag — non-zero while a "Defaults restored." notice should
+ * render on the Options page. Case 0xFD sets it as part of its reset
+ * action; case 0x01 (direct Options nav) clears it so the notice only
+ * persists for the immediate aftermath of the reset click, not across
+ * unrelated navigations back to Options. */
+static char s_ResetDefaultsNotice = 0;
+
 /* Builds the Options submenu item layout. Extracted so both the
  * normal Options navigation (case 0x01) and the "Reset defaults"
  * action (case 0xFD) can produce the same page — the reset action
@@ -2648,6 +2656,14 @@ static void Build_Options_Menu_Page(void)
     FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);      /* "Name" → page 0xC */
     FUN_00430200(0, 0x182, 0x147, 2, 0, 1, 0, 1, 0xFD);    /* "Reset defaults" → case 0xFD action */
     FUN_00430200(0, 0x1B6, 0xf, 2, 0, 1, 0, 1, 0);         /* "Back" → main menu (extra y-gap is the navigation separator) */
+
+    /* Transient reset-defaults notice (small yellow text, centered, not
+     * clickable). Style mirrors the copyright-line pattern at the bottom
+     * of the main menu page (font_idx 3 = tiny, alignment 2 = center). */
+    if (s_ResetDefaultsNotice) {
+        FUN_00430200(0, 0x1D0, 0x148, 1, 3, 0, 0, 2, 0xff);
+    }
+
     g_FrameIndex = 1;
     DAT_004877c9 = 0;  /* ESC → main menu */
     DAT_004877b1 = 0;
@@ -2710,6 +2726,7 @@ void FUN_0042a470(void)
         return;
 
     case 0x01: /* Options submenu */
+        s_ResetDefaultsNotice = 0;     /* Fresh entry via normal nav — clear any stale notice. */
         Build_Options_Menu_Page();
         return;
 
@@ -3700,6 +3717,7 @@ void FUN_0042a470(void)
                 * unused briefing/match-end page and would render that screen
                 * instead of returning to Options. */
         Reset_Config_To_Defaults();
+        s_ResetDefaultsNotice = 1;      /* Trigger the small confirmation text on the Options rebuild below. */
         DAT_004877a4 = 0x01;            /* Treat the rest of this frame as the Options page. */
         Build_Options_Menu_Page();
         return;
