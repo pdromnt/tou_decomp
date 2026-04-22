@@ -385,53 +385,53 @@ static void Render_Game_World(unsigned short *buffer, int stride)
      *   DAT_00483960 == 0 → direct blit, sky comes from tiled sprite fill above */
     if (DAT_00483960 != 0 && DAT_00489ea0 != NULL) {
         /* Per-level sky compositing (FUN_0040c0a0):
-         * Uses parallax scrolling — sky scrolls slower than the map.
-         * Formula: sky_pos = viewport_pos * (sky_size - vp_size) / (map_size - vp_size)
-         * If sky is bigger than map in either axis, do simple rect copy instead. */
+         * The sky image scrolls slower than the map so the backdrop feels
+         * distant. Formula on each axis:
+         *     sky_start = vp_pos * (sky - vp) / (map - vp)
+         * so sky_start is 0 at the left/top edge of the map and (sky - vp)
+         * at the right/bottom edge, exposing the full sky image as the
+         * viewport traverses the map.
+         *
+         * Edge cases on each axis (handled independently for x and y):
+         *   sky <= vp → can't scroll; sky_start stays 0 and the sky tiles
+         *     (wraps with a modulo) if it's strictly smaller than the viewport.
+         *   sky >  map → formula still produces valid offsets inside the
+         *     sky buffer, parallax just covers a shorter visual range. */
         unsigned short *sky = (unsigned short *)DAT_00489ea0;
         int sky_w = DAT_00487a0c;
         int sky_h = DAT_00487a10;
 
-        float ratio_x = (sky_w > vp_w) ? (float)(DAT_004879f0 - vp_w) / (float)(sky_w - vp_w) : 0.0f;
-        float ratio_y = (sky_h > vp_h) ? (float)(DAT_004879f4 - vp_h) / (float)(sky_h - vp_h) : 0.0f;
+        int sky_x_start = 0;
+        int sky_y_start = 0;
+        if (sky_w > vp_w && (int)DAT_004879f0 > vp_w) {
+            sky_x_start = vp_left * (sky_w - vp_w) / ((int)DAT_004879f0 - vp_w);
+        }
+        if (sky_h > vp_h && (int)DAT_004879f4 > vp_h) {
+            sky_y_start = vp_top * (sky_h - vp_h) / ((int)DAT_004879f4 - vp_h);
+        }
 
-        if (ratio_x < 1.0f || ratio_y < 1.0f) {
-            /* Sky bigger than map: simple rect copy from sky buffer (no parallax needed) */
-            int tile_src = (vp_top << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
-            unsigned short *sky_src = (unsigned short *)((int)DAT_00481f50 + tile_src * 2);
-            unsigned short *dst = buffer + (DAT_004806e8 * stride + DAT_004806ec);
-            int sky_stride = DAT_00487a00;
-            for (int y = 0; y < vp_h; y++) {
-                memcpy(dst, sky_src, vp_w * 2);
-                dst += stride;
-                sky_src += sky_stride;
-            }
-        } else {
-            /* Parallax compositing: compute sky start offset from viewport position */
-            int sky_x_start = (int)((float)vp_left / ratio_x);
-            int sky_y_start = (int)((float)vp_top / ratio_y);
-            int sky_offset = sky_y_start * sky_w + sky_x_start;
-            int tile_stride = DAT_00487a00;
+        int tile_stride = DAT_00487a00;
+        unsigned short *tile_row = src + (vp_top << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
+        unsigned short *dst_row = buffer + (DAT_004806e8 * stride + DAT_004806ec);
+        int sky_y = sky_y_start;
 
-            unsigned short *tile_row = src + (vp_top << ((unsigned char)DAT_00487a18 & 0x1F)) + vp_left;
-            unsigned short *dst_row = buffer + (DAT_004806e8 * stride + DAT_004806ec);
-            int sky_row_offset = sky_offset;
-
-            for (int y = 0; y < vp_h; y++) {
-                int sky_col = sky_row_offset;
-                for (int x = 0; x < vp_w; x++) {
-                    unsigned short tile_px = tile_row[x];
-                    if (tile_px == 0) {
-                        dst_row[x] = sky[sky_col];
-                    } else {
-                        dst_row[x] = tile_px;
-                    }
-                    sky_col++;
+        for (int y = 0; y < vp_h; y++) {
+            unsigned short *sky_row_ptr = sky + sky_y * sky_w;
+            int sky_x = sky_x_start;
+            for (int x = 0; x < vp_w; x++) {
+                unsigned short tile_px = tile_row[x];
+                if (tile_px == 0) {
+                    dst_row[x] = sky_row_ptr[sky_x];
+                } else {
+                    dst_row[x] = tile_px;
                 }
-                dst_row += stride;
-                tile_row += tile_stride;
-                sky_row_offset += sky_w;
+                sky_x++;
+                if (sky_x >= sky_w) sky_x = 0;
             }
+            dst_row += stride;
+            tile_row += tile_stride;
+            sky_y++;
+            if (sky_y >= sky_h) sky_y = 0;
         }
     } else {
         /* Standard blit: copy ALL level pixels unconditionally (matching original).
