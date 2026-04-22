@@ -1,11 +1,13 @@
 CXX = g++
 CC = gcc
+WINDRES = windres
 CXXFLAGS = -c -I. -D_WIN32 -m32
 CFLAGS = -c -I. -D_WIN32 -m32
+RCFLAGS = -F pe-i386
 LDFLAGS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32
 
 SRCS = winmain.cpp sound.cpp assets.cpp gameloop.cpp memory.cpp init.cpp graphics.cpp intro.cpp menu.cpp level.cpp math.cpp stubs.cpp utils.cpp effects.cpp entity.cpp hud.cpp gg_gen.cpp
-OBJS = $(SRCS:.cpp=.o) stb_image.o fmod_loader.o
+OBJS = $(SRCS:.cpp=.o) stb_image.o fmod_loader.o tou_res.o
 TARGET = TOU.exe
 
 all: $(TARGET)
@@ -22,6 +24,9 @@ stb_image.o: stb_image.c
 
 fmod_loader.o: fmod_loader.c
 	$(CC) $(CFLAGS) -o $@ $<
+
+tou_res.o: tou.rc icon.ico
+	$(WINDRES) $(RCFLAGS) -O coff -i tou.rc -o $@
 
 ifeq ($(OS),Windows_NT)
     CLEAN_CMD = del /Q /F

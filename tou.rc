@@ -1,0 +1,4 @@
+/* Resource script for TOU.exe
+ * 32512 == IDI_APPLICATION; winmain.cpp loads it by numeric ID for the
+ * window class, and Explorer picks it up as the EXE icon. */
+32512 ICON "icon.ico"
