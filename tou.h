@@ -395,7 +395,7 @@ extern int                   DAT_00489244;      /* active (human) player count *
 /* Match-in-progress flag. Set to 1 by the "Start match" menu action
  * (init.cpp case 0x1E) and cleared when returning to menu / on app init.
  * Gates: HUD stat layout (hud.cpp), team-base spawning (menu.cpp),
- * end-of-match timer/warnings (graphics.cpp, stubs.cpp), and gates the
+ * end-of-match timer/warnings (graphics.cpp, sim.cpp), and gates the
  * FUN_0045c300 game-mode preset call (runs only while this is 0).
  * Despite the old "network/tournament" label it is not about networking
  * — this game only ships team deathmatch. */
@@ -666,7 +666,7 @@ void FUN_0041d2e0(void);        /* edge detection */
 void FUN_0041aea0(void);        /* player spawn init */
 void FUN_00449040(char param);  /* visibility map (0=incremental, 1=full) */
 
-/* ===== Function Prototypes: stubs.cpp (gameplay subsystems) ===== */
+/* ===== Function Prototypes: sim.cpp (gameplay subsystems) ===== */
 void FUN_00460d50(void);        /* input/control update */
 void FUN_004609e0(void);        /* physics step 1 */
 void FUN_00460660(void);        /* half-rate physics */

@@ -1187,7 +1187,7 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 
                     /* COMPAT: Convert X1R5G5B5 → RGB565. All entity +0x4C values
                      * should be X1R5G5B5 + 30000 (splash water colors are now converted
-                     * at spawn time in stubs.cpp to match this convention). */
+                     * at spawn time in sim.cpp to match this convention). */
                     {
                         unsigned short r5 = (color >> 10) & 0x1F;
                         unsigned short g5 = (color >> 5) & 0x1F;

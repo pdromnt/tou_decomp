@@ -1,5 +1,17 @@
 /*
- * stubs.cpp - Placeholder for miscellaneous undecompiled functions
+ * sim.cpp - Per-tick gameplay simulation subsystems.
+ *
+ * Houses the gameplay logic that runs every game tick: projectile
+ * updates, turret AI and line-of-sight, explosion/AoE effects,
+ * spatial binning and collision, entity spawners, building damage,
+ * round timers, edge-entity relocation, and related support code.
+ *
+ * Historical note: this file was originally called stubs.cpp when
+ * most of it was empty placeholders pending decompilation. Every
+ * function in here is now a real implementation — the grouping is
+ * kept together because the systems share a lot of globals (turret
+ * LOS tables, AoE temporaries, projectile bins) and splitting them
+ * would fragment those across new TUs.
  */
 #include "tou.h"
 #include <stdlib.h>
