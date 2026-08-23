@@ -185,7 +185,9 @@ static_assert(offsetof(PlayerData, health) == 0x20, "PlayerData::health offset")
 static_assert(offsetof(PlayerData, team) == 0x2C, "PlayerData::team offset");
 static_assert(offsetof(PlayerData, weapon_type) == 0x34, "PlayerData::weapon_type offset");
 static_assert(offsetof(PlayerData, weapon_slots) == 0x3C, "PlayerData::weapon_slots offset");
+static_assert(offsetof(PlayerData, primary_weapon_level) == 0x8C, "PlayerData::primary_weapon_level offset");
 static_assert(offsetof(PlayerData, shield_value) == 0x98, "PlayerData::shield_value offset");
+static_assert(offsetof(PlayerData, scratch_c0) == 0xC0, "PlayerData::scratch_c0 offset");
 static_assert(offsetof(PlayerData, buttons) == 0xB8, "PlayerData::buttons offset");
 static_assert(offsetof(PlayerData, ai_level) == 0xDD, "PlayerData::ai_level offset");
 static_assert(offsetof(PlayerData, viewport_width) == 0x484, "PlayerData::viewport_width offset");

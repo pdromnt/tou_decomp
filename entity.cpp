@@ -388,10 +388,10 @@ static int FUN_004494e0(int param_1, int param_2, int param_3, int param_4, int 
 {
     int iVar3 = param_5;
     int count = 0;
-    int iVar2 = (int)DAT_00487810 + iVar3 * 0x598;
+    PlayerData *player = Player_Get(iVar3);
     unsigned int uVar4 = (unsigned int)*(unsigned char *)(iVar3 * 0x40 + 0x23 + (int)DAT_0048780c);
-    iVar3 = *(int *)(iVar2 + 0x18);
-    signed char sVar1 = (signed char)((0 < *(int *)(iVar2 + 0xd4)) + 0xb);
+    iVar3 = player->heading;
+    signed char sVar1 = (signed char)((0 < player->boost_timer) + 0xb);
     while (1) {
         param_3 += ((int)(*(int *)((int)DAT_00487ab0 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
         param_4 += ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
@@ -519,11 +519,11 @@ static unsigned int FUN_0044ab20(int *param_1)
     unsigned int local_4 = 0xffffffff;
     unsigned int uVar2 = (unsigned int)DAT_00489240;
     if (0 < DAT_00489240) {
-        char *pcVar4 = (char *)((int)DAT_00487810 + 0x24);
         do {
-            if ((pcVar4[8] != (char)param_1[0xb]) && (*pcVar4 == '\0')) {
-                int iVar3 = (*(int *)(pcVar4 - 0x20) - param_1[1]) >> 0x12;
-                int iVar1 = (*(int *)(pcVar4 - 0x24) - *param_1) >> 0x12;
+            PlayerData *player = Player_Get(uVar6);
+            if ((player->team != (uint8_t)param_1[0xb]) && (player->state_24 == 0)) {
+                int iVar3 = (player->position_y - param_1[1]) >> 0x12;
+                int iVar1 = (player->position_x - *param_1) >> 0x12;
                 iVar1 = iVar1 * iVar1 + iVar3 * iVar3;
                 if (iVar1 < iVar5) {
                     iVar5 = iVar1;
@@ -531,7 +531,6 @@ static unsigned int FUN_0044ab20(int *param_1)
                 }
             }
             uVar6++;
-            pcVar4 += 0x598;
         } while ((int)uVar6 < DAT_00489240);
         uVar2 = local_4;
         if (local_4 != 0xffffffff)
@@ -652,11 +651,11 @@ static void FUN_0044abb0(int *param_1)
     int iVar4 = 0;
     int local_4 = -1;
     if (0 < DAT_00489240) {
-        char *pcVar3 = (char *)((int)DAT_00487810 + 0x24);
         do {
-            if ((pcVar3[8] != (char)param_1[0xb]) && (*pcVar3 == '\0')) {
-                int iVar2 = (*(int *)(pcVar3 - 0x20) - param_1[1]) >> 0x12;
-                iVar1 = (*(int *)(pcVar3 - 0x24) - *param_1) >> 0x12;
+            PlayerData *player = Player_Get(iVar4);
+            if ((player->team != (uint8_t)param_1[0xb]) && (player->state_24 == 0)) {
+                int iVar2 = (player->position_y - param_1[1]) >> 0x12;
+                iVar1 = (player->position_x - *param_1) >> 0x12;
                 iVar2 = iVar1 * iVar1 + iVar2 * iVar2;
                 iVar1 = local_4;
                 if (iVar2 < iVar5) {
@@ -666,11 +665,11 @@ static void FUN_0044abb0(int *param_1)
                 }
             }
             iVar4++;
-            pcVar3 += 0x598;
         } while (iVar4 < DAT_00489240);
         if (iVar1 != -1) {
-            param_1[0x10e] = *(int *)(iVar1 * 0x598 + (int)DAT_00487810);
-            iVar1 = *(int *)(iVar1 * 0x598 + 4 + (int)DAT_00487810);
+            PlayerData *player = Player_Get(iVar1);
+            param_1[0x10e] = player->position_x;
+            iVar1 = player->position_y;
             param_1[0x38] = 1;
             param_1[0x10f] = iVar1;
         }
@@ -1053,35 +1052,36 @@ skip_proj:
     /* Iterate over all players and check if projectile will intersect */
     int local_2c = 0;
     if (0 < DAT_00489240) {
-        unsigned char *local_4c = (unsigned char *)((int)DAT_0048780c + 0x23);
-        int *piVar17 = (int *)((int)DAT_00487810 + 4);
         do {
-            if (((char)param_1[0xb] != (char)piVar17[10]) &&
-                (iVar14 < piVar17[-1]) && (piVar17[-1] < iVar7) &&
-                (iVar15 < *piVar17) && (*piVar17 < iVar8)) {
+            PlayerData *player = Player_Get(local_2c);
+            unsigned char ship_speed = *(unsigned char *)((int)DAT_0048780c +
+                local_2c * 0x40 + 0x23);
+            if (((char)param_1[0xb] != (char)player->team) &&
+                (iVar14 < player->position_x) && (player->position_x < iVar7) &&
+                (iVar15 < player->position_y) && (player->position_y < iVar8)) {
 
-                int local_58 = piVar17[-1];
-                int local_6c = *piVar17;
+                int local_58 = player->position_x;
+                int local_6c = player->position_y;
 
                 /* Enemy lead prediction: if enemy is alive and weapon level >= 2 */
                 int iVar23 = 0;
                 int iVar9 = 0;
-                if ((char)piVar17[0x128] != '\0' || iVar20 < 2) {
+                if ((char)player->unknown_4a4[0] != '\0' || iVar20 < 2) {
                     iVar23 = 0;
                     iVar9 = 0;
                 } else {
-                    signed char sVar12 = (signed char)((0 < piVar17[0x34]) + 0xb);
-                    iVar23 = ((int)(*(int *)((int)DAT_00487ab0 + piVar17[5] * 4) *
-                              (unsigned int)*local_4c) >> sVar12) / 2;
-                    iVar9 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + piVar17[5] * 4) *
-                             (unsigned int)*local_4c) >> sVar12) / 2;
+                    signed char sVar12 = (signed char)((0 < player->boost_timer) + 0xb);
+                    iVar23 = ((int)(*(int *)((int)DAT_00487ab0 + player->heading * 4) *
+                              (unsigned int)ship_speed) >> sVar12) / 2;
+                    iVar9 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + player->heading * 4) *
+                             (unsigned int)ship_speed) >> sVar12) / 2;
                 }
 
                 int local_38 = 0;
                 int iVar21 = local_68 * 4;
-                int iVar22 = piVar17[4] * 4;
+                int iVar22 = player->velocity_y * 4;
                 int local_3c = local_64;
-                int iVar18 = piVar17[3] << 2;
+                int iVar18 = player->velocity_x << 2;
 
                 if (0 < iVar5) {
                     int gravity_step = (*(int *)(iVar19 + 0x88 + iVar1b * 4) * DAT_00483828 * 0x10) / 2;
@@ -1131,8 +1131,6 @@ skip_proj:
                 }
             }
             local_2c++;
-            local_4c += 0x40;
-            piVar17 += 0x166;
         } while (local_2c < DAT_00489240);
     }
 }
@@ -1163,36 +1161,37 @@ static void FUN_0044a6b0(int *param_1)
 
     int local_34 = 0;
     if (0 < DAT_00489240) {
-        unsigned char *local_48 = (unsigned char *)((int)DAT_0048780c + 0x23);
-        int *piVar12 = (int *)((int)DAT_00487810 + 4);
         do {
-            if (((char)param_1[0xb] != (char)piVar12[10]) &&
-                (iVar6 < piVar12[-1]) && (piVar12[-1] < iVar2) &&
-                (iVar7 < *piVar12) && (*piVar12 < iVar11)) {
+            PlayerData *player = Player_Get(local_34);
+            unsigned char ship_speed = *(unsigned char *)((int)DAT_0048780c +
+                local_34 * 0x40 + 0x23);
+            if (((char)param_1[0xb] != (char)player->team) &&
+                (iVar6 < player->position_x) && (player->position_x < iVar2) &&
+                (iVar7 < player->position_y) && (player->position_y < iVar11)) {
 
-                int local_58 = piVar12[-1];
-                int local_50 = *piVar12;
+                int local_58 = player->position_x;
+                int local_50 = player->position_y;
 
                 /* Enemy lead prediction */
                 int iVar16 = 0;
                 int iVar8 = 0;
-                if ((char)piVar12[0x128] != '\0' || ((int)(bVar3 - 1) < 2)) {
+                if ((char)player->unknown_4a4[0] != '\0' || ((int)(bVar3 - 1) < 2)) {
                     iVar16 = 0;
                     iVar8 = 0;
                 } else {
-                    signed char sVar1 = (signed char)((0 < piVar12[0x34]) + 0xb);
-                    iVar16 = ((int)(*(int *)((int)DAT_00487ab0 + piVar12[5] * 4) *
-                              (unsigned int)*local_48) >> sVar1) / 2;
-                    iVar8 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + piVar12[5] * 4) *
-                             (unsigned int)*local_48) >> sVar1) / 2;
+                    signed char sVar1 = (signed char)((0 < player->boost_timer) + 0xb);
+                    iVar16 = ((int)(*(int *)((int)DAT_00487ab0 + player->heading * 4) *
+                              (unsigned int)ship_speed) >> sVar1) / 2;
+                    iVar8 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + player->heading * 4) *
+                             (unsigned int)ship_speed) >> sVar1) / 2;
                 }
 
                 int iVar14 = lVar19 * 4;
-                int iVar15 = piVar12[4] * 4;
+                int iVar15 = player->velocity_y * 4;
                 int local_4c = 0x20;
                 iVar16 = (iVar16 << 4) / 2;
                 int local_38 = 0;
-                int iVar13 = piVar12[3] << 2;
+                int iVar13 = player->velocity_x << 2;
                 int iVar17 = (*(int *)((int)DAT_00487abc + 0x2a0) * DAT_00483828 * 0x10) / 2;
                 iVar8 = ((DAT_00483824 + iVar8) * 0x10) / 2;
                 int local_54 = iVar5;
@@ -1239,8 +1238,6 @@ static void FUN_0044a6b0(int *param_1)
                 } while (local_38 < 0x14);
             }
             local_34++;
-            local_48 += 0x40;
-            piVar12 += 0x166;
         } while (local_34 < DAT_00489240);
     }
 }
@@ -1845,8 +1842,7 @@ static void FUN_0044be20(int *ent)
         iVar4 = 0xc000;
         do {
             Entity *entity = &DAT_004892e8[*(int *)(iVar4 + (int)DAT_0048781c)];
-            if ((*(char *)((int)DAT_00487810 + 0x2c +
-                 (unsigned int)entity->owner * 0x598) !=
+            if ((Player_Get(entity->owner)->team !=
                  (char)ent[0xb]) &&
                 (entity->type == 0x18))
             {
@@ -2294,27 +2290,23 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
     /* Knockback all nearby entities */
     int playerIdx = 0;
     if (DAT_00489240 > 0) {
-        int iVar4 = 0;
         for (int p = 0; p < DAT_00489240; p++) {
-            if (p != idx && *(int *)(iVar4 + 0xa8 + (int)DAT_00487810) == 0) {
-                if (*(int *)(iVar4 + (int)DAT_00487810) - 0x400000 < piVar1[0] &&
-                    piVar1[0] < *(int *)(iVar4 + (int)DAT_00487810) + 0x400000)
+            PlayerData *player = Player_Get(p);
+            if (p != idx && player->timer_a8 == 0) {
+                if (player->position_x - 0x400000 < piVar1[0] &&
+                    piVar1[0] < player->position_x + 0x400000)
                 {
-                    int iVar5 = *(int *)(iVar4 + 4 + (int)DAT_00487810);
+                    int iVar5 = player->position_y;
                     if (iVar5 - 0x400000 < piVar1[1] && piVar1[1] < iVar5 + 0x400000) {
-                        *(int *)(iVar4 + 0xa8 + (int)DAT_00487810) = 10;
+                        player->timer_a8 = 10;
                         unsigned long long uVar7 = FUN_004257e0(piVar1[0], piVar1[1],
-                            *(int *)(iVar4 + (int)DAT_00487810),
-                            *(int *)(iVar4 + 4 + (int)DAT_00487810));
+                            player->position_x, player->position_y);
                         unsigned int uVar2 = ((int)uVar7 + 0x200) & 0x7ff;
-                        *(int *)(iVar4 + 0x10 + (int)DAT_00487810) =
-                            *(int *)((int)DAT_00487ab0 + uVar2 * 4) >> 1;
-                        *(int *)(iVar4 + 0x14 + (int)DAT_00487810) =
-                            *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4) >> 1;
+                        player->velocity_x = *(int *)((int)DAT_00487ab0 + uVar2 * 4) >> 1;
+                        player->velocity_y = *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4) >> 1;
                     }
                 }
             }
-            iVar4 += 0x598;
         }
     }
 
@@ -3100,6 +3092,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
 /* ===== FUN_00451590 — Death Handler (00451590) ===== */
 static void FUN_00451590_impl(int *ent, int param_2)
 {
+    PlayerData *victim = reinterpret_cast<PlayerData *>(ent);
     int *piVar4;
     int iVar7;
 
@@ -3112,20 +3105,18 @@ static void FUN_00451590_impl(int *ent, int param_2)
         unsigned char bVar1 = *(unsigned char *)((int)ent + 0x4a1);
         if (bVar1 < 0x50) {
             /* Killed by another player */
-            unsigned int uVar5 = (unsigned int)*(unsigned char *)((int)DAT_00487810 + 0x2c +
-                (unsigned int)bVar1 * 0x598);
-            *(unsigned char *)((int)DAT_00487810 + (unsigned int)bVar1 * 0x598 + 0xcb) = 200;
-            if (uVar5 != *(unsigned char *)(ent + 0xb)) {
+            PlayerData *killer = Player_Get(bVar1);
+            unsigned int uVar5 = killer->team;
+            killer->timer_cb = 200;
+            if (uVar5 != victim->team) {
                 /* Enemy kill — increment killer's score */
-                *(int *)((int)DAT_00487810 + 0x494 +
-                    (unsigned int)*(unsigned char *)((int)ent + 0x4a1) * 0x598) += 1;
+                killer->score_494 = tou_binary::add_wrap_i32(killer->score_494, 1);
                 piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
                 iVar7 = *piVar4 + 1;
                 goto LAB_apply;
             }
             /* Team kill — decrement killer's score */
-            *(int *)((int)DAT_00487810 + 0x494 +
-                (unsigned int)*(unsigned char *)((int)ent + 0x4a1) * 0x598) -= 1;
+            killer->score_494 = tou_binary::sub_wrap_i32(killer->score_494, 1);
             piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
         } else if (bVar1 < 200) {
             /* Killed by entity type (bVar1 - 100) */
@@ -3154,16 +3145,15 @@ LAB_apply:
 
     /* Shared lives mode: subtract a life from all same-team players */
     if (DAT_0048373b != '\0' && DAT_00489240 > 0) {
-        int iVar3 = 0;
         for (int p = 0; p < DAT_00489240; p++) {
-            if (p != param_2 && (char)ent[0xb] == *(char *)(iVar3 + 0x2c + (int)DAT_00487810)) {
-                unsigned int uVar5 = *(unsigned int *)(iVar3 + 0x28 + (int)DAT_00487810);
+            PlayerData *player = Player_Get(p);
+            if (p != param_2 && victim->team == player->team) {
+                uint32_t uVar5 = static_cast<uint32_t>(player->lives);
                 if (uVar5 > 1) {
-                    *(unsigned int *)(iVar3 + 0x28 + (int)DAT_00487810) = uVar5 - 1;
-                    *(unsigned char *)(iVar3 + 0xcc + (int)DAT_00487810) = 200;
+                    player->lives = static_cast<int32_t>(uVar5 - 1);
+                    player->timer_cc = 200;
                 }
             }
-            iVar3 += 0x598;
         }
     }
 
@@ -4626,22 +4616,22 @@ static void FUN_0044d930_impl(int *ent)
 /* ===== FUN_0044d9f0 — Repulsion Force Field (0044D9F0) ===== */
 static void FUN_0044d9f0_impl(int *ent)
 {
-    int offset = 0;
     int i;
-    for (i = 0; i < DAT_00489240; i++, offset += 0x598) {
-        if (*(char *)(offset + 0x2c + (int)DAT_00487810) == (char)ent[0xb])
+    for (i = 0; i < DAT_00489240; i++) {
+        PlayerData *player = Player_Get(i);
+        if ((char)player->team == (char)ent[0xb])
             continue;
-        int ex = *(int *)(offset + (int)DAT_00487810);
+        int ex = player->position_x;
         int px = ent[0];
         if ((ex - 0x1400000 < px) && (px < ex + 0x1400000)) {
-            int ey = *(int *)(offset + 4 + (int)DAT_00487810);
+            int ey = player->position_y;
             int py = ent[1];
             if ((ey - 0x1400000 < py) && (py < ey + 0x1400000)) {
                 int angle = FUN_004257e0(px, py, ex, ey);
-                *(int *)(offset + 0x10 + (int)DAT_00487810) +=
-                    *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
-                *(int *)(offset + 0x14 + (int)DAT_00487810) +=
-                    *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
+                player->velocity_x = tou_binary::add_wrap_i32(player->velocity_x,
+                    *(int *)((int)DAT_00487ab0 + angle * 4) >> 1);
+                player->velocity_y = tou_binary::add_wrap_i32(player->velocity_y,
+                    *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1);
             }
         }
     }
@@ -4651,7 +4641,7 @@ static void FUN_0044d9f0_impl(int *ent)
         unsigned char owner = entity->owner;
         char team;
         if (owner < 0x46) {
-            team = *(char *)((int)DAT_00487810 + 0x2c + (unsigned int)owner * 0x598);
+            team = static_cast<char>(Player_Get(owner)->team);
         } else {
             team = -5;
         }
@@ -4776,9 +4766,9 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
         int *pIdx = (int *)&DAT_004877f8;
         int count = DAT_00487808;
         do {
-            int *piVar1 = (int *)((int)DAT_00487810 + (*pIdx) * 0x598);
-            iVar5 = (piVar1[1] - y) >> 0x12;
-            iVar3 = (piVar1[0] - x) >> 0x12;
+            PlayerData *player = Player_Get(*pIdx);
+            iVar5 = (player->position_y - y) >> 0x12;
+            iVar3 = (player->position_x - x) >> 0x12;
             fVar2 = (float)(iVar5 * iVar5 + iVar3 * iVar3) * _DAT_004753fc;
             if (fVar2 < _DAT_004753e8) fVar2 = _DAT_004753e8;
             if (fVar2 < minDist) {
@@ -4802,8 +4792,8 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
             iVar7 = (int)((float)vol_byte / minDist) * 8;
 
             int angle = FUN_004257e0(
-                *(int *)((int)DAT_00487810 + iVar8 * 0x598),
-                *(int *)((int)DAT_00487810 + iVar8 * 0x598 + 4),
+                Player_Get(iVar8)->position_x,
+                Player_Get(iVar8)->position_y,
                 x, y);
             int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
             if (minDist < (float)_DAT_004753e0_d) pan = 0x80;
@@ -5164,8 +5154,7 @@ static void FUN_0044e3b0(int *ent)
         if (projectile->type != 0x0E) continue;
 
         /* Check: different team AND within ±0x1040000 on both axes */
-        if (*(char *)((int)DAT_00487810 + 0x2c +
-             (unsigned int)projectile->owner * 0x598) !=
+        if ((char)Player_Get(projectile->owner)->team !=
             (char)ent[0xb] &&
             ex - 0x1040000 < projectile->position_x &&
             projectile->position_x < ex + 0x1040000 &&
@@ -5794,7 +5783,7 @@ void FUN_0044b0b0(void)
             }
 
             /* Hazard damage at low health */
-            if ((double)*(int *)(i * 0x598 + 0x20 + DAT_00487810) /
+            if ((double)Player_Get(i)->health /
                 (double)*(int *)(i * 0x40 + 0x28 + (int)DAT_0048780c) < 0.5) {
                 int vp_x = ent[0] >> 0x16;
                 int vp_y = ent[1] >> 0x16;
