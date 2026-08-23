@@ -1813,6 +1813,7 @@ void FUN_00434310(void)
              *   0x17 NUCLEUS      — trail dots sit still, need entity-entity collision
              *   0x18 PILOT DISRUP — deploys on ground, needs wall collision to deploy
              *   0x19 LANDMINE     — modes 1/2 are stationary mines, need player collision
+             *   0x1C MINISHIP     — dormant ships must keep scanning at zero velocity
              *   0x1F INSECTS      — direct position movement (no velocity), need collision
              *   0x24 ETNA         — deploys on ground, needs wall collision to deploy
              *   0x25 ROMAN CANDLE — deploys on ground, needs wall collision to deploy
@@ -1823,7 +1824,7 @@ void FUN_00434310(void)
              *   0x2E SMOKING NALLE— sits still (vx=vy=0), needs wall/player collision */
             if (ent_type == 0x02 || ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
                 ent_type == 0x1F || ent_type == 0x08 || ent_type == 0x28 ||
-                ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x24 ||
+                ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x1C || ent_type == 0x24 ||
                 ent_type == 0x25 || ent_type == 0x26 || ent_type == 0x2E) {
                 is_projectile = 1;
             }
@@ -1948,7 +1949,8 @@ void FUN_00434310(void)
          * entity[+0x38] = 6 for all turret projectiles (set at spawn).
          * Type 0x22 excluded: wavy fireworks overwrite velocity from heading each
          * tick (gravity would accumulate and distort the wave pattern). */
-        if (is_projectile && !is_debris && ent_type != 0x22 && ent_type != 0x1B && ent_type != 0x26) {
+        if (is_projectile && !is_debris && ent_type != 0x22 && ent_type != 0x1B &&
+            ent_type != 0x1C && ent_type != 0x26) {
             entity->velocity_y += entity->gravity_or_motion_38 * DAT_00483828;
         }
 
@@ -2490,7 +2492,7 @@ void FUN_00434310(void)
                 *   - Scans all players, finds closest enemy (different team)
                 *   - Distance threshold: 22500 pixel^2 (~150px). From Ghidra 0x57E4.
                 *   - Turn rate: +/-0x2A per tick (~7.4 degrees). Heading at +0x3C.
-                *   - When no enemy in range: decelerate (vx/vy *= 0.97)
+                *   - When no enemy in range: decelerate (vx/vy *= 0.95)
                 *   - When chasing: accumulate velocity from sincos[heading]>>5 + gravity
                 *   - Speed cap: normalize if speed^2 > 0x225510
                 *
@@ -2582,8 +2584,10 @@ void FUN_00434310(void)
                         if (entity->position_y > max_y) entity->position_y = max_y;
                     }
                 }
-                /* Invuln countdown — keep minimum 1 so same-team bullets can't
-                 * damage this miniship via the +0x5C==0 friendly-fire bypass. */
+                /* The original callback decrements this to zero, but its bullet
+                 * collision runs after the miniship callback. Our lifted type-0
+                 * callback processes the newly appended bullet in the same outer
+                 * pass, so retain a one-tick friendly guard to prevent self-hits. */
                 {
                     unsigned char ms_inv = entity->timer_5c;
                     if (ms_inv > 1) { ms_inv--; entity->timer_5c = ms_inv; }
@@ -2600,7 +2604,7 @@ void FUN_00434310(void)
                         PlayerData *player = Player_Get(p);
                         unsigned char p_team = player->team;
                         if (p_team == ms_team) continue;
-                        if (player->health <= 0) continue;
+                        if (player->state_24 != 0) continue;
                         int px = player->position_x;
                         int py = player->position_y;
                         int dx = entity->position_x - px;
@@ -2619,24 +2623,35 @@ void FUN_00434310(void)
                 /* Distance threshold: ~22500 pixel² ≈ 150px range.
                  * From Ghidra hex: 0x57E4 = 22500 in the comparison. */
                 if (!ms_found_enemy || ms_best_dist > 22500) {
-                    /* No enemy in range: decelerate (multiply vx/vy by ~0.97) */
-                    entity->velocity_x = (int)((double)entity->velocity_x * 0.97);
-                    entity->velocity_y = (int)((double)entity->velocity_y * 0.97);
+                    /* Original 0x00441090-0x004410AF: x87 multiply by 0.95,
+                     * followed by the game's float-to-int helper. */
+                    entity->velocity_x = tou_binary::x87_ftol(
+                        (long double)entity->velocity_x * 0.95L);
+                    entity->velocity_y = tou_binary::x87_ftol(
+                        (long double)entity->velocity_y * 0.95L);
                 } else {
-                    /* Steer toward target: heading-based turn-rate-limited pursuit.
-                     * FUN_004257e0 returns angle from src to dst. Add 0x400 offset
-                     * to match sincos velocity convention (same as kamikaze). */
+                    /* Original 0x004410B7-0x00441127 leads the target by half
+                     * the distance using the miniship's current velocity. The
+                     * old rewrite added 0x400 to the resulting angle, steering
+                     * directly away from its target. */
                     int ms_heading = entity->counter_3c;
-                    int desired = ((int)FUN_004257e0(
-                        entity->position_x, entity->position_y, ms_tx, ms_ty) + 0x400) & 0x7FF;
-                    int diff = ((desired - ms_heading) + 0x400) & 0x7FF;
-                    if (diff > 0x400) diff -= 0x800;
-                    /* Turn rate: ±0x2A per tick. 0x400 = 180°, 0x2A ≈ 7.4° */
-                    int turn_rate = 0x2A;
-                    if (diff > turn_rate) diff = turn_rate;
-                    else if (diff < -turn_rate) diff = -turn_rate;
-                    else if (diff == 0) diff = (rand() & 1) ? turn_rate : -turn_rate;
-                    ms_heading = (ms_heading + diff) & 0x7FF;
+                    int lead = tou_binary::x87_ftol(
+                        sqrt((long double)ms_best_dist) * 0.5L);
+                    int desired = (int)FUN_004257e0(
+                        entity->position_x, entity->position_y,
+                        tou_binary::sub_wrap_i32(ms_tx,
+                            (int32_t)((uint32_t)entity->velocity_x * (uint32_t)lead)),
+                        tou_binary::sub_wrap_i32(ms_ty,
+                            (int32_t)((uint32_t)entity->velocity_y * (uint32_t)lead))) & 0x7FF;
+                    /* Original 0x0044112D-0x004411B7 compares both wrapped
+                     * arcs and always turns a full 0x2A; it does not clamp to
+                     * the remaining error like the old approximation did. */
+                    int clockwise = (desired - ms_heading) & 0x7FF;
+                    int counter_clockwise = (ms_heading - desired) & 0x7FF;
+                    if (desired != ms_heading) {
+                        ms_heading = (ms_heading +
+                            (clockwise <= counter_clockwise ? 0x2A : -0x2A)) & 0x7FF;
+                    }
                     entity->counter_3c = ms_heading;
                     /* Apply velocity from heading: vx += sincos[heading] >> 5 */
                     int *sc = (int *)DAT_00487ab0;
@@ -2650,10 +2665,69 @@ void FUN_00434310(void)
                         int svy = entity->velocity_y >> 8;
                         int spd_sq = svx * svx + svy * svy;
                         if (spd_sq > 0x225510 && spd_sq > 0) {
-                            double mag = sqrt((double)spd_sq);
-                            double cap = 1500.0; /* approximate speed cap from binary */
-                            entity->velocity_x = (int)(svx * cap / mag) << 8;
-                            entity->velocity_y = (int)(svy * cap / mag) << 8;
+                            long double mag = sqrt((long double)spd_sq);
+                            entity->velocity_x = tou_binary::x87_ftol(
+                                (long double)svx * 1500.0L / mag) << 8;
+                            entity->velocity_y = tou_binary::x87_ftol(
+                                (long double)svy * 1500.0L / mag) << 8;
+                        }
+                    }
+
+                    /* Original 0x0044124E-0x00441570: while pursuing, emit a
+                     * type-0x67 engine particle every third tick when this map
+                     * region is visible. This entire path was missing. */
+                    int trail_tick = entity->scratch_30 + 1;
+                    entity->scratch_30 = trail_tick;
+                    int coarse_x = entity->position_x >> 0x16;
+                    int coarse_y = entity->position_y >> 0x16;
+                    int coarse_w = DAT_004879f8;
+                    int coarse_h = DAT_004879fc;
+                    bool trail_visible = DAT_00487814 != NULL && coarse_x >= 0 &&
+                        coarse_y >= 0 && coarse_x < coarse_w && coarse_y < coarse_h &&
+                        ((((unsigned char *)DAT_00487814)[coarse_x + coarse_y * coarse_w] & 8u) != 0u);
+                    if (trail_tick > 2 && trail_visible && DAT_00489248 < 0x9C4) {
+                        entity->scratch_30 = 0;
+                        int trail_heading = (entity->counter_3c - 0x400) & 0x7FF;
+                        int *sc = (int *)DAT_00487ab0;
+                        int *tt = (int *)DAT_00487abc;
+                        Entity *trail = &DAT_004892e8[DAT_00489248];
+                        trail->position_x = tou_binary::add_wrap_i32(
+                            entity->position_x, tou_binary::add_wrap_i32(sc[trail_heading], sc[trail_heading]));
+                        trail->position_y = tou_binary::add_wrap_i32(
+                            entity->position_y, tou_binary::add_wrap_i32(sc[trail_heading + 0x200], sc[trail_heading + 0x200]));
+                        trail->previous_x = trail->position_x;
+                        trail->previous_y = trail->position_y;
+                        trail->velocity_x = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[trail_heading] * 50u) >> 6,
+                            entity->velocity_x >> 1);
+                        trail->velocity_y = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[trail_heading + 0x200] * 50u) >> 6,
+                            entity->velocity_y >> 1);
+                        trail->motion_x_10 = 0;
+                        trail->motion_y_14 = 0;
+                        trail->state_20 = 0;
+                        trail->type = 0x67;
+                        trail->owner = 0xFF;
+                        trail->variant_24 = (unsigned short)(rand() % 6);
+                        trail->auxiliary_26 = 0xFF;
+                        trail->health_or_damage_28 = 0;
+                        trail->callback_address = tt[0xD7A8 / 4];
+                        trail->gravity_or_motion_38 = tt[0xD830 / 4];
+                        trail->counter_3c = 0;
+                        trail->subtype = 0;
+                        trail->damage_44 = tt[0xD86C / 4];
+                        trail->scratch_48 = 0;
+                        trail->palette_value = tt[0xD89C / 4];
+                        trail->animation_frame = 0;
+                        trail->timer_5c = 0;
+                        DAT_00489248++;
+                        Entity *spawned_trail = &DAT_004892e8[DAT_00489248 - 1];
+                        spawned_trail->timer_5c = 1;
+                        spawned_trail->scratch_64 = 0x12;
+                        spawned_trail->scratch_65 = 0x1C;
+                        if (DAT_00487aa8 != NULL) {
+                            spawned_trail->palette_value =
+                                (unsigned int)((unsigned short *)DAT_00487aa8)[0x1C] + 30000;
                         }
                     }
                 }
@@ -2661,7 +2735,7 @@ void FUN_00434310(void)
                 if (ms_found_enemy && ms_best_dist <= 22500) {
                     int bc = entity->scratch_2c;
                     bc++;
-                    if (bc >= 10 && DAT_00489248 < 0x9C4) {
+                    if (bc > 10 && DAT_00489248 < 0x9C4) {
                         bc = 0;
                         int heading = entity->counter_3c;
                         int *sc = (int *)DAT_00487ab0;
@@ -2672,21 +2746,23 @@ void FUN_00434310(void)
                         bp->previous_x = entity->position_x;
                         bp->previous_y = entity->position_y;
                         int bh = heading & 0x7FF;
-                        int bvx = entity->velocity_x / 2;
-                        int bvy = entity->velocity_y / 2;
-                        bp->velocity_x = (sc[bh] * 5 << 4 >> 6) + bvx;
-                        bp->velocity_y = (sc[(bh + 0x200) & 0x7FF] * 5 << 4 >> 6) + bvy;
+                        bp->velocity_x = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[bh] * 160u) >> 6,
+                            entity->velocity_x);
+                        bp->velocity_y = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[(bh + 0x200) & 0x7FF] * 160u) >> 6,
+                            entity->velocity_y);
                         bp->motion_x_10 = 0; bp->motion_y_14 = 0;
                         bp->type = 0x00; /* basic bullet */
                         bp->variant_24 = 0;
-                        bp->state_20 = 0;
+                        bp->state_20 = 0xDE;
                         bp->auxiliary_26 = 0;
                         bp->owner = entity->owner;
                         bp->health_or_damage_28 = 0;
-                        bp->gravity_or_motion_38 = tt[0x24]; /* gravity */
-                        bp->damage_44 = tt[0x33]; /* damage */
+                        bp->gravity_or_motion_38 = tt[0x25]; /* type 0, subtype 3 gravity */
+                        bp->damage_44 = tt[0x34]; /* type 0, subtype 3 damage */
                         bp->scratch_48 = 0;
-                        bp->palette_value = tt[0x3F]; /* palette */
+                        bp->palette_value = tt[0x40]; /* type 0, subtype 3 palette */
                         bp->animation_frame = 0;
                         bp->subtype = 3; /* sub_type 3 — verified from Ghidra 0x441690 */
                         bp->callback_address = tt[0]; /* callback */
@@ -2694,12 +2770,6 @@ void FUN_00434310(void)
                         bp->timer_5c = 0;
                         DAT_00489248++;
                         DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 60;
-                        /* Set bullet color from palette table (same as Fire_Secondary for type 0) */
-                        if (DAT_00487aa8 != NULL) {
-                            unsigned short pal = ((unsigned short *)DAT_00487aa8)[0x5A + (rand() & 1)];
-                            DAT_004892e8[DAT_00489248 - 1].palette_value =
-                                (unsigned int)pal + 30000;
-                        }
                     }
                     entity->scratch_2c = bc;
                 } /* end bullet firing gate */
@@ -5010,8 +5080,30 @@ void FUN_00434310(void)
                             entity->position_y = entity->previous_y;
                             int ms_vx = entity->velocity_x;
                             int ms_vy = entity->velocity_y;
-                            if (prev_tx != tx) entity->velocity_x = -ms_vx;
-                            if (prev_ty != ty) entity->velocity_y = -ms_vy;
+                            unsigned char x_axis_tile = *(unsigned char *)(
+                                (int)DAT_0048782c + (prev_ty << shift) + tx);
+                            unsigned char y_axis_tile = *(unsigned char *)(
+                                (int)DAT_0048782c + (ty << shift) + prev_tx);
+                            bool x_blocked = *(unsigned char *)(
+                                (unsigned int)x_axis_tile * 0x20 + 2 + (int)DAT_00487928) == 0;
+                            bool y_blocked = *(unsigned char *)(
+                                (unsigned int)y_axis_tile * 0x20 + 2 + (int)DAT_00487928) == 0;
+
+                            /* Original 0x00441827-0x004418C4 probes each axis
+                             * independently. Tile-coordinate comparison alone
+                             * could reverse neither component and permanently
+                             * wedge an idle miniship against a wall. */
+                            if (y_blocked && !x_blocked) {
+                                entity->velocity_y = (-ms_vy) >> 1;
+                                entity->counter_3c = (-0x400 - entity->counter_3c) & 0x7FF;
+                            } else if (x_blocked && !y_blocked) {
+                                entity->velocity_x = (-ms_vx) >> 1;
+                                entity->counter_3c = (-entity->counter_3c) & 0x7FF;
+                            } else {
+                                entity->velocity_x = (-ms_vx) >> 2;
+                                entity->velocity_y = (-ms_vy) >> 2;
+                                entity->counter_3c = (entity->counter_3c - 0x400) & 0x7FF;
+                            }
                             did_bounce = 1;
                             break;
                         }
@@ -5967,6 +6059,7 @@ void FUN_00434310(void)
             i++;
         }
     }
+
 }
 /* ===== FUN_004527e0 — Update_Projectiles (004527E0) ===== */
 /* Updates particles in DAT_00481f34 (stride 0x20, DAT_00489250 count).
@@ -6935,9 +7028,6 @@ void FUN_00454b00(void)
                     }
 
                     if (fire_angle != 0x801) {
-                        /* Update barrel direction to match shot */
-                        t[0xc] = fire_angle & 0x7ff;
-
                         /* Determine projectile type based on building type at +0x1C (t[7]).
                          * Type 0 (basic turret): entity type 0x00 (basic bullet)
                          * Type 1 (ice turret): entity type 0x13 (freeze projectile)
@@ -6963,27 +7053,16 @@ void FUN_00454b00(void)
                         projectile->position_x = *t;
                         projectile->position_y = t[2] - 0x100000;
 
-                        /* Compute velocity: aimed shots fire directly at target,
-                         * random shots (team 0xFE) use sin/cos LUT from random angle. */
-                        if ((char)t[7] != (char)-2 && tgt_x != 0 && tgt_y != 0) {
-                            /* Direct aim at target coordinates */
-                            double speed = 524288.0 * (double)speed_sqrt * 2.3;
-                            double dx = (double)(tgt_x - *t);
-                            double dy = (double)(tgt_y - (t[2] - 0x100000));
-                            double dist = sqrt(dx * dx + dy * dy);
-                            if (dist > 1.0) {
-                                projectile->velocity_x = (int)(dx / dist * speed);
-                                projectile->velocity_y = (int)(dy / dist * speed);
-                            } else {
-                                projectile->velocity_x = 0;
-                                projectile->velocity_y = 0;
-                            }
-                        } else if (DAT_00487ab0 != NULL) {
-                            /* Random angle: use sin/cos LUT */
+                        /* Original 0x00455653-0x00455699 always launches along
+                         * the ballistic angle returned above. The reconstructed
+                         * direct target-vector path discarded that arc entirely. */
+                        if (DAT_00487ab0 != NULL) {
                             int sin_val = *(int *)((int)DAT_00487ab0 + fire_angle * 4);
                             int cos_val = *(int *)((int)DAT_00487ab0 + 0x800 + fire_angle * 4);
-                            projectile->velocity_x = (int)((double)sin_val * (double)speed_sqrt * 2.3);
-                            projectile->velocity_y = (int)((double)cos_val * (double)speed_sqrt * 2.3);
+                            projectile->velocity_x = (int)tou_binary::x87_ftol(
+                                (long double)sin_val * (long double)speed_sqrt * 2.3L);
+                            projectile->velocity_y = (int)tou_binary::x87_ftol(
+                                (long double)cos_val * (long double)speed_sqrt * 2.3L);
                         } else {
                             projectile->velocity_x = 0;
                             projectile->velocity_y = 0;
@@ -7050,8 +7129,8 @@ void FUN_00454b00(void)
                         projectile->motion_x_10 = *t;
                         projectile->motion_y_14 = t[2];
 
-                        /* Play turret fire sound */
-                        FUN_0040f9b0(0x29, *t, t[2]);
+                        /* No one-shot firing sound here in the original. Cars'
+                         * continuous engine audio is managed by their own path. */
                     }
                 }
 
@@ -8385,7 +8464,7 @@ void FUN_00455d50(void)
                                 ep->scratch_48 = 0;
                                 ep->palette_value = ms_tt[0x3B94/4];
                                 ep->animation_frame = 0;
-                                ep->timer_5c = 0x20; /* spawn immunity (team check bypass) */
+                                ep->timer_5c = 0x20;
                                 DAT_00489248++;
                                 /* Post-increment trailing writes */
                                 Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
