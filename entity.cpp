@@ -1837,7 +1837,6 @@ static void FUN_0044bd50(int *ent)
 /* ===== FUN_0044be20 — Enemy Proximity Scanner (0044BE20) ===== */
 static void FUN_0044be20(int *ent)
 {
-    int *piVar1;
     int bVar2 = 0, bVar3 = 0;
     unsigned int i = 0;
     int iVar4;
@@ -1845,15 +1844,17 @@ static void FUN_0044be20(int *ent)
     if (DAT_00487840 != 0) {
         iVar4 = 0xc000;
         do {
-            piVar1 = (int *)(*(int *)(iVar4 + (int)DAT_0048781c) * 0x80 + (int)DAT_004892e8);
+            Entity *entity = &DAT_004892e8[*(int *)(iVar4 + (int)DAT_0048781c)];
             if ((*(char *)((int)DAT_00487810 + 0x2c +
-                 (unsigned int)*(unsigned char *)((int)piVar1 + 0x22) * 0x598) !=
+                 (unsigned int)entity->owner * 0x598) !=
                  (char)ent[0xb]) &&
-                (*(char *)((int)piVar1 + 0x21) == '\x18'))
+                (entity->type == 0x18))
             {
-                if ((ent[0] - 0x1180000 < piVar1[0]) && (piVar1[0] < ent[0] + 0x1180000)) {
-                    if ((ent[1] - 0x1180000 < piVar1[2]) && (piVar1[2] < ent[1] + 0x1180000)) {
-                        if (((char)piVar1[0x10] != '\0') || bVar2) {
+                if ((ent[0] - 0x1180000 < entity->position_x) &&
+                    (entity->position_x < ent[0] + 0x1180000)) {
+                    if ((ent[1] - 0x1180000 < entity->position_y) &&
+                        (entity->position_y < ent[1] + 0x1180000)) {
+                        if (((char)entity->subtype != '\0') || bVar2) {
                             if (!bVar3) { ent[0x35] = 0x20; bVar3 = 1; }
                         } else {
                             ent[0x36] = 0x20; bVar2 = 1;
@@ -2107,73 +2108,64 @@ static void FUN_0044d650_impl(int *ent, int idx)
         (*(char *)((int)ent + 0xa2) != '\0'))
         return;
 
-    int base = (int)DAT_004892e8;
     int count = DAT_00489248;
-    int off, i;
-    char c;
+    int i;
 
     /* Type 1: 0x0B (slot +0x470) -> 0xFA */
     if ((*(int *)((int)ent + 0x470) != 0) && (0 < count)) {
-        for (i = 0, off = 0; i < count; i++, off += 0x80) {
-            if ((*(char *)(off + 0x40 + base) == '\x01') &&
-                (*(char *)(off + 0x21 + base) == '\x0b') &&
-                (*(int *)(off + 0x2c + base) == 1) &&
-                (*(unsigned char *)(off + 0x22 + base) == (unsigned char)idx)) {
-                *(unsigned char *)(off + 0x20 + base) = 0xfa;
-                base = (int)DAT_004892e8; count = DAT_00489248;
+        for (i = 0; i < count; i++) {
+            Entity *entity = &DAT_004892e8[i];
+            if ((entity->subtype == 1) && (entity->type == 0x0b) &&
+                (entity->scratch_2c == 1) && (entity->owner == (unsigned char)idx)) {
+                entity->state_20 = 0xfa;
             }
         }
     }
     /* Type 2: 0x2E (slot +0x46C) -> 0xFB */
     if ((*(int *)((int)ent + 0x46c) != 0) && (0 < count)) {
-        for (i = 0, off = 0; i < count; i++, off += 0x80) {
-            if ((*(char *)(off + 0x21 + base) == 0x2e) &&
-                (*(unsigned char *)(off + 0x22 + base) == (unsigned char)idx)) {
-                *(unsigned char *)(off + 0x20 + base) = 0xfb;
-                base = (int)DAT_004892e8; count = DAT_00489248;
+        for (i = 0; i < count; i++) {
+            Entity *entity = &DAT_004892e8[i];
+            if ((entity->type == 0x2e) && (entity->owner == (unsigned char)idx)) {
+                entity->state_20 = 0xfb;
             }
         }
     }
     /* Type 3: 0x27 (slot +0x468) -> 0xFB */
     if ((*(int *)((int)ent + 0x468) != 0) && (0 < count)) {
-        for (i = 0, off = 0; i < count; i++, off += 0x80) {
-            if ((*(char *)(off + 0x21 + base) == 0x27) &&
-                (*(int *)(off + 0x2c + base) == 1) &&
-                (*(unsigned char *)(off + 0x22 + base) == (unsigned char)idx)) {
-                *(unsigned char *)(off + 0x20 + base) = 0xfb;
-                base = (int)DAT_004892e8; count = DAT_00489248;
+        for (i = 0; i < count; i++) {
+            Entity *entity = &DAT_004892e8[i];
+            if ((entity->type == 0x27) && (entity->scratch_2c == 1) &&
+                (entity->owner == (unsigned char)idx)) {
+                entity->state_20 = 0xfb;
             }
         }
     }
     /* Type 4: 0x22 (slot +0x464) -> 0xFA */
     if ((*(int *)((int)ent + 0x464) != 0) && (0 < count)) {
-        for (i = 0, off = 0; i < count; i++, off += 0x80) {
-            if ((*(char *)(off + 0x21 + base) == 0x22) &&
-                (*(char *)(off + 0x40 + base) != '\0') &&
-                (*(unsigned char *)(off + 0x22 + base) == (unsigned char)idx)) {
-                *(unsigned char *)(off + 0x20 + base) = 0xfa;
-                base = (int)DAT_004892e8; count = DAT_00489248;
+        for (i = 0; i < count; i++) {
+            Entity *entity = &DAT_004892e8[i];
+            if ((entity->type == 0x22) && (entity->subtype != 0) &&
+                (entity->owner == (unsigned char)idx)) {
+                entity->state_20 = 0xfa;
             }
         }
     }
     /* Type 5: 0x28 (slot +0x474) -> 0xFA */
     if ((*(int *)((int)ent + 0x474) != 0) && (0 < count)) {
-        for (i = 0, off = 0; i < count; i++, off += 0x80) {
-            if ((*(char *)(off + 0x21 + base) == 0x28) &&
-                (*(unsigned char *)(off + 0x22 + base) == (unsigned char)idx)) {
-                *(unsigned char *)(off + 0x20 + base) = 0xfa;
-                base = (int)DAT_004892e8; count = DAT_00489248;
+        for (i = 0; i < count; i++) {
+            Entity *entity = &DAT_004892e8[i];
+            if ((entity->type == 0x28) && (entity->owner == (unsigned char)idx)) {
+                entity->state_20 = 0xfa;
             }
         }
     }
     /* Type 6: 0x29/0x2A (slot +0x478) -> 0xFA */
     if ((*(int *)((int)ent + 0x478) != 0) && (0 < count)) {
-        for (i = 0, off = 0; i < count; i++, off += 0x80) {
-            c = *(char *)(off + 0x21 + base);
-            if ((c == 0x29 || c == 0x2a) &&
-                (*(unsigned char *)(off + 0x22 + base) == (unsigned char)idx)) {
-                *(unsigned char *)(off + 0x20 + base) = 0xfa;
-                base = (int)DAT_004892e8; count = DAT_00489248;
+        for (i = 0; i < count; i++) {
+            Entity *entity = &DAT_004892e8[i];
+            if ((entity->type == 0x29 || entity->type == 0x2a) &&
+                (entity->owner == (unsigned char)idx)) {
+                entity->state_20 = 0xfa;
             }
         }
     }
@@ -4654,10 +4646,9 @@ static void FUN_0044d9f0_impl(int *ent)
         }
     }
 
-    int poff = 0;
-    int pbase = (int)DAT_004892e8;
-    for (i = 0; i < DAT_00489248; i++, poff += 0x80) {
-        unsigned char owner = *(unsigned char *)(poff + 0x22 + pbase);
+    for (i = 0; i < DAT_00489248; i++) {
+        Entity *entity = &DAT_004892e8[i];
+        unsigned char owner = entity->owner;
         char team;
         if (owner < 0x46) {
             team = *(char *)((int)DAT_00487810 + 0x2c + (unsigned int)owner * 0x598);
@@ -4666,18 +4657,16 @@ static void FUN_0044d9f0_impl(int *ent)
         }
         if (team == (char)ent[0xb]) continue;
 
-        int ex2 = *(int *)(poff + pbase);
+        int ex2 = entity->position_x;
         int px2 = ent[0];
         if ((ex2 - 0x1400000 < px2) && (px2 < ex2 + 0x1400000)) {
-            int ey2 = *(int *)(poff + 8 + pbase);
+            int ey2 = entity->position_y;
             int py2 = ent[1];
             if ((ey2 - 0x1400000 < py2) && (py2 < ey2 + 0x1400000)) {
                 int angle = FUN_004257e0(px2, py2, ex2, ey2);
-                *(int *)(poff + 0x18 + (int)DAT_004892e8) +=
-                    *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
-                *(int *)(poff + 0x1c + (int)DAT_004892e8) +=
+                entity->velocity_x += *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
+                entity->velocity_y +=
                     *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
-                pbase = (int)DAT_004892e8;
             }
         }
     }
@@ -5171,27 +5160,26 @@ static void FUN_0044e3b0(int *ent)
 
     /* Scan entity array for type 0x0E */
     for (int i = 0; i < DAT_00489248; i++) {
-        int *proj = (int *)(i * 0x80 + (int)DAT_004892e8);
+        Entity *projectile = &DAT_004892e8[i];
 
         /* Must be type 0x0E (MOVING SUCKER) */
-        if (*(unsigned char *)((int)proj + 0x21) != 0x0E) continue;
+        if (projectile->type != 0x0E) continue;
 
         /* Check: different team AND within ±0x1040000 on both axes */
         if (*(char *)((int)DAT_00487810 + 0x2c +
-             (unsigned int)*(unsigned char *)((int)proj + 0x22) * 0x598) !=
+             (unsigned int)projectile->owner * 0x598) !=
             (char)ent[0xb] &&
-            ex - 0x1040000 < *proj && *proj < ex + 0x1040000 &&
-            ey - 0x1040000 < proj[2] && proj[2] < ey + 0x1040000)
+            ex - 0x1040000 < projectile->position_x &&
+            projectile->position_x < ex + 0x1040000 &&
+            ey - 0x1040000 < projectile->position_y &&
+            projectile->position_y < ey + 0x1040000)
         {
             /* Found matching enemy sucker — compute angle and apply force */
-            int off = i * 0x80;
             unsigned long long angle = FUN_004257e0(
-                *(int *)(off + (int)DAT_004892e8),
-                *(int *)(off + 8 + (int)DAT_004892e8),
-                ex, ey);
+                projectile->position_x, projectile->position_y, ex, ey);
             int a = (int)angle;
 
-            if (*(char *)(off + 0x40 + (int)DAT_004892e8) != '\0') {
+            if (projectile->subtype != 0) {
                 ent[4] += *(int *)((int)DAT_00487ab0 + a * 4) >> 2;
                 ent[5] += *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 2;
             } else {

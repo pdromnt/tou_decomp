@@ -133,7 +133,9 @@ callback identity, and the turret-projectile gravity guard. Its large legacy
 behavior fallback and weapon-heavy paths remain raw. The third batch converts
 the complete main gameplay entity renderer in `FUN_0040bb60`. Offset `+0x24`
 still intentionally has both byte and 16-bit views there: the byte selects a
-sprite palette, while the full word selects a pixel-dot shape.
+sprite palette, while the full word selects a pixel-dot shape. The fourth batch
+converts the enemy-proximity, owned-projectile detonation, Moving Sucker, and
+force-field entity-array scanners in `entity.cpp`.
 
 ## Config Ownership
 

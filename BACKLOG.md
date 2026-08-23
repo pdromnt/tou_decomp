@@ -23,7 +23,9 @@ separately in small, assembly-comparable batches. The third batch converts the
 complete main gameplay entity renderer, including its intentional byte/word
 views of `+0x24`, without changing render or RNG call order. The pool physically
 allocates 2600 records (`0x51400 / 0x80`), while gameplay limits active entities
-to 2500.
+to 2500. The fourth, larger batch converts four complete entity-array scanners:
+enemy proximity, owned-projectile detonation, Moving Sucker attraction/repulsion,
+and force-field repulsion.
 
 **Known layout:**
 ```
