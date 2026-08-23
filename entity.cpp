@@ -4466,6 +4466,11 @@ LAB_00401856:
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
                 *(int *)(iVar12 + 0x470 + (int)DAT_00487810) += 1;
         } else if (local_14 == 0x2e) {
+            /* Smoking Nalle is placed at the firing position. The reconstructed
+             * generic projectile speed made it drift through terrain before its
+             * stationary callback got a chance to run. */
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = 0;
+            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = 0;
             piVar1 = (int *)(iVar12 + 0x46c + (int)DAT_00487810); *piVar1 += 1;
         } else if (local_14 == 0x11) {
             *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 1;
