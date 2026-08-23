@@ -87,22 +87,33 @@ hud.cpp, menu.cpp
 
 ---
 
-### T1.2 — PlayerData struct (0x598 / 1432 bytes)  [P0]
-Player array at `DAT_00487810`. Known clusters:
-- `+0x00` ship type, `+0x04` team, `+0x08` lives, `+0x0C` health, `+0x10` shield, `+0x14` energy, `+0x18` score
-- `+0xAC..0xB2` key scan codes (7 keys)
-- `+0xB4` mouse sensitivity
-- `+0xC0..0x130` weapon grid state
-- `+0x200..0x400` visibility buffer pointer
-- `+0x430..0x470` stat counters
-- `+0x490..0x4A0` AI state
+### T1.2 — PlayerData struct (0x598 / 1432 bytes)  [IN PROGRESS]
+The earlier proposed layout was contradicted by the original machine code and
+has been discarded. Verified fields now include:
 
-**Files:** init.cpp, entity.cpp, menu.cpp, gameloop.cpp, stubs.cpp
+- `+0x00..+0x18`: current/previous position, velocity, and heading
+- `+0x1C`: exhaust interval counter; `+0x20`: health; `+0x24`: life state
+- `+0x2C`: team; `+0x34/+0x35`: weapon family and Mark
+- `+0x90..+0xA8`: weapon/effect timers; `+0xAC..+0xB2`: seven key scan codes
+- `+0xB8/+0xBC`: current and previous input bitmasks
+- `+0xC4..+0xDC`: byte/dword gameplay timers; `+0xDD`: AI level
+- `+0x464..+0x4A3`: late state/stat counters and timers
+- `+0x4A8/+0x4AC/+0x4B0`: positional-sound timer, channel, and sound ID
 
-**AC:**
-- `PlayerData` defined; `static_assert(sizeof(PlayerData) == 0x598)`
-- `DAT_00487810` becomes `PlayerData *g_PlayerArray`
-- All pointer arithmetic replaced
+`PlayerData` has exact size/offset assertions. Previous-position capture,
+keyboard input, timer ticking, steering, thrust/exhaust, core player-loop state,
+and positional sound now use typed access. Unknown ranges remain opaque.
+
+The storage global deliberately remains byte-addressable while legacy routines
+still contain binary byte offsets; `Player_Get(index)` is the typed boundary.
+Changing the storage pointer itself to `PlayerData *` before all raw access is
+lifted would silently scale those offsets.
+
+**Remaining AC:**
+
+- Migrate the remaining raw player accesses cluster-by-cluster against assembly
+- Replace neutral field names only when semantics are independently established
+- Make the pool itself typed only after no byte-offset call sites remain
 
 ---
 
@@ -212,7 +223,7 @@ Hard limits: 2500 entities, 2000 particles, 5000 fluid sources, 300 level names.
 ### T3.2 — Replace `void *` pool pointers with typed arrays  [P1]
 After T1.1–T1.5 are done, change declarations:
 - `Entity *g_EntityArray` ← `DAT_004892e8`
-- `PlayerData *g_PlayerArray` ← `DAT_00487810`
+- `PlayerData *g_PlayerArray` ← `DAT_00487810` (after all legacy byte offsets are lifted)
 - `ProjectileRecord *g_ProjectileArray` ← `DAT_00481f28`
 - `Particle *g_ParticleArray` ← `DAT_00487830`
 
