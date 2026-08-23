@@ -14,9 +14,9 @@ A lot of things. A lot of things may be very buggy. The code I got is essentialy
 - Controls
 - Physics (Ships, Water, Collisions, Explosions, etc.)
 - Levels (including GG Levels)
-- Most subsystems (Enemy AI, Spawns, Pickups, VFX, Weapons, etc.)
+- Most subsystems (Enemy AI, Spawns, Pickups, VFX, Weapons, Turrets, etc.)
 
-I'd guesstimate we're 95% done. The 5% left are some inaccuracies that are hard to get correct and bugs. 
+I'd guesstimate we're 98% done. The 2% left are some inaccuracies that are hard to get correct and bugs. 
 
 ## Objective
 
@@ -24,7 +24,7 @@ Initially perform a "dirty" decomp, with no organized file structure or namings,
 
 Later on, organize file structure, namings and overall code architecture for easy maintenance.
 
-All in a all, the plan is to hopefully pull off a 99% compatible decomp, where we can fire up the game and play through the levels without major issues.  
+All in a all, the plan is to hopefully pull off a 99.9% compatible decomp, where we can fire up the game and play through the levels without major issues.  
 
 I also plan on making a level viewer in the style of my other project, [Hotzone](https://github.com/pdromnt/uprising-level-editor), to hopefully better understand how the levels (and maybe GG Packs) work.  
 
