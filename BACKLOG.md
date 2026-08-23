@@ -16,9 +16,11 @@ Replace raw entity blob with typed access without changing original behavior.
 The verified `Entity` layout and offset assertions now live in `types.h`, and
 the global pool is typed as `Entity *`. The first access migration covers the
 callback lookup helper, pre-tick flag reset, and menu/intro renderer. Most
-runtime code still uses raw accesses; migrate those separately in small,
-assembly-comparable batches. The pool physically allocates 2600 records
-(`0x51400 / 0x80`), while gameplay limits active entities to 2500.
+runtime code still uses raw accesses. The second batch covers the common
+prologue of `FUN_00434310`: position history, animation bookkeeping, callback
+identity, and the turret-projectile gravity guard. Migrate the remaining paths
+separately in small, assembly-comparable batches. The pool physically allocates
+2600 records (`0x51400 / 0x80`), while gameplay limits active entities to 2500.
 
 **Known layout:**
 ```
