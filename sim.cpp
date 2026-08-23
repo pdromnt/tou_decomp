@@ -10117,53 +10117,53 @@ void FUN_0045e2c0(void)
             /* Spawn 8 debris entities in 8 evenly-spaced directions */
             int angle_off = 0;  /* byte offset into LUT, increments by 0x400 (= 256 entries = 45°) */
             for (j = 0; j < 8 && DAT_00489248 <= 0x9C3; j++) {
-                int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                Entity *debris = &DAT_004892e8[DAT_00489248];
 
                 /* Position = trooper position */
-                *(int *)(ebase + 0x00) = *(int *)(base + 0x00);
-                *(int *)(ebase + 0x08) = *(int *)(base + 0x08);
+                debris->position_x = *(int *)(base + 0x00);
+                debris->position_y = *(int *)(base + 0x08);
 
                 /* Velocity: random speed (shift 0-3) in this direction */
                 unsigned int rnd = rand() & 3;
-                *(int *)(ebase + 0x18) = (*(int *)((int)DAT_00487ab0 + angle_off) << (rnd & 0x1F)) >> 6;
+                debris->velocity_x = (*(int *)((int)DAT_00487ab0 + angle_off) << (rnd & 0x1F)) >> 6;
                 rnd = rand() & 3;
-                *(int *)(ebase + 0x1C) = (*(int *)((int)DAT_00487ab0 + angle_off + 0x800) << (rnd & 0x1F)) >> 6;
+                debris->velocity_y = (*(int *)((int)DAT_00487ab0 + angle_off + 0x800) << (rnd & 0x1F)) >> 6;
 
                 /* Copy position to prev_position */
-                *(int *)(ebase + 0x04) = *(int *)(base + 0x00);
-                *(int *)(ebase + 0x0C) = *(int *)(base + 0x08);
+                debris->previous_x = *(int *)(base + 0x00);
+                debris->previous_y = *(int *)(base + 0x08);
 
                 /* Zero acceleration */
-                *(int *)(ebase + 0x10) = 0;
-                *(int *)(ebase + 0x14) = 0;
+                debris->motion_x_10 = 0;
+                debris->motion_y_14 = 0;
 
                 /* Entity metadata: debris type */
-                *(unsigned char *)(ebase + 0x21) = 2;     /* type: trooper debris */
-                *(unsigned short *)(ebase + 0x24) = 0;     /* state */
-                *(unsigned char *)(ebase + 0x20) = 5;      /* flags */
-                *(unsigned char *)(ebase + 0x26) = 0xFF;   /* color: none */
-                *(unsigned char *)(ebase + 0x22) = 0xFF;   /* owner: none */
-                *(int *)(ebase + 0x28) = 0;                /* health */
+                debris->type = 2;
+                debris->variant_24 = 0;
+                debris->state_20 = 5;
+                debris->auxiliary_26 = 0xFF;
+                debris->owner = 0xFF;
+                debris->health_or_damage_28 = 0;
 
                 /* Sprite data from entity type table (trooper debris sprites) */
-                *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x4B8);
-                *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0x4F4);
-                *(int *)(ebase + 0x48) = 0;
-                *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0x524);
-                *(unsigned char *)(ebase + 0x54) = 0;
-                *(unsigned char *)(ebase + 0x40) = 0;
-                *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x430);
-                *(int *)(ebase + 0x3C) = 0;
-                *(unsigned char *)(ebase + 0x5C) = 0;
+                debris->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x4B8);
+                debris->damage_44 = *(int *)((int)DAT_00487abc + 0x4F4);
+                debris->scratch_48 = 0;
+                debris->palette_value = *(int *)((int)DAT_00487abc + 0x524);
+                debris->animation_frame = 0;
+                debris->subtype = 0;
+                debris->callback_address = *(int *)((int)DAT_00487abc + 0x430);
+                debris->counter_3c = 0;
+                debris->timer_5c = 0;
 
                 DAT_00489248++;
 
                 /* Set lifetime: random 150-249 ticks */
-                *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x58) = rand() % 100 + 0x96;
+                debris->health_or_damage_28 = rand() % 100 + 0x96;
 
                 /* Set sprite index from ammo/sound table */
                 int snd_rnd = rand();
-                *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+                debris->palette_value =
                     (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + 0x44 + (snd_rnd % 6) * 2) + 30000;
 
                 angle_off += 0x400;
@@ -10178,57 +10178,57 @@ void FUN_0045e2c0(void)
                     /* In viewport: spawn visible debris fragments (16 pieces) */
                     int frag_off = 0;
                     for (j = 0; j < 16 && DAT_00489248 <= 0x9C3; j++) {
-                        int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                        Entity *fragment = &DAT_004892e8[DAT_00489248];
                         unsigned int rnd_angle = rand() & 0x7FF;
                         int speed = rand() % 30 + 20;
                         unsigned int rnd_type = rand() & 1;
                         int etype = rnd_type + 0x6C;  /* entity type 108 or 109 */
 
-                        *(int *)(ebase + 0x00) = *(int *)(base + 0x00);
-                        *(int *)(ebase + 0x08) = *(int *)(base + 0x08);
-                        *(int *)(ebase + 0x18) = *(int *)((int)DAT_00487ab0 + rnd_angle * 4) * speed >> 6;
-                        *(int *)(ebase + 0x1C) = *(int *)((int)DAT_00487ab0 + 0x800 + rnd_angle * 4) * speed >> 6;
-                        *(int *)(ebase + 0x04) = *(int *)(base + 0x00);
-                        *(int *)(ebase + 0x0C) = *(int *)(base + 0x08);
-                        *(int *)(ebase + 0x10) = 0;
-                        *(int *)(ebase + 0x14) = 0;
-                        *(char *)(ebase + 0x21) = (char)etype;
-                        *(unsigned short *)(ebase + 0x24) = 0;
-                        *(unsigned char *)(ebase + 0x20) = 0;
-                        *(unsigned char *)(ebase + 0x26) = 0xFF;
-                        *(unsigned char *)(ebase + 0x22) = 0xFF;
-                        *(int *)(ebase + 0x28) = 0;
+                        fragment->position_x = *(int *)(base + 0x00);
+                        fragment->position_y = *(int *)(base + 0x08);
+                        fragment->velocity_x = *(int *)((int)DAT_00487ab0 + rnd_angle * 4) * speed >> 6;
+                        fragment->velocity_y = *(int *)((int)DAT_00487ab0 + 0x800 + rnd_angle * 4) * speed >> 6;
+                        fragment->previous_x = *(int *)(base + 0x00);
+                        fragment->previous_y = *(int *)(base + 0x08);
+                        fragment->motion_x_10 = 0;
+                        fragment->motion_y_14 = 0;
+                        fragment->type = (unsigned char)etype;
+                        fragment->variant_24 = 0;
+                        fragment->state_20 = 0;
+                        fragment->auxiliary_26 = 0xFF;
+                        fragment->owner = 0xFF;
+                        fragment->health_or_damage_28 = 0;
 
                         int sprite_group = etype * 0x86;
                         int rnd_sprite = rand();
-                        *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (rnd_sprite % 6 + sprite_group) * 4);
+                        fragment->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (rnd_sprite % 6 + sprite_group) * 4);
                         rnd_sprite = rand();
-                        *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (rnd_sprite % 6 + sprite_group) * 4);
-                        *(int *)(ebase + 0x48) = 0;
+                        fragment->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (rnd_sprite % 6 + sprite_group) * 4);
+                        fragment->scratch_48 = 0;
                         rnd_sprite = rand();
-                        *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (rnd_sprite % 6 + sprite_group) * 4);
-                        *(unsigned char *)(ebase + 0x54) = 0;
+                        fragment->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (rnd_sprite % 6 + sprite_group) * 4);
+                        fragment->animation_frame = 0;
                         rnd_sprite = rand();
-                        *(char *)(ebase + 0x40) = (char)(rnd_sprite % 6);
-                        *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + etype * 0x218);
-                        *(int *)(ebase + 0x3C) = 0;
-                        *(unsigned char *)(ebase + 0x5C) = 0;
+                        fragment->subtype = (unsigned char)(rnd_sprite % 6);
+                        fragment->callback_address = *(int *)((int)DAT_00487abc + etype * 0x218);
+                        fragment->counter_3c = 0;
+                        fragment->timer_5c = 0;
 
                         DAT_00489248++;
 
                         /* Team-colored sprite offset */
                         unsigned char team = *(unsigned char *)(base + 0x1C);
                         if ((rand() & 1) == 0 && team < 4) {
-                            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) += (unsigned int)team * 100;
+                            fragment->palette_value += (unsigned int)team * 100;
                         } else {
-                            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) += 300;
+                            fragment->palette_value += 300;
                         }
 
                         /* Set lifetime: random 70-159 ticks */
-                        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x58) = rand() % 90 + 70;
+                        fragment->health_or_damage_28 = rand() % 90 + 70;
 
                         /* Set animation frame */
-                        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x38) =
+                        fragment->scratch_48 =
                             rand() % (int)(*(unsigned char *)((int)DAT_00487abc + 0x126 + etype * 0x218) - 1);
 
                         frag_off += 0x80;
