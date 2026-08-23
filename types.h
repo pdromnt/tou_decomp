@@ -161,8 +161,8 @@ typedef struct PlayerData {
     int32_t viewport_height;         /* 0x488 */
     int32_t viewport_x;              /* 0x48C */
     int32_t viewport_y;              /* 0x490 */
-    int32_t score_494;
-    int32_t scratch_498;
+    int32_t frag_count;             /* 0x494: signed frags (team/self kills subtract) */
+    int32_t death_count;            /* 0x498 */
     uint8_t scratch_49c;
     uint8_t scratch_49d;
     uint8_t timer_49e;
@@ -192,7 +192,8 @@ static_assert(offsetof(PlayerData, buttons) == 0xB8, "PlayerData::buttons offset
 static_assert(offsetof(PlayerData, ai_level) == 0xDD, "PlayerData::ai_level offset");
 static_assert(offsetof(PlayerData, viewport_width) == 0x484, "PlayerData::viewport_width offset");
 static_assert(offsetof(PlayerData, viewport_x) == 0x48C, "PlayerData::viewport_x offset");
-static_assert(offsetof(PlayerData, score_494) == 0x494, "PlayerData::score_494 offset");
+static_assert(offsetof(PlayerData, frag_count) == 0x494, "PlayerData::frag_count offset");
+static_assert(offsetof(PlayerData, death_count) == 0x498, "PlayerData::death_count offset");
 static_assert(offsetof(PlayerData, sound_timer) == 0x4A8, "PlayerData::sound_timer offset");
 
 typedef struct {

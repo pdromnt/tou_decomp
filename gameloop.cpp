@@ -652,6 +652,31 @@ void Game_Update_Render(void)
         g_SubState = 3;
         (*(unsigned char *)&DAT_0048693c)++;
 
+        /* Preserve the completed round's live counters for the post-match pages.
+         * Original Game_Update_Render 0x00461A6B-0x00461AE2 performs this copy
+         * exactly once while transitioning substate 100/101 to substate 3. */
+        if (DAT_00487aa4 != NULL) {
+            unsigned char *team_stats = (unsigned char *)DAT_00487aa4;
+            for (int team = 0; team < 4; team++) {
+                int *live = (int *)(team_stats + team * 0x4000);
+                DAT_00486944[team] = tou_binary::add_wrap_i32(
+                    DAT_00486944[team], live[1]);
+                DAT_00486954[team] = tou_binary::add_wrap_i32(
+                    DAT_00486954[team], live[0]);
+            }
+            DAT_00486964 = tou_binary::add_wrap_i32(
+                DAT_00486964,
+                tou_binary::add_wrap_i32(DAT_0048929c,
+                    *(int *)(team_stats + 0xC004)));
+        }
+        for (int player_index = 0; player_index < DAT_00489240; player_index++) {
+            PlayerData *player = Player_Get(player_index);
+            DAT_00486968[player_index] = tou_binary::add_wrap_i32(
+                DAT_00486968[player_index], player->frag_count);
+            DAT_00486aa8[player_index] = tou_binary::add_wrap_i32(
+                DAT_00486aa8[player_index], player->death_count);
+        }
+
         /* Fall through to rendering — stats overlay will be drawn this frame */
     }
 

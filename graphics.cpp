@@ -686,7 +686,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
             if (player->timer_cb != 0) {
                 char frag_buf[100];
                 FUN_004644af(frag_buf, (const unsigned char *)"Frags: %d",
-                             player->score_494);
+                             player->frag_count);
                 Draw_Text_To_Buffer(frag_buf, 1, 1,
                     buffer + (DAT_004806e8 + 0x32) * stride + DAT_004806ec + 4,
                     stride, 0, DAT_004806d8 - 0x0C, 0);

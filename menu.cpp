@@ -1149,8 +1149,8 @@ void FUN_0041b010(void)
             player->scratch_47d = 0;
             player->timer_47e = 0;
             player->scratch_47f = 0;
-            player->score_494 = 0;
-            player->scratch_498 = 0;
+            player->frag_count = 0;
+            player->death_count = 0;
             player->scratch_49c = 0;
             player->scratch_49d = 0;
             player->timer_49e = 0;

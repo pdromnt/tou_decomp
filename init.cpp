@@ -5911,7 +5911,7 @@ void FUN_0041d740(void)
             for (unsigned int i = 0; i < playerCount; i++) {
                 PlayerData *player = Player_Get(i);
                 unsigned int team = player->team;
-                int perf = player->score_494;
+                int perf = player->frag_count;
                 team_perf_sum[team] += perf;
             }
         }
@@ -5929,7 +5929,7 @@ void FUN_0041d740(void)
             do {
                 PlayerData *player = Player_Get(player_index);
                 unsigned int team = player->team;
-                int perf = player->score_494;
+                int perf = player->frag_count;
                 if (perf > team_perf_sum[team] / 2) {
                     unsigned int deaths = player->state_24;
                     if (deaths == 0) deaths = 1;

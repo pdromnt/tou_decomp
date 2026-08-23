@@ -3110,13 +3110,13 @@ static void FUN_00451590_impl(int *ent, int param_2)
             killer->timer_cb = 200;
             if (uVar5 != victim->team) {
                 /* Enemy kill — increment killer's score */
-                killer->score_494 = tou_binary::add_wrap_i32(killer->score_494, 1);
+                killer->frag_count = tou_binary::add_wrap_i32(killer->frag_count, 1);
                 piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
                 iVar7 = *piVar4 + 1;
                 goto LAB_apply;
             }
             /* Team kill — decrement killer's score */
-            killer->score_494 = tou_binary::sub_wrap_i32(killer->score_494, 1);
+            killer->frag_count = tou_binary::sub_wrap_i32(killer->frag_count, 1);
             piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
         } else if (bVar1 < 200) {
             /* Killed by entity type (bVar1 - 100) */
@@ -3170,7 +3170,7 @@ LAB_apply:
 
     /* Reset entity state */
     *(unsigned char *)(ent + 9) = 1;       /* mark as dead */
-    ent[0x126] += 1;                       /* death count++ */
+    victim->death_count = tou_binary::add_wrap_i32(victim->death_count, 1);
     ent[8] = 0;                            /* health = 0 */
     *(unsigned char *)((int)ent + 0x47d) = 0x32;  /* invuln timer */
     *(unsigned char *)((int)ent + 0xc6) = 0;
