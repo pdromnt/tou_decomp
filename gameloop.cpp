@@ -325,9 +325,9 @@ void FUN_0045e1f0(void)
 
     /* Players (DAT_00487810, stride 0x598): clear per-tick flags */
     for (i = 0; i < DAT_00489240; i++) {
-        int off = i * 0x598;
-        *(char *)(DAT_00487810 + off + 0xA1) = 0;
-        *(char *)(DAT_00487810 + off + 0xA3) = 0;
+        PlayerData *player = Player_Get(i);
+        player->flag_a1 = 0;
+        player->flag_a3 = 0;
     }
 }
 
@@ -450,8 +450,8 @@ static void Gameplay_Tick(void)
             if (mode_byte == 2 || mode_byte == 4) {
                 int p;
                 for (p = 0; p < DAT_00489240; p++) {
-                    int *health = (int *)(DAT_00487810 + 0x20 + p * 0x598);
-                    if (*health > 0x1000) *health = 0x1000;
+                    PlayerData *player = Player_Get(p);
+                    if (player->health > 0x1000) player->health = 0x1000;
                 }
             }
         }

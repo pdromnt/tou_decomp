@@ -1371,20 +1371,18 @@ void FUN_0040d810(int param_1, unsigned int param_2)
  */
 void FUN_0040caf0(int param_1, unsigned int param_2)
 {
-    int player_base = (int)DAT_00487810;
-
     /* Pass 1: Ship sprites via FUN_0040c590 */
-    int offset = 0;
     int explosion_offset = 0;
     for (int i = 0; i < DAT_00489240; i++) {
-        if (*(char *)(player_base + 0x24 + offset) == '\0') {
-            int px = *(int *)(player_base + offset) >> 0x12;
+        PlayerData *player = Player_Get(i);
+        if (player->state_24 == 0) {
+            int px = player->position_x >> 0x12;
             if (DAT_004806dc < px + 0xe && px - 0xe < DAT_004806d0) {
-                int py = *(int *)(player_base + 4 + offset) >> 0x12;
+                int py = player->position_y >> 0x12;
                 if (DAT_004806e0 < py + 0xe && py - 0xe < DAT_004806d4) {
                     /* Calculate blend from damage */
                     unsigned char blend = 0;
-                    char damage = *(char *)(player_base + 0x49f + offset);
+                    int8_t damage = static_cast<int8_t>(player->scratch_49f);
                     if (damage > 0) {
                         int b = damage * 4;
                         blend = (char)((int)(b + (b >> 0x1f & 0x3f)) >> 6) + 0x30;
@@ -1394,40 +1392,37 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                     int ew = *(int *)(base + 100000);
                     int eh = *(int *)(base + 0x186a4);
 
-                    int angle = *(int *)(player_base + 0x18 + offset);
+                    int angle = player->heading;
                     int frame = (int)(((angle + 0x20) & 0x7ff) * 0x20) >> 0xb;
 
                     FUN_0040c590(frame, i,
                                  (px - ew / 2) - DAT_004806dc,
                                  (py - eh / 2) - DAT_004806e0,
-                                 *(unsigned char *)(player_base + 0xa3 + offset),
+                                 player->flag_a3,
                                  param_1, param_2, blend);
-                    player_base = (int)DAT_00487810;
                 }
             }
         }
-        offset += 0x598;
         explosion_offset += 0x186a8;
     }
 
     /* Pass 2: Ship overlay effects */
-    offset = 0;
     for (int i = 0; i < DAT_00489240; i++) {
-        if (*(char *)(offset + 0x24 + player_base) == '\0') {
-            int px = *(int *)(offset + player_base) >> 0x12;
+        PlayerData *player = Player_Get(i);
+        if (player->state_24 == 0) {
+            int px = player->position_x >> 0x12;
             if (DAT_004806dc < px + 10 && px - 10 < DAT_004806d0) {
-                int py = *(int *)(offset + 4 + player_base) >> 0x12;
+                int py = player->position_y >> 0x12;
                 if (DAT_004806e0 < py + 10 && py - 10 < DAT_004806d4) {
                     /* Damage sparks (random sprite 0x29-0x2B) */
-                    if (*(int *)(offset + 0xa4 + player_base) != 0 &&
-                        *(char *)(*(char *)(offset + 0x34 + player_base) + offset + 0x3c + player_base) == '\r') {
+                    if (player->timer_a4 != 0 &&
+                        player->weapon_slots[static_cast<int8_t>(player->weapon_type)] == 13) {
                         int r = rand();
-                        player_base = (int)DAT_00487810;
                         if (r % 10 == 0) {
                             int r2 = rand();
                             int spr = r2 % 3 + 0x29;
-                            int spx = *(int *)(offset + DAT_00487810) >> 0x12;
-                            int spy = *(int *)(offset + 4 + DAT_00487810) >> 0x12;
+                            int spx = player->position_x >> 0x12;
+                            int spy = player->position_y >> 0x12;
                             int sw = (int)((unsigned char *)DAT_00489e8c)[spr];
                             int sh = (int)((unsigned char *)DAT_00489e88)[spr];
 
@@ -1437,17 +1432,16 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                             FUN_0040c280(spr, (spx - (sw >> 1)) - DAT_004806dc,
                                          (spy - (sh >> 1)) - DAT_004806e0, 0,
                                          param_1, param_2, darkness);
-                            player_base = (int)DAT_00487810;
                         }
                     }
 
                     /* Shield glow effect (sprite 0x198+) */
-                    unsigned int shield_state = *(unsigned int *)(offset + 0xa4 + player_base);
+                    unsigned int shield_state = static_cast<uint32_t>(player->timer_a4);
                     if (shield_state != 0 &&
-                        *(char *)(*(char *)(offset + 0x34 + player_base) + offset + 0x3c + player_base) == '\f') {
-                        int spy = *(int *)(offset + 4 + player_base) >> 0x12;
+                        player->weapon_slots[static_cast<int8_t>(player->weapon_type)] == 12) {
+                        int spy = player->position_y >> 0x12;
                         int spr = 0x51c - (shield_state >> 1) % 9;
-                        int spx = *(int *)(offset + player_base) >> 0x12;
+                        int spx = player->position_x >> 0x12;
                         int sw = (int)((unsigned char *)DAT_00489e8c)[spr];
                         int sh = (int)((unsigned char *)DAT_00489e88)[spr];
 
@@ -1457,16 +1451,15 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                         FUN_0040c280(spr, (spx - (sw >> 1)) - DAT_004806dc,
                                      (spy - (sh >> 1)) - DAT_004806e0, 0,
                                      param_1, param_2, darkness);
-                        player_base = (int)DAT_00487810;
                     }
 
                     /* Weapon charge glow (sprite 0x198 + charge level) */
-                    if (*(char *)(offset + 0xc6 + player_base) != '\0') {
-                        int charge_spr = *(unsigned char *)(offset + 199 + player_base) + 0x198;
+                    if (player->stun_timer != 0) {
+                        int charge_spr = player->scratch_c7 + 0x198;
                         unsigned int cw = (unsigned int)((unsigned char *)DAT_00489e8c)[charge_spr];
                         unsigned int ch = (unsigned int)((unsigned char *)DAT_00489e88)[charge_spr];
-                        int cx = ((*(int *)(offset + player_base) >> 0x12) - (int)(cw >> 1)) - DAT_004806dc;
-                        int cy = ((*(int *)(offset + 4 + player_base) >> 0x12) - (int)(ch >> 1)) - DAT_004806e0;
+                        int cx = ((player->position_x >> 0x12) - (int)(cw >> 1)) - DAT_004806dc;
+                        int cy = ((player->position_y >> 0x12) - (int)(ch >> 1)) - DAT_004806e0;
                         int src_idx = ((int *)DAT_00489234)[charge_spr];
 
                         unsigned short *dst = (unsigned short *)(param_1 +
@@ -1506,7 +1499,6 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                                         unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)*dst];
                                         *dst = ((unsigned short *)DAT_004876a4[22])[remap]; /* DAT_004876fc = palette[22] */
                                         intensity--;
-                                        player_base = (int)DAT_00487810;
                                     }
                                     dst++;
                                     src_idx++;
@@ -1518,12 +1510,12 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                     }
 
                     /* Jet exhaust smoke (sprite 0xDAB-) */
-                    shield_state = *(unsigned int *)(offset + 0xa4 + player_base);
+                    shield_state = static_cast<uint32_t>(player->timer_a4);
                     if (shield_state != 0 &&
-                        *(char *)(*(char *)(offset + 0x34 + player_base) + offset + 0x3c + player_base) == '\n') {
-                        int spy = *(int *)(offset + 4 + player_base) >> 0x12;
+                        player->weapon_slots[static_cast<int8_t>(player->weapon_type)] == 10) {
+                        int spy = player->position_y >> 0x12;
                         int spr = 0xdb5 - (shield_state >> 2) % 10;
-                        int spx = *(int *)(offset + player_base) >> 0x12;
+                        int spx = player->position_x >> 0x12;
                         int sw = (int)((unsigned char *)DAT_00489e8c)[spr];
                         int sh = (int)((unsigned char *)DAT_00489e88)[spr];
 
@@ -1533,12 +1525,10 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                         FUN_0040c280(spr, (spx - (sw >> 1)) - DAT_004806dc,
                                      (spy - (sh >> 1)) - DAT_004806e0, 0,
                                      param_1, param_2, darkness);
-                        player_base = (int)DAT_00487810;
                     }
                 }
             }
         }
-        offset += 0x598;
     }
 }
 

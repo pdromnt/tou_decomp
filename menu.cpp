@@ -201,9 +201,9 @@ gg_level_ready:
     /* Mark human/CPU flags and team assignments for all players */
     if (DAT_00487810 != 0) {
         for (int i = 0; i < DAT_00489240; i++) {
-            int poff = i * 0x598;
-            *(char *)(DAT_00487810 + poff + 0x480) = (i < DAT_00489244) ? 1 : 0;
-            *(char *)(DAT_00487810 + poff + 0x2C) = g_ConfigBlob[0x3C6 + i]; /* team */
+            PlayerData *player = Player_Get(i);
+            player->human_controlled = (i < DAT_00489244) ? 1 : 0;
+            player->team = g_ConfigBlob[0x3C6 + i];
         }
     }
 
@@ -475,16 +475,14 @@ void FUN_00451500(void)
     int team_active[4] = {0, 0, 0, 0};
 
     if (DAT_00489240 > 0) {
-        int off = 0;
         for (int i = 0; i < DAT_00489240; i++) {
-            /* Check if player has lives (+0x28) */
-            if (*(int *)(DAT_00487810 + off + 0x28) != 0) {
-                unsigned char team = *(unsigned char *)(DAT_00487810 + off + 0x2c);
+            PlayerData *player = Player_Get(i);
+            if (player->lives != 0) {
+                unsigned char team = player->team;
                 if (team < 4) {
                     team_active[team] = 1;
                 }
             }
-            off += 0x598;
         }
     }
 
@@ -750,96 +748,84 @@ void FUN_0041aea0(void)
 {
     if (DAT_00489240 <= 0) return;
 
-    int poff = 0;
     int soff = 0;  /* ship stats table offset (0x40 per entry) */
 
     for (int i = 0; i < DAT_00489240; i++) {
-        *(char *)(DAT_00487810 + poff + 0x26) = 0;
+        PlayerData *player = Player_Get(i);
+        player->scratch_26 = 0;
 
         int result = FUN_0044dfb0(i);
-        while (result == 0 && *(unsigned char *)(DAT_00487810 + poff + 0x26) < 0x28) {
-            *(unsigned char *)(DAT_00487810 + poff + 0x26) =
-                *(unsigned char *)(DAT_00487810 + poff + 0x26) + 1;
+        while (result == 0 && player->scratch_26 < 0x28) {
+            player->scratch_26++;
             result = FUN_0044dfb0(i);
         }
 
-        if (*(char *)(DAT_00487810 + poff + 0x26) == 0x28) {
+        if (player->scratch_26 == 0x28) {
             /* Failed to find spawn — mark dead */
-            *(char *)(DAT_00487810 + poff + 0x24) = 1;
-            *(char *)(DAT_00487810 + poff + 0x25) = 1;
-            *(char *)(DAT_00487810 + poff + 0x47c) = 0;
-            *(char *)(DAT_00487810 + poff + 0x47d) = 0;
-            *(int *)(DAT_00487810 + poff) = 0;
-            *(int *)(DAT_00487810 + poff + 4) = 0;
+            player->state_24 = 1;
+            player->scratch_25 = 1;
+            player->active_47c = 0;
+            player->scratch_47d = 0;
+            player->position_x = 0;
+            player->position_y = 0;
         } else {
             /* Spawn success — mark alive */
-            *(char *)(DAT_00487810 + poff + 0x26) = 0;
-            *(char *)(DAT_00487810 + poff + 0x24) = 0;
-            *(char *)(DAT_00487810 + poff + 0x25) = 0;
-            *(char *)(DAT_00487810 + poff + 0x47c) = 1;
-            *(char *)(DAT_00487810 + poff + 0x47d) = 0;
+            player->scratch_26 = 0;
+            player->state_24 = 0;
+            player->scratch_25 = 0;
+            player->active_47c = 1;
+            player->scratch_47d = 0;
         }
 
         /* Copy position to previous position */
-        *(int *)(DAT_00487810 + poff + 0x08) = *(int *)(DAT_00487810 + poff);
-        *(int *)(DAT_00487810 + poff + 0x0c) = *(int *)(DAT_00487810 + poff + 4);
+        player->previous_x = player->position_x;
+        player->previous_y = player->position_y;
 
         /* Set health from ship stats table */
         if (DAT_0048780c) {
-            *(int *)(DAT_00487810 + poff + 0x20) = *(int *)((char *)DAT_0048780c + soff + 0x28);
+            player->health = *(int *)((char *)DAT_0048780c + soff + 0x28);
         }
 
         /* Clear velocity */
-        *(int *)(DAT_00487810 + poff + 0x10) = 0;
-        *(int *)(DAT_00487810 + poff + 0x14) = 0;
+        player->velocity_x = 0;
+        player->velocity_y = 0;
 
         /* Clear button state */
-        *(unsigned int *)(DAT_00487810 + poff + 0xB8) = 0;
-        *(unsigned int *)(DAT_00487810 + poff + 0xBC) = 0;
+        player->buttons = 0;
+        player->previous_buttons = 0;
 
         /* Set heading to 0 (pointing right) */
-        *(int *)(DAT_00487810 + poff + 0x18) = 0;
+        player->heading = 0;
 
         /* Default key bindings (overwritten by FUN_0041a8c0 from config blob).
          * These serve as initial fallback values during level loading. */
         if (i == 0) {
-            *(unsigned char *)(DAT_00487810 + poff + 0xAC) = 0xCB; /* LEFT arrow: Turn Left */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAD) = 0xCD; /* RIGHT arrow: Turn Right */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAE) = 0xC8; /* UP arrow: Thrust */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAF) = 0x36; /* RSHIFT: Fire Primary */
-            *(unsigned char *)(DAT_00487810 + poff + 0xB0) = 0x9D; /* RCTRL: Fire Secondary */
-            *(unsigned char *)(DAT_00487810 + poff + 0xB1) = 0x35; /* NUMPAD /: Special/Detonate */
-            *(unsigned char *)(DAT_00487810 + poff + 0xB2) = 0xD0; /* DOWN arrow: Brake */
+            const uint8_t defaults[7] = {0xCB, 0xCD, 0xC8, 0x36, 0x9D, 0x35, 0xD0};
+            memcpy(player->key_scan_codes, defaults, sizeof(defaults));
         } else {
             /* Player 2+ defaults: WASD + space/lctrl/lshift */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAC) = 0x1E; /* A: Turn Left */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAD) = 0x20; /* D: Turn Right */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAE) = 0x11; /* W: Thrust */
-            *(unsigned char *)(DAT_00487810 + poff + 0xAF) = 0x39; /* SPACE: Fire Primary */
-            *(unsigned char *)(DAT_00487810 + poff + 0xB0) = 0x1D; /* LCTRL: Fire Secondary */
-            *(unsigned char *)(DAT_00487810 + poff + 0xB1) = 0x2A; /* LSHIFT: Special/Detonate */
-            *(unsigned char *)(DAT_00487810 + poff + 0xB2) = 0x1F; /* S: Brake */
+            const uint8_t defaults[7] = {0x1E, 0x20, 0x11, 0x39, 0x1D, 0x2A, 0x1F};
+            memcpy(player->key_scan_codes, defaults, sizeof(defaults));
         }
 
         /* Mark as human player (0 = human, nonzero = AI) */
-        *(char *)(DAT_00487810 + poff + 0xDD) = 0;
+        player->ai_level = 0;
 
         /* Initialize energy to max */
-        *(int *)(DAT_00487810 + poff + 0x98) = DAT_00483830;
+        player->shield_value = DAT_00483830;
 
         /* Check underwater tile: if tile type byte 4 == 1, set water flag */
-        int px = *(int *)(DAT_00487810 + poff) >> 18;
-        int py = *(int *)(DAT_00487810 + poff + 4) >> 18;
+        int px = player->position_x >> 18;
+        int py = player->position_y >> 18;
         int shift = (unsigned char)DAT_00487a18 & 0x1f;
         int tile_offset = (py << shift) + px;
         unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_offset);
         if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) == 1) {
-            *(char *)(DAT_00487810 + poff + 0x49f) = 0x3f;
+            player->scratch_49f = 0x3f;
         } else {
-            *(char *)(DAT_00487810 + poff + 0x49f) = 0;
+            player->scratch_49f = 0;
         }
 
-        poff += 0x598;
         soff += 0x40;
     }
 
@@ -1081,158 +1067,142 @@ static const char *ship_files[9] = {
 void FUN_0041b010(void)
 {
     int i;
-    int offset;
     unsigned int angle;
-    int base;
 
     i = 0;
     if (0 < DAT_00489240) {
-        offset = 0;
         do {
-            base = (int)DAT_00487810;
+            PlayerData *player = Player_Get(i);
 
             /* Clear velocity/movement */
-            *(int *)(offset + 0x10 + base) = 0;
-            *(int *)(offset + 0x14 + base) = 0;
+            player->velocity_x = 0;
+            player->velocity_y = 0;
 
             /* Random angle (0..2047) */
             angle = rand() & 0x800007FF;
             if ((int)angle < 0) {
                 angle = (angle - 1 | 0xFFFFF800) + 1;
             }
-            *(unsigned int *)(offset + 0x18 + base) = angle;
+            player->heading = static_cast<int32_t>(angle);
 
             /* Clear flags */
-            *(char *)(offset + 0x1C + base) = 0;
-            *(char *)(offset + 0x1D + base) = 0;
-            *(int *)(offset + 0x20 + base) = 0;
-            *(char *)(offset + 0x24 + base) = 0;
-            *(char *)(offset + 0x25 + base) = 0;
-            *(char *)(offset + 0x26 + base) = 0;
+            player->exhaust_counter = 0;
+            player->unknown_01d[0] = 0;
+            player->health = 0;
+            player->state_24 = 0;
+            player->scratch_25 = 0;
+            player->scratch_26 = 0;
 
             /* Lives */
-            *(int *)(offset + 0x28 + base) = (int)DAT_0048373a;
-            *(int *)(offset + 0x30 + base) = 0;
+            player->lives = (int)DAT_0048373a;
+            player->timer_30 = 0;
 
             /* Stats */
-            *(int *)(offset + 0x90 + base) = 0;
-            *(int *)(offset + 0x94 + base) = 0;
-            *(int *)(offset + 0x98 + base) = DAT_00483830;  /* health */
-            *(char *)(offset + 0x9C + base) = 0x40;  /* hitbox w */
-            *(char *)(offset + 0x9D + base) = 0x40;  /* hitbox h */
-            *(char *)(offset + 0x9E + base) = 0;
-            *(char *)(offset + 0x9F + base) = 0;
-            *(char *)(offset + 0xA0 + base) = 0;
-            *(char *)(offset + 0xA1 + base) = 0;
-            *(char *)(offset + 0xA2 + base) = 0;
-            *(char *)(offset + 0xA3 + base) = 0;
-            *(int *)(offset + 0xA4 + base) = 0;
-            *(int *)(offset + 0xA8 + base) = 0;
-            *(int *)(offset + 0xB8 + base) = 0;
-            *(int *)(offset + 0xBC + base) = 0;
-            *(int *)(offset + 0xC0 + base) = 0;
-            *(char *)(offset + 0xC4 + base) = 0;
-            *(char *)(offset + 0xC5 + base) = 0;
-            *(char *)(offset + 0xC6 + base) = 0;
-            *(char *)(offset + 0xC7 + base) = 0;   /* 199 decimal */
-            *(char *)(offset + 0xC8 + base) = (char)0xFA;  /* 250 */
-            *(char *)(offset + 0xC9 + base) = 0;
-            *(char *)(offset + 0xCA + base) = 0;
-            *(char *)(offset + 0xCB + base) = 0;
-            *(char *)(offset + 0xCC + base) = 0;
-            *(int *)(offset + 0xD0 + base) = 0;
-            *(int *)(offset + 0xD8 + base) = 0;
-            *(int *)(offset + 0xD4 + base) = 0;
-            *(char *)(offset + 0xDC + base) = 0;
-            *(char *)(offset + 0xDD + base) = 0;
-            *(int *)(offset + 0xE0 + base) = 1;
-            *(int *)(offset + 0xF0 + base) = 0;
-            *(int *)(offset + 0xEC + base) = 0;
-            *(int *)(offset + 0xF4 + base) = 0;
-            *(char *)(offset + 0xE4 + base) = 0;
-            *(int *)(offset + 0xE8 + base) = 0;
+            player->timer_90 = 0;
+            player->timer_94 = 0;
+            player->shield_value = DAT_00483830;
+            player->primary_fire_interval = 0x40;
+            player->scratch_09d = 0x40;
+            player->weapon_select_active = 0;
+            player->scratch_09f = 0;
+            player->timer_a0 = 0;
+            player->flag_a1 = 0;
+            player->timer_a2 = 0;
+            player->flag_a3 = 0;
+            player->timer_a4 = 0;
+            player->timer_a8 = 0;
+            player->buttons = 0;
+            player->previous_buttons = 0;
+            player->scratch_c0 = 0;
+            player->timer_c4 = 0;
+            player->timer_c5 = 0;
+            player->stun_timer = 0;
+            player->scratch_c7 = 0;
+            player->timer_c8 = 0xFA;
+            player->hud_banner_timer = 0;
+            player->hud_banner_id = 0;
+            player->timer_cb = 0;
+            player->timer_cc = 0;
+            player->timer_d0 = 0;
+            player->timer_d8 = 0;
+            player->boost_timer = 0;
+            player->timer_dc = 0;
+            player->ai_level = 0;
+            tou_binary::store_i32(player, 0xE0, 1);
+            tou_binary::store_i32(player, 0xF0, 0);
+            tou_binary::store_i32(player, 0xEC, 0);
+            tou_binary::store_i32(player, 0xF4, 0);
+            tou_binary::store_u8(player, 0xE4, 0);
+            tou_binary::store_i32(player, 0xE8, 0);
 
             /* Extended fields 0x430..0x478 */
-            *(int *)(offset + 0x430 + base) = 0;
-            *(int *)(offset + 0x434 + base) = 0;
-            *(int *)(offset + 0x438 + base) = 0;
-            *(int *)(offset + 0x43C + base) = 0;
-            *(int *)(offset + 0x440 + base) = 0;
-            *(int *)(offset + 0x444 + base) = 0;
-            *(int *)(offset + 0x448 + base) = 0;
-            *(int *)(offset + 0x44C + base) = 0;
-            *(int *)(offset + 0x450 + base) = 0;
-            *(int *)(offset + 0x454 + base) = 0;
-            *(int *)(offset + 0x458 + base) = 0;
-            *(int *)(offset + 0x464 + base) = 0;
-            *(int *)(offset + 0x468 + base) = 0;
-            *(int *)(offset + 0x46C + base) = 0;
-            *(int *)(offset + 0x470 + base) = 0;
-            *(int *)(offset + 0x474 + base) = 0;
-            *(int *)(offset + 0x478 + base) = 0;
-            *(char *)(offset + 0x47C + base) = 0;
-            *(char *)(offset + 0x47D + base) = 0;
-            *(char *)(offset + 0x47E + base) = 0;
-            *(char *)(offset + 0x47F + base) = 0;
-            *(int *)(offset + 0x494 + base) = 0;
-            *(int *)(offset + 0x498 + base) = 0;
-            *(char *)(offset + 0x49C + base) = 0;
-            *(char *)(offset + 0x49D + base) = 0;
-            *(char *)(offset + 0x49E + base) = 0;
-            *(char *)(offset + 0x49F + base) = 0;
-            *(char *)(offset + 0x4A0 + base) = (char)0xFF;
-            *(char *)(offset + 0x4A1 + base) = 0;
-            *(char *)(offset + 0x4A2 + base) = 0;
-            *(char *)(offset + 0x4A3 + base) = 0x30;
-            *(char *)(offset + 0x4A4 + base) = 0;
+            for (size_t field = 0x430; field <= 0x458; field += 4) {
+                tou_binary::store_i32(player, field, 0);
+            }
+            player->counter_464 = 0;
+            player->counter_468 = 0;
+            player->counter_46c = 0;
+            player->counter_470 = 0;
+            player->counter_474 = 0;
+            player->counter_478 = 0;
+            player->active_47c = 0;
+            player->scratch_47d = 0;
+            player->timer_47e = 0;
+            player->scratch_47f = 0;
+            player->score_494 = 0;
+            player->scratch_498 = 0;
+            player->scratch_49c = 0;
+            player->scratch_49d = 0;
+            player->timer_49e = 0;
+            player->scratch_49f = 0;
+            player->visibility_state = 0xFF;
+            player->last_attacker = 0;
+            player->timer_4a2 = 0;
+            player->timer_4a3 = 0x30;
+            player->unknown_4a4[0] = 0;
 
             /* Ship type selection based on game mode */
-            base = (int)DAT_00487810;
             if (DAT_00483738 == 1) {
                 /* Mode 1: random from available types */
-                if (0 < *(int *)(offset + 0x38 + base)) {
+                if (0 < player->highest_weapon_slot) {
                     int r = rand();
-                    *(char *)(offset + 0x34 + base) =
-                        (char)(r % (*(int *)(offset + 0x38 + base) + 1));
+                    player->weapon_type = static_cast<uint8_t>(
+                        r % (player->highest_weapon_slot + 1));
                 }
             } else if (DAT_00483738 == 2) {
                 /* Mode 2: match to player config */
                 int j = 0;
-                *(char *)(offset + 0x34 + base) = 100;  /* sentinel */
-                int max_type = *(int *)(offset + 0x38 + base);
+                player->weapon_type = 100;
+                int max_type = player->highest_weapon_slot;
                 if (max_type != -1 && max_type + 1 > 0) {
                     do {
-                        if (*(char *)(offset + base + 0x3C + j) == DAT_004836ce[i]) {
-                            *(char *)(offset + 0x34 + base) = (char)j;
-                            base = (int)DAT_00487810;
+                        if (static_cast<int8_t>(player->weapon_slots[j]) == DAT_004836ce[i]) {
+                            player->weapon_type = static_cast<uint8_t>(j);
                         }
                         j++;
-                    } while (j < *(int *)(offset + 0x38 + base) + 1);
+                    } while (j < player->highest_weapon_slot + 1);
                 }
-                if (*(char *)(offset + 0x34 + base) == 'd') {
-                    *(char *)(offset + 0x34 + base) = 0;
+                if (player->weapon_type == 100) {
+                    player->weapon_type = 0;
                 }
             }
 
-            base = (int)DAT_00487810;
-            *(int *)(offset + 0x4AC + base) = 0;
-            *(int *)(offset + 0x4A8 + base) = 0;
-            *(int *)(offset + 0x4B0 + base) = 0;
+            player->sound_channel = 0;
+            player->sound_timer = 0;
+            player->sound_id = 0;
 
             /* Cap team count from entity type table */
             if (DAT_00487abc) {
-                unsigned char ship_idx = *(unsigned char *)(
-                    *(char *)(offset + 0x34 + base) + offset + 0x3C + base);
+                unsigned char ship_idx = player->weapon_slots[
+                    static_cast<int8_t>(player->weapon_type)];
                 unsigned char max_team = *(unsigned char *)(
                     (int)DAT_00487abc + 0x7D + (unsigned int)ship_idx * 0x218);
-                unsigned char *team_ptr = (unsigned char *)(offset + 0x35 + base);
-                if (max_team < *team_ptr) {
-                    *team_ptr = max_team;
+                if (max_team < player->weapon_mark) {
+                    player->weapon_mark = max_team;
                 }
             }
 
             i++;
-            offset += 0x598;
         } while (i < DAT_00489240);
     }
 
@@ -1241,14 +1211,12 @@ void FUN_0041b010(void)
      * iterating 80 - DAT_00489244 times. We bound by DAT_00489240 for safety. */
     if (DAT_00489244 < 0x50) {
         char *src = (char *)(DAT_0048227c + DAT_00489244 + 2);
-        int off = DAT_00489244 * 0x598;
         int ai_count = 80 - DAT_00489244;  /* max AI player slots */
         int k = 0;
         while (k < ai_count && (DAT_00489244 + k) < DAT_00489240) {
             char val = *src;
             src++;
-            *(char *)(off + 0xDD + DAT_00487810) = val + 1;
-            off += 0x598;
+            Player_Get(DAT_00489244 + k)->ai_level = static_cast<uint8_t>(val + 1);
             k++;
         }
     }
@@ -1256,19 +1224,18 @@ void FUN_0041b010(void)
     /* Third loop: weapon loadout */
     i = 0;
     if (0 < DAT_00489240) {
-        offset = 0;
         do {
+            PlayerData *player = Player_Get(i);
             if (DAT_004892e5 == 1) {
-                *(char *)(offset + 0x8C + DAT_00487810) = 3;
-                *(char *)(offset + 0x8D + DAT_00487810) = 0;
+                player->primary_weapon_level = 3;
+                player->secondary_weapon_level = 0;
             } else {
                 int r1 = rand();
-                *(char *)(offset + 0x8C + DAT_00487810) = (char)(r1 % 3);
+                player->primary_weapon_level = static_cast<uint8_t>(r1 % 3);
                 int r2 = rand();
-                *(char *)(offset + 0x8D + DAT_00487810) = (char)(r2 % 3);
+                player->secondary_weapon_level = static_cast<uint8_t>(r2 % 3);
             }
             i++;
-            offset += 0x598;
         } while (i < DAT_00489240);
     }
 
@@ -1282,48 +1249,42 @@ void FUN_0041b010(void)
 void FUN_0041b5d0(void)
 {
     int i, idx;
-    int base, count;
     int local_4;
 
     /* Pass 1: collect active human players (flag at +0x480 == 1) */
     idx = 0;
     i = 0;
     DAT_00487808 = 0;
-    base = (int)DAT_00487810;
-    count = DAT_00489240;
+    int count = DAT_00489240;
 
     if (0 < count) {
-        int off = 0;
         do {
-            if (*(char *)(off + 0x480 + base) == 1) {
+            PlayerData *player = Player_Get(i);
+            if (player->human_controlled == 1) {
                 if (idx > 3) {
                     /* Max 4 human players */
-                    *(char *)(off + 0x480 + base) = 0;
-                    base = (int)DAT_00487810;
+                    player->human_controlled = 0;
                     count = DAT_00489240;
                     idx = DAT_00487808;
                 }
-                if (*(char *)(off + 0x480 + base) == 1) {
+                if (player->human_controlled == 1) {
                     DAT_004877f8[idx] = i;
                     idx = DAT_00487808 + 1;
                     DAT_00487808 = idx;
                 }
             }
             i++;
-            off += 0x598;
         } while (i < count);
     }
 
     /* Pass 2: clear spawn position/direction fields */
     i = 0;
     if (0 < count) {
-        int off = 0;
         do {
-            *(int *)(off + 0x484 + base) = 0;
-            *(int *)(off + 0x488 + DAT_00487810) = 0;
+            PlayerData *player = Player_Get(i);
+            player->viewport_width = 0;
+            player->viewport_height = 0;
             i++;
-            off += 0x598;
-            base = (int)DAT_00487810;
             idx = DAT_00487808;
         } while (i < DAT_00489240);
     }
@@ -1339,31 +1300,24 @@ void FUN_0041b5d0(void)
     if (0 < idx) {
         for (i = 0; i < idx; i++) {
             int pidx = DAT_004877f8[i];
+            PlayerData *player = Player_Get(pidx);
             switch (local_4) {
             case 0:
-                *(int *)(pidx * 0x598 + 0x484 + base) = 0;
-                *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = 0;
-                base = (int)DAT_00487810;
+                player->viewport_width = 0;
+                player->viewport_height = 0;
                 break;
             case 1:
-                *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth;
-                *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight;
-                base = (int)DAT_00487810;
+                player->viewport_width = g_DisplayWidth;
+                player->viewport_height = g_DisplayHeight;
                 break;
             case 2:
-                *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth / 2;
-                *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight;
-                base = (int)DAT_00487810;
+                player->viewport_width = g_DisplayWidth / 2;
+                player->viewport_height = g_DisplayHeight;
                 break;
             case 3:
-                *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth / 2;
-                *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight / 2;
-                base = (int)DAT_00487810;
-                break;
             case 4:
-                *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth / 2;
-                *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight / 2;
-                base = (int)DAT_00487810;
+                player->viewport_width = g_DisplayWidth / 2;
+                player->viewport_height = g_DisplayHeight / 2;
                 break;
             }
         }
@@ -1372,44 +1326,38 @@ void FUN_0041b5d0(void)
     /* Pass 4: assign spawn directions per quadrant */
     for (i = 0; i < DAT_00487808; i++) {
         int pidx = DAT_004877f8[i];
+        PlayerData *player = Player_Get(pidx);
         switch (i) {
         case 0:
             if (local_4 == 1) {
-                *(int *)(pidx * 0x598 + 0x48C + base) = 0;
-                *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = (int)DAT_00487810;
+                player->viewport_x = 0;
+                player->viewport_y = 0;
             } else if (local_4 == 2) {
-                *(int *)(pidx * 0x598 + 0x48C + base) = g_DisplayWidth / 2;
-                *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = (int)DAT_00487810;
+                player->viewport_x = g_DisplayWidth / 2;
+                player->viewport_y = 0;
             } else if (local_4 == 3 || local_4 == 4) {
-                *(int *)(pidx * 0x598 + 0x48C + base) = g_DisplayWidth / 2;
-                *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = g_DisplayHeight / 2;
-                base = (int)DAT_00487810;
+                player->viewport_x = g_DisplayWidth / 2;
+                player->viewport_y = g_DisplayHeight / 2;
             }
             break;
         case 1:
             if (local_4 == 2) {
-                *(int *)(pidx * 0x598 + 0x48C + base) = 0;
-                *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = (int)DAT_00487810;
+                player->viewport_x = 0;
+                player->viewport_y = 0;
             } else if (local_4 == 3 || local_4 == 4) {
-                *(int *)(pidx * 0x598 + 0x48C + base) = 0;
-                *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = (int)DAT_00487810;
+                player->viewport_x = 0;
+                player->viewport_y = 0;
             }
             break;
         case 2:
             if (local_4 == 3 || local_4 == 4) {
-                *(int *)(pidx * 0x598 + 0x48C + base) = 0;
-                *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = g_DisplayHeight / 2;
-                base = (int)DAT_00487810;
+                player->viewport_x = 0;
+                player->viewport_y = g_DisplayHeight / 2;
             }
             break;
         case 3:
-            *(int *)(pidx * 0x598 + 0x48C + base) = g_DisplayWidth / 2;
-            *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-            base = (int)DAT_00487810;
+            player->viewport_x = g_DisplayWidth / 2;
+            player->viewport_y = 0;
             break;
         }
     }
@@ -1417,33 +1365,27 @@ void FUN_0041b5d0(void)
     /* Pass 5: aspect ratio correction for mode 1 */
     if (DAT_00483724[2] == 1 && DAT_00487808 > 0) {
         for (i = 0; i < DAT_00487808; i++) {
-            int off = DAT_004877f8[i] * 0x598;
-            int field_488 = *(int *)(off + 0x488 + base);
-            int field_484 = *(int *)(off + 0x484 + base);
+            PlayerData *player = Player_Get(DAT_004877f8[i]);
+            int field_488 = player->viewport_height;
+            int field_484 = player->viewport_width;
             if (field_484 < field_488) {
-                *(int *)(off + 0x490 + base) += (field_488 - field_484) / 2;
-                *(int *)(off + 0x488 + DAT_00487810) =
-                    *(int *)(off + 0x484 + DAT_00487810);
-                base = (int)DAT_00487810;
+                player->viewport_y += (field_488 - field_484) / 2;
+                player->viewport_height = player->viewport_width;
             }
-            field_484 = *(int *)(off + 0x484 + base);
-            field_488 = *(int *)(off + 0x488 + base);
+            field_484 = player->viewport_width;
+            field_488 = player->viewport_height;
             if (field_488 < field_484) {
-                *(int *)(off + 0x48C + base) += (field_484 - field_488) / 2;
-                *(int *)(off + 0x484 + DAT_00487810) =
-                    *(int *)(off + 0x488 + DAT_00487810);
-                base = (int)DAT_00487810;
+                player->viewport_x += (field_484 - field_488) / 2;
+                player->viewport_width = player->viewport_height;
             }
         }
     }
 
     /* Pass 6: disable players with too-small spawn areas */
     for (i = 0; i < DAT_00487808; i++) {
-        int off = base + DAT_004877f8[i] * 0x598;
-        if (*(int *)(base + 0x488 + DAT_004877f8[i] * 0x598) < 200 ||
-            *(int *)(off + 0x484) < 0xDC) {
-            *(char *)(off + 0x9E) = 0;
-            base = (int)DAT_00487810;
+        PlayerData *player = Player_Get(DAT_004877f8[i]);
+        if (player->viewport_height < 200 || player->viewport_width < 0xDC) {
+            player->weapon_select_active = 0;
         }
     }
 
@@ -1475,7 +1417,7 @@ void FUN_0041bb00(void)
     /* Set alive flag for each human player */
     if (0 < DAT_00487808) {
         for (i = 0; i < DAT_00487808; i++) {
-            *(char *)(DAT_00487810 + 0x4A0 + DAT_004877f8[i] * 0x598) = (char)0xFF;
+            Player_Get(DAT_004877f8[i])->visibility_state = 0xFF;
         }
     }
 
@@ -1491,9 +1433,9 @@ void FUN_0041bb00(void)
 
     /* Allocate per-player visibility buffers */
     for (i = 0; i < DAT_00487808; i++) {
-        int off = DAT_004877f8[i] * 0x598;
-        int w = *(int *)(off + 0x484 + DAT_00487810) + 0x20;
-        int h = *(int *)(off + 0x488 + DAT_00487810) + 0x40;
+        PlayerData *player = Player_Get(DAT_004877f8[i]);
+        int w = player->viewport_width + 0x20;
+        int h = player->viewport_height + 0x40;
         int size = w * h;
 
         DAT_00489eac[i] = Mem_Alloc(size);
@@ -1780,12 +1722,13 @@ int FUN_004249c0(void)
         }
 
         /* Weapon overrides for specific ship types */
+        PlayerData *player = Player_Get(player_offset / 0x598);
         if (ship_type == 6) {
-            *(char *)(player_offset + 0x8C + DAT_00487810) = 8;
-            *(char *)(player_offset + 0x8D + DAT_00487810) = 0;
+            player->primary_weapon_level = 8;
+            player->secondary_weapon_level = 0;
         } else if (ship_type == 3) {
-            *(char *)(player_offset + 0x8C + DAT_00487810) = 4;
-            *(char *)(player_offset + 0x8D + DAT_00487810) = 1;
+            player->primary_weapon_level = 4;
+            player->secondary_weapon_level = 1;
         }
 
         /* Read and validate header byte */
@@ -1900,8 +1843,7 @@ int FUN_004249c0(void)
             int cb = (unsigned char)((palColor & 0x1F) << 3);
             /* Original: palette_index = *(byte*)(DAT_00487810 + player_offset + 0x2c)
              * At ship load time, DAT_00487810 is calloc-zeroed → always 0. */
-            int pal_idx = (DAT_00487810) ?
-                (int)(unsigned char)*((char *)DAT_00487810 + player_offset + 0x2c) : 0;
+            int pal_idx = DAT_00487810 ? Player_Get(player_offset / 0x598)->team : 0;
             FUN_00424240(ship_type, ship_idx, cr, cg, cb, pal_idx);
         }
 
@@ -1959,16 +1901,16 @@ void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
         if ((param_4 != '\0')) {
             int local_c = 0;
             if (0 < DAT_00489240) {
-                int *piVar5 = (int *)(DAT_00487810 + 4);
                 do {
-                    if (((((char)piVar5[8] == '\0') && (iVar8 + -8 < piVar5[-1] >> 0x12)) &&
-                        (piVar5[-1] >> 0x12 < (int)(uVar2 + 8 + iVar8))) &&
-                       (((int)((param_2 - uVar3) + -10) < *piVar5 >> 0x12 &&
-                        (*piVar5 >> 0x12 < (int)(uVar3 + 8 + iVar6))))) {
+                    PlayerData *player = Player_Get(local_c);
+                    if ((((player->state_24 == 0) &&
+                          (iVar8 - 8 < player->position_x >> 0x12)) &&
+                         (player->position_x >> 0x12 < (int)(uVar2 + 8 + iVar8))) &&
+                        (((int)((param_2 - uVar3) - 10) < player->position_y >> 0x12 &&
+                          (player->position_y >> 0x12 < (int)(uVar3 + 8 + iVar6))))) {
                         return;
                     }
                     local_c = local_c + 1;
-                    piVar5 = piVar5 + 0x166;
                 } while (local_c < DAT_00489240);
             }
         }
@@ -2892,7 +2834,7 @@ retry_spawn:
             }
 
             for (iVar15 = 0; iVar15 < DAT_00489240; iVar15++) {
-                uVar5 = (unsigned int)*(unsigned char *)(DAT_00487810 + 0x2c + iVar15 * 0x598);
+                uVar5 = Player_Get(iVar15)->team;
                 if (stack_c8[uVar5] == 0) {
                     iVar3 = 0;
                     do {

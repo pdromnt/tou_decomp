@@ -98,24 +98,24 @@ typedef struct PlayerData {
     uint8_t scratch_25;              /* 0x025 */
     uint8_t scratch_26;              /* 0x026 */
     uint8_t scratch_27;              /* 0x027 */
-    int32_t scratch_28;              /* 0x028 */
+    int32_t lives;                   /* 0x028 */
     uint8_t team;                    /* 0x02C */
     uint8_t unknown_02d[3];
     int32_t timer_30;                /* 0x030 */
     uint8_t weapon_type;             /* 0x034 */
     uint8_t weapon_mark;             /* 0x035 */
     uint8_t unknown_036[2];
-    int32_t scratch_38;              /* 0x038 */
-    int32_t scratch_3c;              /* 0x03C */
-    uint8_t unknown_040[0x4C];       /* 0x040..0x08B */
+    int32_t highest_weapon_slot;     /* 0x038: maximum valid index */
+    uint8_t weapon_slots[0x50];      /* 0x03C..0x08B */
     uint8_t primary_weapon_level;    /* 0x08C */
-    uint8_t unknown_08d[3];
+    uint8_t secondary_weapon_level;  /* 0x08D */
+    uint8_t unknown_08e[2];
     int32_t timer_90;                /* 0x090 */
     int32_t timer_94;                /* 0x094 */
-    int32_t scratch_98;              /* 0x098 */
+    int32_t shield_value;            /* 0x098 */
     uint8_t primary_fire_interval;   /* 0x09C */
     uint8_t scratch_09d;
-    uint8_t scratch_09e;
+    uint8_t weapon_select_active;    /* 0x09E */
     uint8_t scratch_09f;
     uint8_t timer_a0;                /* 0x0A0 */
     uint8_t flag_a1;                 /* 0x0A1 */
@@ -128,7 +128,7 @@ typedef struct PlayerData {
     uint32_t scratch_b4;             /* 0x0B4 */
     uint32_t buttons;                /* 0x0B8 */
     uint32_t previous_buttons;       /* 0x0BC */
-    uint8_t unknown_0c0[4];
+    uint32_t scratch_c0;             /* 0x0C0 */
     uint8_t timer_c4;                /* 0x0C4 */
     uint8_t timer_c5;                /* 0x0C5 */
     uint8_t stun_timer;              /* 0x0C6 */
@@ -157,14 +157,17 @@ typedef struct PlayerData {
     uint8_t scratch_47f;
     uint8_t human_controlled;        /* 0x480 */
     uint8_t unknown_481[3];
-    int32_t scratch_484;
-    int32_t scratch_488;
-    uint8_t unknown_48c[8];
+    int32_t viewport_width;          /* 0x484 */
+    int32_t viewport_height;         /* 0x488 */
+    int32_t viewport_x;              /* 0x48C */
+    int32_t viewport_y;              /* 0x490 */
     int32_t score_494;
-    uint8_t unknown_498[6];
+    int32_t scratch_498;
+    uint8_t scratch_49c;
+    uint8_t scratch_49d;
     uint8_t timer_49e;
     uint8_t scratch_49f;
-    uint8_t scratch_4a0;
+    uint8_t visibility_state;        /* 0x4A0 */
     uint8_t last_attacker;           /* 0x4A1 */
     uint8_t timer_4a2;
     uint8_t timer_4a3;
@@ -181,8 +184,13 @@ static_assert(offsetof(PlayerData, velocity_x) == 0x10, "PlayerData::velocity_x 
 static_assert(offsetof(PlayerData, health) == 0x20, "PlayerData::health offset");
 static_assert(offsetof(PlayerData, team) == 0x2C, "PlayerData::team offset");
 static_assert(offsetof(PlayerData, weapon_type) == 0x34, "PlayerData::weapon_type offset");
+static_assert(offsetof(PlayerData, weapon_slots) == 0x3C, "PlayerData::weapon_slots offset");
+static_assert(offsetof(PlayerData, shield_value) == 0x98, "PlayerData::shield_value offset");
 static_assert(offsetof(PlayerData, buttons) == 0xB8, "PlayerData::buttons offset");
 static_assert(offsetof(PlayerData, ai_level) == 0xDD, "PlayerData::ai_level offset");
+static_assert(offsetof(PlayerData, viewport_width) == 0x484, "PlayerData::viewport_width offset");
+static_assert(offsetof(PlayerData, viewport_x) == 0x48C, "PlayerData::viewport_x offset");
+static_assert(offsetof(PlayerData, score_494) == 0x494, "PlayerData::score_494 offset");
 static_assert(offsetof(PlayerData, sound_timer) == 0x4A8, "PlayerData::sound_timer offset");
 
 typedef struct {

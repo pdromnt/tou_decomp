@@ -104,8 +104,7 @@ void collision_players(int entity_index)
     const uint8_t guard = tou_binary::load_u8(entity, 0x26);
     unsigned int guard_team = owner;
     if (type == 0x1fu && owner < static_cast<unsigned int>(DAT_00489240)) {
-        guard_team = tou_binary::load_u8(reinterpret_cast<void *>(DAT_00487810),
-                                           static_cast<unsigned int>(owner) * 0x598u + 0x2cu);
+        guard_team = Player_Get(owner)->team;
     }
     uint8_t collision_w = 2;
     uint8_t collision_h = 2;
@@ -118,9 +117,9 @@ void collision_players(int entity_index)
     const int32_t ey = tou_binary::load_i32(entity, 0x08);
     const int32_t damage = tou_binary::load_i32(entity, 0x44);
     for (int player = 0; player < DAT_00489240; ++player) {
-        uint8_t *p = reinterpret_cast<uint8_t *>(DAT_00487810) + player * 0x598;
-        if (tou_binary::load_i32(p, 0x20) <= 0) continue;
-        const unsigned int player_id = type == 0x1fu ? tou_binary::load_u8(p, 0x2c)
+        PlayerData *p = Player_Get(player);
+        if (p->health <= 0) continue;
+        const unsigned int player_id = type == 0x1fu ? p->team
                                                      : static_cast<unsigned int>(player);
         if (guard != 0u && guard_team == player_id) continue;
         int ship_size = DAT_0048780c != NULL
@@ -128,28 +127,26 @@ void collision_players(int entity_index)
         int32_t hx = ship_size + static_cast<int32_t>(collision_w) * FIXED_SCALE;
         int32_t hy = ship_size + static_cast<int32_t>(collision_h) * FIXED_SCALE;
         if (DAT_004892e5 != 0) { hx += 0x140000; hy += 0x140000; }
-        const int32_t px = tou_binary::load_i32(p, 0x00);
-        const int32_t py = tou_binary::load_i32(p, 0x04);
+        const int32_t px = p->position_x;
+        const int32_t py = p->position_y;
         if (!(px - hx < ex && ex < px + hx && py - hy < ey && ey < py + hy)) continue;
 
         bool may_damage = true;
         if (owner < 0x50u) {
-            const uint8_t owner_team = tou_binary::load_u8(
-                reinterpret_cast<void *>(DAT_00487810),
-                static_cast<unsigned int>(owner) * 0x598u + 0x2cu);
-            may_damage = owner_team != tou_binary::load_u8(p, 0x2c) || DAT_0048373d != 0;
+            const uint8_t owner_team = Player_Get(owner)->team;
+            may_damage = owner_team != p->team || DAT_0048373d != 0;
         }
-        if (may_damage) tou_binary::store_i32(p, 0x20, tou_binary::load_i32(p, 0x20) - damage);
-        tou_binary::store_u8(p, 0xc4, 5);
-        tou_binary::store_u8(p, 0xa3, 1);
+        if (may_damage) p->health = tou_binary::sub_wrap_i32(p->health, damage);
+        p->timer_c4 = 5;
+        p->flag_a3 = 1;
         if (DAT_00487abc != NULL) {
             const unsigned int entry = static_cast<unsigned int>(type) * 0x218u + subtype;
             const uint8_t divisor = tou_binary::load_u8(DAT_00487abc, entry + 0xa6u);
             if (divisor != 0u && divisor != 99u) {
-                tou_binary::store_i32(p, 0x10, tou_binary::load_i32(p, 0x10) +
-                    tou_binary::load_i32(entity, 0x18) / divisor);
-                tou_binary::store_i32(p, 0x14, tou_binary::load_i32(p, 0x14) +
-                    tou_binary::load_i32(entity, 0x1c) / divisor);
+                p->velocity_x = tou_binary::add_wrap_i32(
+                    p->velocity_x, tou_binary::load_i32(entity, 0x18) / divisor);
+                p->velocity_y = tou_binary::add_wrap_i32(
+                    p->velocity_y, tou_binary::load_i32(entity, 0x1c) / divisor);
             }
         }
         DAT_00481e8f = 4;
@@ -268,8 +265,7 @@ void collision_prepass_00437b10(int entity_index)
     const uint8_t owner = tou_binary::load_u8(entity, 0x22);
     uint8_t team = 0xfb;
     if (owner < 0x46u) {
-        team = tou_binary::load_u8(reinterpret_cast<void *>(DAT_00487810),
-                                     static_cast<unsigned int>(owner) * 0x598u + 0x2cu);
+        team = Player_Get(owner)->team;
     } else if (owner >= 0x50u && owner <= 0x63u) team = owner - 0x50u;
     else if (owner >= 100u && owner <= 119u) team = owner - 100u;
     else if (owner >= 0x78u && owner <= 0x8bu) team = owner - 0x78u;
@@ -846,9 +842,10 @@ void callback_fireworks_launcher_child_004442f0(int entity_index)
         FUN_0040f9b0(0x112, tou_binary::load_i32(entity, 0), tou_binary::load_i32(entity, 8));
     }
     if (owner < static_cast<uint8_t>(DAT_00489240) && DAT_00487810 != 0) {
-        uint8_t *player = reinterpret_cast<uint8_t *>(DAT_00487810) + owner * 0x598;
-        int deployed = tou_binary::load_i32(player, 0x464);
-        if (deployed > 0) tou_binary::store_i32(player, 0x464, deployed - 1);
+        PlayerData *player = Player_Get(owner);
+        if (player->counter_464 > 0) {
+            player->counter_464 = tou_binary::sub_wrap_i32(player->counter_464, 1);
+        }
     }
     if (coarse_effect_allowed(entity)) spawn_flash(tou_binary::load_i32(entity, 0),
         tou_binary::load_i32(entity, 8), static_cast<uint8_t>(13 + (game_rand() & 3)), 0, 0xff, 0);
@@ -874,19 +871,19 @@ void callback_jupiter_missile_0043a4b0(int entity_index)
     int best = 2000000000, target = -1;
     const uint8_t owner = tou_binary::load_u8(entity, 0x22);
     const uint8_t owner_team = owner < static_cast<uint8_t>(DAT_00489240)
-        ? tou_binary::load_u8(reinterpret_cast<void *>(DAT_00487810), owner * 0x598u + 0x2cu) : 0xff;
+        ? Player_Get(owner)->team : 0xff;
     for (int p = 0; p < DAT_00489240; ++p) {
-        uint8_t *player = reinterpret_cast<uint8_t *>(DAT_00487810) + p * 0x598;
-        if (tou_binary::load_u8(player, 0x2c) == owner_team || tou_binary::load_u8(player, 0x24) != 0u) continue;
-        int dx = (tou_binary::load_i32(entity, 0) - tou_binary::load_i32(player, 0)) >> 0x12;
-        int dy = (tou_binary::load_i32(entity, 8) - tou_binary::load_i32(player, 4)) >> 0x12;
+        PlayerData *player = Player_Get(p);
+        if (player->team == owner_team || player->state_24 != 0u) continue;
+        int dx = (tou_binary::load_i32(entity, 0) - player->position_x) >> 0x12;
+        int dy = (tou_binary::load_i32(entity, 8) - player->position_y) >> 0x12;
         int d = dx * dx + dy * dy;
         if (d < best) { best = d; target = p; }
     }
     if (target >= 0) {
-        uint8_t *player = reinterpret_cast<uint8_t *>(DAT_00487810) + target * 0x598;
+        PlayerData *player = Player_Get(target);
         int desired = static_cast<int>(FUN_004257e0(tou_binary::load_i32(entity, 0), tou_binary::load_i32(entity, 8),
-                                                    tou_binary::load_i32(player, 0), tou_binary::load_i32(player, 4))) & 0x7ff;
+                                                    player->position_x, player->position_y)) & 0x7ff;
         int delta = (desired - heading) & 0x7ff;
         if (delta != 0) heading += delta < 0x400 ? 3 : -3;
     }
@@ -1313,8 +1310,8 @@ void callback_nuclear_barrel_00431650(int entity_index)
     if (subtype == 1u && DAT_00487810 != 0) {
         uint8_t owner = tou_binary::load_u8(entity, 0x22);
         if (owner < static_cast<unsigned int>(DAT_00489240)) {
-            uint8_t *player = reinterpret_cast<uint8_t *>(DAT_00487810) + owner * 0x598;
-            tou_binary::store_i32(player, 0x470, tou_binary::load_i32(player, 0x470) - 1);
+            PlayerData *player = Player_Get(owner);
+            player->counter_470 = tou_binary::sub_wrap_i32(player->counter_470, 1);
         }
     }
     if (coarse_effect_allowed(entity)) {
@@ -1391,7 +1388,7 @@ bool bone_crusher_scan_infantry(uint8_t *entity)
     if (DAT_00487aa4 == NULL || DAT_00487884 == NULL || DAT_00487810 == 0) return false;
     const uint8_t owner = tou_binary::load_u8(entity, 0x22);
     const uint8_t owner_team = owner < static_cast<unsigned int>(DAT_00489240)
-        ? tou_binary::load_u8(reinterpret_cast<void *>(DAT_00487810), owner * 0x598u + 0x2cu)
+        ? Player_Get(owner)->team
         : 0xffu;
     const int32_t x = tou_binary::load_i32(entity, 0);
     const int32_t y = tou_binary::load_i32(entity, 8);
@@ -1606,24 +1603,23 @@ void callback_normal_fireball_00441aa0(int entity_index)
         int best_player = -1;
         const uint8_t owner = tou_binary::load_u8(entity, 0x22);
         const uint8_t owner_team = owner < static_cast<unsigned int>(DAT_00489240)
-            ? tou_binary::load_u8(reinterpret_cast<void *>(DAT_00487810), owner * 0x598u + 0x2cu)
+            ? Player_Get(owner)->team
             : 0xffu;
         for (int i = 0; i < DAT_00489240; ++i) {
-            uint8_t *player = reinterpret_cast<uint8_t *>(DAT_00487810) + i * 0x598;
-            if (tou_binary::load_i32(player, 0x20) <= 0 ||
-                tou_binary::load_u8(player, 0x2c) == owner_team) continue;
+            PlayerData *player = Player_Get(i);
+            if (player->health <= 0 || player->team == owner_team) continue;
             const int dx = tou_binary::sar_i32(tou_binary::load_i32(entity, 0) -
-                                                  tou_binary::load_i32(player, 0), 0x12);
+                                                  player->position_x, 0x12);
             const int dy = tou_binary::sar_i32(tou_binary::load_i32(entity, 8) -
-                                                  tou_binary::load_i32(player, 4), 0x12);
+                                                  player->position_y, 0x12);
             const int distance = dx * dx + dy * dy;
             if (distance < best) { best = distance; best_player = i; }
         }
         if (best_player >= 0) {
-            uint8_t *player = reinterpret_cast<uint8_t *>(DAT_00487810) + best_player * 0x598;
+            PlayerData *player = Player_Get(best_player);
             const int angle = FUN_004257e0(tou_binary::load_i32(entity, 0),
-                tou_binary::load_i32(entity, 8), tou_binary::load_i32(player, 0),
-                tou_binary::load_i32(player, 4)) & 0x7ff;
+                tou_binary::load_i32(entity, 8), player->position_x,
+                player->position_y) & 0x7ff;
             int32_t vx = tou_binary::load_i32(entity, 0x18) +
                          (static_cast<int32_t *>(DAT_00487ab0)[angle] >> 5);
             int32_t vy = tou_binary::load_i32(entity, 0x1c) +

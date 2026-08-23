@@ -16,6 +16,7 @@ void store_u32(void *base, size_t offset, uint32_t value);
 void store_i32(void *base, size_t offset, int32_t value);
 
 int32_t add_wrap_i32(int32_t left, int32_t right);
+int32_t sub_wrap_i32(int32_t left, int32_t right);
 int32_t mul_wrap_i32(int32_t left, int32_t right);
 int32_t shl_wrap_i32(int32_t value, unsigned int shift);
 int32_t sar_i32(int32_t value, unsigned int shift);

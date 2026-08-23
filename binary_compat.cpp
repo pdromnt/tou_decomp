@@ -78,6 +78,11 @@ int32_t add_wrap_i32(int32_t left, int32_t right)
     return bits_to_i32(static_cast<uint32_t>(left) + static_cast<uint32_t>(right));
 }
 
+int32_t sub_wrap_i32(int32_t left, int32_t right)
+{
+    return bits_to_i32(static_cast<uint32_t>(left) - static_cast<uint32_t>(right));
+}
+
 int32_t mul_wrap_i32(int32_t left, int32_t right)
 {
     return bits_to_i32(static_cast<uint32_t>(left) * static_cast<uint32_t>(right));
