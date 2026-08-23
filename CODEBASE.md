@@ -130,7 +130,10 @@ The first batch covers callback record lookup, pre-tick flag reset, and the
 menu/intro entity renderer. The second batch covers the common dispatcher
 prologue in `FUN_00434310`: previous-position capture, animation bookkeeping,
 callback identity, and the turret-projectile gravity guard. Its large legacy
-behavior fallback and weapon-heavy paths remain raw.
+behavior fallback and weapon-heavy paths remain raw. The third batch converts
+the complete main gameplay entity renderer in `FUN_0040bb60`. Offset `+0x24`
+still intentionally has both byte and 16-bit views there: the byte selects a
+sprite palette, while the full word selects a pixel-dot shape.
 
 ## Config Ownership
 

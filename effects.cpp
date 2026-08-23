@@ -1074,21 +1074,19 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 {
     if (DAT_00489248 <= 0) return;
 
-    int ent_base = (int)DAT_004892e8;
-
     for (int i = 0; i < DAT_00489248; i++) {
-        int ent_off = i * 0x80;
-        unsigned int sprite_idx = *(unsigned int *)(ent_base + 0x4c + ent_off);
+        const Entity *entity = &DAT_004892e8[i];
+        unsigned int sprite_idx = entity->palette_value;
 
         if (sprite_idx < 30000) {
             /* Full sprite rendering */
-            unsigned char anim_type = *(unsigned char *)(ent_base + 0x21 + ent_off);
-            int px = *(int *)(ent_base + ent_off) >> 0x12;
+            unsigned char anim_type = entity->type;
+            int px = entity->position_x >> 0x12;
 
             if (anim_type == 0x65) {
                 /* 2x2 pixel cross pattern */
                 if (DAT_004806dc <= px && px + 2 < DAT_004806d0) {
-                    int py = *(int *)(ent_base + 8 + ent_off) >> 0x12;
+                    int py = entity->position_y >> 0x12;
                     if (DAT_004806e0 <= py && py + 2 < DAT_004806d4 && sprite_idx != 130000) {
                         unsigned short *dst = (unsigned short *)(param_1 + 2 +
                             (((py - DAT_004806e0 + DAT_004806e8) * param_2 - DAT_004806dc + px + DAT_004806ec) * 2));
@@ -1100,15 +1098,14 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         *(dst + (param_2 - 1)) = cA;
                         *(dst + param_2 * 1 + 1) = cB;
                         *(dst + param_2 * 1 + param_2) = cB;
-                        ent_base = (int)DAT_004892e8;
                     }
                 }
             } else if (DAT_004806dc < px + 7 && px - 7 < DAT_004806d0) {
-                int py_raw = *(int *)(ent_base + 8 + ent_off) >> 0x12;
+                int py_raw = entity->position_y >> 0x12;
                 if (DAT_004806e0 < py_raw + 7 && py_raw - 7 < DAT_004806d4) {
                     /* Determine animation variant */
                     unsigned char anim_data = *(unsigned char *)(
-                        (int)DAT_00487abc + (unsigned int)*(unsigned char *)(ent_base + 0x40 + ent_off) +
+                        (int)DAT_00487abc + (unsigned int)entity->subtype +
                         0x124 + (unsigned int)anim_type * 0x218);
 
                     /* anim_data is the entity-type "animation source" byte from
@@ -1116,55 +1113,49 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                      * <200 = use frame counter at +0x48; 200..0xCF = special angle
                      * or fuse drivers documented per-case below. */
                     if (anim_data < 200) {
-                        sprite_idx += *(int *)(ent_base + 0x48 + ent_off);
+                        sprite_idx += entity->scratch_48;
                     } else if (anim_data == 200) {
                         /* 16-direction angle-based */
-                        int angle = FUN_004257e0(0, 0, *(int *)(ent_base + 0x18 + ent_off),
-                                                 *(int *)(ent_base + 0x1c + ent_off));
+                        int angle = FUN_004257e0(0, 0, entity->velocity_x,
+                                                 entity->velocity_y);
                         sprite_idx += (unsigned int)((angle + 0x40) >> 7) & 0xf;
-                        ent_base = (int)DAT_004892e8;
                     } else if (anim_data == 0xc9) {
                         /* 32-direction angle-based */
-                        int angle = FUN_004257e0(0, 0, *(int *)(ent_base + 0x18 + ent_off),
-                                                 *(int *)(ent_base + 0x1c + ent_off));
+                        int angle = FUN_004257e0(0, 0, entity->velocity_x,
+                                                 entity->velocity_y);
                         sprite_idx += (unsigned int)((angle * 2 + 0x40) >> 7) & 0x1f;
-                        ent_base = (int)DAT_004892e8;
                     } else if (anim_data == 0xca) {
                         /* 16-dir from velocity angle */
-                        int angle = FUN_004257e0(0, 0, *(int *)(ent_base + 0x18 + ent_off),
-                                                 *(int *)(ent_base + 0x1c + ent_off));
+                        int angle = FUN_004257e0(0, 0, entity->velocity_x,
+                                                 entity->velocity_y);
                         sprite_idx += (unsigned int)((angle * 2 + 0x40) >> 7) & 0xf;
-                        ent_base = (int)DAT_004892e8;
                     } else if (anim_data == 0xcb) {
-                        sprite_idx += (unsigned int)((*(int *)(ent_base + 0x3c + ent_off) + 0x40) >> 7) & 0xf;
+                        sprite_idx += (unsigned int)((entity->counter_3c + 0x40) >> 7) & 0xf;
                     } else if (anim_data == 0xcc) {
                         int r = rand();
-                        ent_base = (int)DAT_004892e8;
                         if (r % 0xf == 0) {
                             int r2 = rand();
                             sprite_idx += 1 + r2 % 5;
-                            ent_base = (int)DAT_004892e8;
                         }
                     } else if (anim_data == 0xcd) {
-                        sprite_idx += (unsigned int)((*(int *)(ent_base + 0x3c + ent_off) + 0x20) >> 6) & 0x1f;
+                        sprite_idx += (unsigned int)((entity->counter_3c + 0x20) >> 6) & 0x1f;
                     } else if (anim_data == 0xce) {
-                        sprite_idx += (unsigned int)((*(int *)(ent_base + 0x3c + ent_off) * 2 + 0x40) >> 7) & 0xf;
+                        sprite_idx += (unsigned int)((entity->counter_3c * 2 + 0x40) >> 7) & 0xf;
                     } else if (anim_data == 0xcf) {
-                        sprite_idx += (unsigned int)(((*(int *)(ent_base + 0x3c + ent_off)) << 2) >> 8) & 7;
+                        sprite_idx += (unsigned int)((entity->counter_3c << 2) >> 8) & 7;
                     }
 
                     /* sprite_idx 0x36 is the bubble shield placeholder — handled by
                      * the alpha-mask renderer FUN_0040c940 instead of the sprite atlas. */
                     if (sprite_idx == 0x36) {
-                        int shield_age = *(int *)(ent_base + 0x28 + ent_off);
+                        int shield_age = entity->health_or_damage_28;
                         int intensity = (shield_age < 0x20) ? (0x10 - shield_age / 2) : 0;
-                        FUN_0040c940(*(unsigned int *)(ent_base + ent_off),
-                                     *(unsigned int *)(ent_base + 8 + ent_off),
+                        FUN_0040c940((unsigned int)entity->position_x,
+                                     (unsigned int)entity->position_y,
                                      param_1, param_2, intensity);
-                        ent_base = (int)DAT_004892e8;
                     } else {
-                        int py = *(int *)(ent_base + 8 + ent_off) >> 0x12;
-                        int px2 = *(int *)(ent_base + ent_off) >> 0x12;
+                        int py = entity->position_y >> 0x12;
+                        int px2 = entity->position_x >> 0x12;
                         int sw = (int)((unsigned char *)DAT_00489e8c)[sprite_idx];
                         int sh = (int)((unsigned char *)DAT_00489e88)[sprite_idx];
 
@@ -1173,9 +1164,8 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 
                         FUN_0040c280(sprite_idx, (px2 - (sw >> 1)) - DAT_004806dc,
                                      (py - (sh >> 1)) - DAT_004806e0,
-                                     *(unsigned char *)(ent_base + 0x24 + ent_off),
+                                     (unsigned char)entity->variant_24,
                                      param_1, param_2, darkness);
-                        ent_base = (int)DAT_004892e8;
                     }
                 }
             }
@@ -1184,14 +1174,14 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
              * Color trick: entity[0x4C] = palette[idx] + 30000; the renderer
              * adds (short)0x8AD0 which makes 30000+0x8AD0=0x10000 → wraps to 0
              * in 16-bit, yielding the raw palette value (X1R5G5B5 format). */
-            int px = *(int *)(ent_base + ent_off) >> 0x12;
+            int px = entity->position_x >> 0x12;
             if (DAT_004806dc <= px && px + 1 < DAT_004806d0) {
-                int py = *(int *)(ent_base + 8 + ent_off) >> 0x12;
+                int py = entity->position_y >> 0x12;
                 if (DAT_004806e0 <= py && py + 1 < DAT_004806d4 && sprite_idx != 130000) {
                     unsigned short *dst = (unsigned short *)(param_1 +
                         (((py - DAT_004806e0 + DAT_004806e8) * param_2 - DAT_004806dc + px + DAT_004806ec) * 2));
 
-                    unsigned short color = (unsigned short)(*(short *)(ent_base + 0x4c + ent_off) + (short)0x8ad0);
+                    unsigned short color = (unsigned short)((short)entity->palette_value + (short)0x8ad0);
 
                     /* COMPAT: Convert X1R5G5B5 → RGB565. All entity +0x4C values
                      * should be X1R5G5B5 + 30000 (splash water colors are now converted
@@ -1214,7 +1204,7 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                     }
 
                     /* Shape patterns based on entry[0x24] */
-                    unsigned short shape = *(unsigned short *)(ent_base + 0x24 + ent_off);
+                    unsigned short shape = (unsigned short)entity->variant_24;
                     switch (shape) {
                     case 0:
                         *dst = color;
@@ -1247,7 +1237,6 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
                         *(dst + param_2 + 1) = color;
                         break;
                     }
-                    ent_base = (int)DAT_004892e8;
                 }
             }
         }

@@ -19,8 +19,11 @@ callback lookup helper, pre-tick flag reset, and menu/intro renderer. Most
 runtime code still uses raw accesses. The second batch covers the common
 prologue of `FUN_00434310`: position history, animation bookkeeping, callback
 identity, and the turret-projectile gravity guard. Migrate the remaining paths
-separately in small, assembly-comparable batches. The pool physically allocates
-2600 records (`0x51400 / 0x80`), while gameplay limits active entities to 2500.
+separately in small, assembly-comparable batches. The third batch converts the
+complete main gameplay entity renderer, including its intentional byte/word
+views of `+0x24`, without changing render or RNG call order. The pool physically
+allocates 2600 records (`0x51400 / 0x80`), while gameplay limits active entities
+to 2500.
 
 **Known layout:**
 ```
