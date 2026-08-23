@@ -39,7 +39,7 @@ void *DAT_00489e90 = NULL;
 void *DAT_00489e84 = NULL;
 void *DAT_00489e7c = NULL;
 void *DAT_0048781c = NULL;
-void *DAT_004892e8 = NULL;
+Entity *DAT_004892e8 = NULL;
 void *DAT_00487884 = NULL;
 void *DAT_00487a9c = NULL;
 void *DAT_00481f34 = NULL;
@@ -112,7 +112,8 @@ void Init_Memory_Pools(void)
     ALLOC_POOL(DAT_00489e84, 80000);
     ALLOC_POOL(DAT_00489e7c, 160000);
     ALLOC_POOL(DAT_0048781c, 0x30000);
-    ALLOC_POOL(DAT_004892e8, 0x51400);
+    DAT_004892e8 = static_cast<Entity *>(Mem_Alloc(0x51400));
+    g_MemoryTracker += 0x51400;
 
     ALLOC_POOL(DAT_00487884, 0x6400);
     ALLOC_POOL(DAT_00487a9c, 0xc80);

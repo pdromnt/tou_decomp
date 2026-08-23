@@ -13,9 +13,11 @@ should be small enough to compare and revert independently.
 ### T1.1 — Entity struct (128 bytes)  [IN PROGRESS / P0]
 Replace raw entity blob with typed access without changing original behavior.
 
-The verified `Entity` layout and offset assertions now live in `types.h`.
-Runtime code still uses raw accesses; migrate those separately in small,
-binary-comparable batches. The pool physically allocates 2600 records
+The verified `Entity` layout and offset assertions now live in `types.h`, and
+the global pool is typed as `Entity *`. The first access migration covers the
+callback lookup helper, pre-tick flag reset, and menu/intro renderer. Most
+runtime code still uses raw accesses; migrate those separately in small,
+assembly-comparable batches. The pool physically allocates 2600 records
 (`0x51400 / 0x80`), while gameplay limits active entities to 2500.
 
 **Known layout:**
@@ -56,7 +58,7 @@ hud.cpp, menu.cpp
 
 **AC:**
 - `Entity` defined in `types.h`; `static_assert(sizeof(Entity) == 128)`
-- `DAT_004892e8` becomes `Entity *g_EntityArray`
+- `DAT_004892e8` becomes an `Entity *`; rename it separately under T13.1
 - All `*(type *)((int)ent + offset)` replaced with `ent->field`
 - Build compiles with zero warnings; no behavior change
 

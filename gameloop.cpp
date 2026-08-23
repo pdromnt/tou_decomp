@@ -307,11 +307,9 @@ void FUN_0045e1f0(void)
 
     /* Main entities (DAT_004892e8, stride 0x80): clear damage flag if health < 30000 */
     for (i = 0; i < DAT_00489248; i++) {
-        int off = i * 0x80;
-        int base = (int)DAT_004892e8;
-        if (*(unsigned int *)(base + off + 0x4C) < 30000 &&
-            *(short *)(base + off + 0x24) == 1) {
-            *(short *)(base + off + 0x24) = 0;
+        Entity *entity = &DAT_004892e8[i];
+        if (entity->palette_value < 30000 && entity->variant_24 == 1) {
+            entity->variant_24 = 0;
         }
     }
 

@@ -123,9 +123,11 @@ fields a universal semantic name until every relevant callback has been traced.
 In particular, offsets `+0x54` and `+0x5C` are byte-sized fields, while `+0x34`
 stores a 32-bit guest callback address rather than a native C++ function pointer.
 
-The runtime pool remains `void *DAT_004892e8` for now. Converting that pointer
-and replacing raw accesses is a separate backlog step so each migration can be
-verified independently against the original executable.
+The runtime pool is now typed as `Entity *DAT_004892e8`. Raw accesses are being
+replaced in small batches so each changed routine can be compared independently
+against its previous generated x86 and, where relevant, the original executable.
+The first batch covers callback record lookup, pre-tick flag reset, and the
+menu/intro entity renderer; simulation and weapon-heavy paths remain raw.
 
 ## Config Ownership
 
