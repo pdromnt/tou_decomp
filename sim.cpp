@@ -2042,12 +2042,12 @@ void FUN_00434310(void)
                             tp->callback_address = tt[0x35EA]; /* callback from config */
                             tp->damage_44 = tt[0x361B]; /* damage from config */
                             DAT_00489248++;
-                            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 1; /* +0x5C */
-                            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1B) = 0x9F; /* +0x65 palette hi */
-                            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1C) = 0x93; /* +0x64 palette lo */
+                            DAT_004892e8[DAT_00489248 - 1].timer_5c = 1; /* +0x5C */
+                            DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0x9F; /* +0x65 palette hi */
+                            DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x93; /* +0x64 palette lo */
                             if (DAT_00487aa8 != NULL) {
                                 unsigned short pal = ((unsigned short *)DAT_00487aa8)[0x9F];
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                DAT_004892e8[DAT_00489248 - 1].palette_value =
                                     (unsigned int)pal + 0x7530; /* +0x4C color */
                             }
                         }
@@ -2228,10 +2228,10 @@ void FUN_00434310(void)
                         ep->timer_5c = 0;
                         DAT_00489248++;
                         /* Ring entities: white color */
-                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                        DAT_004892e8[DAT_00489248 - 1].palette_value =
                             (unsigned int)0xFFFF + 0x7530;
                         /* Lifespan = 0: entities die on wall hit (original sets +0x28 = 0) */
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0;
+                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0;
                     }
                     /* Flash particle — from Ghidra 0x432FCC.
                      * Only spawns if entity position is on solid tile.
@@ -2323,13 +2323,13 @@ void FUN_00434310(void)
                                 ep->counter_3c = 0;
                                 ep->timer_5c = 4;
                                 DAT_00489248++;
-                                int spawned = DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x80;
-                                *(unsigned char *)(spawned + 0x65) = 0x1E;
-                                *(unsigned char *)(spawned + 0x64) = 0x12;
+                                Entity *spawned = &DAT_004892e8[DAT_00489248 - 1];
+                                spawned->scratch_65 = 0x1E;
+                                spawned->scratch_64 = 0x12;
                                 if (DAT_00487aa8 != NULL)
-                                    *(unsigned int *)(spawned + 0x4C) =
+                                    spawned->palette_value =
                                         (unsigned int)((unsigned short *)DAT_00487aa8)[0x1E] + 30000;
-                                *(int *)(spawned + 0x44) = 0x19000;
+                                spawned->damage_44 = 0x19000;
                             }
                         }
                         /* Flash particle for all modes */
@@ -2695,11 +2695,11 @@ void FUN_00434310(void)
                         bp->counter_3c = 0;
                         bp->timer_5c = 0;
                         DAT_00489248++;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 60;
+                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 60;
                         /* Set bullet color from palette table (same as Fire_Secondary for type 0) */
                         if (DAT_00487aa8 != NULL) {
                             unsigned short pal = ((unsigned short *)DAT_00487aa8)[0x5A + (rand() & 1)];
-                            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                            DAT_004892e8[DAT_00489248 - 1].palette_value =
                                 (unsigned int)pal + 30000;
                         }
                     }
@@ -2926,10 +2926,10 @@ void FUN_00434310(void)
                             ep->palette_value = tt[0xDEE8 / 4];
                             ep->callback_address = tt[0xDDF0 / 4];
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 50 + 90;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 50 + 90;
                             unsigned char color_span = *(unsigned char *)((int)DAT_00487abc + 0xDF14);
                             if (color_span != 0)
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) += rand() % color_span;
+                                DAT_004892e8[DAT_00489248 - 1].palette_value += rand() % color_span;
                         }
                     } else if (rc_sub == 1 && rc_cnt > 0x19) {
                         entity->counter_3c = 0;
@@ -2951,7 +2951,7 @@ void FUN_00434310(void)
                             ep->counter_3c = 0x400;
                             ep->scratch_2c = 1;
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 200 + 200;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 200 + 200;
                             entity->state_20 = (unsigned char)(stage + 1);
                         }
                     }
@@ -3016,7 +3016,7 @@ void FUN_00434310(void)
                         ep->counter_3c = 0;
                         ep->timer_5c = 0;
                         DAT_00489248++;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 40; /* short lifespan */
+                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 40; /* short lifespan */
                         /* Yellow/fire palette */
                         if (DAT_00487aa8 != NULL) {
                             int ci = rand() % 10;
@@ -3024,7 +3024,7 @@ void FUN_00434310(void)
                             unsigned short r5 = (pal >> 10) & 0x1F;
                             unsigned short g5 = (pal >> 5) & 0x1F;
                             unsigned short b5 = pal & 0x1F;
-                            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                            DAT_004892e8[DAT_00489248 - 1].palette_value =
                                 (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                         }
                     }
@@ -3080,7 +3080,7 @@ void FUN_00434310(void)
                             ep->palette_value = tt[0xDEE8 / 4];
                             ep->callback_address = tt[0xDDF0 / 4];
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 50 + 90;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 50 + 90;
                         }
                     } else if (sub == 1 && count > 0x19) {
                         entity->counter_3c = 0;
@@ -3101,7 +3101,7 @@ void FUN_00434310(void)
                             ep->counter_3c = 0x400;
                             ep->scratch_2c = 1;
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 200 + 200;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 200 + 200;
                             entity->state_20 = (unsigned char)(stage + 1);
                         }
                     }
@@ -3156,9 +3156,9 @@ void FUN_00434310(void)
                             sp->callback_address = 0; sp->counter_3c = 0;
                             sp->timer_5c = 0;
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 25;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 25;
                             /* Fixed yellow: RGB565 yellow = (31<<11)|(63<<5)|0 = 0xFFE0 */
-                            *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                            DAT_004892e8[DAT_00489248 - 1].palette_value =
                                 (unsigned int)0xFFE0 + 30000;
                         }
                     }
@@ -3200,12 +3200,12 @@ void FUN_00434310(void)
                             ep->counter_3c = 0;
                             ep->timer_5c = 0;
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 1200; /* long lifespan */
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 1200; /* long lifespan */
                             /* Random bright color from full palette range */
                             if (DAT_00487aa8 != NULL) {
                                 int ci = rand() % 128;
                                 unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                DAT_004892e8[DAT_00489248 - 1].palette_value =
                                     (unsigned int)pal + 0x7530;
                             }
                             /* Shrapnel spray is now constant (above), not per-ball */
@@ -3228,11 +3228,11 @@ void FUN_00434310(void)
                             ep->callback_address = ((int *)DAT_00487abc)[0];
                             ep->damage_44 = ((int *)DAT_00487abc)[0x33];
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 600;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 600;
                             if (DAT_00487aa8 != NULL) {
                                 int ci = rand() % 32 + 20;
                                 unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                DAT_004892e8[DAT_00489248 - 1].palette_value =
                                     (unsigned int)pal + 0x7530;
                             }
                         } else {
@@ -3998,12 +3998,12 @@ void FUN_00434310(void)
                     ep->timer_5c = wf_trail_sub >= 2 ? 4 : 0;
                     DAT_00489248++;
                     if (wf_trail_sub < 2)
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 20;
+                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 20;
                     unsigned char pidx = (unsigned char)(rand() % 12 + 20);
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1B) = pidx;
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1C) = 0x12;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_65 = pidx;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x12;
                     if (DAT_00487aa8 != NULL)
-                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                        DAT_004892e8[DAT_00489248 - 1].palette_value =
                             (unsigned int)((unsigned short *)DAT_00487aa8)[pidx] + 0x7530;
                 }
                 break;
@@ -4293,17 +4293,17 @@ void FUN_00434310(void)
                             ep->counter_3c = 0;
                             ep->timer_5c = 0;
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 90;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 90;
                             {
                                 int ci = rand() % 10;
                                 unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
                                 unsigned short r5 = (pal >> 10) & 0x1F;
                                 unsigned short g5 = (pal >> 5) & 0x1F;
                                 unsigned short b5 = pal & 0x1F;
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                DAT_004892e8[DAT_00489248 - 1].palette_value =
                                     (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                             }
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = angle_step;
+                            DAT_004892e8[DAT_00489248 - 1].damage_44 = angle_step;
                         }
                     }
 
@@ -4339,17 +4339,17 @@ void FUN_00434310(void)
                             ep->counter_3c = 0;
                             ep->timer_5c = 0;
                             DAT_00489248++;
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 90;
+                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 90;
                             {
                                 int ci = rand() % 10;
                                 unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
                                 unsigned short r5 = (pal >> 10) & 0x1F;
                                 unsigned short g5 = (pal >> 5) & 0x1F;
                                 unsigned short b5 = pal & 0x1F;
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                DAT_004892e8[DAT_00489248 - 1].palette_value =
                                     (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                             }
-                            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
+                            DAT_004892e8[DAT_00489248 - 1].damage_44 = 0;
                         }
                     }
 
@@ -4600,13 +4600,13 @@ void FUN_00434310(void)
                                 ep->counter_3c = 0;
                                 ep->timer_5c = 0;
                                 DAT_00489248++;
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 50 + 40;
+                                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 50 + 40;
                                 /* Ground-colored: sample pixel at impact point */
-                                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                DAT_004892e8[DAT_00489248 - 1].palette_value =
                                     framebuffer_rgb565_to_x1r5g5b5(
                                         *(unsigned short *)((int)DAT_00481f50 +
                                             ((ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx) * 2)) + 30000;
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
+                                DAT_004892e8[DAT_00489248 - 1].damage_44 = 0;
                             }
                             } /* end impact_angle scope */
                             FUN_00437cf0(cl_x, cl_y, 200, owner, 800);
@@ -4991,14 +4991,14 @@ void FUN_00434310(void)
                                 ep->counter_3c = 0;
                                 ep->timer_5c = 0;
                                 DAT_00489248++;
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 60 + 40;
+                                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 60 + 40;
                                 {
                                     int ci = rand() % 10;
                                     unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
                                     unsigned short r5 = (pal >> 10) & 0x1F;
                                     unsigned short g5 = (pal >> 5) & 0x1F;
                                     unsigned short b5 = pal & 0x1F;
-                                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    DAT_004892e8[DAT_00489248 - 1].palette_value =
                                         (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                                 }
                             }
@@ -5071,13 +5071,13 @@ void FUN_00434310(void)
                                     ep->counter_3c = 0;
                                     ep->timer_5c = 0;
                                     DAT_00489248++;
-                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 120;
+                                    DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 120;
                                     {
                                         int ci = rand() % 10;
-                                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                        DAT_004892e8[DAT_00489248 - 1].palette_value =
                                             *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2) + 30000;
                                     }
-                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = angle_step;
+                                    DAT_004892e8[DAT_00489248 - 1].damage_44 = angle_step;
                                 }
                             }
 
@@ -5113,13 +5113,13 @@ void FUN_00434310(void)
                                     ep->counter_3c = 0;
                                     ep->timer_5c = 0;
                                     DAT_00489248++;
-                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 120;
+                                    DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 120;
                                     {
                                         int ci = rand() % 10;
-                                        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                        DAT_004892e8[DAT_00489248 - 1].palette_value =
                                             *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2) + 30000;
                                     }
-                                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
+                                    DAT_004892e8[DAT_00489248 - 1].damage_44 = 0;
                                 }
                             }
 
@@ -5213,10 +5213,10 @@ void FUN_00434310(void)
                                         bp->palette_value = tt22[0xDEE4 / 4];
                                         bp->callback_address = tt22[0xDDF0 / 4];
                                         DAT_00489248++;
-                                        int spawned = DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x80;
+                                        Entity *spawned = &DAT_004892e8[DAT_00489248 - 1];
                                         unsigned char anim_mod = *(unsigned char *)((int)DAT_00487abc + 0xDF14);
-                                        *(int *)(spawned + 0x48) = anim_mod ? rand() % anim_mod : 0;
-                                        *(int *)(spawned + 0x28) = 0x50;
+                                        spawned->scratch_48 = anim_mod ? rand() % anim_mod : 0;
+                                        spawned->health_or_damage_28 = 0x50;
                                     }
                                 }
                                 if (DAT_00489250 < 2000) {
@@ -5418,7 +5418,7 @@ void FUN_00434310(void)
                                 ep->callback_address = tt[0xDDF0 / 4];
                                 ep->damage_44 = split_damage;
                                 DAT_00489248++;
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 80;
+                                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 80;
                             }
                             if (DAT_00489250 < 2000) {
                                 int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
