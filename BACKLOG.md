@@ -28,7 +28,9 @@ enemy proximity, owned-projectile detonation, Moving Sucker attraction/repulsion
 and force-field repulsion. The fifth batch converts five construction paths:
 the straight and two side projectiles in primary fire, bomb/mine spawning, and
 energy-explosion particles. Their partial initialization and RNG order remain
-intentional.
+intentional. The sixth batch converts all entity construction inside the main
+tile-damage/explosion routine plus the environmental falling-debris constructor,
+including the post-count lifetime, gravity/damage, and palette writes.
 
 **Known layout:**
 ```
