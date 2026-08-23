@@ -23,6 +23,126 @@ LPDIRECTDRAWSURFACE lpDDS_Primary   = NULL;  /* 00489ED8 */
 LPDIRECTDRAWSURFACE lpDDS_Back      = NULL;  /* 00489ECC */
 LPDIRECTDRAWSURFACE lpDDS_Offscreen = NULL;  /* 00489ED0 */
 LPDIRECTDRAWSURFACE DAT_00481d44    = NULL;  /* 00481D44 - offscreen surface 640x480 */
+static LPDIRECTDRAWSURFACE s_PresentationSurface = NULL;
+static int s_PresentationWidth = 0;
+static int s_PresentationHeight = 0;
+
+static int Ensure_Presentation_Surface(int width, int height)
+{
+    if (width <= 0 || height <= 0 || lpDD == NULL)
+        return 0;
+    if (s_PresentationSurface != NULL &&
+        s_PresentationWidth == width && s_PresentationHeight == height)
+        return 1;
+
+    if (s_PresentationSurface != NULL) {
+        s_PresentationSurface->Release();
+        s_PresentationSurface = NULL;
+    }
+
+    DDSURFACEDESC desc = {};
+    desc.dwSize = sizeof(desc);
+    desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    desc.dwWidth = width;
+    desc.dwHeight = height;
+    desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
+    if (lpDD->CreateSurface(&desc, &s_PresentationSurface, NULL) != DD_OK) {
+        s_PresentationWidth = 0;
+        s_PresentationHeight = 0;
+        return 0;
+    }
+
+    s_PresentationWidth = width;
+    s_PresentationHeight = height;
+    return 1;
+}
+
+/* The recovered renderer remains natively 640x480. Display settings resize
+ * only its presentation viewport, keeping gameplay coordinates untouched. */
+void Get_Game_Presentation_Rect(RECT *rect)
+{
+    RECT client = {0, 0, 640, 480};
+    if (hWnd_Main != NULL)
+        GetClientRect(hWnd_Main, &client);
+
+    int client_w = client.right - client.left;
+    int client_h = client.bottom - client.top;
+    if (client_w <= 0 || client_h <= 0) {
+        *rect = client;
+        return;
+    }
+
+    int width = client_w;
+    int height = (client_w * 3) / 4;
+    if (height > client_h) {
+        height = client_h;
+        width = (client_h * 4) / 3;
+    }
+
+    rect->left = (client_w - width) / 2;
+    rect->top = (client_h - height) / 2;
+    rect->right = rect->left + width;
+    rect->bottom = rect->top + height;
+}
+
+void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *game_y)
+{
+    RECT viewport;
+    Get_Game_Presentation_Rect(&viewport);
+    int width = viewport.right - viewport.left;
+    int height = viewport.bottom - viewport.top;
+    if (width <= 0 || height <= 0) {
+        *game_x = 0;
+        *game_y = 0;
+        return;
+    }
+
+    int x = ((client_x - viewport.left) * 640) / width;
+    int y = ((client_y - viewport.top) * 480) / height;
+    if (x < 0) x = 0;
+    if (x > 639) x = 639;
+    if (y < 0) y = 0;
+    if (y > 479) y = 479;
+    *game_x = x;
+    *game_y = y;
+}
+
+void Apply_Display_Settings(void)
+{
+    if (hWnd_Main == NULL)
+        return;
+
+    unsigned int mode = DAT_00483724[1];
+    if (g_NumDisplayModes <= 0 || mode >= (unsigned int)g_NumDisplayModes)
+        mode = 5;
+
+    MONITORINFO monitor = {};
+    monitor.cbSize = sizeof(monitor);
+    GetMonitorInfoA(MonitorFromWindow(hWnd_Main, MONITOR_DEFAULTTONEAREST), &monitor);
+
+    if (g_WindowMode != 0) {
+        SetWindowLongA(hWnd_Main, GWL_STYLE, WS_POPUP);
+        SetWindowPos(hWnd_Main, HWND_TOP,
+            monitor.rcMonitor.left, monitor.rcMonitor.top,
+            monitor.rcMonitor.right - monitor.rcMonitor.left,
+            monitor.rcMonitor.bottom - monitor.rcMonitor.top,
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    } else {
+        DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+        RECT window_rect = {0, 0, g_ModeWidths[mode], g_ModeHeights[mode]};
+        AdjustWindowRect(&window_rect, style, FALSE);
+        int width = window_rect.right - window_rect.left;
+        int height = window_rect.bottom - window_rect.top;
+        int x = monitor.rcWork.left + ((monitor.rcWork.right - monitor.rcWork.left) - width) / 2;
+        int y = monitor.rcWork.top + ((monitor.rcWork.bottom - monitor.rcWork.top) - height) / 2;
+
+        SetWindowLongA(hWnd_Main, GWL_STYLE, style);
+        SetWindowPos(hWnd_Main, HWND_NOTOPMOST, x, y, width, height,
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    }
+
+    InvalidateRect(hWnd_Main, NULL, TRUE);
+}
 
 /* ===== Init_DirectDraw (004610E0) ===== */
 /*
@@ -93,6 +213,12 @@ int Init_DirectDraw(int width, int height)
 void Release_DirectDraw_Surfaces(void)
 {
     if (lpDD != NULL) {
+        if (s_PresentationSurface != NULL) {
+            s_PresentationSurface->Release();
+            s_PresentationSurface = NULL;
+            s_PresentationWidth = 0;
+            s_PresentationHeight = 0;
+        }
         if (lpDDS_Primary != NULL) {
             lpDDS_Primary->Release();
             lpDDS_Primary = NULL;
@@ -110,6 +236,7 @@ void Restore_Surfaces(void)
     if (lpDDS_Primary)   lpDDS_Primary->Restore();
     if (lpDDS_Back)      lpDDS_Back->Restore();
     if (lpDDS_Offscreen) lpDDS_Offscreen->Restore();
+    if (s_PresentationSurface) s_PresentationSurface->Restore();
     g_SurfaceReady = 2;
 }
 
@@ -826,14 +953,70 @@ void Render_Frame(void)
     /* 5. Unlock */
     lpDDS_Offscreen->Unlock(NULL);
 
-    /* 6. Blt offscreen to primary (windowed - need screen coordinates) */
+    /* 6. Compose bars + scaled frame offscreen, then present atomically.
+     * Drawing the bars and frame separately to the visible primary surface
+     * caused obvious flicker. GDI HALFTONE gives cleaner non-integer scaling
+     * than DirectDraw's legacy stretch blit. */
     RECT rcSrc = {0, 0, 640, 480};
+    RECT rcClient;
+    GetClientRect(hWnd_Main, &rcClient);
+    int client_w = rcClient.right - rcClient.left;
+    int client_h = rcClient.bottom - rcClient.top;
+    if (!Ensure_Presentation_Surface(client_w, client_h))
+        return;
+
+    DDBLTFX fill = {};
+    fill.dwSize = sizeof(fill);
+    fill.dwFillColor = 0;
+    s_PresentationSurface->Blt(NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fill);
+
+    RECT rcDest;
+    Get_Game_Presentation_Rect(&rcDest);
+    HDC source_dc = NULL;
+    HDC presentation_dc = NULL;
+    HRESULT source_hr = lpDDS_Offscreen->GetDC(&source_dc);
+    HRESULT presentation_hr = s_PresentationSurface->GetDC(&presentation_dc);
+    if (source_hr == DD_OK && presentation_hr == DD_OK) {
+        int dest_w = rcDest.right - rcDest.left;
+        int dest_h = rcDest.bottom - rcDest.top;
+        int scale_x = dest_w / 640;
+        int scale_y = dest_h / 480;
+        int pixel_perfect = scale_x >= 1 && scale_x == scale_y &&
+                            dest_w == 640 * scale_x && dest_h == 480 * scale_y;
+        /* Preserve razor-sharp pixels at exact integer scales (fullscreen on
+         * a 1440p display is exactly 3x); smooth only uneven scaling ratios. */
+        SetStretchBltMode(presentation_dc, pixel_perfect ? COLORONCOLOR : HALFTONE);
+        SetBrushOrgEx(presentation_dc, 0, 0, NULL);
+        StretchBlt(presentation_dc,
+            rcDest.left, rcDest.top,
+            dest_w, dest_h,
+            source_dc, 0, 0, 640, 480, SRCCOPY);
+    } else {
+        /* Conservative fallback for drivers that reject GetDC. */
+        if (presentation_hr == DD_OK) {
+            s_PresentationSurface->ReleaseDC(presentation_dc);
+            presentation_dc = NULL;
+        }
+        if (source_hr == DD_OK) {
+            lpDDS_Offscreen->ReleaseDC(source_dc);
+            source_dc = NULL;
+        }
+        s_PresentationSurface->Blt(&rcDest, lpDDS_Offscreen, &rcSrc, DDBLT_WAIT, NULL);
+    }
+    if (presentation_dc != NULL)
+        s_PresentationSurface->ReleaseDC(presentation_dc);
+    if (source_dc != NULL)
+        lpDDS_Offscreen->ReleaseDC(source_dc);
+
+    RECT presentation_src = {0, 0, client_w, client_h};
+    RECT presentation_dest = presentation_src;
     POINT pt = {0, 0};
     ClientToScreen(hWnd_Main, &pt);
-    RECT rcDest = {pt.x, pt.y, pt.x + 640, pt.y + 480};
+    OffsetRect(&presentation_dest, pt.x, pt.y);
 
     do {
-        hr = lpDDS_Primary->Blt(&rcDest, lpDDS_Offscreen, &rcSrc, DDBLT_WAIT, NULL);
+        hr = lpDDS_Primary->Blt(&presentation_dest, s_PresentationSurface,
+                                &presentation_src, DDBLT_WAIT, NULL);
         if (hr == DDERR_SURFACELOST) {
             Restore_Surfaces();
             return;
@@ -1152,6 +1335,15 @@ void Render_Game_View_To(unsigned short *frame)
                     sprintf(valBuf, "%d x %d", 640, 480);
                 }
                 str = valBuf;
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
+                break;
+            }
+
+            case 0x35: {
+                int mode = cfgPtr ? (int)*cfgPtr : 0;
+                int idx = 0x14E + ((mode != 0) ? 1 : 0);
+                if (g_MenuStrings && idx < 350 && g_MenuStrings[idx])
+                    str = g_MenuStrings[idx];
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
             }

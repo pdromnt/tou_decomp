@@ -97,6 +97,7 @@ int           DAT_004877cc   = 0;
 unsigned char DAT_004877ec   = 0;
 int           DAT_00487824   = 0;
 unsigned char DAT_00483724[4] = {0};
+unsigned char g_WindowMode = 0;
 int           DAT_00487784   = 0;
 unsigned char DAT_00483834   = 0;
 unsigned char DAT_00483835   = 0;
@@ -981,7 +982,7 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x3F] = (char *)"Controls";
 
     /* Screen sizes */
-    g_MenuStrings[0x40] = (char *)"Playes screen sizes";
+    g_MenuStrings[0x40] = (char *)"Viewport size";
     g_MenuStrings[0x41] = (char *)"Full";
     g_MenuStrings[0x42] = (char *)"Square";
     g_MenuStrings[0x43] = (char *)"1/4 screen";
@@ -1264,6 +1265,9 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x14A] = s_HoverLevelAuthor;
     g_MenuStrings[0x14B] = s_HoverLevelEmail;
     g_MenuStrings[0x14C] = s_HoverLevelType;
+    g_MenuStrings[0x14D] = (char *)"Mode";
+    g_MenuStrings[0x14E] = (char *)"Windowed";
+    g_MenuStrings[0x14F] = (char *)"Fullscreen";
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -2323,8 +2327,10 @@ void FUN_00425fe0(void)
          * absolute cursor synced during a drag made the palette popup wander
          * away from its click origin. */
         if (g_bIsActive && g_InputMode == 0 && PtInRect(&client, pt)) {
-            g_MouseDeltaX = pt.x << 18;
-            g_MouseDeltaY = pt.y << 18;
+            int game_x, game_y;
+            Client_To_Game_Coordinates(pt.x, pt.y, &game_x, &game_y);
+            g_MouseDeltaX = game_x << 18;
+            g_MouseDeltaY = game_y << 18;
         }
         g_MouseButtons = 0;
         if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
@@ -2997,6 +3003,11 @@ void FUN_0042a470(void)
         iVar7 = iVar7 + 0x50;
         FUN_0042fc90(CFG_ADDR(0x483725));
         FUN_0042fcf0();
+        FUN_00430200(0, iVar7, 0x14D, 2, 2, 2, 0, 4, 0xff);        /* "Mode" label */
+        iVar3 = FUN_00430200(0, iVar7, 0x14E, 2, 2, 1, 0x35, 5, 0xff);
+        FUN_0042fc90((int)(uintptr_t)&g_WindowMode);
+        FUN_0042fcf0();
+        iVar7 = iVar7 + iVar3;
         FUN_00430200(0, iVar7, 0x40, 2, 2, 2, 0, 4, 0xff);        /* "Detail" label */
         iVar3 = FUN_00430200(0, iVar7, 0x41, 2, 2, 1, 4, 5, 0xff); /* detail value */
         FUN_0042fc90(CFG_ADDR(0x483726));
@@ -4204,12 +4215,24 @@ void FUN_00427df0(int param_1, char param_2)
         *data = val;
         if (val == 0xFF) {
             *data = (unsigned char)(g_NumDisplayModes - 1);
+            DAT_00483724[1] = *data;
+            Apply_Display_Settings();
             return;
         }
         if ((int)(unsigned int)val >= g_NumDisplayModes) {
             *data = 0;
+            DAT_00483724[1] = *data;
+            Apply_Display_Settings();
             return;
         }
+        DAT_00483724[1] = *data;
+        Apply_Display_Settings();
+        break;
+    }
+
+    case 0x35: { /* Modern display mode */
+        *data = (*data == 0) ? 1 : 0;
+        Apply_Display_Settings();
         break;
     }
 
@@ -6069,6 +6092,8 @@ void Early_Init_Vars(void)
  *   - FUN_00425840 "Reset defaults" menu action (defaults → save → sync) */
 void Set_Config_Defaults(void)
 {
+    g_WindowMode = 0;
+
     /* === Basic config (offsets 0-3) === */
     g_ConfigBlob[0] = 1;     /* DAT_00481f58: active level slots (1 = first slot active) */
     g_ConfigBlob[1] = 0;     /* DAT_00481f59 */
@@ -6312,6 +6337,9 @@ void Load_Options_Config(void)
     FILE *fp = fopen("options.cfg", "rb");
     if (fp != NULL) {
         fread(g_ConfigBlob, 1, 6408, fp);
+        unsigned char savedWindowMode = 0;
+        if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
+            g_WindowMode = savedWindowMode;
         fclose(fp);
     }
 }
@@ -6323,6 +6351,7 @@ void Save_Options_Config(void)
     FILE *fp = fopen("options.cfg", "wb");
     if (fp != NULL) {
         fwrite(g_ConfigBlob, 1, 6408, fp);
+        fwrite(&g_WindowMode, 1, 1, fp);
         fclose(fp);
     }
 }

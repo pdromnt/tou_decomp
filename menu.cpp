@@ -26,42 +26,16 @@ int Menu_Init_And_Loop(void)
     DAT_00487824 = 0;
     FUN_0040e130();  /* Init/start menu music */
 
-    /* Clamp desired mode to valid range. The config (options.cfg) may reference
-     * modes enumerated by the original game's fullscreen DDraw init; our windowed
-     * mode decomp has fewer modes in the table. Out-of-range indices read garbage
-     * from the mode table, producing insane resolutions that hang the system. */
-    if (g_NumDisplayModes > 0 && (int)(unsigned int)DAT_00487640[2] >= g_NumDisplayModes) {
-        DAT_00487640[2] = 0;
-    }
-    /* Resolution switch: if current mode != desired mode, try to change.
-     * Original uses pointer arithmetic from &g_NumDisplayModes, but our decomp
-     * can't guarantee contiguous layout. Use direct array indexing instead. */
-    if (DAT_00487640[1] != DAT_00487640[2]) {
-        int modeIdx = (unsigned int)DAT_00487640[2];
-        DAT_00483724[1] = DAT_00487640[2];
-        DAT_00487640[1] = DAT_00487640[2];
-        g_DisplayWidth  = g_ModeWidths[modeIdx];
-        g_DisplayHeight = g_ModeHeights[modeIdx];
-
-        Release_DirectDraw_Surfaces();
-        iVar1 = Init_DirectDraw(g_DisplayWidth, g_DisplayHeight);
-
-        /* If DDraw init fails, cycle through modes until one works */
-        while (iVar1 == 0) {
-            Release_DirectDraw_Surfaces();
-            DAT_00487640[2] = DAT_00487640[2] + 1;
-            if (g_NumDisplayModes <= (int)(unsigned int)DAT_00487640[2]) {
-                DAT_00487640[2] = 0;
-            }
-            modeIdx = (unsigned int)DAT_00487640[2];
-            g_DisplayWidth  = g_ModeWidths[modeIdx];
-            g_DisplayHeight = g_ModeHeights[modeIdx];
-            DAT_00483724[1] = DAT_00487640[2];
-            DAT_00487640[1] = DAT_00487640[2];
-            Release_DirectDraw_Surfaces();
-            iVar1 = Init_DirectDraw(g_DisplayWidth, g_DisplayHeight);
-        }
-    }
+    /* Modern presentation is decoupled from the verified 640x480 renderer.
+     * The selected resolution resizes the window instead of reallocating game
+     * buffers whose dimensions are part of the recovered runtime contract. */
+    if (g_NumDisplayModes > 0 && DAT_00483724[1] >= g_NumDisplayModes)
+        DAT_00483724[1] = 5;
+    DAT_00487640[1] = 5;
+    DAT_00487640[2] = 5;
+    g_DisplayWidth = 640;
+    g_DisplayHeight = 480;
+    Apply_Display_Settings();
 
     /* Load level data and resources */
     iVar1 = Load_Level_Resources();
