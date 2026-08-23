@@ -8272,27 +8272,27 @@ void FUN_00455d50(void)
                                 int bt_ang = bt * 0x80; /* 0x2000/16 = 0x80 per step (index into sincos) */
                                 int bt_rand = rand() % 3;
                                 int bt_spd = (rand() % 3) + 5;
-                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
-                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
-                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
-                                *(int *)(ep + 0x18) = (bt_sc[bt_ang] << bt_spd) >> 6;
-                                *(int *)(ep + 0x1C) = (bt_sc[bt_ang + 0x200] << bt_spd) >> 6;
-                                *(unsigned char *)(ep + 0x20) = 0;
-                                *(unsigned char *)(ep + 0x21) = 0x01;
-                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
-                                *(short *)(ep + 0x24) = 0;
-                                *(unsigned char *)(ep + 0x26) = 0x1E;
-                                *(int *)(ep + 0x28) = 0;
-                                *(int *)(ep + 0x34) = bt_tt[0x218/4];
-                                *(int *)(ep + 0x38) = bt_tt[(0x2A0 + bt_rand * 4) / 4];
-                                *(int *)(ep + 0x3C) = 0;
-                                *(unsigned char *)(ep + 0x40) = (unsigned char)bt_rand;
-                                *(int *)(ep + 0x44) = bt_tt[(0x2DC + bt_rand * 4) / 4];
-                                *(int *)(ep + 0x48) = 0;
-                                *(int *)(ep + 0x4C) = bt_tt[(0x30C + bt_rand * 4) / 4];
-                                *(unsigned char *)(ep + 0x54) = 0;
-                                *(unsigned char *)(ep + 0x5C) = 0;
+                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                ep->position_x = item_x; ep->previous_x = item_x;
+                                ep->position_y = item_y; ep->previous_y = item_y;
+                                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                                ep->velocity_x = (bt_sc[bt_ang] << bt_spd) >> 6;
+                                ep->velocity_y = (bt_sc[bt_ang + 0x200] << bt_spd) >> 6;
+                                ep->state_20 = 0;
+                                ep->type = 0x01;
+                                ep->owner = (unsigned char)p;
+                                ep->variant_24 = 0;
+                                ep->auxiliary_26 = 0x1E;
+                                ep->health_or_damage_28 = 0;
+                                ep->callback_address = bt_tt[0x218/4];
+                                ep->gravity_or_motion_38 = bt_tt[(0x2A0 + bt_rand * 4) / 4];
+                                ep->counter_3c = 0;
+                                ep->subtype = (unsigned char)bt_rand;
+                                ep->damage_44 = bt_tt[(0x2DC + bt_rand * 4) / 4];
+                                ep->scratch_48 = 0;
+                                ep->palette_value = bt_tt[(0x30C + bt_rand * 4) / 4];
+                                ep->animation_frame = 0;
+                                ep->timer_5c = 0;
                                 DAT_00489248++;
                             }
                             /* Flash particle */
@@ -8312,34 +8312,34 @@ void FUN_00455d50(void)
                             for (int sh = 0; sh < 75 && DAT_00489248 < 0x9C4; sh++) {
                                 unsigned int sh_ang = rand() & 0x7FF;
                                 int sh_spd = rand() % 50;
-                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
-                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
-                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
-                                *(int *)(ep + 0x18) = (bt_sc[sh_ang] * sh_spd) >> 6;
-                                *(int *)(ep + 0x1C) = (bt_sc[sh_ang + 0x200] * sh_spd) >> 6;
-                                *(unsigned char *)(ep + 0x20) = 0;
-                                *(unsigned char *)(ep + 0x21) = 0x67;
-                                *(unsigned char *)(ep + 0x22) = 0xFF;
-                                *(short *)(ep + 0x24) = 0;
-                                *(unsigned char *)(ep + 0x26) = 0xFF;
-                                *(int *)(ep + 0x28) = 0;
-                                *(int *)(ep + 0x34) = bt_tt[0xD7A8/4];
-                                *(int *)(ep + 0x38) = bt_tt[0xD830/4];
-                                *(int *)(ep + 0x3C) = 0;
-                                *(unsigned char *)(ep + 0x40) = 0;
-                                *(int *)(ep + 0x44) = bt_tt[0xD86C/4];
-                                *(int *)(ep + 0x48) = 0;
-                                *(unsigned char *)(ep + 0x54) = 0;
+                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                ep->position_x = item_x; ep->previous_x = item_x;
+                                ep->position_y = item_y; ep->previous_y = item_y;
+                                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                                ep->velocity_x = (bt_sc[sh_ang] * sh_spd) >> 6;
+                                ep->velocity_y = (bt_sc[sh_ang + 0x200] * sh_spd) >> 6;
+                                ep->state_20 = 0;
+                                ep->type = 0x67;
+                                ep->owner = 0xFF;
+                                ep->variant_24 = 0;
+                                ep->auxiliary_26 = 0xFF;
+                                ep->health_or_damage_28 = 0;
+                                ep->callback_address = bt_tt[0xD7A8/4];
+                                ep->gravity_or_motion_38 = bt_tt[0xD830/4];
+                                ep->counter_3c = 0;
+                                ep->subtype = 0;
+                                ep->damage_44 = bt_tt[0xD86C/4];
+                                ep->scratch_48 = 0;
+                                ep->animation_frame = 0;
                                 DAT_00489248++;
                                 /* Post-increment trailing writes */
-                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(unsigned char *)(ep2 - 0x24) = 6; /* +0x5C */
+                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                ep2->timer_5c = 6; /* +0x5C */
                                 unsigned char sh_pal = (unsigned char)((rand() % 12) + 0x14);
-                                *(unsigned char *)(ep2 - 0x1B) = sh_pal; /* +0x65 */
-                                *(unsigned char *)(ep2 - 0x1C) = 0x12; /* +0x64 */
+                                ep2->scratch_65 = sh_pal; /* +0x65 */
+                                ep2->scratch_64 = 0x12; /* +0x64 */
                                 unsigned short *pal_s = (unsigned short *)DAT_00487aa8;
-                                if (pal_s) *(unsigned int *)(ep2 - 0x34) = (unsigned int)pal_s[sh_pal] + 30000; /* +0x4C */
+                                if (pal_s) ep2->palette_value = (unsigned int)pal_s[sh_pal] + 30000; /* +0x4C */
                             }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x01;
                         } else if (roll < 142) {
@@ -8349,33 +8349,33 @@ void FUN_00455d50(void)
                             int *dr_tt = (int *)DAT_00487abc;
                             for (int dr = 0; dr < 32 && DAT_00489248 < 0x9C4; dr++) {
                                 int dr_ang = dr * 0x40; /* 0x800/32 = 0x40 per step */
-                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
-                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
-                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
-                                *(int *)(ep + 0x18) = (dr_sc[dr_ang] * 90) >> 6;
-                                *(int *)(ep + 0x1C) = (dr_sc[dr_ang + 0x200] * 90) >> 6;
-                                *(unsigned char *)(ep + 0x20) = 0xC2;
-                                *(unsigned char *)(ep + 0x21) = 0x00;
-                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
-                                *(short *)(ep + 0x24) = 6;
-                                *(unsigned char *)(ep + 0x26) = 0xFF;
-                                *(int *)(ep + 0x28) = 0;
-                                *(int *)(ep + 0x34) = dr_tt[0];
-                                *(int *)(ep + 0x38) = dr_tt[0x90/4];
-                                *(int *)(ep + 0x3C) = 0;
-                                *(unsigned char *)(ep + 0x40) = 2;
-                                *(int *)(ep + 0x44) = dr_tt[0xCC/4];
-                                *(int *)(ep + 0x48) = 0;
-                                *(int *)(ep + 0x4C) = dr_tt[0xFC/4];
-                                *(unsigned char *)(ep + 0x54) = 0;
-                                *(unsigned char *)(ep + 0x5C) = 0;
+                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                ep->position_x = item_x; ep->previous_x = item_x;
+                                ep->position_y = item_y; ep->previous_y = item_y;
+                                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                                ep->velocity_x = (dr_sc[dr_ang] * 90) >> 6;
+                                ep->velocity_y = (dr_sc[dr_ang + 0x200] * 90) >> 6;
+                                ep->state_20 = 0xC2;
+                                ep->type = 0x00;
+                                ep->owner = (unsigned char)p;
+                                ep->variant_24 = 6;
+                                ep->auxiliary_26 = 0xFF;
+                                ep->health_or_damage_28 = 0;
+                                ep->callback_address = dr_tt[0];
+                                ep->gravity_or_motion_38 = dr_tt[0x90/4];
+                                ep->counter_3c = 0;
+                                ep->subtype = 2;
+                                ep->damage_44 = dr_tt[0xCC/4];
+                                ep->scratch_48 = 0;
+                                ep->palette_value = dr_tt[0xFC/4];
+                                ep->animation_frame = 0;
+                                ep->timer_5c = 0;
                                 DAT_00489248++;
                                 /* Post-increment trailing writes */
-                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
                                 unsigned short *pal_dr = (unsigned short *)DAT_00487aa8;
-                                if (pal_dr) *(unsigned int *)(ep2 - 0x34) = (unsigned int)pal_dr[7] + 30000; /* +0x4C */
-                                *(int *)(ep2 - 0x58) = (rand() & 7) + 0x96; /* +0x28: lifespan 150-157 */
+                                if (pal_dr) ep2->palette_value = (unsigned int)pal_dr[7] + 30000; /* +0x4C */
+                                ep2->health_or_damage_28 = (rand() & 7) + 0x96; /* +0x28: lifespan 150-157 */
                             }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x02;
                         } else if (roll < 242) {
@@ -8386,37 +8386,37 @@ void FUN_00455d50(void)
                             unsigned char plr_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
                             for (int ms = 0; ms < 4 && DAT_00489248 < 0x9C4; ms++) {
                                 int ms_ang = (ms * 0x200 + 0x100) & 0x7FF;
-                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
-                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
-                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
-                                *(int *)(ep + 0x18) = ms_sc[ms_ang] >> 1;
-                                *(int *)(ep + 0x1C) = ms_sc[ms_ang + 0x200] >> 1;
-                                *(unsigned char *)(ep + 0x20) = 0;
-                                *(unsigned char *)(ep + 0x21) = 0x1C;
-                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
-                                *(short *)(ep + 0x24) = 0;
-                                *(unsigned char *)(ep + 0x26) = 0xFF;
-                                *(int *)(ep + 0x28) = 0;
-                                *(int *)(ep + 0x34) = ms_tt[0x3AA0/4];
-                                *(int *)(ep + 0x38) = ms_tt[0x3B28/4];
-                                *(int *)(ep + 0x3C) = 0;
-                                *(unsigned char *)(ep + 0x40) = 0;
-                                *(int *)(ep + 0x44) = ms_tt[0x3B64/4];
-                                *(int *)(ep + 0x48) = 0;
-                                *(int *)(ep + 0x4C) = ms_tt[0x3B94/4];
-                                *(unsigned char *)(ep + 0x54) = 0;
-                                *(unsigned char *)(ep + 0x5C) = 0x20; /* spawn immunity (team check bypass) */
+                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                ep->position_x = item_x; ep->previous_x = item_x;
+                                ep->position_y = item_y; ep->previous_y = item_y;
+                                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                                ep->velocity_x = ms_sc[ms_ang] >> 1;
+                                ep->velocity_y = ms_sc[ms_ang + 0x200] >> 1;
+                                ep->state_20 = 0;
+                                ep->type = 0x1C;
+                                ep->owner = (unsigned char)p;
+                                ep->variant_24 = 0;
+                                ep->auxiliary_26 = 0xFF;
+                                ep->health_or_damage_28 = 0;
+                                ep->callback_address = ms_tt[0x3AA0/4];
+                                ep->gravity_or_motion_38 = ms_tt[0x3B28/4];
+                                ep->counter_3c = 0;
+                                ep->subtype = 0;
+                                ep->damage_44 = ms_tt[0x3B64/4];
+                                ep->scratch_48 = 0;
+                                ep->palette_value = ms_tt[0x3B94/4];
+                                ep->animation_frame = 0;
+                                ep->timer_5c = 0x20; /* spawn immunity (team check bypass) */
                                 DAT_00489248++;
                                 /* Post-increment trailing writes */
-                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(int *)(ep2 - 0x44) = ms_ang; /* +0x3C: heading */
-                                *(int *)(ep2 - 0x54) = 0x0A; /* +0x2C: fire rate */
-                                *(int *)(ep2 - 0x20) = 0x157C; /* +0x60: lifetime 5500 */
-                                *(int *)(ep2 - 0x34) += (int)plr_team * 100; /* +0x4C: team sprite */
+                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                ep2->counter_3c = ms_ang; /* +0x3C: heading */
+                                ep2->scratch_2c = 0x0A; /* +0x2C: fire rate */
+                                ep2->scratch_60 = 0x157C; /* +0x60: lifetime 5500 */
+                                ep2->palette_value += (int)plr_team * 100; /* +0x4C: team sprite */
                                 /* Register in tracking list (category 5 = miniships) */
                                 *(int *)((int)DAT_0048781c + (5 * 0x1000 + DAT_00487834[5]) * 4) = DAT_00489248 - 1;
-                                *(int *)(ep2 - 0x30) = DAT_00487834[5]; /* +0x50: tracking slot */
+                                ep2->scratch_50 = DAT_00487834[5]; /* +0x50: tracking slot */
                                 DAT_00487834[5]++;
                             }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x03;
@@ -8426,37 +8426,37 @@ void FUN_00455d50(void)
                             int *in_tt = (int *)DAT_00487abc;
                             unsigned char plr_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
                             for (int in = 0; in < 6 && DAT_00489248 < 0x9C4; in++) {
-                                int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(int *)(ep + 0x00) = item_x; *(int *)(ep + 0x04) = item_x;
-                                *(int *)(ep + 0x08) = item_y; *(int *)(ep + 0x0C) = item_y;
-                                *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
-                                *(int *)(ep + 0x18) = 0; *(int *)(ep + 0x1C) = 0;
-                                *(unsigned char *)(ep + 0x20) = 0;
-                                *(unsigned char *)(ep + 0x21) = 0x1F;
-                                *(unsigned char *)(ep + 0x22) = (unsigned char)p;
-                                *(short *)(ep + 0x24) = 0;
-                                *(unsigned char *)(ep + 0x26) = 0xFF;
-                                *(int *)(ep + 0x28) = 0;
-                                *(int *)(ep + 0x34) = in_tt[0x40E8/4];
-                                *(int *)(ep + 0x38) = in_tt[0x4170/4];
-                                *(int *)(ep + 0x3C) = 0;
-                                *(unsigned char *)(ep + 0x40) = 0;
-                                *(int *)(ep + 0x44) = in_tt[0x41AC/4];
-                                *(int *)(ep + 0x48) = 0;
-                                *(int *)(ep + 0x4C) = in_tt[0x41DC/4];
-                                *(unsigned char *)(ep + 0x54) = 0;
-                                *(unsigned char *)(ep + 0x5C) = 0x20; /* spawn immunity (team check bypass) */
+                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                ep->position_x = item_x; ep->previous_x = item_x;
+                                ep->position_y = item_y; ep->previous_y = item_y;
+                                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                                ep->velocity_x = 0; ep->velocity_y = 0;
+                                ep->state_20 = 0;
+                                ep->type = 0x1F;
+                                ep->owner = (unsigned char)p;
+                                ep->variant_24 = 0;
+                                ep->auxiliary_26 = 0xFF;
+                                ep->health_or_damage_28 = 0;
+                                ep->callback_address = in_tt[0x40E8/4];
+                                ep->gravity_or_motion_38 = in_tt[0x4170/4];
+                                ep->counter_3c = 0;
+                                ep->subtype = 0;
+                                ep->damage_44 = in_tt[0x41AC/4];
+                                ep->scratch_48 = 0;
+                                ep->palette_value = in_tt[0x41DC/4];
+                                ep->animation_frame = 0;
+                                ep->timer_5c = 0x20; /* spawn immunity (team check bypass) */
                                 DAT_00489248++;
                                 /* Post-increment trailing writes */
-                                int ep2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                *(unsigned char *)(ep2 - 0x5A) = 0xFF; /* +0x26 (redundant) */
-                                *(int *)(ep2 - 0x54) = 0; /* +0x2C */
-                                *(unsigned char *)(ep2 - 0x1B) = 0; /* +0x65 */
-                                *(int *)(ep2 - 0x34) += (int)plr_team * 100; /* +0x4C: team sprite */
-                                *(int *)(ep2 - 0x20) = 0x9C4; /* +0x60: lifetime 2500 */
+                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                ep2->auxiliary_26 = 0xFF; /* +0x26 (redundant) */
+                                ep2->scratch_2c = 0; /* +0x2C */
+                                ep2->scratch_65 = 0; /* +0x65 */
+                                ep2->palette_value += (int)plr_team * 100; /* +0x4C: team sprite */
+                                ep2->scratch_60 = 0x9C4; /* +0x60: lifetime 2500 */
                                 /* Register in tracking list (category 4 = insects) */
                                 *(int *)((int)DAT_0048781c + (4 * 0x1000 + DAT_00487834[4]) * 4) = DAT_00489248 - 1;
-                                *(int *)(ep2 - 0x30) = DAT_00487834[4]; /* +0x50: tracking slot */
+                                ep2->scratch_50 = DAT_00487834[4]; /* +0x50: tracking slot */
                                 DAT_00487834[4]++;
                             }
                             *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x04;
