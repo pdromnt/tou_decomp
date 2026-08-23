@@ -63,9 +63,10 @@ To create the same archive layout used by CI:
 
 ## Releases
 
-The `Build release` GitHub Actions workflow can be run manually to produce a
-downloadable Windows artifact. Pushing a tag named `v*` also creates a GitHub
-Release with the packaged game attached.
+The `Build release` GitHub Actions workflow only runs when started manually.
+Enter the release tag/version (for example `v1.0.0`) when choosing **Run
+workflow**; it builds the game and creates the tagged GitHub Release with the
+package attached. Commits and tag pushes do not trigger releases.
 
 ## Longer-Term Direction
 

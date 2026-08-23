@@ -2,9 +2,11 @@ name: Build release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      release_tag:
+        description: "Release tag/version (for example v1.0.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -33,9 +35,10 @@ jobs:
       - name: Package runtime files
         id: package
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-$env:GITHUB_RUN_NUMBER" }
-          $archive = & ./scripts/package-release.ps1 -Version $version
+          $archive = & ./scripts/package-release.ps1 -Version $env:RELEASE_TAG
           "archive=$archive" >> $env:GITHUB_OUTPUT
 
       - name: Upload workflow artifact
@@ -46,8 +49,8 @@ jobs:
           if-no-files-found: error
 
       - name: Create GitHub release
-        if: github.ref_type == 'tag'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME "${{ steps.package.outputs.archive }}" --verify-tag --generate-notes
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release create $env:RELEASE_TAG "${{ steps.package.outputs.archive }}" --target $env:GITHUB_SHA --generate-notes
