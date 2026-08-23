@@ -128,9 +128,10 @@ keep before merging.
 ## Optional Entity Trace
 
 Set `TOU_ENTITY_TRACE=1` before launching the decomp to write
-`entity-trace.csv`. Tracing is off by default and the generated file is ignored.
-Use it only for controlled original-versus-decomp investigations because file
-I/O can disturb timing.
+`entity-trace.csv`. Tracing is off by default. The generated diagnostic is not
+part of release packages and should be deleted after use. Use it only for
+controlled original-versus-decomp investigations because file I/O can disturb
+timing.
 
 ## Refactoring Rules
 

@@ -2,9 +2,10 @@
 
 ## Status
 
-The dedicated binary-parity pass is complete as of 2026-08-23. The
+The dedicated binary-parity pass is complete as of 2026-08-23. Work from the
 `accuracy/binary-parity` branch was compared repeatedly against the original
-Windows executable and accepted through hands-on runtime testing.
+Windows executable, accepted through hands-on runtime testing, and merged into
+`main`.
 
 This file is now a completion record and the contract for handling future
 discrepancies. General cleanup and modernization work lives in `BACKLOG.md`.
@@ -63,12 +64,13 @@ and x87 conversion behavior unless the original binary proves otherwise.
 7. Obtain runtime acceptance before calling it fixed.
 
 Optional entity tracing remains available by setting `TOU_ENTITY_TRACE=1`; it
-writes `entity-trace.csv`, which is ignored by Git.
+writes the untracked diagnostic file `entity-trace.csv`. Delete it after the
+investigation; it is not part of release packages.
 
 ## Intentional Compatibility Difference
 
 The original executable is fullscreen-only. The decomp currently runs in a
-window for compatibility and is titled `Tunnels of Underworld - Decompiled`.
+window for compatibility and is titled `Tunnels of Underworld - RE/Decompiled`.
 That is intentional platform behavior, not an unresolved gameplay discrepancy.
 
 ## Merge Gates
@@ -79,5 +81,5 @@ That is intentional platform behavior, not an unresolved gameplay discrepancy.
 - [x] Standalone accuracy-test executable removed from the normal workflow
 - [x] Clean 32-bit MinGW build succeeds
 - [x] Release package contents validated
-- [x] GitHub Actions workflow builds artifacts and creates releases from `v*`
-  tags
+- [x] Manually dispatched GitHub Actions workflow builds the package and creates
+  the requested tagged release
