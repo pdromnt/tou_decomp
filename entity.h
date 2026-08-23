@@ -69,7 +69,8 @@ extern short                 DAT_0048373a;       /* initial lives */
 extern int                   DAT_00483830;       /* starting health */
 extern void                 *DAT_0048780c;       /* ship stats table (0x40 per ship, 9 ships) */
 extern unsigned char         DAT_0048236e[];     /* ship type per player (from level data) */
-extern char                  DAT_004836ce[];     /* player config ship IDs */
+/* Original 0x004836CE: per-player selected starting weapon type IDs. */
+#define DAT_004836ce ((char *)&g_ConfigBlob[0x1776])
 extern char                  DAT_0048378e[];     /* ship-taken flags (9 entries) */
 extern void                 *DAT_00489eac[4];    /* per-player visibility buffers */
 extern int                   DAT_00487788[4];    /* per-player stat counters */
@@ -154,9 +155,6 @@ extern int                   DAT_004892cc;       /* trooper spawn flag */
 
 /* ===== Wall Particle System ===== */
 void FUN_0044f630(int x, int y, int velX, int velY, float scale, int maxDist, int spread, char direction); /* wall segment ripple */
-
-/* ===== Per-player start weapon (set in weapon loadout grid via right-click) ===== */
-extern unsigned char g_StartWeapon[64];
 
 /* ===== Function Prototypes: sim.cpp (gameplay subsystems) ===== */
 void FUN_00460d50(void);        /* input/control update */
