@@ -50,7 +50,14 @@ structure strides, overflow, and x87 behavior are part of the reconstruction.
 | `memory.cpp` | Recovered allocation and shared-memory helpers |
 | `math.cpp` | Small math compatibility helpers |
 | `utils.cpp` | Optional debug logging |
-| `tou.h` | Shared declarations; still oversized and scheduled for gradual splitting |
+| `tou.h` | Aggregate include retained while source files migrate to narrower headers |
+| `types.h` | Shared recovered structures |
+| `gfx.h` | Graphics, assets, viewport, effects, and HUD declarations |
+| `input.h` | DirectInput and keyboard/mouse declarations |
+| `sound.h` | FMOD-facing audio declarations |
+| `level.h` | Level data, loading, and GG generator declarations |
+| `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
+| `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
 | `compat.h` | Legacy Windows and DirectX API-level includes |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
 

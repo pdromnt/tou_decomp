@@ -122,8 +122,8 @@ unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 
 ## Theme 2: Headers & Modules
 
-### T2.1 — Split `tou.h` into subsystem headers  [IN PROGRESS / P0]
-`tou.h` is 783 lines of intermixed externs. Split into:
+### T2.1 — Split `tou.h` into subsystem headers  [DONE]
+`tou.h` was 791 lines of intermixed externs. It is now a 24-line aggregate over:
 - `types.h` — structs, enums, constants
 - `gfx.h` — DirectDraw globals, render prototypes
 - `input.h` — DI globals, keyboard/mouse state
@@ -135,21 +135,23 @@ unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 
 Keep `tou.h` as an aggregate include during transition.
 
-**Progress:** `compat.h` now owns the Windows/DirectX API versions and includes;
-`fixed_point.h` owns the verified world-coordinate constants.
+`fixed_point.h` separately owns the verified world-coordinate constants.
 
 **AC:**
-- Each header contains only relevant declarations; no circular includes
-- All .cpp files still compile with `#include "tou.h"`
-- Clean include graph (verify with `g++ -H` or equivalent)
+- [x] Each header contains only relevant declarations; no circular includes
+- [x] All `.cpp` files still compile with `#include "tou.h"`
+- [x] Every subsystem header passes a standalone syntax check
+- [x] Rebuilt `.text`, `.data`, and `.rdata` match the pre-split executable
+  byte-for-byte
 
 ---
 
-### T2.2 — Centralize math tables in `math.h` / `math.cpp`  [P2]
+### T2.2 — Centralize math tables in `game_math.h` / `math.cpp`  [P2]
 Trig tables, ballistic LUT (`DAT_00489e90`), and vector helpers currently live in init.cpp and entity.cpp.
 
 **AC:**
-- `math.h` declares all pure math functions
+- `game_math.h` declares all pure math functions without shadowing the system
+  `<math.h>` header
 - `math.cpp` contains all table init and helpers
 - No math tables duplicated across files
 
@@ -533,7 +535,7 @@ Currently marked dead because menu writes directly into blob offsets.
 ---
 
 ### T14.2 — Remove unused globals  [P2]
-Some `extern` declarations in `tou.h` may reference dead code.
+Some `extern` declarations in the subsystem headers may reference dead code.
 
 **AC:**
 - Run linker with `--gc-sections` or grep for unused symbols
@@ -626,9 +628,9 @@ T7.1 (AudioEngine) ──> T11.1 (SDL2, optional)
 
 | Sprint | Items |
 |--------|-------|
-| 1 | T1.1, T1.2, T1.7, T3.3 |
+| 1 | T1.1, T1.2, T3.3 |
 | 2 | T1.3, T1.4, T1.5, T1.6, T3.1, T3.2 |
-| 3 | T2.1, T4.1, T4.2 |
+| 3 | T4.1, T4.2 |
 | 4 | T5.1, T6.1, T14.1 |
 | 5 | T13.1, T13.2 (batch rename pass) |
 | 6 | T4.3, T7.1, T8.1 |
