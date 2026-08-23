@@ -46,5 +46,4 @@ debug.txt
 NUL
 
 # Generated runtime and release artifacts
-/entity-trace.csv
 /dist/

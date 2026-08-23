@@ -33,7 +33,7 @@ not move the executable away from `fmod.dll`, `options.cfg`, or the asset
 directories.
 
 The decomp intentionally runs windowed and identifies itself as
-`Tunnels of Underworld - Decompiled` so it cannot be confused with the original
+`Tunnels of Underworld - RE/Decompiled` so it cannot be confused with the original
 fullscreen executable.
 
 ## Building on Windows
