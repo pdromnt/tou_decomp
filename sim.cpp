@@ -6964,9 +6964,9 @@ void FUN_00454b00(void)
                         }
 
                         /* Create projectile entity in DAT_004892e8 */
-                        int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                        *(int *)(ebase + 0x00) = *t;
-                        *(int *)(ebase + 0x08) = t[2] - 0x100000;
+                        Entity *projectile = &DAT_004892e8[DAT_00489248];
+                        projectile->position_x = *t;
+                        projectile->position_y = t[2] - 0x100000;
 
                         /* Compute velocity: aimed shots fire directly at target,
                          * random shots (team 0xFE) use sin/cos LUT from random angle. */
@@ -6977,47 +6977,47 @@ void FUN_00454b00(void)
                             double dy = (double)(tgt_y - (t[2] - 0x100000));
                             double dist = sqrt(dx * dx + dy * dy);
                             if (dist > 1.0) {
-                                *(int *)(ebase + 0x18) = (int)(dx / dist * speed);
-                                *(int *)(ebase + 0x1c) = (int)(dy / dist * speed);
+                                projectile->velocity_x = (int)(dx / dist * speed);
+                                projectile->velocity_y = (int)(dy / dist * speed);
                             } else {
-                                *(int *)(ebase + 0x18) = 0;
-                                *(int *)(ebase + 0x1c) = 0;
+                                projectile->velocity_x = 0;
+                                projectile->velocity_y = 0;
                             }
                         } else if (DAT_00487ab0 != NULL) {
                             /* Random angle: use sin/cos LUT */
                             int sin_val = *(int *)((int)DAT_00487ab0 + fire_angle * 4);
                             int cos_val = *(int *)((int)DAT_00487ab0 + 0x800 + fire_angle * 4);
-                            *(int *)(ebase + 0x18) = (int)((double)sin_val * (double)speed_sqrt * 2.3);
-                            *(int *)(ebase + 0x1c) = (int)((double)cos_val * (double)speed_sqrt * 2.3);
+                            projectile->velocity_x = (int)((double)sin_val * (double)speed_sqrt * 2.3);
+                            projectile->velocity_y = (int)((double)cos_val * (double)speed_sqrt * 2.3);
                         } else {
-                            *(int *)(ebase + 0x18) = 0;
-                            *(int *)(ebase + 0x1c) = 0;
+                            projectile->velocity_x = 0;
+                            projectile->velocity_y = 0;
                         }
 
-                        *(int *)(ebase + 0x04) = *t;
-                        *(int *)(ebase + 0x0c) = t[2] - 0x100000;
-                        *(int *)(ebase + 0x10) = 0;
-                        *(int *)(ebase + 0x14) = 0;
-                        *(char *)(ebase + 0x21) = (char)proj_type;
-                        *(short *)(ebase + 0x24) = 0;
-                        *(char *)(ebase + 0x20) = 0;
-                        *(char *)(ebase + 0x26) = (char)0xfe;
-                        *(char *)(ebase + 0x22) = owner;
-                        *(int *)(ebase + 0x28) = 0;
+                        projectile->previous_x = *t;
+                        projectile->previous_y = t[2] - 0x100000;
+                        projectile->motion_x_10 = 0;
+                        projectile->motion_y_14 = 0;
+                        projectile->type = (unsigned char)proj_type;
+                        projectile->variant_24 = 0;
+                        projectile->state_20 = 0;
+                        projectile->auxiliary_26 = 0xfe;
+                        projectile->owner = (unsigned char)owner;
+                        projectile->health_or_damage_28 = 0;
 
                         /* Entity type config lookups */
                         int type_offset = proj_subtype + proj_type * 0x86;
                         if (DAT_00487abc != NULL) {
-                            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + type_offset * 4);
-                            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xc4 + type_offset * 4);
-                            *(int *)(ebase + 0x4c) = *(int *)((int)DAT_00487abc + 0xf4 + type_offset * 4);
-                            *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + proj_type * 0x218);
+                            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + type_offset * 4);
+                            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xc4 + type_offset * 4);
+                            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xf4 + type_offset * 4);
+                            projectile->callback_address = *(int *)((int)DAT_00487abc + proj_type * 0x218);
                         }
-                        *(int *)(ebase + 0x48) = 0;
-                        *(char *)(ebase + 0x54) = 0;
-                        *(char *)(ebase + 0x40) = (char)proj_subtype;
-                        *(int *)(ebase + 0x3c) = 0;
-                        *(char *)(ebase + 0x5c) = 0;
+                        projectile->scratch_48 = 0;
+                        projectile->animation_frame = 0;
+                        projectile->subtype = (unsigned char)proj_subtype;
+                        projectile->counter_3c = 0;
+                        projectile->timer_5c = 0;
 
                         DAT_00489248++;
 
@@ -7030,30 +7030,30 @@ void FUN_00454b00(void)
                                 {
                                     /* Grayscale particle color: original X1R5G5B5 (*0x421), converted to RGB565 (*0x841) */
                                     unsigned int gray5 = life_val >> 3;
-                                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    projectile->palette_value =
                                         ((gray5 << 11) | (gray5 << 6) | gray5) + 30000;
                                 }
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3c) = 0x1b5800;
-                                *(short *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x5c) = 6;
+                                projectile->damage_44 = 0x1b5800;
+                                projectile->variant_24 = 6;
                             } else {
                                 /* Normal turret */
                                 int rnd = rand();
                                 if (DAT_00487aa8 != NULL) {
-                                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                                    projectile->palette_value =
                                         (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + 0xf2 + (rnd % 3) * 2) + 30000;
                                 } else {
-                                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) = 30100;
+                                    projectile->palette_value = 30100;
                                 }
-                                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3c) = 0x32000;
+                                projectile->damage_44 = 0x32000;
                             }
                         }
 
                         /* Set entity gravity (offset -0x48 = entity +0x38). */
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x48) = 6;
+                        projectile->gravity_or_motion_38 = 6;
 
                         /* Store turret position as projectile origin */
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *t;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = t[2];
+                        projectile->motion_x_10 = *t;
+                        projectile->motion_y_14 = t[2];
 
                         /* Play turret fire sound */
                         FUN_0040f9b0(0x29, *t, t[2]);
