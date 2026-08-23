@@ -10,8 +10,13 @@ should be small enough to compare and revert independently.
 
 ## Theme 1: Types & Data Structures
 
-### T1.1 — Entity struct (128 bytes)  [P0]
-Replace raw entity blob with a typed C struct.
+### T1.1 — Entity struct (128 bytes)  [IN PROGRESS / P0]
+Replace raw entity blob with typed access without changing original behavior.
+
+The verified `Entity` layout and offset assertions now live in `types.h`.
+Runtime code still uses raw accesses; migrate those separately in small,
+binary-comparable batches. The pool physically allocates 2600 records
+(`0x51400 / 0x80`), while gameplay limits active entities to 2500.
 
 **Known layout:**
 ```
@@ -19,30 +24,38 @@ Replace raw entity blob with a typed C struct.
 +0x04  int  prev_x
 +0x08  int  pos_y
 +0x0C  int  prev_y
-+0x10  int  accel_x
-+0x14  int  accel_y
++0x10  int  motion_x      (type-specific)
++0x14  int  motion_y      (type-specific)
 +0x18  int  vel_x
 +0x1C  int  vel_y
-+0x20  byte state
++0x20  byte state         (type-specific)
 +0x21  byte type
-+0x22  byte team
-+0x24  short short_state
-+0x26  byte guard
-+0x28  int  health
-+0x34  void* behavior_cb
-+0x38  int  gravity
-+0x3C  int  counter
++0x22  byte owner         (player/team, 0xFF when absent)
++0x24  short variant
++0x26  byte auxiliary     (cooldown/color/lifetime/guard by type)
++0x28  int  health_or_damage
++0x2C  int  scratch
++0x30  int  scratch
++0x34  uint behavior_cb   (original 32-bit virtual address, not a host pointer)
++0x38  int  gravity_or_motion
++0x3C  int  counter       (type-specific)
 +0x40  byte subtype
 +0x44  int  damage
++0x48  int  scratch
 +0x4C  int  palette
-+0x54  int  anim_frame
-+0x5C  int  invuln_timer
++0x50  int  scratch
++0x54  byte anim_frame
++0x5C  byte timer         (type-specific)
++0x60  int  scratch       (type-specific fuse/state)
++0x64  byte scratch       (type-specific cadence/state)
++0x65  byte scratch
 ```
 
-**Files to touch:** entity.cpp, stubs.cpp, effects.cpp, hud.cpp, menu.cpp
+**Files to touch:** sim.cpp, entity.cpp, entity_callbacks.cpp, effects.cpp,
+hud.cpp, menu.cpp
 
 **AC:**
-- `Entity` defined in a new header; `static_assert(sizeof(Entity) == 128)`
+- `Entity` defined in `types.h`; `static_assert(sizeof(Entity) == 128)`
 - `DAT_004892e8` becomes `Entity *g_EntityArray`
 - All `*(type *)((int)ent + offset)` replaced with `ent->field`
 - Build compiles with zero warnings; no behavior change
