@@ -135,7 +135,10 @@ the complete main gameplay entity renderer in `FUN_0040bb60`. Offset `+0x24`
 still intentionally has both byte and 16-bit views there: the byte selects a
 sprite palette, while the full word selects a pixel-dot shape. The fourth batch
 converts the enemy-proximity, owned-projectile detonation, Moving Sucker, and
-force-field entity-array scanners in `entity.cpp`.
+force-field entity-array scanners in `entity.cpp`. The fifth batch converts all
+three primary-fire projectile paths plus bomb/mine and energy-explosion entity
+construction. Constructors still write only the fields written by the recovered
+code; do not zero the whole record as a cleanup.
 
 ## Config Ownership
 
