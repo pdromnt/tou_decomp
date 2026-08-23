@@ -183,30 +183,30 @@ void FUN_0044f630(int x, int y, int velX, int velY, float scale,
  * param_3: world x, param_4: world y */
 void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol_override, int param6)
 {
-    int iVar6 = entity_idx * 0x598;
+    PlayerData *player = Player_Get(entity_idx);
 
     /* If same sound already assigned to this entity, just refresh timer */
-    if (param_2 == *(int *)(iVar6 + 0x4b0 + (int)DAT_00487810)) {
-        if (0 < *(int *)(iVar6 + 0x4a8 + (int)DAT_00487810)) {
-            *(int *)(iVar6 + 0x4a8 + (int)DAT_00487810) = 6;
+    if (param_2 == player->sound_id) {
+        if (0 < player->sound_timer) {
+            player->sound_timer = 6;
         }
     }
     else {
         /* Different sound — stop old channel and reset timer */
-        FSOUND_StopSound(*(int *)(iVar6 + 0x4ac + (int)DAT_00487810));
-        *(int *)(iVar6 + 0x4a8 + (int)DAT_00487810) = 0;
+        FSOUND_StopSound(player->sound_channel);
+        player->sound_timer = 0;
     }
 
     /* If timer is already active, don't re-trigger */
-    if (*(int *)(iVar6 + 0x4a8 + (int)DAT_00487810) != 0) return;
+    if (player->sound_timer != 0) return;
 
     /* Check sound enabled and sample exists */
     if (DAT_0048371f == '\0' || g_SoundEnabled == 0) return;
     if (*(int *)((int)g_SoundTable + param_2 * 8) == 0) return;
 
     /* Set timer and record which sound */
-    *(int *)(iVar6 + 0x4a8 + (int)DAT_00487810) = 6;
-    *(int *)(iVar6 + 0x4b0 + (int)DAT_00487810) = param_2;
+    player->sound_timer = 6;
+    player->sound_id = param_2;
 
     float minDist = 10000.0f;
     int iVar8 = 0xff;
@@ -216,9 +216,9 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
         int *pIdx = (int *)&DAT_004877f8;
         int count = DAT_00487808;
         do {
-            int *piVar1 = (int *)((int)DAT_00487810 + (*pIdx) * 0x598);
-            int iVar5 = (piVar1[1] - param_4) >> 0x12;
-            int iVar3 = (piVar1[0] - param_3) >> 0x12;
+            PlayerData *listener = Player_Get(*pIdx);
+            int iVar5 = (listener->position_y - param_4) >> 0x12;
+            int iVar3 = (listener->position_x - param_3) >> 0x12;
             float fVar2 = (float)(iVar5 * iVar5 + iVar3 * iVar3) * _DAT_004753fc;
             if (fVar2 < _DAT_004753e8) fVar2 = _DAT_004753e8;
             if (fVar2 < minDist) {
@@ -237,8 +237,8 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
 
             /* Pan from angle to nearest listener */
             int angle = FUN_004257e0(
-                *(int *)((int)DAT_00487810 + iVar8 * 0x598),
-                *(int *)((int)DAT_00487810 + iVar8 * 0x598 + 4),
+                Player_Get(iVar8)->position_x,
+                Player_Get(iVar8)->position_y,
                 param_3, param_4);
             int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
             if (minDist < (float)_DAT_004753e0_d) pan = 0x80;
@@ -255,7 +255,7 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
             FSOUND_SetPaused(chan, 0);
 
             /* Store channel handle for later management */
-            *(int *)(iVar6 + 0x4ac + (int)DAT_00487810) = chan;
+            player->sound_channel = chan;
         }
     }
 }
@@ -3354,24 +3354,25 @@ static void FUN_0044dea0_impl(int *ent, int idx)
 /* ===== FUN_0040fb70 — Positional Sound Update (0040FB70) ===== */
 static void FUN_0040fb70_impl(int idx)
 {
-    int iVar9 = idx * 0x598;
-    int iVar6 = *(int *)(iVar9 + 0x4a8 + (int)DAT_00487810);
+    PlayerData *player = Player_Get(idx);
+    int iVar6 = player->sound_timer;
 
     if (1 < iVar6) {
         int iVar8 = 0xff;
-        *(int *)(iVar9 + 0x4a8 + (int)DAT_00487810) = iVar6 - 1;
+        player->sound_timer = iVar6 - 1;
         float minDist = 10000.0f;
 
         if (0 < DAT_00487808) {
             int *pIdx = (int *)&DAT_004877f8;
             int count = DAT_00487808;
-            int iVar1 = *(int *)(iVar9 + (int)DAT_00487810);
-            int iVar2 = *(int *)(iVar9 + 4 + (int)DAT_00487810);
+            int iVar1 = player->position_x;
+            int iVar2 = player->position_y;
 
             do {
                 int iVar7 = *pIdx;
-                int iVar5 = (*(int *)((int)DAT_00487810 + iVar7 * 0x598 + 4) - iVar2) >> 0x12;
-                int iVar4 = (*(int *)((int)DAT_00487810 + iVar7 * 0x598) - iVar1) >> 0x12;
+                PlayerData *listener = Player_Get(iVar7);
+                int iVar5 = (listener->position_y - iVar2) >> 0x12;
+                int iVar4 = (listener->position_x - iVar1) >> 0x12;
                 float fVar3 = (float)(iVar5 * iVar5 + iVar4 * iVar4) * _DAT_004753fc;
                 if (fVar3 < _DAT_004753e8) fVar3 = _DAT_004753e8;
                 if (fVar3 < minDist) {
@@ -3385,24 +3386,24 @@ static void FUN_0040fb70_impl(int idx)
             if (iVar8 != 0xff) {
                 int vol = (int)(1.0f / minDist) * 2;
                 unsigned long long angle = (unsigned long long)FUN_004257e0(
-                    *(int *)((int)DAT_00487810 + iVar8 * 0x598),
-                    *(int *)((int)DAT_00487810 + iVar8 * 0x598 + 4),
+                    Player_Get(iVar8)->position_x,
+                    Player_Get(iVar8)->position_y,
                     iVar1, iVar2);
                 int pan = (*(int *)((int)DAT_00487ab0 + (int)angle * 4) >> 0xc) + 0x80;
                 if (minDist < (float)_DAT_004753e0_d) pan = 0x80;
 
                 if (vol >= 0x100) vol = 0xff;
                 if (vol >= 5) {
-                    FSOUND_SetPan(*(int *)(iVar9 + 0x4ac + (int)DAT_00487810), pan);
-                    FSOUND_SetVolume(*(int *)(iVar9 + 0x4ac + (int)DAT_00487810), vol);
+                    FSOUND_SetPan(player->sound_channel, pan);
+                    FSOUND_SetVolume(player->sound_channel, vol);
                 }
             }
         }
     }
 
-    if (*(int *)(iVar9 + 0x4a8 + (int)DAT_00487810) == 1) {
-        *(int *)(iVar9 + 0x4a8 + (int)DAT_00487810) = 0;
-        FSOUND_StopSound(*(int *)(iVar9 + 0x4ac + (int)DAT_00487810));
+    if (player->sound_timer == 1) {
+        player->sound_timer = 0;
+        FSOUND_StopSound(player->sound_channel);
     }
 }
 
@@ -4825,9 +4826,9 @@ static void FUN_0044bb70(void)
     int i;
     if (DAT_00489240 > 0) {
         for (i = 0; i < DAT_00489240; i++) {
-            int off = i * 0x598;
-            *(int *)(DAT_00487810 + off + 0x08) = *(int *)(DAT_00487810 + off);
-            *(int *)(DAT_00487810 + off + 0x0C) = *(int *)(DAT_00487810 + off + 4);
+            PlayerData *player = Player_Get(i);
+            player->previous_x = player->position_x;
+            player->previous_y = player->position_y;
         }
     }
 }
@@ -4841,11 +4842,11 @@ static void FUN_0044b990(void)
     HRESULT hr;
     int i;
 
-    /* Save previous buttons → +0xBC, clear current → +0xB8 */
+    /* Save previous buttons, then clear the current input frame. */
     for (i = 0; i < DAT_00489240; i++) {
-        int off = i * 0x598;
-        *(unsigned int *)(DAT_00487810 + off + 0xBC) = *(unsigned int *)(DAT_00487810 + off + 0xB8);
-        *(unsigned int *)(DAT_00487810 + off + 0xB8) = 0;
+        PlayerData *player = Player_Get(i);
+        player->previous_buttons = player->buttons;
+        player->buttons = 0;
     }
 
     if (lpDI_Keyboard == NULL) return;
@@ -4860,23 +4861,20 @@ static void FUN_0044b990(void)
 
     /* Map key bindings to button flags for each human player */
     for (i = 0; i < DAT_00489240; i++) {
-        int off = i * 0x598;
-        int base = (int)DAT_00487810 + off;
+        PlayerData *player = Player_Get(i);
 
-        /* Skip AI-controlled entities (+0xDD != 0) */
-        if (*(char *)(base + 0xDD) != '\0')
+        if (player->ai_level != 0)
             continue;
 
-        /* 7 key bindings at +0xAC through +0xB2 → 7 button bits */
-        unsigned char k0 = *(unsigned char *)(base + 0xAC);
-        unsigned char k1 = *(unsigned char *)(base + 0xAD);
-        unsigned char k2 = *(unsigned char *)(base + 0xAE);
-        unsigned char k3 = *(unsigned char *)(base + 0xAF);
-        unsigned char k4 = *(unsigned char *)(base + 0xB0);
-        unsigned char k5 = *(unsigned char *)(base + 0xB1);
-        unsigned char k6 = *(unsigned char *)(base + 0xB2);
+        unsigned char k0 = player->key_scan_codes[0];
+        unsigned char k1 = player->key_scan_codes[1];
+        unsigned char k2 = player->key_scan_codes[2];
+        unsigned char k3 = player->key_scan_codes[3];
+        unsigned char k4 = player->key_scan_codes[4];
+        unsigned char k5 = player->key_scan_codes[5];
+        unsigned char k6 = player->key_scan_codes[6];
 
-        unsigned int *buttons = (unsigned int *)(base + 0xB8);
+        unsigned int *buttons = &player->buttons;
         if (keyState[k0] & 0x80) *buttons |= 0x01;  /* Turn Left */
         if (keyState[k1] & 0x80) *buttons |= 0x02;  /* Turn Right */
         if (keyState[k2] & 0x80) *buttons |= 0x04;  /* Thrust */
@@ -4890,37 +4888,37 @@ static void FUN_0044b990(void)
 
 /* ===== FUN_0044bbb0 — Tick_Cooldown_Timers ===== */
 /* Decrements ~22 cooldown/timer fields per entity each tick. */
-static void FUN_0044bbb0(int base)
+static void FUN_0044bbb0(PlayerData *player)
 {
     /* int timers — decrement if nonzero */
-    if (*(int *)(base + 0x90) != 0) (*(int *)(base + 0x90))--;
-    if (*(int *)(base + 0x94) != 0) (*(int *)(base + 0x94))--;
-    if (*(int *)(base + 0xA4) != 0) (*(int *)(base + 0xA4))--;
-    if (*(int *)(base + 0xA8) != 0) (*(int *)(base + 0xA8))--;
-    if (*(int *)(base + 0xD0) > 0)  (*(int *)(base + 0xD0))--;
-    if (*(int *)(base + 0xD4) > 0)  (*(int *)(base + 0xD4))--;
-    if (*(int *)(base + 0xD8) > 0)  (*(int *)(base + 0xD8))--;
-    if (*(int *)(base + 0x30) > 0)  (*(int *)(base + 0x30))--;
+    if (player->timer_90 != 0) player->timer_90--;
+    if (player->timer_94 != 0) player->timer_94--;
+    if (player->timer_a4 != 0) player->timer_a4--;
+    if (player->timer_a8 != 0) player->timer_a8--;
+    if (player->timer_d0 > 0) player->timer_d0--;
+    if (player->boost_timer > 0) player->boost_timer--;
+    if (player->timer_d8 > 0) player->timer_d8--;
+    if (player->timer_30 > 0) player->timer_30--;
 
     /* char timers — decrement if nonzero */
-    if (*(char *)(base + 0xC4) != '\0') (*(char *)(base + 0xC4))--;
-    if (*(char *)(base + 0xA2) != '\0') (*(char *)(base + 0xA2))--;
-    if (*(char *)(base + 0xA0) != '\0') (*(char *)(base + 0xA0))--;
-    if (*(char *)(base + 0xC5) != '\0') (*(char *)(base + 0xC5))--;
-    if (*(char *)(base + 0xC8) != '\0') (*(char *)(base + 0xC8))--;
-    if (*(char *)(base + 0xC9) != '\0') (*(char *)(base + 0xC9))--;
-    if (*(char *)(base + 0xCB) != '\0') (*(char *)(base + 0xCB))--;
-    if (*(char *)(base + 0xCC) != '\0') (*(char *)(base + 0xCC))--;
-    if (*(char *)(base + 0xDC) != '\0') (*(char *)(base + 0xDC))--;
-    if (*(char *)(base + 0x47E) != '\0') (*(char *)(base + 0x47E))--;
-    if (*(char *)(base + 0x49E) != '\0') (*(char *)(base + 0x49E))--;
-    if (*(char *)(base + 0x4A2) != '\0') (*(char *)(base + 0x4A2))--;
-    if (*(char *)(base + 0x4A3) != '\0') (*(char *)(base + 0x4A3))--;
+    if (player->timer_c4 != 0) player->timer_c4--;
+    if (player->timer_a2 != 0) player->timer_a2--;
+    if (player->timer_a0 != 0) player->timer_a0--;
+    if (player->timer_c5 != 0) player->timer_c5--;
+    if (player->timer_c8 != 0) player->timer_c8--;
+    if (player->hud_banner_timer != 0) player->hud_banner_timer--;
+    if (player->timer_cb != 0) player->timer_cb--;
+    if (player->timer_cc != 0) player->timer_cc--;
+    if (player->timer_dc != 0) player->timer_dc--;
+    if (player->timer_47e != 0) player->timer_47e--;
+    if (player->timer_49e != 0) player->timer_49e--;
+    if (player->timer_4a2 != 0) player->timer_4a2--;
+    if (player->timer_4a3 != 0) player->timer_4a3--;
 
     /* Stun timer at +0xC6: random 1/128 chance of decrementing */
-    if (*(char *)(base + 0xC6) != '\0') {
+    if (player->stun_timer != 0) {
         if ((rand() & 0x7F) == 0) {
-            (*(char *)(base + 0xC6))--;
+            player->stun_timer--;
         }
     }
 }
@@ -4930,53 +4928,53 @@ static void FUN_0044bbb0(int base)
  * Turn rate comes from ship stats table, halved during speed boost.
  * Player +0xB8 (button bitmask): bit 0=left, 1=right, 2=thrust, 3=fire1,
  * 4=fire2, 5=menu/detonate, 6=brake. Heading at +0x18 in 0..0x7FF range. */
-static void FUN_0044bf20(int base, int player_idx)
+static void FUN_0044bf20(PlayerData *player, int player_idx)
 {
-    unsigned int buttons = *(unsigned int *)(base + 0xB8);
+    unsigned int buttons = player->buttons;
     unsigned char turn_rate = *(unsigned char *)((int)DAT_0048780c + player_idx * 0x40 + 0x24);
-    int boost_active = (*(int *)(base + 0xD4) > 0) ? 1 : 0;
+    int boost_active = (player->boost_timer > 0) ? 1 : 0;
 
     /* Halve turn rate during boost */
     int rate = (int)turn_rate >> boost_active;
 
     if (buttons & 0x01) {  /* Turn Left */
-        *(unsigned int *)(base + 0x18) = (*(int *)(base + 0x18) + rate) & 0x7FF;
+        player->heading = (player->heading + rate) & 0x7FF;
     }
     if (buttons & 0x02) {  /* Turn Right */
-        *(unsigned int *)(base + 0x18) = (*(int *)(base + 0x18) - rate) & 0x7FF;
+        player->heading = (player->heading - rate) & 0x7FF;
     }
 }
 
 /* ===== FUN_0044bfa0 — Thrust_Application ===== */
 /* Applies thrust acceleration in the heading direction using sin/cos LUT.
  * Spawns engine exhaust particles behind the ship at regular intervals. */
-static void FUN_0044bfa0(int *ent, int player_idx)
+static void FUN_0044bfa0(PlayerData *player, int player_idx)
 {
-    int heading = ent[6];  /* +0x18: heading angle 0-0x7FF */
+    int heading = player->heading;
     int cfg_off = player_idx * 0x40;
     unsigned char accel = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x23);
-    int boost_active = (ent[0x35] > 0) ? 1 : 0;  /* +0xD4: speed boost timer */
+    int boost_active = (player->boost_timer > 0) ? 1 : 0;
     int shift = 0xB + boost_active;  /* halve thrust during boost */
 
     int *lut = (int *)DAT_00487ab0;
 
     /* vel_x += cos(heading) * accel >> shift */
-    ent[4] += (lut[heading] * (int)accel) >> shift;
+    player->velocity_x += (lut[heading] * (int)accel) >> shift;
     /* vel_y += sin(heading) * accel >> shift */
-    ent[5] += (lut[(heading + 0x200) & 0x7FF] * (int)accel) >> shift;
+    player->velocity_y += (lut[(heading + 0x200) & 0x7FF] * (int)accel) >> shift;
 
     /* Increment fire counter, spawn exhaust when it wraps */
-    char counter = (char)ent[7] + 1;  /* +0x1C: exhaust counter */
-    *(char *)(ent + 7) = counter;
+    char counter = (char)player->exhaust_counter + 1;
+    player->exhaust_counter = (unsigned char)counter;
 
     unsigned char fire_interval = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x2E);
     if (counter == (char)fire_interval) {
-        *(char *)(ent + 7) = 0;
+        player->exhaust_counter = 0;
 
         /* Check collision bitmap: only spawn if in viewport area (bit 0x08) */
         if (DAT_00487814 != NULL) {
-            int gx = ent[0] >> 0x16;
-            int gy = ent[1] >> 0x16;
+            int gx = player->position_x >> 0x16;
+            int gy = player->position_y >> 0x16;
             if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
                 if ((((unsigned char *)DAT_00487814)[gy * DAT_004879f8 + gx] & 0x08) != 0) {
                     /* Exhaust type from config byte at +0x2D:
@@ -4997,11 +4995,11 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                             Entity *spawn = &DAT_004892e8[DAT_00489248];
 
                             /* Position: slightly behind ship at reverse+side angle */
-                            spawn->position_x = ent[0] + (lut[uVar6] + lut[uVar7] * 2) * 2;
-                            spawn->position_y = ent[1] + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
+                            spawn->position_x = player->position_x + (lut[uVar6] + lut[uVar7] * 2) * 2;
+                            spawn->position_y = player->position_y + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
                             /* Velocity: spread-based */
-                            spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + ent[4];
-                            spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                            spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + player->velocity_x;
+                            spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + player->velocity_y;
                             /* Previous position = current */
                             spawn->previous_x = spawn->position_x;
                             spawn->previous_y = spawn->position_y;
@@ -5039,10 +5037,10 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                                 uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
                                 spawn = &DAT_004892e8[DAT_00489248];
 
-                                spawn->position_x = ent[0] + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
-                                spawn->position_y = ent[1] + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
-                                spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + ent[4];
-                                spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                                spawn->position_x = player->position_x + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
+                                spawn->position_y = player->position_y + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
+                                spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + player->velocity_x;
+                                spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + player->velocity_y;
                                 spawn->previous_x = spawn->position_x;
                                 spawn->previous_y = spawn->position_y;
                                 spawn->motion_x_10 = 0;
@@ -5078,12 +5076,12 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                             int *part = (int *)((int)DAT_00481f34 + DAT_00489250 * 0x20);
 
                             /* Position: behind the ship */
-                            part[0] = ent[0] + lut[rev] * 8;
-                            part[1] = ent[1] + lut[(rev + 0x200) & 0x7FF] * 8;
+                            part[0] = player->position_x + lut[rev] * 8;
+                            part[1] = player->position_y + lut[(rev + 0x200) & 0x7FF] * 8;
 
                             /* Velocity: ship velocity + random backwards spread */
-                            part[2] = (lut[spread] * 0x14 >> 5) + ent[4];
-                            part[3] = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                            part[2] = (lut[spread] * 0x14 >> 5) + player->velocity_x;
+                            part[3] = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + player->velocity_y;
 
                             /* Sprite type depends on exhaust_type:
                              * type 1 → sprite 5 or 6, type 2 → sprite 3 or 4 */
@@ -5656,10 +5654,11 @@ void FUN_0044b0b0(void)
 
     /* Main entity loop */
     for (i = 0; i < DAT_00489240; i++) {
-        ent = (unsigned int *)(i * 0x598 + DAT_00487810);
+        PlayerData *player = Player_Get(i);
+        ent = reinterpret_cast<unsigned int *>(player);
 
         /* Tick cooldown timers */
-        FUN_0044bbb0((int)ent);
+        FUN_0044bbb0(player);
 
         /* Update positional sound */
         FUN_0040fb70_impl(i);
@@ -5669,32 +5668,34 @@ void FUN_0044b0b0(void)
          * are stale. Safety net: read difficulty from g_ConfigBlob[0x326+i]
          * (written by the Players menu "Computer" column, render_mode 0x1F).
          * Config value 0-4 → AI level 1-5 (config_val + 1). */
-        if (i >= DAT_00489244 && *(char *)((int)ent + 0xDD) == '\0') {
+        if (i >= DAT_00489244 && player->ai_level == 0) {
             unsigned char cfg_diff = g_ConfigBlob[0x326 + i];
-            *(char *)((int)ent + 0xDD) = (cfg_diff > 0) ? (char)(cfg_diff + 1) : 1;
+            player->ai_level = (cfg_diff > 0) ? (unsigned char)(cfg_diff + 1) : 1;
         }
-        if (*(char *)((int)ent + 0xDD) != '\0') {
+        if (player->ai_level != 0) {
             FUN_0044ad30((int *)ent, i);
         }
 
         /* ---- DEAD entity handling ---- */
-        if ((char)ent[9] == '\x01') {
-            if (*(char *)((int)ent + 0x47D) == '\0') {
+        if (player->state_24 == 1) {
+            if (player->scratch_47d == 0) {
                 /* Respawn freeze expired — allow spectator camera */
                 if ((char)ent[0x120] != '\0') {
                     FUN_0044bd50((int *)ent);
                 }
             } else {
                 /* Decrement respawn freeze timer */
-                (*(char *)((int)ent + 0x47D))--;
+                player->scratch_47d--;
             }
         }
         /* ---- ALIVE entity handling ---- */
         else {
             /* Accumulate distance traveled (every 8th tick) */
             if (DAT_00489288 == '\0') {
-                unsigned int abs_vx = (ent[4] < 0x80000000u) ? ent[4] : -(int)ent[4];
-                unsigned int abs_vy = (ent[5] < 0x80000000u) ? ent[5] : -(int)ent[5];
+                unsigned int raw_vx = (unsigned int)player->velocity_x;
+                unsigned int raw_vy = (unsigned int)player->velocity_y;
+                unsigned int abs_vx = (raw_vx < 0x80000000u) ? raw_vx : -(int)raw_vx;
+                unsigned int abs_vy = (raw_vy < 0x80000000u) ? raw_vy : -(int)raw_vy;
                 DAT_00486fa8[i] += (int)(abs_vy + abs_vx) >> 0x11;
             }
 
@@ -5706,17 +5707,17 @@ void FUN_0044b0b0(void)
             /* Random heading jitter during lock-on (ent[0x34] > 0) */
             if ((int)ent[0x34] > 0) {
                 int rnd = rand() & 1;
-                ent[6] = (ent[6] + rnd * 0x80 - 0x40) & 0x7FF;
+                player->heading = (player->heading + rnd * 0x80 - 0x40) & 0x7FF;
             }
 
             /* Random heading jitter during evasion (ent[0x36] > 0) */
             if ((int)ent[0x36] > 0) {
                 int rnd = rand() & 1;
-                ent[6] = (ent[6] - 0x0D + rnd * 0x1A) & 0x7FF;
+                player->heading = (player->heading - 0x0D + rnd * 0x1A) & 0x7FF;
             }
 
             /* Overheating: increment heat when firing while moving */
-            buttons = ent[0x2E];  /* +0xB8 */
+            buttons = player->buttons;
             if ((buttons & 1) && (buttons & 2)) {
                 *(char *)(ent + 0x37) = (char)ent[0x37] + 3;
             }
@@ -5727,7 +5728,7 @@ void FUN_0044b0b0(void)
                  ent[0x34] != 0) &&
                 ((buttons & 4) || ent[0x34] != 0 || *(char *)((int)ent + 0xC5) != '\0') &&
                 *(char *)((int)ent + 0xC6) == '\0') {
-                FUN_0044bfa0((int *)ent, i);
+                FUN_0044bfa0(player, i);
                 *(char *)(ent + 0x129) = 1;  /* +0x4A4: thrusting flag */
                 can_thrust = 1;
             }
@@ -5739,7 +5740,7 @@ void FUN_0044b0b0(void)
             if (*(char *)((int)ent + 0x9E) == '\0' && *(char *)((int)ent + 0xC6) == '\0') {
                 /* Heading rotation */
                 if (*(char *)((int)ent + 0x47E) == '\0') {
-                    FUN_0044bf20((int)ent, i);
+                    FUN_0044bf20(player, i);
                 }
 
                 /* Brake / reverse thrust */

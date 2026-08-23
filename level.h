@@ -104,7 +104,14 @@ extern char                  DAT_00489d7c[];     /* error string buffer (256 byt
 extern void                 *DAT_00487aa4;      /* large game state buffer */
 extern int                   DAT_00489254;      /* edge count */
 extern void                 *DAT_00489e84;      /* edge record array */
-extern PlayerData           *DAT_00487810;      /* player/ship runtime records */
+/* Keep the storage pointer byte-addressable while legacy routines are lifted.
+ * Typed access must go through Player_Get; changing this global itself to a
+ * PlayerData pointer silently scales the many surviving binary byte offsets. */
+extern unsigned char        *DAT_00487810;      /* player/ship runtime record storage */
+static inline PlayerData *Player_Get(int index)
+{
+    return reinterpret_cast<PlayerData *>(DAT_00487810 + index * sizeof(PlayerData));
+}
 extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
 /* Match-in-progress flag. Set to 1 by the "Start match" menu action
