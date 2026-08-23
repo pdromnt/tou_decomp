@@ -1241,14 +1241,14 @@ void FUN_00460660(void)
 
     /* Phase 4: Mark entities with bit 0x02 (3x3 coarse cells, collidable type only) */
     if (DAT_00489248 > 0) {
-        int eoff = 0;
         for (i = 0; i < DAT_00489248; i++) {
+            Entity *entity = &DAT_004892e8[i];
             /* Check if entity type is collidable: entity_type_table[type][subtype].byte_0x130 == 1 */
-            unsigned char etype = *(unsigned char *)((int)DAT_004892e8 + eoff + 0x21);
-            unsigned char esub = *(unsigned char *)((int)DAT_004892e8 + eoff + 0x40);
+            unsigned char etype = entity->type;
+            unsigned char esub = entity->subtype;
             if (*(char *)((int)DAT_00487abc + (unsigned int)etype * 0x218 + (unsigned int)esub + 0x130) == '\x01') {
-                int cx = (*(int *)((int)DAT_004892e8 + eoff) >> 0x16) - 1;
-                int cy = (*(int *)((int)DAT_004892e8 + eoff + 8) >> 0x16) - 1;
+                int cx = (entity->position_x >> 0x16) - 1;
+                int cy = (entity->position_y >> 0x16) - 1;
                 for (dy = 0; dy < 3; dy++) {
                     for (dx = 0; dx < 3; dx++) {
                         int gx = cx + dx;
@@ -1259,7 +1259,6 @@ void FUN_00460660(void)
                     }
                 }
             }
-            eoff += 0x80;
         }
     }
 
@@ -1445,33 +1444,32 @@ void FUN_00413720(void)
             /* Must be in viewport and underwater tile */
             if ((*(unsigned char *)((int)DAT_00487814 + (px >> 4) + (py >> 4) * DAT_004879f8) & 0x08) &&
                 *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + (py << shift) + px) * 0x20 + 4 + (int)DAT_00487928) == '\x01') {
-                int eoff = DAT_00489248 * 0x80;
-                int ebase = (int)DAT_004892e8 + eoff;
-                *(int *)(ebase) = px * FIXED_SCALE;
-                *(int *)(ebase + 8) = py * FIXED_SCALE;
-                *(int *)(ebase + 0x18) = 0;
-                *(int *)(ebase + 0x1C) = 0;
-                *(int *)(ebase + 4) = px * FIXED_SCALE;
-                *(int *)(ebase + 0x0C) = py * FIXED_SCALE;
-                *(int *)(ebase + 0x10) = 0;
-                *(int *)(ebase + 0x14) = 0;
-                *(unsigned char *)(ebase + 0x21) = 0x65;
-                *(unsigned short *)(ebase + 0x24) = 0;
-                *(unsigned char *)(ebase + 0x20) = 0;
-                *(unsigned char *)(ebase + 0x26) = 0xFF;
-                *(unsigned char *)(ebase + 0x22) = 0xFF;
-                *(int *)(ebase + 0x28) = 0;
-                *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0xD404);
-                *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xD440);
-                *(int *)(ebase + 0x48) = 0;
-                *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0xD470);
-                *(unsigned char *)(ebase + 0x54) = 0;
-                *(unsigned char *)(ebase + 0x40) = 1;
-                *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0xD378);
-                *(int *)(ebase + 0x3C) = 0;
-                *(unsigned char *)(ebase + 0x5C) = 0;
+                Entity *entity = &DAT_004892e8[DAT_00489248];
+                entity->position_x = px * FIXED_SCALE;
+                entity->position_y = py * FIXED_SCALE;
+                entity->velocity_x = 0;
+                entity->velocity_y = 0;
+                entity->previous_x = px * FIXED_SCALE;
+                entity->previous_y = py * FIXED_SCALE;
+                entity->motion_x_10 = 0;
+                entity->motion_y_14 = 0;
+                entity->type = 0x65;
+                entity->variant_24 = 0;
+                entity->state_20 = 0;
+                entity->auxiliary_26 = 0xFF;
+                entity->owner = 0xFF;
+                entity->health_or_damage_28 = 0;
+                entity->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD404);
+                entity->damage_44 = *(int *)((int)DAT_00487abc + 0xD440);
+                entity->scratch_48 = 0;
+                entity->palette_value = *(int *)((int)DAT_00487abc + 0xD470);
+                entity->animation_frame = 0;
+                entity->subtype = 1;
+                entity->callback_address = *(int *)((int)DAT_00487abc + 0xD378);
+                entity->counter_3c = 0;
+                entity->timer_5c = 0;
                 DAT_00489248++;
-                *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x58) = 100;
+                entity->health_or_damage_28 = 100;
             }
         }
     }
