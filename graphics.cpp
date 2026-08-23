@@ -539,12 +539,13 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
                     FUN_0040aaf0((int)buffer, stride, icon_x, icon_y, weapon_type, icon_state);
 
-                    /* Ammo dots around weapon icon */
+                    /* Weapon Mark selector dots around weapon icon */
                     if (DAT_00487ab0 != NULL) {
-                        int ammo_loaded = *(unsigned char *)(DAT_00487810 + poff + 0x35) + 1;
-                        int ammo_total = *(unsigned char *)((char *)DAT_00487abc +
-                                          weapon_type * 0x218 + 0x7D);
-                        FUN_0040a710((int)buffer, stride, icon_x, icon_y, ammo_loaded, ammo_total);
+                        int selected_mark = *(unsigned char *)(DAT_00487810 + poff + 0x35) + 1;
+                        int highest_mark = *(unsigned char *)((char *)DAT_00487abc +
+                                           weapon_type * 0x218 + 0x7D);
+                        FUN_0040a710((int)buffer, stride, icon_x, icon_y,
+                                     selected_mark, highest_mark);
                     }
                 }
             }

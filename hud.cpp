@@ -440,11 +440,11 @@ void FUN_0040aaf0(int param_1, int param_2, int param_3, int param_4,
     }
 }
 
-/* ===== FUN_0040a710 - Ammo dots (0040A710) ===== */
+/* ===== FUN_0040a710 - Weapon Mark dots (0040A710) ===== */
 /* Draws orbital dots around the weapon icon using sin/cos lookup table.
  * param_3, param_4 = center position.
- * param_5 = loaded ammo count (bright dots 0x6739).
- * param_6 = total capacity (remaining = dim dots 0x2108).
+ * param_5 = selected Mark + 1 (bright dots 0x6739).
+ * param_6 = highest zero-based Mark index (remaining dots are dim 0x2108).
  * Each dot is a 3x4 bordered pixel block. */
 void FUN_0040a710(int param_1, int param_2, int param_3, int param_4,
                   int param_5, int param_6)
@@ -455,7 +455,7 @@ void FUN_0040a710(int param_1, int param_2, int param_3, int param_4,
     int *sincos = (int *)DAT_00487ab0;
     int lut_pos = 0x755;  /* Starting position in sin/cos table */
 
-    /* Draw loaded ammo dots (bright) */
+    /* Draw dots through the selected Mark (bright). */
     for (int i = 0; i < param_5; i++) {
         lut_pos -= 0x80;
         if (lut_pos < 0) break;  /* Safety: don't read negative indices */
@@ -486,8 +486,8 @@ void FUN_0040a710(int param_1, int param_2, int param_3, int param_4,
         p[1] = 0;
     }
 
-    /* Draw remaining capacity dots (dim) */
-    int remaining = param_6 - param_5;
+    /* Original 0040A7C9 includes the highest Mark: max - selected + 1. */
+    int remaining = param_6 - param_5 + 1;
     for (int i = 0; i < remaining; i++) {
         lut_pos -= 0x80;
         if (lut_pos < 0) break;
