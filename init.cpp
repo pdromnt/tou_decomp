@@ -1316,7 +1316,9 @@ static int FUN_004236f0(int sprite_index, int color_param)
     /* Phase 2: Color transformation.
      * Builds 9 LUTs (3 input channels x 3 output channels) per variant,
      * then applies sqrt-of-sum-of-squares color matrix per pixel.
-     * Palette values in DAT_00483838 are X1R5G5B5; our pixels are RGB565. */
+     * This routine intentionally operates on the original X1R5G5B5 pixels.
+     * Type-9 sprites are converted to RGB565 only after all four variants have
+     * been generated, preserving the binary's channel thresholds and masks. */
 
     for (int v = 0; v < num_variants; v++) {
         /* Extract palette RGB from X1R5G5B5 */
@@ -1468,12 +1470,9 @@ static int FUN_004236f0(int sprite_index, int color_param)
         for (int p = 0; p < total_pixels; p++) {
             unsigned short px = pixels[pixel_cursor];
             if (px != 0) {
-                /* Decode RGB565 -> 8-bit LUT indices.
-                 * R: bits 15-11 (5 bit), G: bits 10-5 (6 bit), B: bits 4-0 (5 bit).
-                 * Original binary used X1R5G5B5 with all 5-bit >> N << 3.
-                 * We use RGB565 so G is 6-bit, scaled by << 2. */
-                int ri = ((px >> 11) & 0x1F) << 3;
-                int gi = ((px >> 5) & 0x3F) << 2;
+                /* Original X1R5G5B5 channel extraction. */
+                int ri = ((px >> 10) & 0x1F) << 3;
+                int gi = ((px >> 5) & 0x1F) << 3;
                 int bi = (px & 0x1F) << 3;
 
                 /* Sum-of-squares per output channel */
@@ -1493,7 +1492,7 @@ static int FUN_004236f0(int sprite_index, int color_param)
                     pixels[pixel_cursor] = 0;
                 } else {
                     pixels[pixel_cursor] = (unsigned short)(
-                        ((ro & 0xF8) << 8) | ((go & 0xFC) << 3) | (bo >> 3));
+                        ((ro >> 3) << 10) | ((go >> 3) << 5) | (bo >> 3));
                 }
             }
             pixel_cursor++;
@@ -1559,20 +1558,32 @@ int FUN_00423150(void)
             break;
         }
         case 9: {
-            /* BGR24 -> RGB565 conversion (same as case 0/1) */
+            /* The binary generates team-colored variants in X1R5G5B5. */
+            int variant_start = DAT_00481d28;
             ((int *)DAT_00489234)[sprite_index] = DAT_00481d28;
             unsigned char *src9 = (unsigned char *)DAT_00481cf8;
             for (int p = 0; p < pixel_count; p++) {
                 unsigned char b_val = src9[p * 3];
                 unsigned char g_val = src9[p * 3 + 1];
                 unsigned char r_val = src9[p * 3 + 2];
-                unsigned short pixel = ((r_val & 0xF8) << 8)
-                    | ((g_val & 0xFC) << 3) | (b_val >> 3);
+                unsigned short pixel = (unsigned short)(((r_val >> 3) << 10)
+                    | ((g_val >> 3) << 5) | (b_val >> 3));
                 ((unsigned short *)DAT_00487ab4)[DAT_00481d28] = pixel;
                 DAT_00481d28++;
             }
             /* Generate 4 color-tinted variants at +0, +100, +200, +300 */
             DAT_00481d28 = FUN_004236f0((int)sprite_index, 0xFF);
+            /* Compatibility framebuffer uses RGB565; convert only after the
+             * original variant-generation math is complete. */
+            for (int p = variant_start; p < DAT_00481d28; ++p) {
+                unsigned short xrgb1555 = ((unsigned short *)DAT_00487ab4)[p];
+                unsigned short r5 = (xrgb1555 >> 10) & 0x1f;
+                unsigned short g5 = (xrgb1555 >> 5) & 0x1f;
+                unsigned short b5 = xrgb1555 & 0x1f;
+                unsigned short g6 = (unsigned short)((g5 << 1) | (g5 >> 4));
+                ((unsigned short *)DAT_00487ab4)[p] =
+                    (unsigned short)((r5 << 11) | (g6 << 5) | b5);
+            }
             break;
         }
         case 2: case 3: case 4: {

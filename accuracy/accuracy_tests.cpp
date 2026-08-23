@@ -30,6 +30,7 @@ uint8_t sprite_widths[0x5000];
 uint8_t sprite_heights[0x5000];
 int sprite_offsets[0x5000];
 uint16_t sprite_pixels[0x10000];
+uint8_t sprite_grayscale[0x10000];
 
 void check(bool condition, const char *message)
 {
@@ -82,13 +83,20 @@ void *DAT_00489e8c = sprite_widths;
 void *DAT_00489e88 = sprite_heights;
 void *DAT_00489234 = sprite_offsets;
 void *DAT_00487ab4 = sprite_pixels;
+void *DAT_00489e94 = sprite_grayscale;
 int DAT_00483828 = 1;
 char DAT_00489288 = 1;
 unsigned char g_ConfigBlob[6408] = {0};
+int captured_explosion_param11 = -1;
+int captured_explosion_calls = 0;
 
 void FUN_004355d0(unsigned int) {}
 void FUN_004357b0(int, int, int, unsigned char, char, int, int, int, int,
-                  char, char, unsigned char) {}
+                  char, char param11, unsigned char)
+{
+    captured_explosion_param11 = param11;
+    ++captured_explosion_calls;
+}
 void FUN_0040f9b0(int, int, int, int, int) {}
 void FUN_00437cf0(int, int, int, int, int) {}
 int FUN_004257e0(int, int, int, int) { return 0; }
@@ -373,6 +381,39 @@ int main()
           emitter_pool[0x0d] >= 2 && emitter_pool[0x0d] <= 3 && emitter_pool[0x0e] == 2,
           "Normal Fireball impact emitter matches the original lifetime and sprite family");
 
+    /* Plastic Explosives Mark I stamps its grayscale explosion mask into terrain. */
+    memset(entity_pool, 0, 0x80);
+    memset(tilemap, 0, sizeof(tilemap));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    memset(framebuffer, 0, sizeof(framebuffer));
+    memset(sprite_widths, 0, sizeof(sprite_widths));
+    memset(sprite_heights, 0, sizeof(sprite_heights));
+    memset(sprite_offsets, 0, sizeof(sprite_offsets));
+    memset(sprite_pixels, 0, sizeof(sprite_pixels));
+    memset(sprite_grayscale, 0, sizeof(sprite_grayscale));
+    for (int variant = 0; variant < 3; ++variant) {
+        sprite_widths[0x194 + variant] = 1;
+        sprite_heights[0x194 + variant] = 1;
+        sprite_offsets[0x194 + variant] = variant;
+        sprite_grayscale[variant] = 0xff;
+    }
+    sprite_widths[0x2f] = 1;
+    sprite_heights[0x2f] = 1;
+    sprite_offsets[0x2f] = 10;
+    sprite_pixels[10] = 0x07e0;
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x14);
+    tou_accuracy::store_u8(entity_pool, 0x40, 0);
+    tou_accuracy::store_i32(entity_pool, 0, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 8, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 4, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    check(Accuracy_DispatchEntityCallback(0x0043a4b0u, 0),
+          "Plastic Explosives uses the shared 0x0043a4b0 callback");
+    check(tilemap[(10 << 8) + 10] == 7 && framebuffer[(10 << 8) + 10] == 0x07e0,
+          "Plastic Explosives Mark I restores its opaque terrain stamp");
+
     /* Mark II/III unit hits branch to the same impact VFX instead of returning early. */
     for (int fireball_mode = 1; fireball_mode <= 2; ++fireball_mode) {
         memset(entity_pool, 0, 0x80);
@@ -421,6 +462,31 @@ int main()
           "Shotgun/Rapidfire dispatch recognizes type 0");
     check(tou_accuracy::load_i32(entity_pool, 0x28) == 1 && DAT_00481e8f == 1,
           "Shotgun/Rapidfire keeps the assembly life-removal ordering");
+
+    /* Explosive-terrain fragments carry state 0x32/subtype 2.  The original
+     * callback passes param_11=1 so FUN_004357b0 expands their crater. */
+    memset(entity_pool, 0, 0x80);
+    memset(tilemap, 0, sizeof(tilemap));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    DAT_00483828 = 0;
+    DAT_00489248 = 1;
+    DAT_00489240 = 0;
+    DAT_00481e8f = 0;
+    captured_explosion_param11 = -1;
+    captured_explosion_calls = 0;
+    tilemap[10 * 256 + 10] = 7;
+    tou_accuracy::store_u8(entity_pool, 0x20, 0x32);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x00);
+    tou_accuracy::store_u8(entity_pool, 0x22, 0x00);
+    tou_accuracy::store_u8(entity_pool, 0x26, 0xff);
+    tou_accuracy::store_u8(entity_pool, 0x40, 0x02);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    Accuracy_DispatchEntityCallback(0x00438010u, 0);
+    check(captured_explosion_calls == 1 && captured_explosion_param11 == 1,
+          "Plastic debris restores the original randomized large-crater flag");
 
     /* Dumbfire bounces only while +0x3c is greater than one. */
     memset(entity_pool, 0, 0x80);

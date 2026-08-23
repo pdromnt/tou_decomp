@@ -1188,10 +1188,16 @@ void callback_shotgun_rapidfire_00438010(int entity_index)
     if (tile_property(current, 2) != 0u) return;
     const uint8_t subtype = tou_accuracy::load_u8(entity, 0x40);
     if (map_point_valid(x, y)) {
+        /* Original 0x004389d4-0x00438a1a passes param_11=1 only for the
+         * type-0/subtype-2 debris spawned by an explosive terrain tile.
+         * FUN_004357b0 uses it to replace level 2 with level 20..22, clearing
+         * the armed neighbourhood before the chain can multiply again. */
+        const uint8_t randomize_plastic_crater =
+            (subtype == 2u && tou_accuracy::load_u8(entity, 0x20) == 0x32u) ? 1u : 0u;
         FUN_004357b0(x, y, subtype, previous_effect_tile(entity), current == 0x0cu,
             tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8),
             tou_accuracy::load_i32(entity, 4), tou_accuracy::load_i32(entity, 0x0c),
-            0, 0, tou_accuracy::load_u8(entity, 0x22));
+            0, randomize_plastic_crater, tou_accuracy::load_u8(entity, 0x22));
     }
     uint8_t sprite = 0;
     if (subtype == 3u) sprite = static_cast<uint8_t>((accuracy_rand() & 1) + 5);
@@ -1528,6 +1534,68 @@ uint32_t rgb555_luma(uint16_t color)
            static_cast<uint8_t>(color << 3);
 }
 
+int blend_channel_256(int destination, int source, int alpha)
+{
+    const int delta = (source - destination) * alpha;
+    return destination + tou_accuracy::sar_i32(delta + (delta < 0 ? 0xff : 0), 8);
+}
+
+void paint_plastic_explosive(uint8_t *entity)
+{
+    const int variant = accuracy_rand() % 3;
+    const int mask_sprite = 0x194 + variant;
+    const int width = static_cast<uint8_t *>(DAT_00489e8c)[mask_sprite];
+    const int height = static_cast<uint8_t *>(DAT_00489e88)[mask_sprite];
+    const int start_x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0), 0x12) - width / 2;
+    const int start_y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 8), 0x12) - height / 2;
+    int mask_offset = static_cast<int *>(DAT_00489234)[mask_sprite];
+    const int texture_width = static_cast<uint8_t *>(DAT_00489e8c)[0x2f];
+    const int texture_height = static_cast<uint8_t *>(DAT_00489e88)[0x2f];
+    const int texture_offset = static_cast<int *>(DAT_00489234)[0x2f];
+    if (width <= 0 || height <= 0 || texture_width <= 0 || texture_height <= 0 ||
+        DAT_00489e94 == NULL || DAT_00487ab4 == NULL || DAT_00481f50 == NULL) return;
+
+    uint8_t *tiles = static_cast<uint8_t *>(DAT_0048782c);
+    uint16_t *framebuffer = static_cast<uint16_t *>(DAT_00481f50);
+    const uint8_t *mask = static_cast<uint8_t *>(DAT_00489e94);
+    const uint16_t *texture = static_cast<uint16_t *>(DAT_00487ab4);
+    for (int row = 0; row < height; ++row) {
+        const int y = start_y + row;
+        for (int column = 0; column < width; ++column, ++mask_offset) {
+            const int x = start_x + column;
+            if (x <= 0 || y <= 0 || x >= static_cast<int>(DAT_004879f0) ||
+                y >= static_cast<int>(DAT_004879f4)) continue;
+            const int offset = tile_offset(x, y);
+            uint8_t &tile = tiles[offset];
+            const uint8_t *properties = static_cast<uint8_t *>(DAT_00487928) + tile * 0x20u;
+            if (properties[0] != 0u || properties[4] != 0u || properties[0x0b] != 0u ||
+                tile == 7u || tile == 10u || tile == 0x10u || properties[0x18] != 0u) continue;
+
+            const int alpha = mask[mask_offset];
+            const uint16_t source = texture[texture_offset +
+                (y % texture_height) * texture_width + x % texture_width];
+            uint16_t &destination = framebuffer[offset];
+            if (alpha < 0xf0) {
+                if (alpha == 0) continue;
+                const int dr = ((destination >> 11) & 0x1f) << 3;
+                const int dg = ((destination >> 5) & 0x3f) << 2;
+                const int db = (destination & 0x1f) << 3;
+                const int sr = ((source >> 11) & 0x1f) << 3;
+                const int sg = ((source >> 5) & 0x3f) << 2;
+                const int sb = (source & 0x1f) << 3;
+                const int r = blend_channel_256(dr, sr, alpha);
+                const int g = blend_channel_256(dg, sg, alpha);
+                const int b = blend_channel_256(db, sb, alpha);
+                destination = static_cast<uint16_t>(((r & 0xf8) << 8) |
+                    ((g & 0xfc) << 3) | (b >> 3));
+            } else {
+                destination = source;
+                tile = properties[0x0e] == 0x40u ? 0x12u : 7u;
+            }
+        }
+    }
+}
+
 void paint_organic_waste_ii(uint8_t *entity)
 {
     const int sprite = accuracy_rand() % 3;
@@ -1586,7 +1654,8 @@ void callback_organic_waste_ii_0043a4b0(int entity_index)
         damage_special_tile(entity);
     }
     if (tile_property(tile_at(x, y), 2) != 0u) return;
-    if (tou_accuracy::load_u8(entity, 0x40) == 1u) paint_organic_waste_ii(entity);
+    if (tou_accuracy::load_u8(entity, 0x40) == 0u) paint_plastic_explosive(entity);
+    else paint_organic_waste_ii(entity);
     FUN_0040f9b0(0x10c, tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8));
     DAT_00481e8f = 1;
 }
