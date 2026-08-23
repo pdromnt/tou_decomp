@@ -59,6 +59,14 @@ char   DAT_00481ed8 = 0;
 /* DAT_00489e90 already defined in memory.cpp */
 
 /* ===== Utility functions ===== */
+static unsigned short framebuffer_rgb565_to_x1r5g5b5(unsigned short color)
+{
+    unsigned short red = (color >> 11) & 0x1f;
+    unsigned short green = (color >> 6) & 0x1f;
+    unsigned short blue = color & 0x1f;
+    return (unsigned short)((red << 10) | (green << 5) | blue);
+}
+
 /* ===== FUN_00410030 — Spawn Random Debris Particle from Top (00410030) ===== */
 /* Entity slot capacity is 0x9c4 (2500); every spawn path in this file uses the
  * same guard. Position uses 18-bit fixed-point: tile*FIXED_SCALE = pixels<<18. */
@@ -551,10 +559,10 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                 iVar16 = rand();
                                                 entity->health_or_damage_28 = iVar16 % 0x32 + 0x28;
                                                 entity->damage_44 = 0x7d000;
-                                                entity->palette_value =
+                                                entity->palette_value = framebuffer_rgb565_to_x1r5g5b5(
                                                     *(unsigned short *)
                                                         ((int)DAT_00481f50 +
-                                                         ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2)
+                                                         ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2))
                                                     + 30000;
                                             }
 
@@ -601,10 +609,10 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                     iVar16 = rand();
                                                     entity->health_or_damage_28 = iVar16 % 0x32 + 0x28;
                                                     entity->damage_44 = 0;
-                                                    entity->palette_value =
+                                                    entity->palette_value = framebuffer_rgb565_to_x1r5g5b5(
                                                         *(unsigned short *)
                                                             ((int)DAT_00481f50 +
-                                                             ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2)
+                                                             ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2))
                                                         + 30000;
                                                     local_4 = local_4 + 1;
                                                 } while (local_4 < local_20);
@@ -4810,8 +4818,9 @@ void FUN_00434310(void)
                                 *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 50 + 40;
                                 /* Ground-colored: sample pixel at impact point */
                                 *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                                    *(unsigned short *)((int)DAT_00481f50 +
-                                        ((ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx) * 2) + 30000;
+                                    framebuffer_rgb565_to_x1r5g5b5(
+                                        *(unsigned short *)((int)DAT_00481f50 +
+                                            ((ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx) * 2)) + 30000;
                                 *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
                             }
                             } /* end impact_angle scope */
