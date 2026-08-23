@@ -49,7 +49,8 @@ typedef struct Entity {
     uint32_t palette_value;         /* 0x4C */
     int32_t scratch_50;             /* 0x50 */
     uint8_t animation_frame;        /* 0x54 */
-    uint8_t unknown_55[7];          /* 0x55 */
+    uint8_t unknown_55[3];          /* 0x55 */
+    int32_t scratch_58;             /* 0x58: type-specific damage/force value */
     uint8_t timer_5c;               /* 0x5C */
     uint8_t unknown_5d[3];          /* 0x5D */
     int32_t scratch_60;             /* 0x60 */
@@ -71,6 +72,7 @@ static_assert(offsetof(Entity, subtype) == 0x40, "Entity::subtype offset");
 static_assert(offsetof(Entity, damage_44) == 0x44, "Entity::damage offset");
 static_assert(offsetof(Entity, palette_value) == 0x4C, "Entity::palette offset");
 static_assert(offsetof(Entity, animation_frame) == 0x54, "Entity::animation offset");
+static_assert(offsetof(Entity, scratch_58) == 0x58, "Entity::scratch_58 offset");
 static_assert(offsetof(Entity, timer_5c) == 0x5C, "Entity::timer offset");
 static_assert(offsetof(Entity, scratch_60) == 0x60, "Entity::scratch_60 offset");
 static_assert(offsetof(Entity, scratch_64) == 0x64, "Entity::scratch_64 offset");

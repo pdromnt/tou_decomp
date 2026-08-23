@@ -808,10 +808,10 @@ LAB_00436bc6:
  * (unowned / environmental). */
 void FUN_004355d0(unsigned int param_1)
 {
-    int *piVar5 = (int *)((int)DAT_004892e8 + param_1 * 0x80);
-    unsigned char bVar1 = *(unsigned char *)((int)piVar5 + 0x22); /* owner byte */
-    int iVar2 = *piVar5;       /* pos_x */
-    int iVar3 = piVar5[2];     /* pos_y */
+    Entity *entity = &DAT_004892e8[param_1];
+    unsigned char bVar1 = entity->owner;
+    int iVar2 = entity->position_x;
+    int iVar3 = entity->position_y;
 
     /* Compute team from owner byte */
     unsigned int team;
@@ -822,7 +822,7 @@ void FUN_004355d0(unsigned int param_1)
     }
 
     int iVar7;
-    if (*(char *)((int)piVar5 + 0x26) == '\0') {
+    if ((char)entity->auxiliary_26 == '\0') {
         /* Branch: byte_0x26 == 0 — check all structures regardless of team */
         iVar7 = 0;
         if (DAT_00489260 < 1) return;
@@ -877,7 +877,7 @@ void FUN_004355d0(unsigned int param_1)
     /* Apply damage and set damaged flag.
      * Projectile +0x44 (piVar5[0x11]) is the damage value; structure +0x10 is its
      * health. Structure +0x1e=1 is consumed by FUN_00458010 (shield animation). */
-    *(int *)(iVar7 + 0x10 + (int)DAT_00481f28) -= piVar5[0x11]; /* subtract damage (offset 0x44) */
+    *(int *)(iVar7 + 0x10 + (int)DAT_00481f28) -= entity->damage_44;
     *(unsigned char *)(iVar7 + 0x1e + (int)DAT_00481f28) = 1;   /* set damaged flag */
 }
 
@@ -889,297 +889,82 @@ void FUN_004355d0(unsigned int param_1)
  * DAT_00487834[i] is the per-category count; DAT_0048781c is a flat linkBase
  * holding category-indexed entity indices in 0x1000-slot windows per category.
  * Hitbox values like 0x200000 are in 18-bit fixed-point (= 8 pixels). */
+struct FireDamageCategory {
+    int count_index;
+    int link_offset;
+    int x_radius;
+    int y_above;
+    int y_below;
+    int health_threshold;
+    bool reject_state_minus_five;
+    bool threshold_by_subtype;
+};
+
+static bool apply_fire_particle_damage_category(
+    int particle_index, int damage, const FireDamageCategory &category)
+{
+    int *particle = (int *)((int)DAT_00481f34 + particle_index * 0x20);
+    unsigned char particle_owner =
+        *(unsigned char *)((int)particle + 0x14);
+    int *links = (int *)DAT_0048781c + category.link_offset;
+
+    for (int i = 0; i < DAT_00487834[category.count_index]; ++i) {
+        Entity *entity = &DAT_004892e8[links[i]];
+        signed char state = (signed char)entity->state_20;
+        if (!((entity->timer_5c == 0 || entity->owner != particle_owner) &&
+              state != -6 &&
+              (!category.reject_state_minus_five || state != -5))) {
+            continue;
+        }
+
+        if (!(particle[0] - category.x_radius < entity->position_x &&
+              entity->position_x < particle[0] + category.x_radius &&
+              particle[1] - category.y_above < entity->position_y &&
+              entity->position_y < particle[1] + category.y_below)) {
+            continue;
+        }
+
+        entity->variant_24 = 1;
+        entity->scratch_58 = damage;
+        entity->health_or_damage_28 += entity->scratch_58;
+
+        int threshold = category.health_threshold;
+        if (category.threshold_by_subtype) {
+            if (entity->subtype == 0) {
+                threshold = 12800000;
+            } else if (entity->subtype == 1) {
+                threshold = 0x70800;
+            } else {
+                return true;
+            }
+        }
+
+        if (entity->health_or_damage_28 >= threshold) {
+            entity->state_20 = 0xfa;
+        }
+        return true;
+    }
+    return false;
+}
+
 void FUN_00451e70(int param_1, int param_2)
 {
-    int *piVar3, *piVar4, *piVar5;
-    int iVar6;
-    unsigned int local_8;
+    static const FireDamageCategory categories[] = {
+        {0, 0x0000, 0x200000, 0x140000, 0x240000, 0x19000, false, false},
+        {1, 0x1000, 0x200000, 0x200000, 0x200000, 1, false, false},
+        {2, 0x2000, 0x240000, 0x140000, 0x300000, 0x2ee000, false, false},
+        {3, 0x3000, 0x240000, 0x140000, 0x2c0000, 0xfa000, false, false},
+        {4, 0x4000, 0x240000, 0x1c0000, 0x1c0000, 0x7d000, false, false},
+        {5, 0x5000, 0x2c0000, 0x2c0000, 0x2c0000, 0xfa000, false, false},
+        {6, 0x6000, 0x200000, 0x200000, 0x200000, 0, false, true},
+        {7, 0x7000, 0x280000, 0x300000, 0x300000, 0x465000, true, false},
+        {8, 0x8000, 0x240000, 0x240000, 0x240000, 0xfa000, false, false},
+    };
 
-    int pbase = (int)DAT_00481f34;
-    int ebase = (int)DAT_004892e8;
-    int *linkBase = (int *)DAT_0048781c;
-
-    /* Category 0: DAT_00487834[0], offset +0x0000, hitbox 0x200000 x (0x140000 to 0x240000), health 0x19000 */
-    local_8 = 0;
-    if (DAT_00487834[0] != 0) {
-        int *pIdx = linkBase;
-        do {
-            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
-            if ((((char)piVar3[0x17] == '\0') ||
-                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar3[8] != -6))
-            {
-                piVar4 = (int *)(param_1 * 0x20 + pbase);
-                iVar6 = *piVar4;
-                if ((iVar6 - 0x200000 < *piVar3) && (*piVar3 < iVar6 + 0x200000)) {
-                    iVar6 = piVar4[1];
-                    if ((iVar6 - 0x140000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x240000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x19000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[0]);
-    }
-
-    /* Category 1: DAT_00487834[1], offset +0x1000, hitbox 0x200000 x 0x200000, health 1 */
-    local_8 = 0;
-    if (DAT_00487834[1] != 0) {
-        int *pIdx = linkBase + 0x1000;
-        do {
-            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
-            if ((((char)piVar3[0x17] == '\0') ||
-                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar3[8] != -6))
-            {
-                piVar4 = (int *)(param_1 * 0x20 + pbase);
-                iVar6 = *piVar4;
-                if ((iVar6 - 0x200000 < *piVar3) && (*piVar3 < iVar6 + 0x200000)) {
-                    iVar6 = piVar4[1];
-                    if ((iVar6 - 0x200000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x200000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 1) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[1]);
-    }
-
-    /* Category 2: DAT_00487834[2], offset +0x2000, hitbox 0x240000 x (0x140000 to 0x300000), health 0x2ee000 */
-    local_8 = 0;
-    if (DAT_00487834[2] != 0) {
-        int *pIdx = linkBase + 0x2000;
-        do {
-            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
-            if ((((char)piVar3[0x17] == '\0') ||
-                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar3[8] != -6))
-            {
-                piVar4 = (int *)(param_1 * 0x20 + pbase);
-                iVar6 = *piVar4;
-                if ((iVar6 - 0x240000 < *piVar3) && (*piVar3 < iVar6 + 0x240000)) {
-                    iVar6 = piVar4[1];
-                    if ((iVar6 - 0x140000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x300000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x2ee000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[2]);
-    }
-
-    /* Category 3: DAT_00487834[3] (=DAT_00487840), offset +0x3000, hitbox 0x240000 x (0x140000 to 0x2c0000), health 0xfa000 */
-    local_8 = 0;
-    if (DAT_00487834[3] != 0) {
-        int *pIdx = linkBase + 0x3000;
-        do {
-            iVar6 = *pIdx;
-            piVar4 = (int *)(iVar6 * 0x80 + ebase);
-            if (((*(char *)(iVar6 * 0x80 + 0x5c + ebase) == '\0') ||
-                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar4[8] != -6))
-            {
-                piVar5 = (int *)(pbase + param_1 * 0x20);
-                int iVar2 = *piVar5;
-                if ((iVar2 - 0x240000 < *piVar4) && (*piVar4 < iVar2 + 0x240000)) {
-                    iVar2 = piVar5[1];
-                    if ((iVar2 - 0x140000 < piVar4[2]) && (piVar4[2] < iVar2 + 0x2c0000)) {
-                        iVar6 = iVar6 * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0xfa000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[3]);
-    }
-
-    /* Category 4: DAT_00487834[4], offset +0x4000, hitbox 0x240000 x 0x1c0000, health 0x7d000 */
-    local_8 = 0;
-    if (DAT_00487834[4] != 0) {
-        int *pIdx = linkBase + 0x4000;
-        do {
-            iVar6 = (*pIdx) * 0x80;
-            piVar4 = (int *)(iVar6 + ebase);
-            if (((*(char *)(iVar6 + 0x5c + ebase) == '\0') ||
-                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar4[8] != -6))
-            {
-                piVar5 = (int *)(pbase + param_1 * 0x20);
-                iVar6 = *piVar5;
-                if ((iVar6 - 0x240000 < *piVar4) && (*piVar4 < iVar6 + 0x240000)) {
-                    iVar6 = piVar5[1];
-                    if ((iVar6 - 0x1c0000 < piVar4[2]) && (piVar4[2] < iVar6 + 0x1c0000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x7d000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[4]);
-    }
-
-    /* Category 5: DAT_00487834[5], offset +0x5000, hitbox 0x2c0000 x 0x2c0000, health 0xfa000 */
-    local_8 = 0;
-    if (DAT_00487834[5] != 0) {
-        int *pIdx = linkBase + 0x5000;
-        do {
-            iVar6 = *pIdx;
-            piVar4 = (int *)(iVar6 * 0x80 + ebase);
-            if (((*(char *)(iVar6 * 0x80 + 0x5c + ebase) == '\0') ||
-                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar4[8] != -6))
-            {
-                piVar5 = (int *)(pbase + param_1 * 0x20);
-                int iVar2 = *piVar5;
-                if ((iVar2 - 0x2c0000 < *piVar4) && (*piVar4 < iVar2 + 0x2c0000)) {
-                    iVar2 = piVar5[1];
-                    if ((iVar2 - 0x2c0000 < piVar4[2]) && (piVar4[2] < iVar2 + 0x2c0000)) {
-                        iVar6 = iVar6 * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0xfa000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[5]);
-    }
-
-    /* Category 6: DAT_00487834[6] (=DAT_0048784c), offset +0x6000, hitbox 0x200000 x 0x200000, health varies by subtype */
-    local_8 = 0;
-    if (DAT_00487834[6] != 0) {
-        int *pIdx = linkBase + 0x6000;
-        do {
-            piVar4 = (int *)((*pIdx) * 0x80 + ebase);
-            if ((((char)piVar4[0x17] == '\0') ||
-                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar4[8] != -6))
-            {
-                piVar5 = (int *)(pbase + param_1 * 0x20);
-                iVar6 = *piVar5;
-                if ((iVar6 - 0x200000 < *piVar4) && (*piVar4 < iVar6 + 0x200000)) {
-                    iVar6 = piVar5[1];
-                    if ((iVar6 - 0x200000 < piVar4[2]) && (piVar4[2] < iVar6 + 0x200000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        char cVar1 = *(char *)(iVar6 + 0x40 + ebase);
-                        if (cVar1 == '\0') {
-                            if (*(int *)(iVar6 + 0x28 + ebase) < 12800000) return;
-                            *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                            return;
-                        }
-                        if (cVar1 != '\x01') return;
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x70800) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[6]);
-    }
-
-    /* Category 7: DAT_00487834[7], offset +0x7000, hitbox 0x280000 x 0x300000, health 0x465000 */
-    local_8 = 0;
-    if (DAT_00487834[7] != 0) {
-        int *pIdx = linkBase + 0x7000;
-        do {
-            piVar3 = (int *)(ebase + (*pIdx) * 0x80);
-            if ((((char)piVar3[0x17] == '\0') ||
-                (*(char *)((int)piVar3 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               (((char)piVar3[8] != -6 && ((char)piVar3[8] != -5))))
-            {
-                piVar4 = (int *)(param_1 * 0x20 + pbase);
-                iVar6 = *piVar4;
-                if ((iVar6 - 0x280000 < *piVar3) && (*piVar3 < iVar6 + 0x280000)) {
-                    iVar6 = piVar4[1];
-                    if ((iVar6 - 0x300000 < piVar3[2]) && (piVar3[2] < iVar6 + 0x300000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0x465000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-        } while (local_8 < (unsigned int)DAT_00487834[7]);
-    }
-
-    /* Category 8: DAT_00487834[8], offset +0x8000, hitbox 0x240000 x 0x240000, health 0xfa000 */
-    local_8 = 0;
-    if (DAT_00487834[8] == 0) return;
-    {
-        int *pIdx = linkBase + 0x8000;
-        do {
-            iVar6 = (*pIdx) * 0x80;
-            piVar4 = (int *)(iVar6 + ebase);
-            if (((*(char *)(iVar6 + 0x5c + ebase) == '\0') ||
-                (*(char *)((int)piVar4 + 0x22) != *(char *)(param_1 * 0x20 + 0x14 + pbase))) &&
-               ((char)piVar4[8] != -6))
-            {
-                piVar5 = (int *)(pbase + param_1 * 0x20);
-                iVar6 = *piVar5;
-                if ((iVar6 - 0x240000 < *piVar4) && (*piVar4 < iVar6 + 0x240000)) {
-                    iVar6 = piVar5[1];
-                    if ((iVar6 - 0x240000 < piVar4[2]) && (piVar4[2] < iVar6 + 0x240000)) {
-                        iVar6 = (*pIdx) * 0x80;
-                        *(unsigned short *)(iVar6 + 0x24 + ebase) = 1;
-                        *(int *)(iVar6 + 0x58 + ebase) = param_2;
-                        *(int *)(iVar6 + 0x28 + ebase) += *(int *)(iVar6 + 0x58 + ebase);
-                        if (*(int *)(iVar6 + 0x28 + ebase) < 0xfa000) return;
-                        *(unsigned char *)(iVar6 + 0x20 + ebase) = 0xfa;
-                        return;
-                    }
-                }
-            }
-            local_8++;
-            pIdx++;
-            if (DAT_00487834[8] <= (int)local_8) return;
-        } while (1);
+    for (unsigned int i = 0; i < sizeof(categories) / sizeof(categories[0]); ++i) {
+        if (apply_fire_particle_damage_category(param_1, param_2, categories[i])) {
+            return;
+        }
     }
 }
 
