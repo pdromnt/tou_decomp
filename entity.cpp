@@ -5871,32 +5871,10 @@ void FUN_0044b0b0(void)
 
         /* Tile pickup interaction */
 
-        /* Close the weapon selector only after leaving repair terrain entirely.
-         * The original checks only the ship's center tile here, relying on its
-         * collision position settling into the repair tile immediately. Our
-         * reconstructed collision can leave the center in air while the pad is
-         * directly above or below, causing early selector input to be erased on
-         * the following tick. FUN_0044f900 already accepts these same 3 tiles. */
-        if ((char)ent[0x28] == '\0') {
-            unsigned char repair_here = *(unsigned char *)(
-                (int)DAT_00487928 + 0x18 + (unsigned int)tile_val * 0x20);
-            unsigned char repair_above = 0;
-            unsigned char repair_below = 0;
-            if (ty > 0) {
-                unsigned char above_tile = *(unsigned char *)(
-                    (int)DAT_0048782c + ((ty - 1) << shift) + tx);
-                repair_above = *(unsigned char *)(
-                    (int)DAT_00487928 + 0x18 + (unsigned int)above_tile * 0x20);
-            }
-            if (ty + 1 < (int)DAT_004879f4) {
-                unsigned char below_tile = *(unsigned char *)(
-                    (int)DAT_0048782c + ((ty + 1) << shift) + tx);
-                repair_below = *(unsigned char *)(
-                    (int)DAT_00487928 + 0x18 + (unsigned int)below_tile * 0x20);
-            }
-            if (repair_here == 0 && repair_above == 0 && repair_below == 0) {
-                *(char *)((int)ent + 0x9E) = 0;
-            }
+        /* Check if tile is walkable — clear underwater flag if so */
+        if (*(char *)((int)DAT_00487928 + 0x18 + (unsigned int)tile_val * 0x20) == '\0' &&
+            (char)ent[0x28] == '\0') {
+            *(char *)((int)ent + 0x9E) = 0;
         }
 
         /* Wall collision (only if alive) */
