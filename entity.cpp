@@ -3272,43 +3272,42 @@ LAB_apply:
         unsigned int uVar6 = (unsigned int)rand() & 1;
         int iVar8 = (int)uVar6 + 0x6c;
 
-        int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-        *(int *)(base + 0x00) = ent[2];
-        *(int *)(base + 0x08) = ent[3];
-        *(int *)(base + 0x18) = (*(int *)((int)DAT_00487ab0 + uVar5 * 4) * speed >> 7) + ent[4];
-        *(int *)(base + 0x1c) = (*(int *)((int)DAT_00487ab0 + 0x800 + uVar5 * 4) * speed >> 7) + ent[5];
-        *(int *)(base + 0x04) = ent[2];
-        *(int *)(base + 0x0c) = ent[3];
-        *(int *)(base + 0x10) = 0;
-        *(int *)(base + 0x14) = 0;
-        *(char *)(base + 0x21) = (char)iVar8;
-        *(unsigned short *)(base + 0x24) = 0;
-        *(unsigned char *)(base + 0x20) = 0;
-        *(unsigned char *)(base + 0x26) = 0xff;
-        *(unsigned char *)(base + 0x22) = 0xff;
-        *(int *)(base + 0x28) = 0;
+        Entity *fragment = &DAT_004892e8[DAT_00489248];
+        fragment->position_x = ent[2];
+        fragment->position_y = ent[3];
+        fragment->velocity_x = (*(int *)((int)DAT_00487ab0 + uVar5 * 4) * speed >> 7) + ent[4];
+        fragment->velocity_y = (*(int *)((int)DAT_00487ab0 + 0x800 + uVar5 * 4) * speed >> 7) + ent[5];
+        fragment->previous_x = ent[2];
+        fragment->previous_y = ent[3];
+        fragment->motion_x_10 = 0;
+        fragment->motion_y_14 = 0;
+        fragment->type = (unsigned char)iVar8;
+        fragment->variant_24 = 0;
+        fragment->state_20 = 0;
+        fragment->auxiliary_26 = 0xff;
+        fragment->owner = 0xff;
+        fragment->health_or_damage_28 = 0;
 
         int iVar3 = iVar8 * 0x86;
-        *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (rand() % 3 + iVar3) * 4);
-        *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0xc4 + (rand() % 3 + iVar3) * 4);
-        *(int *)(base + 0x48) = 0;
-        *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0xf4 + (rand() % 3 + iVar3) * 4);
-        *(unsigned char *)(base + 0x54) = 0;
-        *(char *)(base + 0x40) = (char)(rand() % 3);
-        *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + iVar8 * 0x218);
-        *(int *)(base + 0x3c) = 0;
-        *(unsigned char *)(base + 0x5c) = 0;
+        fragment->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (rand() % 3 + iVar3) * 4);
+        fragment->damage_44 = *(int *)((int)DAT_00487abc + 0xc4 + (rand() % 3 + iVar3) * 4);
+        fragment->scratch_48 = 0;
+        fragment->palette_value = *(int *)((int)DAT_00487abc + 0xf4 + (rand() % 3 + iVar3) * 4);
+        fragment->animation_frame = 0;
+        fragment->subtype = (unsigned char)(rand() % 3);
+        fragment->callback_address = *(int *)((int)DAT_00487abc + iVar8 * 0x218);
+        fragment->counter_3c = 0;
+        fragment->timer_5c = 0;
 
         DAT_00489248++;
         int rCol = rand();
         if (rCol % 3 == 0) {
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) += 300;
+            fragment->palette_value += 300;
         } else {
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) +=
-                (unsigned int)*(unsigned char *)(ent + 0xb) * 100;
+            fragment->palette_value += (unsigned int)*(unsigned char *)(ent + 0xb) * 100;
         }
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 0x5a + 100;
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x38) =
+        fragment->health_or_damage_28 = rand() % 0x5a + 100;
+        fragment->scratch_48 =
             rand() % (int)(*(unsigned char *)((int)DAT_00487abc + 0x126 + iVar8 * 0x218) - 1);
     }
 }
