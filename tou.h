@@ -135,6 +135,7 @@ extern int                   g_MouseDeltaY;     /* 004877B8 */
 extern char                  g_InputMode;       /* 004877E4 */
 extern unsigned char         DAT_004877e6;      /* 004877E6 - input mode item index */
 extern int                   DAT_004877e8;
+extern char                  g_DirectInputMouseXSeen;
 
 /* ===== Display Mode (init.cpp) ===== */
 extern int                   g_DisplayWidth;    /* 00489238 */

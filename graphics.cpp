@@ -845,6 +845,17 @@ void Render_Frame(void)
  * Original pipeline: Lock DDraw surface → copy Software_Buffer (clean bg) →
  *   draw menu items fresh onto surface → unlock → Blt.
  * COMPAT: Scratch buffer replaces the DDraw surface. */
+static int Menu_Text_Width(const char *str, int font_idx)
+{
+    int width = 0;
+    if (!str || !Font_Char_Table)
+        return 0;
+    int font_base = (font_idx & 0xFF) * 256;
+    while (*str)
+        width += Font_Char_Table[font_base + (unsigned char)*str++].width;
+    return width;
+}
+
 void Render_Game_View_To(unsigned short *frame)
 {
     if (!frame || !g_GameViewData)
@@ -912,6 +923,11 @@ void Render_Game_View_To(unsigned short *frame)
                 int idx = item->string_idx + val;
                 if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
+                if (str && item->render_mode != 0x1E) {
+                    int text_w = Menu_Text_Width(str, item->font_idx);
+                    item->x = (item->render_mode == 0x0F || item->render_mode == 0x17)
+                        ? 100 : 540 - text_w;
+                }
                 break;
             }
 
@@ -1020,6 +1036,7 @@ void Render_Game_View_To(unsigned short *frame)
                 int idx = item->string_idx + offset;
                 if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
             }
 
@@ -1029,6 +1046,7 @@ void Render_Game_View_To(unsigned short *frame)
                 int idx = item->string_idx + val - 1;
                 if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
             }
 
@@ -1118,6 +1136,7 @@ void Render_Game_View_To(unsigned short *frame)
                     sprintf(valBuf, "%d", val);
                     str = valBuf;
                 }
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
             }
 
@@ -1132,6 +1151,7 @@ void Render_Game_View_To(unsigned short *frame)
                     sprintf(valBuf, "%d x %d", 640, 480);
                 }
                 str = valBuf;
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
             }
 
@@ -1146,6 +1166,7 @@ void Render_Game_View_To(unsigned short *frame)
                     if (g_KeyNameTable && scanCode < 256 && g_KeyNameTable[scanCode])
                         str = g_KeyNameTable[scanCode];
                 }
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
             }
 
@@ -1188,12 +1209,13 @@ void Render_Game_View_To(unsigned short *frame)
                     colorVal = (unsigned char)((char)colorVal + (char)(DAT_004877e8 >> 8));
                 }
 
-                /* Draw 25x25 rectangle using DAT_00481f4c palette (X1R5G5B5→RGB565) */
+                /* Original FUN_00428650 copies the 16-bit palette entry
+                 * verbatim.  Converting it here shifted red and green and
+                 * made the selector disagree with the actual ship color. */
                 int sx = item->x;
                 int sy = item->y;
                 if (DAT_00481f4c && sx >= 0 && sy >= 0 && sx + 25 <= 640 && sy + 25 <= 480) {
-                    unsigned short x1col = ((unsigned short *)DAT_00481f4c)[colorVal];
-                    unsigned short fillColor = ((x1col & 0x7C00) << 1) | ((x1col & 0x03E0) << 1) | (x1col & 0x001F);
+                    unsigned short fillColor = ((unsigned short *)DAT_00481f4c)[colorVal];
                     for (int row = 0; row < 25; row++) {
                         for (int col = 0; col < 25; col++) {
                             frame[(sy + row) * 640 + sx + col] = fillColor;
@@ -1406,12 +1428,12 @@ void Render_Game_View_To(unsigned short *frame)
                 unsigned char colorVal = drag_cfg ? *drag_cfg : 0;
                 colorVal = (unsigned char)((char)colorVal + (char)(DAT_004877e8 >> 8));
 
-                /* Position strip at the ITEM location (stays fixed during drag).
-                 * In the original, DAT_004877b4/b8 freeze at drag-start position. */
-                int strip_x = drag_items[drag_idx].x - 0x80;
+                /* DAT_004877B4/B8 are the frozen cursor position while the
+                 * drag accumulator changes, exactly as in FUN_00428650. */
+                int strip_x = (g_MouseDeltaX >> 18) - 0x80;
                 if (strip_x < 4) strip_x = 4;
                 if (strip_x + 0x104 > 640) strip_x = 640 - 0x104;
-                int strip_y = drag_items[drag_idx].y;
+                int strip_y = g_MouseDeltaY >> 18;
 
                 /* Draw dark border outline (259 x 17) */
                 int bx0 = strip_x - 2, by0 = strip_y + 13;
@@ -1436,9 +1458,7 @@ void Render_Game_View_To(unsigned short *frame)
                         for (int pr = 0; pr < 16; pr++) {
                             unsigned short *row_dst = frame + (py_start + pr) * 640 + strip_x;
                             for (int pc = 0; pc < 256; pc++) {
-                                /* X1R5G5B5 → RGB565: shift R and G left by 1 */
-                                unsigned short x1 = pal_strip[pc];
-                                row_dst[pc] = ((x1 & 0x7C00) << 1) | ((x1 & 0x03E0) << 1) | (x1 & 0x001F);
+                                row_dst[pc] = pal_strip[pc];
                             }
                         }
                     }
@@ -1477,24 +1497,20 @@ void Render_Game_View_To(unsigned short *frame)
                     }
                 }
             } else {
-                /* Non-color sliders: "Hold & drag" tooltip with dark background.
-                 * Original uses FUN_00425f00 to draw two bordered boxes + text.
-                 * Position near drag item (frozen at drag start). */
-                int tt_x = drag_items[drag_idx].x - 0x28;
-                int tt_y = drag_items[drag_idx].y + 30;
+                /* Compact two-line drag hint at the frozen drag-start cursor. */
+                int cursor_x = g_MouseDeltaX >> 18;
+                int cursor_y = g_MouseDeltaY >> 18;
+                const char *tip_top = "Hold &";
+                const char *tip_bottom = "drag";
+                int tip_top_w = Menu_Text_Width(tip_top, 2);
+                int tip_bottom_w = Menu_Text_Width(tip_bottom, 2);
+                int box_w = 0x61;
+                int box_h = 0x26;
+                int tt_x = cursor_x - box_w / 2;
+                int tt_y = cursor_y + 8;
                 if (tt_x < 2) tt_x = 2;
-                if (tt_x + 0x61 > 638) tt_x = 638 - 0x61;
-                if (tt_y < 2) tt_y = 2;
-                if (tt_y + 0x26 > 478) tt_y = 478 - 0x26;
-
-                /* Measure text to size the box around it */
-                int tw1 = 0, tw2 = 0, th = 14;
-                if (Font_Char_Table) {
-                    const char *s1 = "Hold &"; while (*s1) { tw1 += Font_Char_Table[2*256 + (unsigned char)*s1].width; s1++; }
-                    const char *s2 = "drag";   while (*s2) { tw2 += Font_Char_Table[2*256 + (unsigned char)*s2].width; s2++; }
-                }
-                int box_w = ((tw1 > tw2) ? tw1 : tw2) + 16;
-                int box_h = th * 2 + 20;
+                if (tt_x + box_w > 638) tt_x = 638 - box_w;
+                if (tt_y + box_h > 478) tt_y = 478 - box_h;
                 /* Dark filled background */
                 for (int fy = tt_y; fy < tt_y + box_h && fy < 480; fy++)
                     for (int fx = tt_x; fx < tt_x + box_w && fx < 640; fx++)
@@ -1512,13 +1528,12 @@ void Render_Game_View_To(unsigned short *frame)
                         frame[by * 640 + ox + ow - 1] = 0x4208;
                     }
                 }
-                /* Center text in box */
-                int tx1 = tt_x + (box_w - tw1) / 2;
-                int tx2 = tt_x + (box_w - tw2) / 2;
-                Draw_Text_To_Buffer((const char *)"Hold &",
-                    2, 0, frame + (tt_y + 4) * 640 + tx1, 640, 0, 0, 0);
-                Draw_Text_To_Buffer((const char *)"drag",
-                    2, 0, frame + (tt_y + 4 + th + 2) * 640 + tx2, 640, 0, 0, 0);
+                Draw_Text_To_Buffer(tip_top, 2, 0,
+                    frame + (tt_y + 1) * 640 + tt_x + (box_w - tip_top_w) / 2,
+                    640, 0, 100, 0);
+                Draw_Text_To_Buffer(tip_bottom, 2, 0,
+                    frame + (tt_y + 16) * 640 + tt_x + (box_w - tip_bottom_w) / 2,
+                    640, 0, 100, 0);
             }
         }
     }
@@ -1742,9 +1757,14 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
     if (color_idx >= 6 && color_idx <= 8) {
         int team_idx = color_idx - 6;
         unsigned short tc = DAT_00483838[team_idx];
-        unsigned int tc_r = (unsigned char)(((unsigned char)(tc >> 10)) << 3);
-        unsigned int tc_g = (unsigned char)(((unsigned char)(tc >> 5)) << 3);
-        unsigned int tc_b = (unsigned char)(((unsigned char)tc) << 3);
+        /* Original 0040AF2C-0040AF59 performs each shift in an 8-bit
+         * register.  The truncation discards the neighboring X1R5G5B5
+         * channels.  Integer promotion in the old reconstruction retained
+         * those bits, saturating the ramps and making the scoreboard team
+         * labels effectively black. */
+        unsigned int tc_r = ((tc >> 10) & 0x1F) << 3;
+        unsigned int tc_g = ((tc >> 5)  & 0x1F) << 3;
+        unsigned int tc_b = ( tc        & 0x1F) << 3;
 
         /* First 128 entries: fade black → team color */
         int accR = 0, accG = 0, accB = 0;

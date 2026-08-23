@@ -932,9 +932,9 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x16] = (char *)"Graphics and level design";
     g_MenuStrings[0x17] = (char *)"Documents and home pages";
     g_MenuStrings[0x18] = (char *)"Extra ideas and help";
-    g_MenuStrings[0x19] = (char *)"Tapio Raevaara";
+    g_MenuStrings[0x19] = (char *)"Teemu M\xe4kinen";
     g_MenuStrings[0x1A] = (char *)"Tapio Raevaara";
-    g_MenuStrings[0x1B] = (char *)"GG level size";
+    g_MenuStrings[0x1B] = (char *)"Teppo Kankaanp\xe4\xe4";
 
     /* Details & visuals */
     g_MenuStrings[0x1C] = (char *)"GG level size";
@@ -955,7 +955,7 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x29] = (char *)"Detail";
     g_MenuStrings[0x2A] = (char *)"Refresh rate";
     g_MenuStrings[0x2B] = (char *)"Color";
-    g_MenuStrings[0x2C] = (char *)":";
+    g_MenuStrings[0x2C] = (char *)"Wavy";
     g_MenuStrings[0x2D] = (char *)"Rapidfire";
     g_MenuStrings[0x2E] = (char *)"Snowy";
     g_MenuStrings[0x2F] = (char *)"Rainy";
@@ -990,7 +990,7 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x46] = (char *)"Yes";
     g_MenuStrings[0x47] = (char *)"No";
     g_MenuStrings[0x48] = (char *)"Next";
-    g_MenuStrings[0x49] = (char *)"Previous";
+    g_MenuStrings[0x49] = (char *)"Last";
     g_MenuStrings[0x4A] = (char *)"Page";
     g_MenuStrings[0x4B] = (char *)"Page 1";
     g_MenuStrings[0x4C] = (char *)"Page 2";
@@ -1009,7 +1009,8 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x57] = (char *)"Turn right";
     g_MenuStrings[0x58] = (char *)"Basic weapon";
     g_MenuStrings[0x59] = (char *)"Special weapon";
-    g_MenuStrings[0x5A] = (char *)"Menu button";
+    /* The menu input also remotely detonates placed explosives in-game. */
+    g_MenuStrings[0x5A] = (char *)"Menu button / detonate";
     g_MenuStrings[0x5B] = (char *)"Access gained to 9 campaign levels";
     g_MenuStrings[0x5C] = (char *)"Level amount";
     g_MenuStrings[0x5D] = (char *)"Randomize levels";
@@ -2299,10 +2300,18 @@ void FUN_00425fe0(void)
      * g_MouseButtons to become stale. Use Win32 API for both position and buttons. */
     {
         POINT pt;
+        RECT client;
         GetCursorPos(&pt);
         ScreenToClient(hWnd_Main, &pt);
-        g_MouseDeltaX = pt.x << 18;
-        g_MouseDeltaY = pt.y << 18;
+        GetClientRect(hWnd_Main, &client);
+        /* The original freezes DAT_004877B4/B8 while a slider is active and
+         * records horizontal motion in DAT_004877E8 instead.  Keeping the
+         * absolute cursor synced during a drag made the palette popup wander
+         * away from its click origin. */
+        if (g_bIsActive && g_InputMode == 0 && PtInRect(&client, pt)) {
+            g_MouseDeltaX = pt.x << 18;
+            g_MouseDeltaY = pt.y << 18;
+        }
         g_MouseButtons = 0;
         if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
         if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g_MouseButtons |= 2;
@@ -2315,7 +2324,10 @@ void FUN_00425fe0(void)
          * mouse is not reporting events. */
         static int s_lastCursorX = -1;
         if (g_InputMode == 1) {
-            if (s_lastCursorX >= 0) {
+            /* DirectInput normally supplied this delta earlier in the frame.
+             * Only use the Win32 path when no DInput X event arrived, or the
+             * same physical movement is counted twice. */
+            if (s_lastCursorX >= 0 && !g_DirectInputMouseXSeen) {
                 int dx = pt.x - s_lastCursorX;
                 DAT_004877e8 += dx * 0x80;
             }
@@ -4851,6 +4863,7 @@ void FUN_00426650(void)
         MenuItem *items = (MenuItem *)g_GameViewData;
         int cursor_x = g_MouseDeltaX >> 18;
         int cursor_y = g_MouseDeltaY >> 18;
+        int levelMetadataHovered = 0;
         for (int i = 0; i < DAT_004877a8; i++) {
             MenuItem *item = &items[i];
 
@@ -4878,6 +4891,7 @@ void FUN_00426650(void)
                 if (DAT_004877a4 == 0x11 && item->render_mode == 8 &&
                     item->extra_data != 0) {
                     Update_Level_Hover_Metadata(*(int *)(uintptr_t)item->extra_data);
+                    levelMetadataHovered = 1;
                 }
 
                 /* Propagate hover to linked item */
@@ -5109,6 +5123,13 @@ void FUN_00426650(void)
                     DAT_004877e5 = 0;
                 }
             }
+        }
+
+        /* The original hover panel is transient.  The reconstructed cache
+         * previously retained the last level forever because it only had an
+         * update path, not a no-row-hovered path. */
+        if (DAT_004877a4 == 0x11 && !levelMetadataHovered) {
+            Update_Level_Hover_Metadata(-1);
         }
 
         /* COMPAT: Fallback release handling for slider drag.
@@ -6230,6 +6251,21 @@ void Init_Game_Config(void)
 
     /* Load saved config from options.cfg (overwrites defaults above) */
     Load_Options_Config();
+
+    /* Older reconstructed saves wrote an all-zero team palette block.  These
+     * are fixed original game colors, not user-facing options; heal invalid
+     * entries before syncing the blob into runtime globals. */
+    {
+        static const unsigned short default_team_colors[4] = {
+            0x1A56, 0x2ACA, 0x6508, 0x4A52
+        };
+        unsigned short *saved_team_colors =
+            (unsigned short *)&g_ConfigBlob[0x18E0];
+        for (int i = 0; i < 4; i++) {
+            if (saved_team_colors[i] == 0)
+                saved_team_colors[i] = default_team_colors[i];
+        }
+    }
 
     /* Final overrides (applied AFTER loading saved config) */
     DAT_00483838[3] = 0x6739;  /* Gray palette (will be overwritten to gold by FUN_0042d8b0) */

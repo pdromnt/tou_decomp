@@ -20,6 +20,7 @@ int  g_MouseDeltaX = 0;              /* 004877B4 */
 int  g_MouseDeltaY = 0;              /* 004877B8 */
 char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
+char g_DirectInputMouseXSeen = 0;     /* windowed-mode fallback guard */
 DWORD        DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
 unsigned int DAT_00489eec = 0;       /* Last pressed key scan code */
 
@@ -36,6 +37,8 @@ void Input_Update(void)
     DIDEVICEOBJECTDATA didod;
     DWORD dwElements;
     HRESULT hr;
+
+    g_DirectInputMouseXSeen = 0;
 
     if (lpDI_Mouse == NULL)
         return;
@@ -63,6 +66,7 @@ void Input_Update(void)
 
         switch (didod.dwOfs) {
         case DIMOFS_X:                          /* 0x00 */
+            g_DirectInputMouseXSeen = 1;
             if (g_InputMode == 1) {
                 DAT_004877e8 += didod.dwData * 0x80;
             } else if (g_InputMode == 0) {
