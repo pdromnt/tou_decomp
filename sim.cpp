@@ -1923,9 +1923,9 @@ void FUN_00454340(void)
 }
 /* ===== FUN_00434310 — Entity_Debris_Animation (00434310) ===== */
 /* Processes all entities in DAT_004892e8 (stride 0x80, count DAT_00489248).
- * The original calls per-entity behavior callbacks via function pointers at +0x34,
- * with SEH to catch crashes. Since callbacks reference original binary addresses,
- * we handle entity behavior inline based on entity type:
+ * Recovered callbacks dispatch by their original guest address at +0x34. Types
+ * whose callbacks have not been lifted yet continue through the legacy inline
+ * fallback below:
  *   - Type 0 (+0x21=0): projectile — position integration, boundary check, expire on wall hit
  *   - Type 2 (+0x21=2): trooper debris — position integration, gravity, lifetime countdown
  *   - Type 0x6C/0x6D (+0x21): visible debris fragments — same as above
@@ -1950,27 +1950,30 @@ void FUN_00434310(void)
         unsigned char frame_ctr = *(unsigned char *)(ebase + 0x54) + 1;
         *(unsigned char *)(ebase + 0x54) = frame_ctr;
 
-        /* Check animation wrap (simplified: wrap at 8 frames) */
+        /* Original 0x00434310 uses an unsigned strict-greater comparison. */
         int type_entry = (unsigned int)*(unsigned char *)(ebase + 0x40) +
                          (unsigned int)ent_type * 0x218;
-        unsigned char max_frame = 8;
-        if (DAT_00487abc != NULL) {
-            unsigned char tbl_max = *(unsigned char *)((int)DAT_00487abc + type_entry + 0x12A);
-            if (tbl_max > 0) max_frame = tbl_max;
-        }
-        if (frame_ctr >= max_frame) {
+        unsigned char max_frame = DAT_00487abc != NULL
+            ? *(unsigned char *)((int)DAT_00487abc + type_entry + 0x12A)
+            : 0;
+        if (max_frame < frame_ctr) {
             *(unsigned char *)(ebase + 0x54) = 0;
             *(int *)(ebase + 0x48) = *(int *)(ebase + 0x48) + 1;
 
-            /* Check max cycles */
-            unsigned char max_cycles = 0xFF;
-            if (DAT_00487abc != NULL) {
-                max_cycles = *(unsigned char *)((int)DAT_00487abc + type_entry + 0x124);
-            }
-            if (max_cycles > 0 && (unsigned int)*(int *)(ebase + 0x48) >= (unsigned int)max_cycles) {
+            unsigned char max_cycles = DAT_00487abc != NULL
+                ? *(unsigned char *)((int)DAT_00487abc + type_entry + 0x124)
+                : 0;
+            if ((unsigned int)max_cycles <= (unsigned int)*(int *)(ebase + 0x48)) {
                 *(int *)(ebase + 0x48) = 0;
             }
         }
+
+        DAT_00481e8f = 0;
+        uint32_t callback_address = tou_accuracy::load_u32((void *)ebase, 0x34);
+        int accuracy_handled = Accuracy_DispatchEntityCallback(callback_address, i) ? 1 : 0;
+        if (accuracy_handled) {
+            should_remove = DAT_00481e8f == 1;
+        } else {
 
         /* Force type 0x13 turret bullets: zero gravity + zero acceleration every tick.
          * Direct aim is correct at spawn but something keeps modifying velocity. */
@@ -4812,8 +4815,8 @@ void FUN_00434310(void)
                             int sp_idx14 = (sub14 == 0) ? (0x194 + rand() % 3) : (0x42 + rand() % 3);
                             int sp_w14 = (int)*(unsigned char *)((int)DAT_00489e8c + sp_idx14);
                             int sp_h14 = (int)*(unsigned char *)((int)DAT_00489e88 + sp_idx14);
-                            int cx14 = (prev_x >> 0x12) - sp_w14 / 2;
-                            int cy14 = (prev_y >> 0x12) - sp_h14 / 2;
+                            int cx14 = (*(int *)(ebase + 0x00) >> 0x12) - sp_w14 / 2;
+                            int cy14 = (*(int *)(ebase + 0x08) >> 0x12) - sp_h14 / 2;
                             int sp_off14 = *(int *)((int)DAT_00489234 + sp_idx14 * 4);
                             unsigned char *sp_gray14 = (unsigned char *)DAT_00489e94;
                             unsigned short *fb14 = (unsigned short *)DAT_00481f50;
@@ -4869,14 +4872,28 @@ void FUN_00434310(void)
                                             else
                                                 tmap14[toff14] = 7;
                                         } else {
-                                            /* ORGANIC WASTE: spawn goo ON TOP — fill AIR tiles
-                                             * above the surface, creating new destructible terrain.
-                                             * Only paint on passable tiles (prop[+1]==1, includes air). */
-                                            if (tp[1] != 1) continue; /* skip solid tiles */
-                                            unsigned short rgb_pixel = px_rgb14[sp_pixel];
-                                            if (rgb_pixel == 0) continue;
-                                            fb14[toff14] = rgb_pixel;
-                                            tmap14[toff14] = 7; /* destructible — rammable */
+                                            /* Organic Waste mode II, original
+                                             * 0x0043b02d-0x0043b2f0. The RGB555
+                                             * sprite itself is the mask. */
+                                            if (!px_rgb14) continue;
+                                            unsigned short src_col = px_rgb14[sp_pixel];
+                                            if (src_col == 0) continue;
+                                            if (tp[0] != 1 && t_val != 0x15) continue;
+                                            if (t_val == 0x15) {
+                                                unsigned short dst_col = fb14[toff14];
+                                                unsigned int dst_luma =
+                                                    (unsigned char)((dst_col >> 10) << 3) +
+                                                    (unsigned char)((dst_col >> 5) << 3) +
+                                                    (unsigned char)(dst_col << 3);
+                                                unsigned int src_luma =
+                                                    (unsigned char)((src_col >> 10) << 3) +
+                                                    (unsigned char)((src_col >> 5) << 3) +
+                                                    (unsigned char)(src_col << 3);
+                                                if (dst_luma >= src_luma) continue;
+                                            } else {
+                                                tmap14[toff14] = 0x15;
+                                            }
+                                            fb14[toff14] = src_col;
                                         }
                                     }
                                 }
@@ -5873,14 +5890,12 @@ void FUN_00434310(void)
             *(int *)(ebase + 0x18) == 0 && *(int *)(ebase + 0x1C) == 0) {
             should_remove = 1;
         }
+        }
 
-        /* === Removal via swap-with-last === */
+        /* Original 0x00434310 updates tracking links and copies only selected
+         * fields from the last record; it does not memcpy all 0x80 bytes. */
         if (should_remove) {
-            DAT_00489248--;
-            if (i < DAT_00489248) {
-                int last = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                memcpy((void *)ebase, (void *)last, 0x80);
-            }
+            Accuracy_RemoveEntityAt(i);
             /* Don't increment i — re-check swapped-in entry */
         } else {
             i++;

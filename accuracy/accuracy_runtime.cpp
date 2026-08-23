@@ -1,0 +1,975 @@
+#include "accuracy_runtime.h"
+
+#include "accuracy_core.h"
+#include "../tou.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+namespace {
+
+const uint32_t kCallbackNucleus = 0x00432c80u;
+const uint32_t kCallbackMachineGun = 0x0043f990u;
+const uint32_t kCallbackOrganicWaste = 0x004427e0u;
+const uint32_t kCallbackOrganicWasteII = 0x0043a4b0u;
+const uint32_t kCallbackTrail = 0x00430480u;
+const int kEntityStride = 0x80;
+const int kEntityCapacity = 0x9c4;
+const int kParticleStride = 0x20;
+const int kParticleCapacity = 0x7d0;
+
+uint8_t *entity_at(int index)
+{
+    return static_cast<uint8_t *>(DAT_004892e8) + index * kEntityStride;
+}
+
+int accuracy_rand()
+{
+    return TOU_Accuracy_Rand();
+}
+
+bool map_point_valid(int x, int y)
+{
+    return x > 0 && y > 0 && x < static_cast<int>(DAT_004879f0) &&
+           y < static_cast<int>(DAT_004879f4);
+}
+
+int tile_offset(int x, int y)
+{
+    return (y << (static_cast<unsigned char>(DAT_00487a18) & 0x1f)) + x;
+}
+
+uint8_t tile_at(int x, int y)
+{
+    return static_cast<uint8_t *>(DAT_0048782c)[tile_offset(x, y)];
+}
+
+uint8_t tile_property(uint8_t tile, int property)
+{
+    return static_cast<uint8_t *>(DAT_00487928)[static_cast<unsigned int>(tile) * 0x20u + property];
+}
+
+void damage_special_tile(uint8_t *entity)
+{
+    const int x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x00), 0x12);
+    const int y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x08), 0x12);
+    const uint8_t tile = tile_at(x, y);
+    if (tile > 0xefu && DAT_00489e80 != NULL) {
+        uint8_t *record = static_cast<uint8_t *>(DAT_00489e80) +
+                          static_cast<unsigned int>(tile) * 0x20u - 0x1df4u;
+        tou_accuracy::store_i32(record, 0,
+            tou_accuracy::load_i32(record, 0) - tou_accuracy::load_i32(entity, 0x44));
+    }
+}
+
+void collision_players(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    const uint8_t type = tou_accuracy::load_u8(entity, 0x21);
+    const uint8_t subtype = tou_accuracy::load_u8(entity, 0x40);
+    const uint8_t owner = tou_accuracy::load_u8(entity, 0x22);
+    const uint8_t guard = tou_accuracy::load_u8(entity, 0x26);
+    unsigned int guard_team = owner;
+    if (type == 0x1fu && owner < static_cast<unsigned int>(DAT_00489240)) {
+        guard_team = tou_accuracy::load_u8(reinterpret_cast<void *>(DAT_00487810),
+                                           static_cast<unsigned int>(owner) * 0x598u + 0x2cu);
+    }
+    uint8_t collision_w = 2;
+    uint8_t collision_h = 2;
+    if (DAT_00487abc != NULL) {
+        const unsigned int entry = static_cast<unsigned int>(type) * 0x218u + subtype;
+        collision_w = tou_accuracy::load_u8(DAT_00487abc, entry + 0x136u);
+        collision_h = tou_accuracy::load_u8(DAT_00487abc, entry + 0x13cu);
+    }
+    const int32_t ex = tou_accuracy::load_i32(entity, 0x00);
+    const int32_t ey = tou_accuracy::load_i32(entity, 0x08);
+    const int32_t damage = tou_accuracy::load_i32(entity, 0x44);
+    for (int player = 0; player < DAT_00489240; ++player) {
+        uint8_t *p = reinterpret_cast<uint8_t *>(DAT_00487810) + player * 0x598;
+        if (tou_accuracy::load_i32(p, 0x20) <= 0) continue;
+        const unsigned int player_id = type == 0x1fu ? tou_accuracy::load_u8(p, 0x2c)
+                                                     : static_cast<unsigned int>(player);
+        if (guard != 0u && guard_team == player_id) continue;
+        int ship_size = DAT_0048780c != NULL
+            ? tou_accuracy::load_i32(DAT_0048780c, player * 0x40 + 0x38) : 0;
+        int32_t hx = ship_size + static_cast<int32_t>(collision_w) * 0x40000;
+        int32_t hy = ship_size + static_cast<int32_t>(collision_h) * 0x40000;
+        if (DAT_004892e5 != 0) { hx += 0x140000; hy += 0x140000; }
+        const int32_t px = tou_accuracy::load_i32(p, 0x00);
+        const int32_t py = tou_accuracy::load_i32(p, 0x04);
+        if (!(px - hx < ex && ex < px + hx && py - hy < ey && ey < py + hy)) continue;
+
+        bool may_damage = true;
+        if (owner < 0x50u) {
+            const uint8_t owner_team = tou_accuracy::load_u8(
+                reinterpret_cast<void *>(DAT_00487810),
+                static_cast<unsigned int>(owner) * 0x598u + 0x2cu);
+            may_damage = owner_team != tou_accuracy::load_u8(p, 0x2c) || DAT_0048373d != 0;
+        }
+        if (may_damage) tou_accuracy::store_i32(p, 0x20, tou_accuracy::load_i32(p, 0x20) - damage);
+        tou_accuracy::store_u8(p, 0xc4, 5);
+        tou_accuracy::store_u8(p, 0xa3, 1);
+        if (DAT_00487abc != NULL) {
+            const unsigned int entry = static_cast<unsigned int>(type) * 0x218u + subtype;
+            const uint8_t divisor = tou_accuracy::load_u8(DAT_00487abc, entry + 0xa6u);
+            if (divisor != 0u && divisor != 99u) {
+                tou_accuracy::store_i32(p, 0x10, tou_accuracy::load_i32(p, 0x10) +
+                    tou_accuracy::load_i32(entity, 0x18) / divisor);
+                tou_accuracy::store_i32(p, 0x14, tou_accuracy::load_i32(p, 0x14) +
+                    tou_accuracy::load_i32(entity, 0x1c) / divisor);
+            }
+        }
+        DAT_00481e8f = 4;
+        return;
+    }
+}
+
+void collision_tracked(int entity_index)
+{
+    uint8_t *projectile = entity_at(entity_index);
+    static const int32_t x_radius[9] = {
+        0x100000, 0x100000, 0x140000, 0x140000, 0x140000,
+        0x1c0000, 0x100000, 0x180000, 0x140000
+    };
+    static const int32_t y_above[9] = {
+        0x40000, 0x100000, 0x40000, 0x40000, 0xc0000,
+        0x1c0000, 0x100000, 0x200000, 0x140000
+    };
+    static const int32_t y_below[9] = {
+        0x140000, 0x100000, 0x200000, 0x1c0000, 0xc0000,
+        0x1c0000, 0x100000, 0x200000, 0x140000
+    };
+    static const int32_t threshold[9] = {
+        0x25800, 1, 0x271000, 0x7d000, 0xbb800,
+        0x138800, 0, 0x465000, 0xfa000
+    };
+    const int32_t px = tou_accuracy::load_i32(projectile, 0x00);
+    const int32_t py = tou_accuracy::load_i32(projectile, 0x08);
+    const int32_t damage = tou_accuracy::load_i32(projectile, 0x44);
+    const uint8_t owner = tou_accuracy::load_u8(projectile, 0x22);
+    const uint8_t projectile_type = tou_accuracy::load_u8(projectile, 0x21);
+    const uint8_t projectile_subtype = tou_accuracy::load_u8(projectile, 0x40);
+    for (int category = 0; category < 9; ++category) {
+        int *links = static_cast<int *>(DAT_0048781c) + category * 0x1000;
+        for (int slot = 0; slot < DAT_00487834[category]; ++slot) {
+            uint8_t *target = entity_at(links[slot]);
+            const uint8_t state = tou_accuracy::load_u8(target, 0x20);
+            if (state == 0xfau || (category == 7 && state == 0xfbu)) continue;
+            if (tou_accuracy::load_u8(target, 0x5c) != 0u &&
+                tou_accuracy::load_u8(target, 0x22) == owner) continue;
+            if (category == 5 && state == 0xdeu) continue;
+            const int32_t tx = tou_accuracy::load_i32(target, 0x00);
+            const int32_t ty = tou_accuracy::load_i32(target, 0x08);
+            if (!(tx - x_radius[category] < px && px < tx + x_radius[category] &&
+                  ty - y_above[category] < py && py < ty + y_below[category])) continue;
+            tou_accuracy::store_u16(target, 0x24, 1);
+            tou_accuracy::store_i32(target, 0x58, damage);
+            const int32_t accumulated = tou_accuracy::load_i32(target, 0x28) + damage;
+            tou_accuracy::store_i32(target, 0x28, accumulated);
+            int32_t limit = threshold[category];
+            if (category == 6) {
+                const uint8_t subtype = tou_accuracy::load_u8(target, 0x40);
+                if (subtype == 0u) limit = 2000000000;
+                else if (subtype == 1u) limit = 0x70800;
+                else limit = 0;
+            }
+            bool kill = limit != 0 && accumulated >= limit;
+            if (category == 8 && projectile_type == 0x6au && projectile_subtype == 2u) kill = false;
+            if (kill) tou_accuracy::store_u8(target, 0x20, 0xfa);
+            DAT_00481e8f = 3;
+            return;
+        }
+    }
+}
+
+void collision_troopers(int entity_index)
+{
+    if (DAT_00487884 == NULL) return;
+    uint8_t *projectile = entity_at(entity_index);
+    const uint8_t owner = tou_accuracy::load_u8(projectile, 0x22);
+    const uint8_t team = owner >= 0x50u && owner <= 0x63u ? owner - 0x50u : 0xfbu;
+    const int32_t x = tou_accuracy::load_i32(projectile, 0x00);
+    const int32_t y = tou_accuracy::load_i32(projectile, 0x08);
+    for (int i = 0; i < DAT_0048924c; ++i) {
+        uint8_t *trooper = static_cast<uint8_t *>(DAT_00487884) + i * 0x40;
+        if (tou_accuracy::load_i32(trooper, 0x20) < 0 ||
+            tou_accuracy::load_u8(trooper, 0x14) == owner) continue;
+        const int32_t tx = tou_accuracy::load_i32(trooper, 0x00);
+        const int32_t ty = tou_accuracy::load_i32(trooper, 0x08);
+        if (!(tx - 0x140000 < x && x < tx + 0x140000 &&
+              ty - 0x1c0000 < y && y < ty + 0x40000)) continue;
+        DAT_00481e8f = 3;
+        tou_accuracy::store_i32(trooper, 0x28,
+            tou_accuracy::load_i32(trooper, 0x28) - tou_accuracy::load_i32(projectile, 0x44));
+        tou_accuracy::store_i32(trooper, 0x2c, 1);
+        if (tou_accuracy::load_u8(trooper, 0x25) == 1u && team != tou_accuracy::load_u8(trooper, 0x1c) &&
+            tou_accuracy::load_i32(projectile, 0x44) > 0x7d000) {
+            tou_accuracy::store_i32(trooper, 0x30,
+                tou_accuracy::load_i32(projectile, 0x18) < 0 ? -1 : 1);
+        }
+        return;
+    }
+}
+
+bool collision_checks(int entity_index, bool tracked)
+{
+    uint8_t *entity = entity_at(entity_index);
+    const int cx = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x00), 0x16);
+    const int cy = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x08), 0x16);
+    const uint8_t bits = static_cast<uint8_t *>(DAT_00487814)[cx + cy * DAT_004879f8];
+    if ((bits & 1u) != 0u) { collision_players(entity_index); if (DAT_00481e8f == 4u) return true; }
+    if (tracked && (bits & 2u) != 0u) { collision_tracked(entity_index); if (DAT_00481e8f == 3u) return true; }
+    if ((bits & 4u) != 0u) { collision_troopers(entity_index); if (DAT_00481e8f == 3u) return true; }
+    const int tx = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x00), 0x12);
+    const int ty = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x08), 0x12);
+    if (tile_property(tile_at(tx, ty), 10) == 1u) {
+        FUN_004355d0(static_cast<unsigned int>(entity_index));
+        if (DAT_00481e8f != 0u) return true;
+    }
+    return false;
+}
+
+void collision_prepass_00437b10(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    const uint8_t owner = tou_accuracy::load_u8(entity, 0x22);
+    uint8_t team = 0xfb;
+    if (owner < 0x46u) {
+        team = tou_accuracy::load_u8(reinterpret_cast<void *>(DAT_00487810),
+                                     static_cast<unsigned int>(owner) * 0x598u + 0x2cu);
+    } else if (owner >= 0x50u && owner <= 0x63u) team = owner - 0x50u;
+    else if (owner >= 100u && owner <= 119u) team = owner - 100u;
+    else if (owner >= 0x78u && owner <= 0x8bu) team = owner - 0x78u;
+    int *links = static_cast<int *>(DAT_0048781c) + 0x6000;
+    const int32_t x = tou_accuracy::load_i32(entity, 0x00);
+    const int32_t y = tou_accuracy::load_i32(entity, 0x08);
+    for (int slot = 0; slot < DAT_00487834[6]; ++slot) {
+        uint8_t *target = entity_at(links[slot]);
+        if (tou_accuracy::load_u8(target, 0x22) == team) continue;
+        const int32_t tx = tou_accuracy::load_i32(target, 0x00);
+        const int32_t ty = tou_accuracy::load_i32(target, 0x08);
+        if (!(tx - 0x1900000 < x && x < tx + 0x1900000 &&
+              ty - 0x1900000 < y && y < ty + 0x1900000)) continue;
+        const uint32_t angle = static_cast<uint32_t>(FUN_004257e0(x, y, tx, ty)) & 0x7ffu;
+        const int32_t sx = static_cast<int32_t *>(DAT_00487ab0)[angle];
+        const int32_t sy = static_cast<int32_t *>(DAT_00487ab0)[angle + 0x200u];
+        if (tou_accuracy::load_u8(target, 0x40) != 0u) {
+            tou_accuracy::store_i32(entity, 0x18, tou_accuracy::load_i32(entity, 0x18) + (sx >> 1));
+            tou_accuracy::store_i32(entity, 0x1c, tou_accuracy::load_i32(entity, 0x1c) + (sy >> 1));
+        } else {
+            tou_accuracy::store_i32(entity, 0x18, tou_accuracy::load_i32(entity, 0x18) - sx);
+            tou_accuracy::store_i32(entity, 0x1c, tou_accuracy::load_i32(entity, 0x1c) - sy);
+        }
+    }
+}
+
+int tracking_category(uint8_t type)
+{
+    switch (type) {
+    case 0x0b: return 0;
+    case 0x17: return 1;
+    case 0x0f: return 2;
+    case 0x18: return 3;
+    case 0x1f: return 4;
+    case 0x1c: return 5;
+    case 0x0e: return 6;
+    case 0x2e: return 7;
+    case 0x27: return 8;
+    default: return -1;
+    }
+}
+
+bool is_tracked(const uint8_t *entity)
+{
+    if (DAT_00487abc == NULL) return false;
+    uint8_t type = tou_accuracy::load_u8(entity, 0x21);
+    uint8_t subtype = tou_accuracy::load_u8(entity, 0x40);
+    const uint8_t *types = static_cast<const uint8_t *>(DAT_00487abc);
+    return types[static_cast<unsigned int>(type) * 0x218u + subtype + 0x130u] == 1u;
+}
+
+void copy_entity_fields(uint8_t *destination, const uint8_t *source)
+{
+    static const uint8_t dword_offsets[] = {
+        0x00, 0x08, 0x04, 0x0c, 0x2c, 0x30, 0x10, 0x14, 0x18, 0x1c,
+        0x28, 0x34, 0x38, 0x3c, 0x44, 0x48, 0x4c, 0x50, 0x58, 0x60
+    };
+    static const uint8_t byte_offsets[] = {
+        0x21, 0x20, 0x26, 0x22, 0x40, 0x54, 0x5c, 0x64, 0x65
+    };
+
+    for (unsigned int i = 0; i < sizeof(dword_offsets); ++i) {
+        uint8_t offset = dword_offsets[i];
+        tou_accuracy::store_u32(destination, offset,
+                                tou_accuracy::load_u32(source, offset));
+    }
+    for (unsigned int i = 0; i < sizeof(byte_offsets); ++i) {
+        uint8_t offset = byte_offsets[i];
+        tou_accuracy::store_u8(destination, offset,
+                               tou_accuracy::load_u8(source, offset));
+    }
+    tou_accuracy::store_u16(destination, 0x24,
+                            tou_accuracy::load_u16(source, 0x24));
+}
+
+bool trace_enabled()
+{
+    static int initialized = 0;
+    static bool enabled = false;
+    if (!initialized) {
+        const char *value = getenv("TOU_ACCURACY_TRACE");
+        enabled = value != NULL && value[0] != '\0' && value[0] != '0';
+        initialized = 1;
+    }
+    return enabled;
+}
+
+void trace_callback(uint64_t sequence, uint32_t callback_address, int entity_index,
+                    int32_t before_x, int32_t before_y, int32_t before_life,
+                    uint8_t before_state, uint8_t before_guard,
+                    uint64_t rng_before)
+{
+    if (!trace_enabled()) return;
+    uint8_t *entity = entity_at(entity_index);
+    FILE *file = fopen("accuracy-entity-trace.csv", sequence == 0 ? "w" : "a");
+    if (file == NULL) return;
+    if (sequence == 0) {
+        fputs("sequence,callback,index,type,subtype,before_x,before_y,after_x,after_y,"
+              "before_life,after_life,before_state,after_state,before_guard,after_guard,"
+              "remove,rng_before,rng_after,entity_count,particle_count\n", file);
+    }
+    fprintf(file,
+            "%llu,%08lx,%d,%u,%u,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%u,%llu,%llu,%d,%d\n",
+            static_cast<unsigned long long>(sequence),
+            static_cast<unsigned long>(callback_address), entity_index,
+            static_cast<unsigned int>(tou_accuracy::load_u8(entity, 0x21)),
+            static_cast<unsigned int>(tou_accuracy::load_u8(entity, 0x40)),
+            static_cast<long>(before_x), static_cast<long>(before_y),
+            static_cast<long>(tou_accuracy::load_i32(entity, 0x00)),
+            static_cast<long>(tou_accuracy::load_i32(entity, 0x08)),
+            static_cast<long>(before_life),
+            static_cast<long>(tou_accuracy::load_i32(entity, 0x28)),
+            static_cast<unsigned int>(before_state),
+            static_cast<unsigned int>(tou_accuracy::load_u8(entity, 0x20)),
+            static_cast<unsigned int>(before_guard),
+            static_cast<unsigned int>(tou_accuracy::load_u8(entity, 0x5c)),
+            static_cast<unsigned int>(DAT_00481e8f),
+            static_cast<unsigned long long>(rng_before),
+            static_cast<unsigned long long>(TOU_Accuracy_RandCallCount()),
+            DAT_00489248, DAT_00489250);
+    fclose(file);
+}
+
+void callback_nucleus_00432c80(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    const uint8_t subtype = tou_accuracy::load_u8(entity, 0x40);
+
+    if (subtype == 1u) {
+        int32_t countdown = tou_accuracy::load_i32(entity, 0x28);
+        if (countdown < 1) {
+            tou_accuracy::store_u8(entity, 0x20, 0xfau);
+        } else {
+            tou_accuracy::store_i32(entity, 0x28, countdown - 1);
+        }
+    }
+
+    uint8_t guard = tou_accuracy::load_u8(entity, 0x5c);
+    if (guard != 0u) {
+        tou_accuracy::store_u8(entity, 0x5c, static_cast<uint8_t>(guard - 1u));
+    }
+
+    if (tou_accuracy::load_u8(entity, 0x20) == 0xfau) {
+        const uint32_t starting_angle = static_cast<uint32_t>(TOU_Accuracy_Rand()) & 0x7ffu;
+        int angle_offset = 0;
+        do {
+            if (DAT_00489248 >= kEntityCapacity) break;
+
+            const uint32_t angle = (starting_angle + static_cast<uint32_t>(angle_offset)) & 0x7ffu;
+            uint8_t *spawned = entity_at(DAT_00489248);
+            const int32_t x = tou_accuracy::load_i32(entity, 0x00);
+            const int32_t y = tou_accuracy::load_i32(entity, 0x08);
+            const int32_t sin_value = static_cast<int32_t *>(DAT_00487ab0)[angle];
+            const int32_t cos_value = static_cast<int32_t *>(DAT_00487ab0)[angle + 0x200u];
+
+            tou_accuracy::store_i32(spawned, 0x00, x);
+            tou_accuracy::store_i32(spawned, 0x08, y);
+            tou_accuracy::store_i32(spawned, 0x18,
+                tou_accuracy::sar_i32(tou_accuracy::shl_wrap_i32(
+                    tou_accuracy::mul_wrap_i32(sin_value, 5), 4), 6));
+            tou_accuracy::store_i32(spawned, 0x1c,
+                tou_accuracy::sar_i32(tou_accuracy::shl_wrap_i32(
+                    tou_accuracy::mul_wrap_i32(cos_value, 5), 4), 6));
+            tou_accuracy::store_i32(spawned, 0x04, x);
+            tou_accuracy::store_i32(spawned, 0x0c, y);
+            tou_accuracy::store_i32(spawned, 0x10, 0);
+            tou_accuracy::store_i32(spawned, 0x14, 0);
+            tou_accuracy::store_u8(spawned, 0x21, 0);
+            tou_accuracy::store_u16(spawned, 0x24, 0);
+            tou_accuracy::store_u8(spawned, 0x20, 0);
+            tou_accuracy::store_u8(spawned, 0x26, 0);
+            tou_accuracy::store_u8(spawned, 0x22, tou_accuracy::load_u8(entity, 0x22));
+            tou_accuracy::store_i32(spawned, 0x28, 0);
+            tou_accuracy::store_i32(spawned, 0x38,
+                                    tou_accuracy::load_i32(DAT_00487abc, 0x90));
+            tou_accuracy::store_i32(spawned, 0x44,
+                                    tou_accuracy::load_i32(DAT_00487abc, 0xcc));
+            tou_accuracy::store_i32(spawned, 0x48, 0);
+            tou_accuracy::store_i32(spawned, 0x4c,
+                                    tou_accuracy::load_i32(DAT_00487abc, 0xfc));
+            tou_accuracy::store_u8(spawned, 0x54, 0);
+            tou_accuracy::store_u8(spawned, 0x40, 2);
+            tou_accuracy::store_u32(spawned, 0x34,
+                                    tou_accuracy::load_u32(DAT_00487abc, 0x00));
+            tou_accuracy::store_i32(spawned, 0x3c, 0);
+            tou_accuracy::store_u8(spawned, 0x5c, 0);
+
+            ++DAT_00489248;
+            const unsigned int palette_index = subtype == 0u ? 8u : 15u;
+            tou_accuracy::store_u32(spawned, 0x4c,
+                static_cast<uint32_t>(static_cast<uint16_t *>(DAT_00487aa8)[palette_index]) + 30000u);
+            tou_accuracy::store_i32(spawned, 0x44, subtype == 0u ? 0x4b000 : 0x32000);
+            angle_offset += 0xaa;
+        } while (angle_offset < 0x800);
+    } else if (DAT_00481e8f != 1u) {
+        return;
+    }
+
+    if (DAT_00489250 < kParticleCapacity) {
+        const int32_t x = tou_accuracy::load_i32(entity, 0x00);
+        const int32_t y = tou_accuracy::load_i32(entity, 0x08);
+        const int32_t cell = tou_accuracy::sar_i32(x, 0x16) +
+                             tou_accuracy::sar_i32(y, 0x16) * DAT_004879f8;
+        if ((static_cast<uint8_t *>(DAT_00487814)[cell] & 8u) != 0u) {
+            uint8_t *particle = static_cast<uint8_t *>(DAT_00481f34) +
+                                DAT_00489250 * kParticleStride;
+            tou_accuracy::store_i32(particle, 0x00, x);
+            tou_accuracy::store_i32(particle, 0x04, y);
+            tou_accuracy::store_i32(particle, 0x08, 0);
+            tou_accuracy::store_i32(particle, 0x0c, 0);
+            tou_accuracy::store_u8(particle, 0x10,
+                static_cast<uint8_t>((TOU_Accuracy_Rand() & 1) + 3));
+            tou_accuracy::store_u8(particle, 0x11, 0);
+            tou_accuracy::store_u8(particle, 0x12, 0);
+            tou_accuracy::store_u8(particle, 0x13, 1);
+            tou_accuracy::store_u8(particle, 0x14, 0xff);
+            tou_accuracy::store_u8(particle, 0x15, 0);
+            ++DAT_00489250;
+        }
+    }
+    DAT_00481e8f = 1;
+}
+
+uint8_t *spawn_type67(int32_t x, int32_t y, int32_t vx, int32_t vy)
+{
+    if (DAT_00489248 >= kEntityCapacity) return NULL;
+    uint8_t *spawned = entity_at(DAT_00489248++);
+    tou_accuracy::store_i32(spawned, 0x00, x);
+    tou_accuracy::store_i32(spawned, 0x08, y);
+    tou_accuracy::store_i32(spawned, 0x18, vx);
+    tou_accuracy::store_i32(spawned, 0x1c, vy);
+    tou_accuracy::store_i32(spawned, 0x04, x);
+    tou_accuracy::store_i32(spawned, 0x0c, y);
+    tou_accuracy::store_i32(spawned, 0x10, 0);
+    tou_accuracy::store_i32(spawned, 0x14, 0);
+    tou_accuracy::store_u8(spawned, 0x21, 0x67);
+    tou_accuracy::store_u16(spawned, 0x24, 0);
+    tou_accuracy::store_u8(spawned, 0x20, 0);
+    tou_accuracy::store_u8(spawned, 0x26, 0xff);
+    tou_accuracy::store_u8(spawned, 0x22, 0xff);
+    tou_accuracy::store_i32(spawned, 0x28, 0);
+    tou_accuracy::store_i32(spawned, 0x38, tou_accuracy::load_i32(DAT_00487abc, 0xd830));
+    tou_accuracy::store_i32(spawned, 0x44, tou_accuracy::load_i32(DAT_00487abc, 0xd86c));
+    tou_accuracy::store_i32(spawned, 0x48, 0);
+    tou_accuracy::store_i32(spawned, 0x4c, tou_accuracy::load_i32(DAT_00487abc, 0xd89c));
+    tou_accuracy::store_u8(spawned, 0x54, 0);
+    tou_accuracy::store_u8(spawned, 0x40, 0);
+    tou_accuracy::store_i32(spawned, 0x34, tou_accuracy::load_i32(DAT_00487abc, 0xd7a8));
+    tou_accuracy::store_i32(spawned, 0x3c, 0);
+    tou_accuracy::store_u8(spawned, 0x5c, 0);
+    return spawned;
+}
+
+void spawn_machinegun_trace(uint8_t *projectile, int heading)
+{
+    const int32_t x = tou_accuracy::load_i32(projectile, 0x00);
+    const int32_t y = tou_accuracy::load_i32(projectile, 0x08);
+    const int32_t pvx = tou_accuracy::load_i32(projectile, 0x18);
+    const int32_t pvy = tou_accuracy::load_i32(projectile, 0x1c);
+    /* 0x00440176-0x00440193: x87 computes 20.0 / effect-density,
+     * truncates through 0x00464488, then clamps the RNG divisor to one. */
+    int divisor = static_cast<int>(tou_accuracy::x87_ftol(
+        20.0L / static_cast<long double>(DAT_0048385c)));
+    if (divisor < 1) divisor = 1;
+    if (accuracy_rand() % divisor != 0) return;
+    int count = accuracy_rand() % 3 + 1;
+    while (count-- > 0 && DAT_00489248 < kEntityCapacity) {
+        uint32_t angle = static_cast<uint32_t>(accuracy_rand()) & 0x7ffu;
+        const int speed = accuracy_rand() % 10;
+        int32_t vx = (static_cast<int32_t *>(DAT_00487ab0)[angle] * speed >> 7) + (pvx >> 2);
+        int32_t vy = (static_cast<int32_t *>(DAT_00487ab0)[angle + 0x200u] * speed >> 7) + (pvy >> 2);
+        uint8_t *trail = spawn_type67(x, y, vx, vy);
+        if (trail == NULL) break;
+        tou_accuracy::store_u8(trail, 0x5c, 1);
+        const uint8_t palette_index = static_cast<uint8_t>(accuracy_rand() % 12 + 0x14);
+        tou_accuracy::store_u8(trail, 0x65, palette_index);
+        tou_accuracy::store_u8(trail, 0x64, 0x12);
+        tou_accuracy::store_u32(trail, 0x4c,
+            static_cast<uint32_t>(static_cast<uint16_t *>(DAT_00487aa8)[palette_index]) + 30000u);
+    }
+    (void)heading;
+}
+
+void machinegun_impact(uint8_t *entity)
+{
+    uint8_t previous_tile = tile_at(
+        tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x04), 0x12),
+        tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x0c), 0x12));
+    if (tile_property(previous_tile, 4) == 0u) previous_tile = 0;
+    const int tx = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x00), 0x12);
+    const int ty = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x08), 0x12);
+    if (map_point_valid(tx, ty)) {
+        FUN_004357b0(tx, ty, 2, previous_tile, tile_at(tx, ty) == 0x0f,
+            tou_accuracy::load_i32(entity, 0x00), tou_accuracy::load_i32(entity, 0x08),
+            tou_accuracy::load_i32(entity, 0x04), tou_accuracy::load_i32(entity, 0x0c),
+            1, 0, tou_accuracy::load_u8(entity, 0x22));
+    }
+    DAT_00481e8f = 1;
+}
+
+void callback_machinegun_0043f990(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    const uint32_t heading = tou_accuracy::load_u32(entity, 0x2c) & 0x7ffu;
+    tou_accuracy::store_i32(entity, 0x18,
+        tou_accuracy::shl_wrap_i32(static_cast<int32_t *>(DAT_00487ab0)[heading], 1));
+    tou_accuracy::store_i32(entity, 0x1c,
+        tou_accuracy::shl_wrap_i32(static_cast<int32_t *>(DAT_00487ab0)[heading + 0x200u], 1));
+
+    for (;;) {
+        const int32_t old_x = tou_accuracy::load_i32(entity, 0x00);
+        const int32_t old_y = tou_accuracy::load_i32(entity, 0x08);
+        tou_accuracy::store_i32(entity, 0x04, old_x);
+        tou_accuracy::store_i32(entity, 0x0c, old_y);
+        const int32_t x = tou_accuracy::add_wrap_i32(old_x, tou_accuracy::load_i32(entity, 0x18));
+        const int32_t y = tou_accuracy::add_wrap_i32(old_y, tou_accuracy::load_i32(entity, 0x1c));
+        tou_accuracy::store_i32(entity, 0x00, x);
+        tou_accuracy::store_i32(entity, 0x08, y);
+        if (x < 0 || y < 0 || tou_accuracy::sar_i32(x, 0x12) >= static_cast<int>(DAT_004879f0) ||
+            tou_accuracy::sar_i32(y, 0x12) >= static_cast<int>(DAT_004879f4)) {
+            if (x < 0) tou_accuracy::store_i32(entity, 0x00, 0);
+            else if (tou_accuracy::sar_i32(x, 0x12) >= static_cast<int>(DAT_004879f0))
+                tou_accuracy::store_i32(entity, 0x00, static_cast<int32_t>(DAT_004879f0) << 0x12);
+            if (y < 0) tou_accuracy::store_i32(entity, 0x08, 0);
+            else if (tou_accuracy::sar_i32(y, 0x12) >= static_cast<int>(DAT_004879f4))
+                tou_accuracy::store_i32(entity, 0x08, static_cast<int32_t>(DAT_004879f4) << 0x12);
+            machinegun_impact(entity);
+            return;
+        }
+        if (collision_checks(entity_index, true)) { machinegun_impact(entity); return; }
+        damage_special_tile(entity);
+        const int tx = tou_accuracy::sar_i32(x, 0x12);
+        const int ty = tou_accuracy::sar_i32(y, 0x12);
+        if (tile_property(tile_at(tx, ty), 2) == 0u) { machinegun_impact(entity); return; }
+        const int cx = tou_accuracy::sar_i32(x, 0x16);
+        const int cy = tou_accuracy::sar_i32(y, 0x16);
+        if ((static_cast<uint8_t *>(DAT_00487814)[cx + cy * DAT_004879f8] & 8u) != 0u)
+            spawn_machinegun_trace(entity, static_cast<int>(heading));
+    }
+}
+
+uint32_t rgb555_luma(uint16_t color)
+{
+    return static_cast<uint8_t>((color >> 10) << 3) +
+           static_cast<uint8_t>((color >> 5) << 3) +
+           static_cast<uint8_t>(color << 3);
+}
+
+void paint_organic_waste_ii(uint8_t *entity)
+{
+    const int sprite = accuracy_rand() % 3;
+    const unsigned int frame = 0x42u + static_cast<unsigned int>(sprite);
+    const int width = static_cast<uint8_t *>(DAT_00489e8c)[frame];
+    const int height = static_cast<uint8_t *>(DAT_00489e88)[frame];
+    const int start_x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x00), 0x12) - width / 2;
+    const int start_y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x08), 0x12) - height / 2;
+    const int pixel_offset = static_cast<int *>(DAT_00489234)[0x42];
+    const uint16_t *source = static_cast<uint16_t *>(DAT_00487ab4) + pixel_offset + sprite * 0;
+    /* Each frame has its own offset at table bytes 0x108..0x110. */
+    source = static_cast<uint16_t *>(DAT_00487ab4) +
+             *reinterpret_cast<int *>(static_cast<uint8_t *>(DAT_00489234) + 0x108 + sprite * 4);
+    for (int row = 0; row < height; ++row) {
+        for (int column = 0; column < width; ++column) {
+            const int x = start_x + column;
+            const int y = start_y + row;
+            const uint16_t color = source[row * width + column];
+            if (!map_point_valid(x, y) || color == 0u) continue;
+            const int offset = tile_offset(x, y);
+            uint8_t &tile = static_cast<uint8_t *>(DAT_0048782c)[offset];
+            if (tile_property(tile, 0) != 1u && tile != 0x15u) continue;
+            uint16_t &destination = static_cast<uint16_t *>(DAT_00481f50)[offset];
+            if (tile != 0x15u) { tile = 0x15u; destination = color; }
+            else if (rgb555_luma(destination) < rgb555_luma(color)) destination = color;
+        }
+    }
+}
+
+void callback_organic_waste_ii_0043a4b0(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    int32_t life = tou_accuracy::load_i32(entity, 0x28);
+    if (life != 0) {
+        --life;
+        tou_accuracy::store_i32(entity, 0x28, life);
+        if (life == 1) { DAT_00481e8f = 1; FUN_0040f9b0(0x10c, tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8)); return; }
+    }
+    if (tou_accuracy::load_u8(entity, 0x20) == 0xffu) {
+        DAT_00481e8f = 1; FUN_0040f9b0(0x10c, tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8)); return;
+    }
+    tou_accuracy::store_i32(entity, 0x1c,
+        tou_accuracy::load_i32(entity, 0x1c) + tou_accuracy::load_i32(entity, 0x38) * DAT_00483828);
+    tou_accuracy::store_i32(entity, 0x00,
+        tou_accuracy::load_i32(entity, 0x00) + tou_accuracy::load_i32(entity, 0x18));
+    tou_accuracy::store_i32(entity, 0x08,
+        tou_accuracy::load_i32(entity, 0x08) + tou_accuracy::load_i32(entity, 0x1c));
+    const int x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0), 0x12);
+    const int y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 8), 0x12);
+    if (!map_point_valid(x, y)) { DAT_00481e8f = 1; FUN_0040f9b0(0x10c, tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8)); return; }
+    if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+    uint8_t cooldown = tou_accuracy::load_u8(entity, 0x26);
+    if (cooldown != 0xffu) {
+        if (cooldown != 0u && cooldown < 0xfeu) tou_accuracy::store_u8(entity, 0x26, cooldown - 1u);
+        if (collision_checks(entity_index, true)) { DAT_00481e8f = 1; FUN_0040f9b0(0x10c, tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8)); return; }
+        damage_special_tile(entity);
+    }
+    if (tile_property(tile_at(x, y), 2) != 0u) return;
+    if (tou_accuracy::load_u8(entity, 0x40) == 1u) paint_organic_waste_ii(entity);
+    FUN_0040f9b0(0x10c, tou_accuracy::load_i32(entity, 0), tou_accuracy::load_i32(entity, 8));
+    DAT_00481e8f = 1;
+}
+
+void smooth_organic_patch(int center_offset)
+{
+    uint16_t *pixels = static_cast<uint16_t *>(DAT_00481f50);
+    uint8_t *tiles = static_cast<uint8_t *>(DAT_0048782c);
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            const int offset = center_offset + row * DAT_00487a00 + column;
+            const uint8_t *properties = static_cast<uint8_t *>(DAT_00487928) + tiles[offset] * 0x20u;
+            if (properties[0x0b] != 0u || properties[4] != 0u || properties[0] != 0u) continue;
+            const uint16_t center = pixels[offset];
+            uint16_t left = pixels[offset - 1]; if (left == 0u) left = center;
+            uint16_t right = pixels[offset + 1]; if (right == 0u) right = center;
+            uint16_t above = pixels[offset - DAT_00487a00]; if (above == 0u) above = center;
+            uint16_t below = pixels[offset + DAT_00487a00]; if (below == 0u) below = center;
+            const unsigned int r = (((left >> 10) & 0x1f) + ((right >> 10) & 0x1f) +
+                                    ((above >> 10) & 0x1f) + ((below >> 10) & 0x1f) +
+                                    ((center >> 10) & 0x1f) * 4u) >> 3;
+            const unsigned int g = (((left >> 5) & 0x1f) + ((right >> 5) & 0x1f) +
+                                    ((above >> 5) & 0x1f) + ((below >> 5) & 0x1f) +
+                                    ((center >> 5) & 0x1f) * 4u) >> 3;
+            const unsigned int b = ((left & 0x1f) + (right & 0x1f) + (above & 0x1f) +
+                                    (below & 0x1f) + (center & 0x1f) * 4u) >> 3;
+            pixels[offset] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
+        }
+    }
+}
+
+void organic_tail(uint8_t *entity)
+{
+    uint8_t guard = tou_accuracy::load_u8(entity, 0x5c);
+    if (guard == 0u) { DAT_00481e8f = 1; return; }
+    tou_accuracy::store_u16(entity, 0x24, static_cast<uint16_t>(accuracy_rand() % 6));
+    const unsigned int palette_index = 0xa0u + static_cast<unsigned int>(accuracy_rand() % 16);
+    tou_accuracy::store_u32(entity, 0x4c,
+        static_cast<uint32_t>(static_cast<uint16_t *>(DAT_00487aa8)[palette_index]) + 30000u);
+    tou_accuracy::store_u8(entity, 0x5c, guard - 1u);
+}
+
+void callback_organic_waste_004427e0(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    int32_t life = tou_accuracy::load_i32(entity, 0x28);
+    if (life > 0) {
+        --life;
+        tou_accuracy::store_i32(entity, 0x28, life);
+        if (life == 1) { tou_accuracy::store_u8(entity, 0x5c, 0); organic_tail(entity); return; }
+    }
+    if (static_cast<int8_t>(tou_accuracy::load_u8(entity, 0x20)) == -1) {
+        organic_tail(entity); return;
+    }
+
+    tou_accuracy::store_i32(entity, 0x1c,
+        tou_accuracy::load_i32(entity, 0x1c) + tou_accuracy::load_i32(entity, 0x38) * DAT_00483828);
+    tou_accuracy::store_i32(entity, 0x00,
+        tou_accuracy::load_i32(entity, 0x00) + tou_accuracy::load_i32(entity, 0x18));
+    tou_accuracy::store_i32(entity, 0x08,
+        tou_accuracy::load_i32(entity, 0x08) + tou_accuracy::load_i32(entity, 0x1c));
+    int x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0), 0x12);
+    int y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 8), 0x12);
+    if (!map_point_valid(x, y)) {
+        if (x <= 0) { tou_accuracy::store_i32(entity, 0, 0); tou_accuracy::store_i32(entity, 4, 0); }
+        else if (x >= static_cast<int>(DAT_004879f0)) {
+            const int32_t edge = static_cast<int32_t>(DAT_004879f0) << 0x12;
+            tou_accuracy::store_i32(entity, 0, edge); tou_accuracy::store_i32(entity, 4, edge);
+        }
+        if (y <= 0) { tou_accuracy::store_i32(entity, 8, 0); tou_accuracy::store_i32(entity, 0x0c, 0); }
+        else if (y >= static_cast<int>(DAT_004879f4)) {
+            const int32_t edge = static_cast<int32_t>(DAT_004879f4) << 0x12;
+            tou_accuracy::store_i32(entity, 8, edge); tou_accuracy::store_i32(entity, 0x0c, edge);
+        }
+        organic_tail(entity); return;
+    }
+    if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+
+    uint8_t cooldown = tou_accuracy::load_u8(entity, 0x26);
+    if (cooldown != 0xffu) {
+        if (cooldown != 0u && cooldown < 0xfeu) tou_accuracy::store_u8(entity, 0x26, cooldown - 1u);
+        if (collision_checks(entity_index, false)) {
+            tou_accuracy::store_u8(entity, 0x5c, 0); organic_tail(entity); return;
+        }
+        damage_special_tile(entity);
+    }
+
+    x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0), 0x12);
+    y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 8), 0x12);
+    uint8_t current_tile = tile_at(x, y);
+    if (current_tile >= 0xf0u) { tou_accuracy::store_u8(entity, 0x5c, 0); organic_tail(entity); return; }
+    if (tile_property(current_tile, 2) != 0u) return;
+
+    const int32_t vx = tou_accuracy::load_i32(entity, 0x18);
+    const int32_t vy = tou_accuracy::load_i32(entity, 0x1c);
+    const int32_t speed_x = tou_accuracy::sar_i32(vx, 9);
+    const int32_t speed_y = tou_accuracy::sar_i32(vy, 9);
+    const int32_t speed_squared = speed_x * speed_x + speed_y * speed_y;
+    if (speed_squared > 1000) {
+        const int previous_x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 4), 0x12);
+        const int previous_y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x0c), 0x12);
+        if (tile_property(tile_at(x, previous_y), 2) == 1u) {
+            tou_accuracy::store_i32(entity, 0x1c, -(vy / (accuracy_rand() % 8 + 6)));
+            tou_accuracy::store_i32(entity, 0x18, vx / (accuracy_rand() % 4 + 6));
+            tou_accuracy::store_i32(entity, 8, tou_accuracy::load_i32(entity, 0x0c));
+            return;
+        }
+        if (tile_property(tile_at(previous_x, y), 2) != 1u) {
+            tou_accuracy::store_i32(entity, 0x18, -(vx / (accuracy_rand() % 8 + 6)));
+            tou_accuracy::store_i32(entity, 0x1c, -(vy / (accuracy_rand() % 8 + 6)));
+            tou_accuracy::store_i32(entity, 0, tou_accuracy::load_i32(entity, 4));
+            tou_accuracy::store_i32(entity, 8, tou_accuracy::load_i32(entity, 0x0c));
+            return;
+        }
+        tou_accuracy::store_i32(entity, 0x18, -(vx / (accuracy_rand() % 8 + 6)));
+        tou_accuracy::store_i32(entity, 0x1c, vy / (accuracy_rand() % 4 + 6));
+        tou_accuracy::store_i32(entity, 0, tou_accuracy::load_i32(entity, 4));
+        return;
+    }
+
+    /* Type 2/state 10 is the Organic Waste crawler and terrain grower. */
+    if (tou_accuracy::load_u8(entity, 0x21) != 2u || tou_accuracy::load_u8(entity, 0x20) != 10u) return;
+    int scan_count = 0;
+    while (tou_accuracy::load_i32(entity, 8) > 0x180000) {
+        const int previous_x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 4), 0x12);
+        const int previous_y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x0c), 0x12);
+        if (scan_count > 5 || tile_property(tile_at(previous_x, previous_y), 1) != 0u) break;
+        tou_accuracy::store_i32(entity, 8, tou_accuracy::load_i32(entity, 8) - 0x40000);
+        tou_accuracy::store_i32(entity, 0x0c, tou_accuracy::load_i32(entity, 8));
+        tou_accuracy::store_i32(entity, 4, tou_accuracy::load_i32(entity, 0));
+        tou_accuracy::store_i32(entity, 0x18, 0);
+        tou_accuracy::store_i32(entity, 0x1c, 0);
+        ++scan_count;
+    }
+    if (tou_accuracy::load_i32(entity, 8) <= 0x180000) {
+        tou_accuracy::store_u8(entity, 0x5c, 0); tou_accuracy::store_i32(entity, 0x0c, 0);
+        organic_tail(entity); return;
+    }
+    if (scan_count == 7) tou_accuracy::store_u8(entity, 0x5c, 0);
+
+    const int previous_x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 4), 0x12);
+    const int previous_y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x0c), 0x12);
+    if (tile_property(tile_at(previous_x, previous_y), 1) != 1u ||
+        tile_property(tile_at(previous_x, previous_y + 1), 0) != 0u) {
+        organic_tail(entity); return;
+    }
+    tou_accuracy::store_i32(entity, 0, tou_accuracy::load_i32(entity, 4));
+    tou_accuracy::store_i32(entity, 8, tou_accuracy::load_i32(entity, 0x0c));
+    int direction = (accuracy_rand() & 1) != 0 ? -1 : 1;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (tile_property(tile_at(previous_x + direction, previous_y), 1) == 1u &&
+            tile_property(tile_at(previous_x + direction, previous_y + 1), 1) == 1u) {
+            tou_accuracy::store_i32(entity, 0x1c, 0x32);
+            tou_accuracy::store_i32(entity, 0, tou_accuracy::load_i32(entity, 0) + direction * 0x40000);
+            tou_accuracy::store_i32(entity, 8, tou_accuracy::load_i32(entity, 8) + 0x40000);
+            tou_accuracy::store_i32(entity, 0x18, (accuracy_rand() % 0x5a) * direction);
+            return;
+        }
+        direction = -direction;
+    }
+
+    x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0), 0x12);
+    y = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 8), 0x12);
+    if (tile_at(x, y + 1) < 0xf0u) {
+        const uint32_t color_with_bias = tou_accuracy::load_u32(entity, 0x4c);
+        tou_accuracy::store_i32(entity, 0x28, accuracy_rand() % 400 + 0x96);
+        const int paint_y = y - (accuracy_rand() % 2) - 1;
+        int width = 1;
+        int left = x;
+        for (int row = 0; width < 9; ++row, width += 2, --left) {
+            for (int column = 0; column < width; ++column) {
+                const int px = left + column;
+                const int py = paint_y + row;
+                if (!map_point_valid(px, py)) continue;
+                const int offset = tile_offset(px, py);
+                uint8_t &tile = static_cast<uint8_t *>(DAT_0048782c)[offset];
+                if (tile_property(tile, 1) == 1u) {
+                    tile = tile_property(tile, 0x0f);
+                    static_cast<uint16_t *>(DAT_00481f50)[offset] =
+                        static_cast<uint16_t>(color_with_bias - 30000u);
+                }
+            }
+        }
+        smooth_organic_patch(tile_offset(previous_x - 1, previous_y - 1));
+    }
+    organic_tail(entity);
+}
+
+void callback_trail_00430480(int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    tou_accuracy::store_i32(entity, 0x00,
+        tou_accuracy::load_i32(entity, 0x00) + tou_accuracy::load_i32(entity, 0x18));
+    tou_accuracy::store_i32(entity, 0x08,
+        tou_accuracy::load_i32(entity, 0x08) + tou_accuracy::load_i32(entity, 0x1c));
+    if (tou_accuracy::load_u8(entity, 0x40) != 5u && tou_accuracy::load_u8(entity, 0x21) != 0x65u) {
+        tou_accuracy::store_i32(entity, 0x1c,
+            tou_accuracy::load_i32(entity, 0x1c) + tou_accuracy::load_i32(entity, 0x38) * DAT_00483828);
+    }
+    const int32_t x = tou_accuracy::load_i32(entity, 0x00);
+    const int32_t y = tou_accuracy::load_i32(entity, 0x08);
+    if (x < 0 || y < 0 || tou_accuracy::sar_i32(x, 0x12) >= static_cast<int>(DAT_004879f0) ||
+        tou_accuracy::sar_i32(y, 0x12) >= static_cast<int>(DAT_004879f4)) {
+        DAT_00481e8f = 1;
+        return;
+    }
+    if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+    if (tou_accuracy::load_u8(entity, 0x21) != 0x67u) return;
+    int32_t fade_counter = tou_accuracy::load_i32(entity, 0x3c) + 1;
+    tou_accuracy::store_i32(entity, 0x3c, fade_counter);
+    uint8_t palette_index = tou_accuracy::load_u8(entity, 0x65);
+    tou_accuracy::store_u32(entity, 0x4c,
+        static_cast<uint32_t>(static_cast<uint16_t *>(DAT_00487aa8)[palette_index]) + 30000u);
+    if (fade_counter >= tou_accuracy::load_u8(entity, 0x5c)) {
+        --palette_index;
+        tou_accuracy::store_i32(entity, 0x3c, 0);
+        tou_accuracy::store_u8(entity, 0x65, palette_index);
+        tou_accuracy::store_u32(entity, 0x4c,
+            static_cast<uint32_t>(static_cast<uint16_t *>(DAT_00487aa8)[palette_index]) + 30000u);
+    }
+    if (palette_index <= tou_accuracy::load_u8(entity, 0x64)) DAT_00481e8f = 1;
+}
+
+} // namespace
+
+void Accuracy_InitEntityCallbackTable(void)
+{
+    if (DAT_00487abc == NULL) return;
+    uint8_t *table = static_cast<uint8_t *>(DAT_00487abc);
+    for (unsigned int type = 0; type < 128u; ++type) {
+        tou_accuracy::store_u32(table, type * 0x218u, 0u);
+    }
+
+    struct Mapping { uint8_t type; uint32_t callback; };
+    static const Mapping mappings[] = {
+        {0x00, 0x00438010u}, {0x01, 0x00438d90u}, {0x02, 0x004427e0u},
+        {0x05, 0x00439880u}, {0x08, 0x0043cc20u}, {0x09, 0x0043cc20u},
+        {0x0b, 0x00431650u}, {0x0e, 0x00430dc0u}, {0x0f, 0x004330c0u},
+        {0x11, 0x00441aa0u}, {0x12, 0x00438010u}, {0x13, 0x0043a4b0u},
+        {0x14, 0x0043a4b0u}, {0x16, 0x00439b90u}, {0x17, 0x00432c80u},
+        {0x18, 0x00433c80u}, {0x19, 0x00443420u}, {0x1b, 0x00443b10u},
+        {0x1c, 0x00440e20u}, {0x1d, 0x0043c0b0u}, {0x1e, 0x0043c0b0u},
+        {0x1f, 0x0043b370u}, {0x22, 0x004442f0u}, {0x23, 0x004457b0u},
+        {0x24, 0x00447a70u}, {0x25, 0x00446130u}, {0x26, 0x0043dbd0u},
+        {0x27, 0x0043e070u}, {0x28, 0x0043e890u}, {0x29, 0x0043e890u},
+        {0x2a, 0x0043e890u}, {0x2b, 0x00439b90u}, {0x2c, 0x0043f990u},
+        {0x2d, 0x0043f990u}, {0x2e, 0x00432220u}, {0x64, 0x004309f0u},
+        {0x65, 0x00430480u}, {0x66, 0x004427e0u}, {0x67, 0x00430480u},
+        {0x69, 0x00438010u}, {0x6a, 0x00439b90u}, {0x6b, 0x0043a4b0u},
+        {0x6c, 0x004309f0u}, {0x6d, 0x004309f0u}
+    };
+
+    for (unsigned int i = 0; i < sizeof(mappings) / sizeof(mappings[0]); ++i) {
+        tou_accuracy::store_u32(table, mappings[i].type * 0x218u,
+                                mappings[i].callback);
+    }
+}
+
+void Accuracy_InitNucleusMarkIIEntity(void *entity)
+{
+    /* Original fire path 0x00406b20-0x00406b36. */
+    tou_accuracy::store_i32(static_cast<uint8_t *>(entity), 0x28, 0x19);
+}
+
+bool Accuracy_DispatchEntityCallback(uint32_t callback_address, int entity_index)
+{
+    uint8_t *entity = entity_at(entity_index);
+    const uint8_t entity_type = tou_accuracy::load_u8(entity, 0x21);
+    if (callback_address != kCallbackNucleus &&
+        callback_address != kCallbackMachineGun &&
+        callback_address != kCallbackOrganicWaste &&
+        callback_address != kCallbackOrganicWasteII &&
+        callback_address != kCallbackTrail) return false;
+
+    /* Several guest callbacks are shared by unrelated entity types. Only claim
+     * the paths lifted above; unsupported siblings remain on the legacy path. */
+    if ((callback_address == kCallbackMachineGun && entity_type != 0x2cu) ||
+        (callback_address == kCallbackOrganicWaste && entity_type != 0x02u) ||
+        (callback_address == kCallbackOrganicWasteII && entity_type != 0x14u) ||
+        (callback_address == kCallbackTrail && entity_type != 0x67u)) return false;
+
+    static uint64_t sequence = 0;
+    const int32_t before_x = tou_accuracy::load_i32(entity, 0x00);
+    const int32_t before_y = tou_accuracy::load_i32(entity, 0x08);
+    const int32_t before_life = tou_accuracy::load_i32(entity, 0x28);
+    const uint8_t before_state = tou_accuracy::load_u8(entity, 0x20);
+    const uint8_t before_guard = tou_accuracy::load_u8(entity, 0x5c);
+    const uint64_t rng_before = TOU_Accuracy_RandCallCount();
+
+    if (callback_address == kCallbackNucleus) callback_nucleus_00432c80(entity_index);
+    else if (callback_address == kCallbackMachineGun) callback_machinegun_0043f990(entity_index);
+    else if (callback_address == kCallbackOrganicWaste) callback_organic_waste_004427e0(entity_index);
+    else if (callback_address == kCallbackOrganicWasteII) callback_organic_waste_ii_0043a4b0(entity_index);
+    else callback_trail_00430480(entity_index);
+    trace_callback(sequence++, callback_address, entity_index, before_x, before_y,
+                   before_life, before_state, before_guard, rng_before);
+    return true;
+}
+
+void Accuracy_RemoveEntityAt(int entity_index)
+{
+    if (entity_index < 0 || entity_index >= DAT_00489248) return;
+    uint8_t *removed = entity_at(entity_index);
+
+    if (is_tracked(removed)) {
+        const int category = tracking_category(tou_accuracy::load_u8(removed, 0x21));
+        if (category >= 0 && DAT_00487834[category] > 0) {
+            const int removed_slot = tou_accuracy::load_i32(removed, 0x50);
+            const int new_count = --DAT_00487834[category];
+            int *links = static_cast<int *>(DAT_0048781c) + category * 0x1000;
+            const int moved_entity_index = links[new_count];
+            tou_accuracy::store_i32(entity_at(moved_entity_index), 0x50, removed_slot);
+            links[removed_slot] = moved_entity_index;
+        }
+    }
+
+    const int last_index = DAT_00489248 - 1;
+    uint8_t *last = entity_at(last_index);
+    if (entity_index != last_index && is_tracked(last)) {
+        const int category = tracking_category(tou_accuracy::load_u8(last, 0x21));
+        if (category >= 0) {
+            int *links = static_cast<int *>(DAT_0048781c) + category * 0x1000;
+            links[tou_accuracy::load_i32(last, 0x50)] = entity_index;
+        }
+    }
+
+    --DAT_00489248;
+    copy_entity_fields(removed, entity_at(DAT_00489248));
+}

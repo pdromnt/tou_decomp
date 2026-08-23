@@ -6545,9 +6545,9 @@ MainInit:
     *((unsigned char *)g_EntityConfig + 0x15) = 2;
 
     FUN_0041fc10();
-    /* Original FUN_0041fe70 @ 0x0041FE70 populated the entity AI behavior table
-     * at runtime; in this decomp that table comes pre-filled via loadtime.dat
-     * (loaded by FUN_004254b0 into DAT_00487abc), so no runtime init is needed. */
+    /* Original FUN_0041fe70 @ 0x0041FE70 populated callback slot +0 before
+     * FUN_004254b0 loaded the remaining type data beginning at +4. */
+    Accuracy_InitEntityCallbackTable();
     FUN_0041f900();
 
     /* Clear entity array: zero first byte of each 100-byte record */

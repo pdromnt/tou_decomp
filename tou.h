@@ -8,8 +8,15 @@
 #include <ddraw.h>
 #include <dinput.h>
 #include <mmsystem.h>
+#include <stdlib.h>
 
 #include "fmod.h"
+#include "accuracy/accuracy_core.h"
+#include "accuracy/accuracy_runtime.h"
+
+/* Use the original executable's embedded MSVC6 RNG instead of host CRT state. */
+#define rand  TOU_Accuracy_Rand
+#define srand TOU_Accuracy_Srand
 
 /* ===== Error Strings (matching binary string table) ===== */
 /* 0047F0EC */ #define STR_ERR_DDRAW_INSTALL  "DirectDraw Init FAILED.\nInstall DirectX 7.0 to play TOU.\n\nRead readme.txt for more\ninformation."
