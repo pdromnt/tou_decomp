@@ -74,11 +74,13 @@ The executable expects these paths relative to its working directory:
 | `sfx/` | Weapon, UI, ship, and environment sounds |
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
-| `options.cfg` | Original 6408-byte configuration blob |
+| `options.cfg` | User configuration generated beside the executable on first run |
 | `fmod.dll` | Legacy audio runtime loaded dynamically at startup |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
-release. Keep it synchronized when adding a new required runtime path.
+release. It packages runtime files only: repository Markdown and the local
+`options.cfg` are intentionally excluded. Keep it synchronized when adding a
+new required runtime path.
 
 ## Binary-Compatibility Layer
 
