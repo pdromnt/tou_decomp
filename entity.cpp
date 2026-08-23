@@ -78,11 +78,13 @@ static float  _DAT_00475794 = 0.016666668f; /* fire rate norm (1/60) */
 static float  _DAT_004757a8 = 0.5f;        /* melee velocity scale */
 
 /* Weapon range data tables (from binary at 0x47ee0c) */
-static int DAT_0047ee0c[4] = { 0x20, 0x19, 0x14, 0x12 };  /* base range per weapon level */
-static int DAT_0047ee1c[4] = { 0x10, 0x0c, 0x09, 0x05 };  /* range bonus per weapon level */
-static int DAT_0047ee2c[2] = { 0x02, 0x00 };               /* range minimum */
-static int DAT_0047ee34[4] = { 0x07, 0x0a, 0x12, 0x28 };   /* step count per weapon level */
-static float DAT_0047ee48[4] = { 0.5f, 0.6f, 0.9f, 1.0f }; /* weapon accuracy per level */
+/* Original contiguous AI tables at 0x0047EE0C-0x0047EE58.  AI level is
+ * stored as 1..5 at entity +0xDD; preserve the original indexing used by
+ * FUN_00449FD0 without relying on one C array spilling into the next. */
+static int DAT_0047ee0c[5] = { 0x20, 0x19, 0x14, 0x12, 0x10 };       /* base range */
+static int DAT_0047ee1c[6] = { 0x10, 0x0c, 0x09, 0x05, 0x02, 0x00 }; /* growth, indexed 1..5 */
+static int DAT_0047ee34[5] = { 0x07, 0x0a, 0x12, 0x28, 0x3c };       /* simulation steps */
+static float DAT_0047ee48[5] = { 0.7f, 0.9f, 1.0f, 1.0f, 1.0f };    /* velocity inheritance */
 
 /* ===== FUN_0044f630 — Wall Segment Ripple Displacement (0044F630) ===== */
 /* Finds nearest wall segment to impact point, then applies a sine-wave
@@ -948,10 +950,6 @@ static void FUN_004498a0(int *param_1, int param_2)
     piVar4[0x2e] = (int)uVar6;
 
 LAB_00449c28:
-    /* Dead zone: skip turning when nearly aimed at target (±0x18 ≈ 5°).
-     * Prevents rapid left/right oscillation when heading is close to correct. */
-    if (uVar7 < 0x18 || uVar7 > 0x7E8)
-        return; /* close enough — don't turn */
     if (0x3ff < uVar7) {
         piVar4[0x2e] = piVar4[0x2e] | 1;  /* turn left */
         return;
@@ -2723,16 +2721,8 @@ static void FUN_0044f900_impl(int *ent, int idx)
         }
         iVar8 = (unsigned int)*(unsigned char *)((int)ent + 0x35) + (unsigned int)*pbVar14 * 0x86;
     } else {
-        /* AI weapon selection — pick random available weapon.
-         * Throttle: only re-roll every ~100 ticks to prevent seizure-like switching.
-         * Uses ent[0x32] (offset +0xC8) as cooldown — AI path doesn't use it
-         * (only the player path sets it to 0xFA). */
-        if (ent[0x32] > 0) {
-            ent[0x32] = ent[0x32] - 1;
-            return; /* keep current weapon, skip re-roll */
-        }
-        ent[0x32] = 100 + (rand() % 50); /* re-roll in 100-150 ticks */
-
+        /* AI weapon selection — pick a random available weapon each time this
+         * path runs, matching 0x0044FC16-0x0044FCB8. */
         unsigned int uVar9 = ent[0xe];
         if (uVar9 == 0) return;
         if (0 < (int)uVar9) {
