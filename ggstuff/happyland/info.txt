@@ -1,0 +1,96 @@
+#-----------------------------------------------------------------------------------
+# TOU - Tunnels of Underground. Ground Generator Level options.
+#-----------------------------------------------------------------------------------
+#This file includes all the options you can set to a GG level.
+#-----------------------------------------------------------------------------------
+#This is a comment line.
+#If you must answer no or yes, you must type the whole word; plain 'n' won't work as no.
+#Before a parameter line there must be a '/ITEMNAME'-line.
+
+#Theme author
+/MAKER
+Hannu Kankaanp‰‰
+
+#Author's email (not compulsory, of course)
+/EMAIL
+hkankaan@cc.hut.fi
+
+#Texture bumpiness (0-128), 128=goes to very dark, 0=single-coloured
+/TEXDARK
+90
+
+#Parallax darkness (0-128)
+/PARDARK
+96
+
+#Attribute numbers:
+#1-normal land
+#2-brickwall
+#3-indestructable
+#4-burning
+#5-burning 2
+#6-snow
+#7-flesh/meat
+
+#What attribute is your level texture? (give a number, see above)
+/TEXATTR
+1
+
+#What attribute is the grass?
+/GRASATTR
+1
+
+#What attribute are the pictures that don't have their separate attribute map?
+/PICATTR
+1
+
+#What attribute are the signs?
+/SIGNATTR
+2
+
+#Sign text color (0=blue, 1=yellow, 2=white, 3=dark blue)
+/SIGNCOLOR
+1
+
+#Sign text placement (X,Y) in pixels, from the top left corner of the sign picture
+/SIGNTEXT
+10,22
+
+#Fixed width,height for level (=always the same)? 0 means no.
+/FIXEDSIZE
+0,0
+
+#Add a water level in the level (100=full water, 0=no water, 50=half of the level is water)
+/WATERLEVEL
+0
+
+#Water color in RGB. Format: Red,Green,Blue example: 50,50,200 means 50 red, 50 green and 200 blue.
+/WATERC
+50,50,200
+
+#Beach-style generator (you have played the beach, right?)
+/BEACHSTYLE
+no
+
+#Place names in signs. Use /SIGNU to make text that is over the actual name (Mount Aramya, for example), use
+#/SIGND to make text that is below the name (Aramya Canyon, for example). You can have max. 16 of these.
+/SIGNU
+Rock
+
+/SIGNU
+Hill
+
+/SIGNU
+Lake
+
+/SIGNU
+Mount
+
+/SIGNU
+Cave
+
+/SIGND
+Canyon
+
+/SIGNU
+Mine

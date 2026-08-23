@@ -1,0 +1,53 @@
+name: Build release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install 32-bit MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          update: true
+          install: >-
+            make
+            mingw-w64-i686-gcc
+
+      - name: Build game
+        shell: msys2 {0}
+        run: make -j2
+
+      - name: Package runtime files
+        id: package
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-$env:GITHUB_RUN_NUMBER" }
+          $archive = & ./scripts/package-release.ps1 -Version $version
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tunnels-of-underworld-windows
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME "${{ steps.package.outputs.archive }}" --verify-tag --generate-notes

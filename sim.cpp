@@ -1969,9 +1969,9 @@ void FUN_00434310(void)
         }
 
         DAT_00481e8f = 0;
-        uint32_t callback_address = tou_accuracy::load_u32((void *)ebase, 0x34);
-        int accuracy_handled = Accuracy_DispatchEntityCallback(callback_address, i) ? 1 : 0;
-        if (accuracy_handled) {
+        uint32_t callback_address = tou_binary::load_u32((void *)ebase, 0x34);
+        int callback_handled = EntityCallbacks_Dispatch(callback_address, i) ? 1 : 0;
+        if (callback_handled) {
             should_remove = DAT_00481e8f == 1;
         } else {
 
@@ -6186,7 +6186,7 @@ void FUN_00434310(void)
         /* Original 0x00434310 updates tracking links and copies only selected
          * fields from the last record; it does not memcpy all 0x80 bytes. */
         if (should_remove) {
-            Accuracy_RemoveEntityAt(i);
+            EntityCallbacks_RemoveAt(i);
             /* Don't increment i — re-check swapped-in entry */
         } else {
             i++;

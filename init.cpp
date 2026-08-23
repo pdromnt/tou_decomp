@@ -6608,7 +6608,7 @@ MainInit:
     FUN_0041fc10();
     /* Original FUN_0041fe70 @ 0x0041FE70 populated callback slot +0 before
      * FUN_004254b0 loaded the remaining type data beginning at +4. */
-    Accuracy_InitEntityCallbackTable();
+    EntityCallbacks_Init();
     FUN_0041f900();
 
     /* Clear entity array: zero first byte of each 100-byte record */

@@ -1042,7 +1042,7 @@ static void FUN_00449fd0(int *param_1)
         proj_speed = *(int *)(iVar19 + 0xac + offset * 4);
     }
     {
-        /* Compute X velocity: cos(facing) * speed / 64 + entity_vx * accuracy */
+        /* Compute X velocity: cos(facing) * speed / 64 + inherited entity velocity */
         int cos_val = *(int *)((int)DAT_00487ab0 + facing * 4);
         int sin_val = *(int *)((int)DAT_00487ab0 + 0x800 + facing * 4);
         local_60 = (int)((float)(cos_val * proj_speed >> 6) + (float)param_1[4] * fVarAcc);
@@ -2907,7 +2907,7 @@ static void FUN_00450080_impl(int *ent, char param_2)
     if (param_2 != '\0') {
         /* Original 004505D9-004505FC: x87 integer -> double, multiply by 0.8,
          * then __ftol truncation. This is Sticky Waste's drag. */
-        Accuracy_ApplyStickyWasteSlowdown(&ent[4], &ent[5]);
+        EntityCallbacks_ApplyStickyWasteSlowdown(&ent[4], &ent[5]);
     } else {
         ent[4] = ent[4] / 2;
         ent[5] = ent[5] / 2;
@@ -4555,7 +4555,7 @@ LAB_00406a71:
                 else if (local_14 == 0x17 && *(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
                     /* Original 0x00406b20-0x00406b36: count was already
                      * incremented, so -0x58 addresses the new entity's +0x28. */
-                    Accuracy_InitNucleusMarkIIEntity(
+                    EntityCallbacks_InitNucleusMarkII(
                         (void *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x80));
             }
         }

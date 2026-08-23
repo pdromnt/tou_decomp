@@ -1,10 +1,10 @@
-#ifndef TOU_ACCURACY_CORE_H
-#define TOU_ACCURACY_CORE_H
+#ifndef TOU_BINARY_COMPAT_H
+#define TOU_BINARY_COMPAT_H
 
 #include <stddef.h>
 #include <stdint.h>
 
-namespace tou_accuracy {
+namespace tou_binary {
 
 uint8_t load_u8(const void *base, size_t offset);
 uint16_t load_u16(const void *base, size_t offset);
@@ -34,11 +34,11 @@ private:
 int64_t x87_ftol(long double value);
 uint16_t x87_control_word();
 
-} // namespace tou_accuracy
+} // namespace tou_binary
 
-extern "C" int TOU_Accuracy_Rand(void);
-extern "C" void TOU_Accuracy_Srand(unsigned int seed);
-extern "C" uint32_t TOU_Accuracy_RandState(void);
-extern "C" uint64_t TOU_Accuracy_RandCallCount(void);
+extern "C" int TOU_Rand(void);
+extern "C" void TOU_Srand(unsigned int seed);
+extern "C" uint32_t TOU_RandState(void);
+extern "C" uint64_t TOU_RandCallCount(void);
 
 #endif

@@ -1,11 +1,11 @@
-#include "accuracy_core.h"
+#include "binary_compat.h"
 
 #include <math.h>
 #include <string.h>
 
 namespace {
 
-tou_accuracy::MsvcRng g_rng(1u);
+tou_binary::MsvcRng g_rng(1u);
 uint64_t g_rng_call_count = 0;
 
 int32_t bits_to_i32(uint32_t value)
@@ -17,7 +17,7 @@ int32_t bits_to_i32(uint32_t value)
 
 } // namespace
 
-namespace tou_accuracy {
+namespace tou_binary {
 
 uint8_t load_u8(const void *base, size_t offset)
 {
@@ -145,19 +145,19 @@ int64_t x87_ftol(long double value)
 #endif
 }
 
-} // namespace tou_accuracy
+} // namespace tou_binary
 
-extern "C" int TOU_Accuracy_Rand(void)
+extern "C" int TOU_Rand(void)
 {
     ++g_rng_call_count;
     return g_rng.next();
 }
 
-extern "C" void TOU_Accuracy_Srand(unsigned int seed)
+extern "C" void TOU_Srand(unsigned int seed)
 {
     g_rng.seed(static_cast<uint32_t>(seed));
     g_rng_call_count = 0;
 }
 
-extern "C" uint32_t TOU_Accuracy_RandState(void) { return g_rng.state(); }
-extern "C" uint64_t TOU_Accuracy_RandCallCount(void) { return g_rng_call_count; }
+extern "C" uint32_t TOU_RandState(void) { return g_rng.state(); }
+extern "C" uint64_t TOU_RandCallCount(void) { return g_rng_call_count; }

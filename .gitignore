@@ -40,11 +40,11 @@
 # debug information files
 *.dwo
 *.log
-*.txt
+debug.txt
 
 # system junk
 NUL
 
-# random files
-*.md
-/accuracy-entity-trace.csv
+# Generated runtime and release artifacts
+/entity-trace.csv
+/dist/

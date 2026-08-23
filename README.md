@@ -1,45 +1,91 @@
 # Decompilation of Tunnels of Underworld
 
-DISCLAIMER: This is project is not 100% accurate. The original source code I'm assuming was lost, so I'm attempting an effort to bring this game back to life, first by decompiling it and then by updating it so it works properly in current day Windows versions.
+This repository contains a behavior-focused reconstruction of **Tunnels of
+Underworld** (TOU), an old Windows game created by
+[hannukp](https://github.com/hannukp).
 
-Tunnels of Underworld (or TOU for short) is an original creation by [hannukp](https://github.com/hannukp) and I don't claim any ownership over it. I'm simply a fan who wants to preserve his game.
+The original source appears to be lost. This project was recovered through
+runtime comparison, disassembly, Ghidra, and a deliberately ugly-first static
+reconstruction. I do not claim ownership of the original game or its assets.
 
-## What works so far
+Please note this project doesn't have an official Discord server or Subreddit,
+the only way to collaborate or contact people who are members of the project is
+via the repo's Issues page.
 
-A lot of things. A lot of things may be very buggy. The code I got is essentialy heavily decompiling things with Ghidra and having a clanker help me with the hardest parts.
+## Current Status
 
-- Renderer (Sprites, Particles, Animations, HUD, Tiles, Fonts, etc.)
-- Menus
-- SFX/BGM, Spatial Audio
-- Controls
-- Physics (Ships, Water, Collisions, Explosions, etc.)
-- Levels (including GG Levels)
-- Most subsystems (Enemy AI, Spawns, Pickups, VFX, Weapons, Turrets, etc.)
+The major gameplay-parity pass is complete. Weapons and their selectable Marks,
+enemy ships, turrets, physics, menus, controls, levels, audio, particles, and
+effects have all received hands-on runtime testing against the original game.
 
-I'd guesstimate we're 98% done. The 2% left are some inaccuracies that are hard to get correct and bugs. 
+The code is still recognizably a decompilation: original addresses, raw memory
+offsets, and Ghidra-style names remain where changing them without stronger
+types would risk behavior. Cleanup should be incremental and parity-preserving.
 
-## Objective
+See [PLAN.md](PLAN.md) for the completed parity record,
+[CODEBASE.md](CODEBASE.md) for the source map, and [BACKLOG.md](BACKLOG.md) for
+future refactoring and platform work.
 
-Initially perform a "dirty" decomp, with no organized file structure or namings, just decompiling, making sure things work, implementing systems and fixing bugs.
+## Running a Release
 
-Later on, organize file structure, namings and overall code architecture for easy maintenance.
+Extract the complete release archive and run `TOU.exe` from that directory. Do
+not move the executable away from `fmod.dll`, `options.cfg`, or the asset
+directories.
 
-All in a all, the plan is to hopefully pull off a 99.9% compatible decomp, where we can fire up the game and play through the levels without major issues.  
+The decomp intentionally runs windowed and identifies itself as
+`Tunnels of Underworld - Decompiled` so it cannot be confused with the original
+fullscreen executable.
 
-I also plan on making a level viewer in the style of my other project, [Hotzone](https://github.com/pdromnt/uprising-level-editor), to hopefully better understand how the levels (and maybe GG Packs) work.  
+## Building on Windows
 
-When we're done with everything and have a fully working game, I plan to update the stack (maybe SDL2?) to add more compatibility (and maybe support other OSes?) and maybe some improvements (Netplay, Gamepad support, experiments with FSR Upscaling).
+Requirements:
 
-## Contribs
+- 32-bit MinGW-w64 GCC/G++
+- GNU Make (`mingw32-make`)
+- `windres`
+- Windows DirectDraw, DirectInput, and WinMM development libraries
 
-If you know enough to help with the decomp, feel free to open a PR.
+Build from the repository root:
 
-## Tools used
-- MinGW
-- Ghidra + BetterGhidraMCP
-- Various Clankers
-- An old battlestation to run the original game.
+```powershell
+mingw32-make clean
+mingw32-make -j8
+```
+
+The output is `TOU.exe`. `build.bat` performs the same clean build and closes an
+already-running decomp executable first.
+
+To create the same archive layout used by CI:
+
+```powershell
+./scripts/package-release.ps1 -Version local
+```
+
+## Releases
+
+The `Build release` GitHub Actions workflow can be run manually to produce a
+downloadable Windows artifact. Pushing a tag named `v*` also creates a GitHub
+Release with the packaged game attached.
+
+## Longer-Term Direction
+
+Once the recovered code is easier to maintain, likely follow-up work includes
+an SDL renderer/input/audio port, Linux/macOS/browser support, gamepads,
+non-split-screen netplay, and better tooling for `.lev` and GG level formats.
+
+## Contributing
+
+Behavior changes need evidence from the original executable. Pure refactors
+must keep the 32-bit build working and avoid changing fixed-point arithmetic,
+RNG order, callback dispatch, or update order by accident.
+
+## Tools Used
+
+- MinGW-w64
+- Ghidra and GhidrAssistMCP
+- Runtime comparison on hardware capable of running the original game
 
 ## License
 
-I'm not gonna put any kind of licenses on this project due to it not being a clean room decomp and also in respect to the original creator. I'm not sure if they would approve of this! (Sorry Hannu!)
+No license is currently offered. This is not a clean-room decompilation, and the
+repository includes original game data for preservation purposes.
