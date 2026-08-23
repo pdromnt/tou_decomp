@@ -2173,12 +2173,7 @@ void FUN_00434310(void)
          * Type 0x22 excluded: wavy fireworks overwrite velocity from heading each
          * tick (gravity would accumulate and distort the wave pattern). */
         if (is_projectile && !is_debris && ent_type != 0x22 && ent_type != 0x1B && ent_type != 0x26) {
-            /* Skip gravity for turret-owned projectiles — we use direct aim,
-             * not ballistic trajectory, so gravity curves bullets away. */
-            unsigned char grav_owner = *(unsigned char *)(ebase + 0x22);
-            if (grav_owner < 0x50) {
-                *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
-            }
+            *(int *)(ebase + 0x1C) += *(int *)(ebase + 0x38) * DAT_00483828;
         }
 
         /* === Homing/guidance + special movement — per-type ===
@@ -6755,18 +6750,23 @@ static int check_line_of_sight(int sx, int sy, int tx, int ty)
 }
 
 /* ===== FUN_00459dd0 — Aimed Fire Direction (00459DD0) ===== */
-/* Computes firing angle from source to target with full line-of-sight validation.
- * Original uses FUN_004599f0 (trajectory) + FUN_00459c70 (LOS ray trace).
- * We use direct angle + Bresenham LOS which matches original low-gravity behavior. */
-static int FUN_00459dd0_simplified(int sx, int sy, int tx, int ty, float speed_factor, char use_alt)
+/* Try the original low ballistic arc and, when permitted, the high arc.  Each
+ * candidate must survive the original trajectory-aware terrain trace. */
+static int FUN_00459dd0(int sx, int sy, int tx, int ty, float speed_factor, char use_alt)
 {
-    (void)speed_factor;
-    (void)use_alt;
-
-    if (!check_line_of_sight(sx, sy, tx, ty)) {
-        return 0x801;
+    int angle = FUN_004599f0(sx, sy, tx, ty, 0, speed_factor, DAT_00483828);
+    if (angle != 0x801 &&
+        FUN_00459c70(sx, sy, tx, ty, angle, speed_factor, DAT_00483828) != '\0') {
+        return angle;
     }
-    return FUN_004257e0(sx, sy, tx, ty);
+    if (use_alt != '\0') {
+        angle = FUN_004599f0(sx, sy, tx, ty, 1, speed_factor, DAT_00483828);
+        if (angle != 0x801 &&
+            FUN_00459c70(sx, sy, tx, ty, angle, speed_factor, DAT_00483828) != '\0') {
+            return angle;
+        }
+    }
+    return 0x801;
 }
 
 /* ===== FUN_00454b00 — Update_Turrets (00454B00) ===== */
@@ -7155,10 +7155,9 @@ void FUN_00454b00(void)
                         /* Random angle */
                         fire_angle = rand() & 0x7ff;
                     } else {
-                        /* Aimed fire (simplified) */
-                        fire_angle = FUN_00459dd0_simplified(*t, t[2] - 0x100000, tgt_x, tgt_y,
-                                                            speed_sqrt,
-                                                            *(char *)((int)t + 0x25) != '\0');
+                        fire_angle = FUN_00459dd0(*t, t[2] - 0x100000, tgt_x, tgt_y,
+                                                 speed_sqrt,
+                                                 *(char *)((int)t + 0x25) != '\0');
                     }
 
                     if (fire_angle != 0x801) {
@@ -7329,28 +7328,29 @@ int FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y,
         int dx = (src_x - dst_x) >> 0x12;
         int dy = (src_y - dst_y) >> 0x12;
         int dist_sq = dx * dx + dy * dy;
-        DAT_00481f10 = (int)sqrtf((float)dist_sq);
+        DAT_00481f10 = (int)sqrt((double)dist_sq);
         return angle;
     }
 
     /* High gravity: ballistic arc LUT lookup */
-    float range_sq = range_sqrt * range_sqrt;
-    float temp = (1024.0f / (float)gravity) * range_sq;
+    float temp = (float)((1024.0 / (double)gravity) *
+                         (double)range_sqrt * (double)range_sqrt);
     int dx = (dst_x - src_x) >> 0x12;
     int dy = (dst_y - src_y) >> 0x12;
     unsigned char neg_x = 0;
 
-    float idx_x_f = ((float)dx * 0.125f) / temp;
-    float idx_y_f = ((float)dy * 0.125f) / temp + 45.0f;
+    /* X remains in x87 extended precision here; Y is stored to a float slot. */
+    double idx_x_ext = ((double)dx * 0.125) / (double)temp;
+    float idx_y_f = (float)(((double)dy * 0.125) / (double)temp + 45.0);
 
     /* Absolute value of X index, track sign */
-    if (idx_x_f < 0.0f) {
-        idx_x_f = -idx_x_f;
+    if (idx_x_ext < 0.0) {
+        idx_x_ext = -idx_x_ext;
         neg_x = 1;
     }
 
     /* Truncate to integer indices */
-    int ix = (int)idx_x_f;
+    int ix = (int)idx_x_ext;
     int iy = (int)idx_y_f;
 
     /* Bounds check: ix in [0,44], iy in [0,89] */
@@ -7358,8 +7358,10 @@ int FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y,
         return 0x801;
 
     /* Fractional parts for bilinear interpolation */
-    float frac_x = 1.0f - (idx_x_f - (float)ix);
-    float frac_y = 1.0f - (idx_y_f - (float)iy);
+    float frac_x = (float)(idx_x_ext - (double)ix);
+    float frac_y = (float)((double)idx_y_f - (double)iy);
+    double inv_x = 1.0 - (double)frac_x;
+    double inv_y = 1.0 - (double)frac_y;
 
     /* LUT index arithmetic (from disassembly):
      * row_stride = iy * 23 * 2 = iy * 46 (since ECX = iy*3*8 - iy = iy*23, then ESI = ix + ECX*2)
@@ -7373,30 +7375,20 @@ int FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y,
 
     unsigned short *lut = (unsigned short *)DAT_00489e90;
 
-    /* Read 4 velocity-X entries for bilinear interpolation */
-    float vx_00 = (float)(unsigned short)lut[base0];           /* (ix, iy) */
-    float vx_01 = (float)(unsigned short)lut[base0 + 4];       /* (ix, iy) + 4 */
-    float vx_10 = (float)(unsigned short)lut[base0 + 188];     /* (ix, iy) + 0xBC */
-    float vx_11 = (float)(unsigned short)lut[base1];            /* (ix, iy+1) */
+    /* Preserve the original x87 bilinear interpolation and weighting order. */
+    double next_vx = (double)(unsigned short)lut[base1] * inv_x +
+                     (double)(unsigned short)lut[base0 + 188] * (double)frac_x;
+    double cur_vx = (double)(unsigned short)lut[base0 + 4] * (double)frac_x +
+                    (double)(unsigned short)lut[base0] * inv_x;
+    float interp_vx = (float)(next_vx * (double)frac_y + cur_vx * inv_y);
 
-    /* Bilinear interpolation for X velocity */
-    float interp_vx = vx_11 * frac_x + vx_10 * frac_y;
-    interp_vx = interp_vx * frac_y;
-    float tmp2 = vx_01 * frac_x + vx_00 * frac_y;
-    interp_vx += tmp2 * frac_x;
+    double next_vy = (double)(unsigned short)lut[base0 + 190] * (double)frac_x +
+                     (double)(unsigned short)lut[base0 + 186] * inv_x;
+    double cur_vy = (double)(unsigned short)lut[base0 + 6] * (double)frac_x +
+                    (double)(unsigned short)lut[base0 + 2] * inv_x;
+    double interp_vy = next_vy * (double)frac_y + cur_vy * inv_y;
 
-    /* Read 4 velocity-Y entries (offset by 190, 186, 6, 2 in word indices) */
-    float vy_00 = (float)(unsigned short)lut[base0 + 190];
-    float vy_01 = (float)(unsigned short)lut[base0 + 186];
-    float vy_10 = (float)(unsigned short)lut[base0 + 6];
-    float vy_11 = (float)(unsigned short)lut[base0 + 2];
-
-    float interp_vy = vy_00 * frac_x + vy_01 * frac_y;
-    interp_vy = interp_vy * frac_y;
-    float tmp3 = vy_10 * frac_x + vy_11 * frac_y;
-    interp_vy += tmp3 * frac_x;
-
-    DAT_00481f10 = (int)(interp_vy * 1024.0f);
+    DAT_00481f10 = (int)(interp_vy * 1024.0);
 
     if (neg_x) {
         int a = (int)interp_vx;
@@ -7427,7 +7419,7 @@ char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y,
         steps = (unsigned int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 3)) >> 2);
     } else {
         int half_val = (DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3;
-        steps = (unsigned int)((float)half_val * range_sqrt / (float)gravity);
+        steps = (unsigned int)((double)half_val * (double)range_sqrt / (double)gravity);
     }
 
     /* Ray-march along the trajectory */
@@ -7476,10 +7468,8 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 {
     int base = weap_idx * 0x40;
 
-    /* Predict target position at lead time mult1.
-     * Uses 32-bit arithmetic matching the original binary — overflow wraps,
-     * and FUN_004599f0 returns 0x801 for out-of-range predicted positions.
-     * The caller's fallback (restoring direct_aim on 0x801) handles this. */
+    /* Predict target position at lead time mult1 using the original 32-bit
+     * arithmetic and wraparound behavior. */
     DAT_00481ee8 = DAT_00481ef8 * DAT_00481efc * mult1 + DAT_00481ee0;
     DAT_00481ee4 = DAT_00481efc * DAT_00481ef4 * mult1 + DAT_00481edc;
 
@@ -7507,14 +7497,16 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
     if (DAT_00481ed0 < 0x50) {
         dist1 = (int)((DAT_00481f00 + (DAT_00481f00 >> 31 & 7)) >> 3);
     } else {
-        dist1 = (int)((float)DAT_00481f00 / range_sqrt);
+        int eighth = (DAT_00481f00 + (DAT_00481f00 >> 31 & 7)) >> 3;
+        dist1 = (int)((double)eighth * (double)range_sqrt / (double)DAT_00481ed0);
     }
     DAT_00481f00 = dist1;
 
     if (DAT_00481ed0 < 0x50) {
         DAT_00481f04 = (int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3);
     } else {
-        DAT_00481f04 = (int)((float)DAT_00481f10 / range_sqrt);
+        int eighth = (DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3;
+        DAT_00481f04 = (int)((double)eighth * (double)range_sqrt / (double)DAT_00481ed0);
     }
 
     /* Compare which prediction is closer to actual distance */
@@ -7591,11 +7583,8 @@ void FUN_00458010(void)
                 *(int *)(off + 0x10 + (int)DAT_00481f28) = 2000000000;
             }
 
-            /* Set gravity for this weapon type.
-             * TEMP: Force low gravity (< 0x50) to use direct atan2 aiming
-             * instead of ballistic LUT, which may have interpolation bugs. */
+            /* Set the real projectile gravity used by the original solver. */
             DAT_00481ed0 = -(int)((unsigned int)(*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x06')) & DAT_00483828;
-            if (DAT_00481ed0 >= 0x50) DAT_00481ed0 = 0x4F;
 
             /* Increment animation counter */
             char *anim_ctr = (char *)(off + 0x23 + (int)DAT_00481f28);
@@ -7654,7 +7643,7 @@ next_player:
 
                     if (best_target_idx != 0xfa) {
                         /* Found a player target */
-                        *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrtf((float)best_dist);
+                        *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrt((double)best_dist);
 
                         DAT_00481edc = *(int *)(DAT_00487810 + best_target_idx * 0x598);
                         int tgt_off = DAT_00487810 + best_target_idx * 0x598;
@@ -7671,39 +7660,21 @@ next_player:
                             (int)(unsigned char)DAT_00481ed8, fRange, DAT_00481ed0);
                         *(int *)(off + 0xc + (int)DAT_00481f28) = aim_angle;
 
-                        /* Predictive aim for non-type-3 weapons on low arc.
-                         * The original 32-bit prediction overflows for large
-                         * velocity*efc products (gravity>=0x50 makes efc huge).
-                         * We guard against overflow AND fall back to direct aim
-                         * if prediction returns 0x801 (LUT out-of-bounds). */
+                        /* Predictive aim for non-type-3 weapons on low arc. */
                         if (*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x03' && DAT_00481ed8 == 0) {
                             if ((int)DAT_00481ed0 < 0x50) {
                                 DAT_00481efc = (int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3);
                             } else {
-                                DAT_00481efc = (int)((float)DAT_00481f10 / fRange);
+                                int eighth = (DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3;
+                                DAT_00481efc = (int)((double)eighth * (double)fRange /
+                                                     (double)DAT_00481ed0);
                             }
 
-                            int direct_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
-
-                            /* Check if velocity*efc*8 fits in 32-bit */
-                            long long vx_check = (long long)DAT_00481ef4 * DAT_00481efc;
-                            long long vy_check = (long long)DAT_00481ef8 * DAT_00481efc;
-                            const long long SAFE_LIMIT = 0x7FFFFFFFLL / 8;
-                            if (vx_check > -SAFE_LIMIT && vx_check < SAFE_LIMIT &&
-                                vy_check > -SAFE_LIMIT && vy_check < SAFE_LIMIT) {
-                                /* Safe to predict */
-                                int r = FUN_00459e90(3, 4, i, fRange);
-                                if (r == 0) {
-                                    FUN_00459e90(1, 3, i, fRange);
-                                } else {
-                                    FUN_00459e90(4, 8, i, fRange);
-                                }
-                            }
-
-                            /* If prediction produced 0x801 (LUT out-of-bounds for
-                             * predicted position), restore the valid direct aim */
-                            if (*(int *)(off + 0xc + (int)DAT_00481f28) == 0x801) {
-                                *(int *)(off + 0xc + (int)DAT_00481f28) = direct_aim;
+                            int r = FUN_00459e90(3, 4, i, fRange);
+                            if (r == 0) {
+                                FUN_00459e90(1, 3, i, fRange);
+                            } else {
+                                FUN_00459e90(4, 8, i, fRange);
                             }
                         }
                         goto aim_slew;
@@ -7783,7 +7754,7 @@ next_grid_entry:
                             *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 0;
                         }
                         else {
-                            *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrtf((float)best_dist);
+                            *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrt((double)best_dist);
                             DAT_00481edc = *(int *)(grid_best * 0x40 + (int)DAT_00481f28);
                             DAT_00481ee0 = *(int *)(grid_best * 0x40 + (int)DAT_00481f28 + 4);
                             *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 2;
@@ -7887,8 +7858,8 @@ aim_slew:
                         int aim = *(int *)(off + 8 + (int)DAT_00481f28);
                         int cos_val = math_lut[aim];
                         int sin_val = math_lut[aim + 0x200]; /* +0x800 bytes / 4 = +0x200 ints */
-                        int muzzle_dx = (int)((float)cos_val * fRange);
-                        int muzzle_dy = (int)((float)sin_val * fRange);
+                        int muzzle_dx = cos_val * 2;
+                        int muzzle_dy = sin_val * 2;
 
                         /* --- Spawn projectile based on weapon type --- */
                         int *ent_types = (int *)DAT_00487abc;
