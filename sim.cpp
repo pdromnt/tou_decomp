@@ -69,39 +69,39 @@ int FUN_00410030(void)
     int iVar1 = rand();
     /* X in tile range [9, map_w-9], shifted left by 18 fractional bits. */
     int iVar2 = (iVar1 % (DAT_004879f0 - 0x12) + 9) * FIXED_SCALE;
-    int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+    Entity *entity = &DAT_004892e8[DAT_00489248];
 
-    *(int *)(base + 0x00) = iVar2;
-    *(int *)(base + 0x08) = 0x380000;
+    entity->position_x = iVar2;
+    entity->position_y = 0x380000;
     iVar1 = rand();
-    *(int *)(base + 0x18) = (0xfa - iVar1 % 500) * 0x200;
+    entity->velocity_x = (0xfa - iVar1 % 500) * 0x200;
     iVar1 = rand();
-    *(int *)(base + 0x1c) = (iVar1 % 100 + 0x32) * 0x200;
-    *(int *)(base + 0x04) = iVar2;
-    *(int *)(base + 0x0c) = 0x380000;
-    *(int *)(base + 0x10) = 0;
-    *(int *)(base + 0x14) = 0;
-    *(unsigned char *)(base + 0x21) = 0x1d;
-    *(unsigned short *)(base + 0x24) = 0;
-    *(unsigned char *)(base + 0x20) = 0;
-    *(unsigned char *)(base + 0x26) = 0;
-    *(unsigned char *)(base + 0x22) = 0xff;
-    *(int *)(base + 0x28) = 0;
-    *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0x3d40);
-    *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0x3d7c);
-    *(int *)(base + 0x48) = 0;
-    *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0x3dac);
-    *(unsigned char *)(base + 0x54) = 0;
-    *(unsigned char *)(base + 0x40) = 0;
-    *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0x3cb8);
-    *(int *)(base + 0x3c) = 0;
-    *(unsigned char *)(base + 0x5c) = 0;
+    entity->velocity_y = (iVar1 % 100 + 0x32) * 0x200;
+    entity->previous_x = iVar2;
+    entity->previous_y = 0x380000;
+    entity->motion_x_10 = 0;
+    entity->motion_y_14 = 0;
+    entity->type = 0x1d;
+    entity->variant_24 = 0;
+    entity->state_20 = 0;
+    entity->auxiliary_26 = 0;
+    entity->owner = 0xff;
+    entity->health_or_damage_28 = 0;
+    entity->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x3d40);
+    entity->damage_44 = *(int *)((int)DAT_00487abc + 0x3d7c);
+    entity->scratch_48 = 0;
+    entity->palette_value = *(int *)((int)DAT_00487abc + 0x3dac);
+    entity->animation_frame = 0;
+    entity->subtype = 0;
+    entity->callback_address = *(int *)((int)DAT_00487abc + 0x3cb8);
+    entity->counter_3c = 0;
+    entity->timer_5c = 0;
 
     DAT_00489248++;
 
-    /* Set type/subtype bytes on the newly incremented slot */
-    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
-    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0;
+    /* Set the trailing scratch bytes after publishing the new count. */
+    entity->scratch_64 = 0;
+    entity->scratch_65 = 0;
 
     return 0;
 }
@@ -363,39 +363,39 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                 uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
             }
             iVar6 = rand();
-            int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(ebase + 0x00) = param_1 << 0x12;
-            *(int *)(ebase + 0x08) = param_2 << 0x12;
-            *(int *)(ebase + 0x18) =
+            Entity *entity = &DAT_004892e8[DAT_00489248];
+            entity->position_x = param_1 << 0x12;
+            entity->position_y = param_2 << 0x12;
+            entity->velocity_x =
                 *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar6 % param_7_speed) >> 7;
-            *(int *)(ebase + 0x1c) =
+            entity->velocity_y =
                 *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar6 % param_7_speed) >> 7;
-            *(int *)(ebase + 0x04) = param_1 << 0x12;
-            *(int *)(ebase + 0x0c) = param_2 << 0x12;
-            *(int *)(ebase + 0x10) = 0;
-            *(int *)(ebase + 0x14) = 0;
-            *(unsigned char *)(ebase + 0x21) = 0;
+            entity->previous_x = param_1 << 0x12;
+            entity->previous_y = param_2 << 0x12;
+            entity->motion_x_10 = 0;
+            entity->motion_y_14 = 0;
+            entity->type = 0;
             iVar6 = rand();
-            *(short *)(ebase + 0x24) = (short)(iVar6 % 6);
-            *(unsigned char *)(ebase + 0x20) = 0x32;
-            *(unsigned char *)(ebase + 0x26) = 0;
-            *(unsigned char *)(ebase + 0x22) = param_12;
-            *(int *)(ebase + 0x28) = 0;
-            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x90);
-            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xCC);
-            *(int *)(ebase + 0x48) = 0;
-            *(int *)(ebase + 0x4c) = *(int *)((int)DAT_00487abc + 0xFC);
-            *(unsigned char *)(ebase + 0x54) = 0;
-            *(unsigned char *)(ebase + 0x40) = 2;
-            *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x00);
-            *(int *)(ebase + 0x3c) = 0;
-            *(unsigned char *)(ebase + 0x5c) = 0;
+            entity->variant_24 = (short)(iVar6 % 6);
+            entity->state_20 = 0x32;
+            entity->auxiliary_26 = 0;
+            entity->owner = param_12;
+            entity->health_or_damage_28 = 0;
+            entity->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x90);
+            entity->damage_44 = *(int *)((int)DAT_00487abc + 0xCC);
+            entity->scratch_48 = 0;
+            entity->palette_value = *(int *)((int)DAT_00487abc + 0xFC);
+            entity->animation_frame = 0;
+            entity->subtype = 2;
+            entity->callback_address = *(int *)((int)DAT_00487abc + 0x00);
+            entity->counter_3c = 0;
+            entity->timer_5c = 0;
             DAT_00489248 = DAT_00489248 + 1;
 
             /* Set lifespan and gravity on newly incremented slot's trailing fields */
             iVar6 = rand();
-            *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) = iVar6 % 100 + 0x78;
-            *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0x3e800;
+            entity->health_or_damage_28 = iVar6 % 100 + 0x78;
+            entity->damage_44 = 0x3e800;
             iVar6 = rand();
             {
                 unsigned short pal555 = *(unsigned short *)((int)DAT_00487aa8 + 0x1ec + (iVar6 % 10) * 2);
@@ -404,7 +404,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                 unsigned short g5 = (pal555 >> 5) & 0x1F;
                 unsigned short b5 = pal555 & 0x1F;
                 unsigned short rgb565 = (r5 << 11) | (g5 << 6) | b5;
-                *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) = rgb565 + 30000;
+                entity->palette_value = rgb565 + 30000;
             }
 
             param_6 = param_6 + 0x100;
@@ -527,39 +527,38 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                     uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
                                                 }
                                                 iVar16 = rand();
-                                                int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                                *(int *)(ebase + 0x00) = iVar15 << 0x12;
-                                                *(int *)(ebase + 0x08) = iVar8 * FIXED_SCALE;
-                                                *(int *)(ebase + 0x18) =
+                                                Entity *entity = &DAT_004892e8[DAT_00489248];
+                                                entity->position_x = iVar15 << 0x12;
+                                                entity->position_y = iVar8 * FIXED_SCALE;
+                                                entity->velocity_x =
                                                     *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar16 % 2000) >> 10;
-                                                *(int *)(ebase + 0x1c) =
+                                                entity->velocity_y =
                                                     *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar16 % 2000) >> 10;
-                                                *(int *)(ebase + 0x04) = iVar15 << 0x12;
-                                                *(int *)(ebase + 0x0c) = iVar8 * FIXED_SCALE;
-                                                *(int *)(ebase + 0x10) = 0;
-                                                *(int *)(ebase + 0x14) = 0;
-                                                *(unsigned char *)(ebase + 0x21) = 2;
+                                                entity->previous_x = iVar15 << 0x12;
+                                                entity->previous_y = iVar8 * FIXED_SCALE;
+                                                entity->motion_x_10 = 0;
+                                                entity->motion_y_14 = 0;
+                                                entity->type = 2;
                                                 iVar16 = rand();
-                                                *(short *)(ebase + 0x24) = (short)(iVar16 % 6);
-                                                *(unsigned char *)(ebase + 0x20) = 0;
-                                                *(unsigned char *)(ebase + 0x26) = 0;
-                                                *(unsigned char *)(ebase + 0x22) = param_12;
-                                                *(int *)(ebase + 0x28) = 0;
-                                                *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x4B8);
-                                                *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0x4F4);
-                                                *(int *)(ebase + 0x48) = 0;
-                                                *(int *)(ebase + 0x4c) = *(int *)((int)DAT_00487abc + 0x524);
-                                                *(unsigned char *)(ebase + 0x54) = 0;
-                                                *(unsigned char *)(ebase + 0x40) = 0;
-                                                *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x430);
-                                                *(int *)(ebase + 0x3c) = 0;
-                                                *(unsigned char *)(ebase + 0x5c) = 0;
+                                                entity->variant_24 = (short)(iVar16 % 6);
+                                                entity->state_20 = 0;
+                                                entity->auxiliary_26 = 0;
+                                                entity->owner = param_12;
+                                                entity->health_or_damage_28 = 0;
+                                                entity->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x4B8);
+                                                entity->damage_44 = *(int *)((int)DAT_00487abc + 0x4F4);
+                                                entity->scratch_48 = 0;
+                                                entity->palette_value = *(int *)((int)DAT_00487abc + 0x524);
+                                                entity->animation_frame = 0;
+                                                entity->subtype = 0;
+                                                entity->callback_address = *(int *)((int)DAT_00487abc + 0x430);
+                                                entity->counter_3c = 0;
+                                                entity->timer_5c = 0;
                                                 DAT_00489248 = DAT_00489248 + 1;
                                                 iVar16 = rand();
-                                                *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) =
-                                                    iVar16 % 0x32 + 0x28;
-                                                *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0x7d000;
-                                                *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
+                                                entity->health_or_damage_28 = iVar16 % 0x32 + 0x28;
+                                                entity->damage_44 = 0x7d000;
+                                                entity->palette_value =
                                                     *(unsigned short *)
                                                         ((int)DAT_00481f50 +
                                                          ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2)
@@ -578,39 +577,38 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                         uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
                                                     }
                                                     iVar16 = rand();
-                                                    int eb2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                                    *(int *)(eb2 + 0x00) = iVar15 << 0x12;
-                                                    *(int *)(eb2 + 0x08) = iVar8 * FIXED_SCALE;
-                                                    *(int *)(eb2 + 0x18) =
+                                                    Entity *entity = &DAT_004892e8[DAT_00489248];
+                                                    entity->position_x = iVar15 << 0x12;
+                                                    entity->position_y = iVar8 * FIXED_SCALE;
+                                                    entity->velocity_x =
                                                         *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar16 % 2000) >> 10;
-                                                    *(int *)(eb2 + 0x1c) =
+                                                    entity->velocity_y =
                                                         *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar16 % 2000) >> 10;
-                                                    *(int *)(eb2 + 0x04) = iVar15 << 0x12;
-                                                    *(int *)(eb2 + 0x0c) = iVar8 * FIXED_SCALE;
-                                                    *(int *)(eb2 + 0x10) = 0;
-                                                    *(int *)(eb2 + 0x14) = 0;
-                                                    *(unsigned char *)(eb2 + 0x21) = 100;
+                                                    entity->previous_x = iVar15 << 0x12;
+                                                    entity->previous_y = iVar8 * FIXED_SCALE;
+                                                    entity->motion_x_10 = 0;
+                                                    entity->motion_y_14 = 0;
+                                                    entity->type = 100;
                                                     iVar16 = rand();
-                                                    *(short *)(eb2 + 0x24) = (short)(iVar16 % 6);
-                                                    *(unsigned char *)(eb2 + 0x20) = 0;
-                                                    *(unsigned char *)(eb2 + 0x26) = 0xff;
-                                                    *(unsigned char *)(eb2 + 0x22) = param_12;
-                                                    *(int *)(eb2 + 0x28) = 0;
-                                                    *(int *)(eb2 + 0x38) = *(int *)((int)DAT_00487abc + 0xD1E8);
-                                                    *(int *)(eb2 + 0x44) = *(int *)((int)DAT_00487abc + 0xD224);
-                                                    *(int *)(eb2 + 0x48) = 0;
-                                                    *(int *)(eb2 + 0x4c) = *(int *)((int)DAT_00487abc + 0xD254);
-                                                    *(unsigned char *)(eb2 + 0x54) = 0;
-                                                    *(unsigned char *)(eb2 + 0x40) = 0;
-                                                    *(int *)(eb2 + 0x34) = *(int *)((int)DAT_00487abc + 0xD160);
-                                                    *(int *)(eb2 + 0x3c) = 0;
-                                                    *(unsigned char *)(eb2 + 0x5c) = 0;
+                                                    entity->variant_24 = (short)(iVar16 % 6);
+                                                    entity->state_20 = 0;
+                                                    entity->auxiliary_26 = 0xff;
+                                                    entity->owner = param_12;
+                                                    entity->health_or_damage_28 = 0;
+                                                    entity->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD1E8);
+                                                    entity->damage_44 = *(int *)((int)DAT_00487abc + 0xD224);
+                                                    entity->scratch_48 = 0;
+                                                    entity->palette_value = *(int *)((int)DAT_00487abc + 0xD254);
+                                                    entity->animation_frame = 0;
+                                                    entity->subtype = 0;
+                                                    entity->callback_address = *(int *)((int)DAT_00487abc + 0xD160);
+                                                    entity->counter_3c = 0;
+                                                    entity->timer_5c = 0;
                                                     DAT_00489248 = DAT_00489248 + 1;
                                                     iVar16 = rand();
-                                                    *(int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) =
-                                                        iVar16 % 0x32 + 0x28;
-                                                    *(int *)(DAT_00489248 * 0x80 + -0x3c + (int)DAT_004892e8) = 0;
-                                                    *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) =
+                                                    entity->health_or_damage_28 = iVar16 % 0x32 + 0x28;
+                                                    entity->damage_44 = 0;
+                                                    entity->palette_value =
                                                         *(unsigned short *)
                                                             ((int)DAT_00481f50 +
                                                              ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar15) * 2)
@@ -755,33 +753,33 @@ LAB_00436bc6:
             iVar6 = rand();
             iVar17 = rand();
             iVar7 = (iVar6 % 6 + -3) * FIXED_SCALE + param_1 * FIXED_SCALE;
-            int eb3 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(eb3 + 0x00) = iVar7;
+            Entity *entity = &DAT_004892e8[DAT_00489248];
+            entity->position_x = iVar7;
             iVar6 = (iVar17 % 6 + -3) * FIXED_SCALE + param_2 * FIXED_SCALE;
-            *(int *)(eb3 + 0x08) = iVar6;
-            *(int *)(eb3 + 0x18) =
+            entity->position_y = iVar6;
+            entity->velocity_x =
                 (int)(*(int *)((int)DAT_00487ab0 + uVar10 * 4) * (int)(uVar12 & 0xff)) >> 8;
-            *(int *)(eb3 + 0x1c) =
+            entity->velocity_y =
                 (int)(*(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (int)(uVar12 & 0xff)) >> 8;
-            *(int *)(eb3 + 0x04) = iVar7;
-            *(int *)(eb3 + 0x0c) = iVar6;
-            *(int *)(eb3 + 0x10) = 0;
-            *(int *)(eb3 + 0x14) = 0;
-            *(unsigned char *)(eb3 + 0x21) = 2;
-            *(unsigned short *)(eb3 + 0x24) = 0;
-            *(unsigned char *)(eb3 + 0x20) = 5;
-            *(unsigned char *)(eb3 + 0x26) = 0xff;
-            *(unsigned char *)(eb3 + 0x22) = 0xff;
-            *(int *)(eb3 + 0x28) = 0;
-            *(int *)(eb3 + 0x38) = *(int *)((int)DAT_00487abc + 0x4B8);
-            *(int *)(eb3 + 0x44) = *(int *)((int)DAT_00487abc + 0x4F4);
-            *(int *)(eb3 + 0x48) = 0;
-            *(int *)(eb3 + 0x4c) = *(int *)((int)DAT_00487abc + 0x524);
-            *(unsigned char *)(eb3 + 0x54) = 0;
-            *(unsigned char *)(eb3 + 0x40) = 0;
-            *(int *)(eb3 + 0x34) = *(int *)((int)DAT_00487abc + 0x430);
-            *(int *)(eb3 + 0x3c) = 0;
-            *(unsigned char *)(eb3 + 0x5c) = 0;
+            entity->previous_x = iVar7;
+            entity->previous_y = iVar6;
+            entity->motion_x_10 = 0;
+            entity->motion_y_14 = 0;
+            entity->type = 2;
+            entity->variant_24 = 0;
+            entity->state_20 = 5;
+            entity->auxiliary_26 = 0xff;
+            entity->owner = 0xff;
+            entity->health_or_damage_28 = 0;
+            entity->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x4B8);
+            entity->damage_44 = *(int *)((int)DAT_00487abc + 0x4F4);
+            entity->scratch_48 = 0;
+            entity->palette_value = *(int *)((int)DAT_00487abc + 0x524);
+            entity->animation_frame = 0;
+            entity->subtype = 0;
+            entity->callback_address = *(int *)((int)DAT_00487abc + 0x430);
+            entity->counter_3c = 0;
+            entity->timer_5c = 0;
             DAT_00489248 = DAT_00489248 + 1;
 
             iVar6 = rand();
@@ -792,14 +790,14 @@ LAB_00436bc6:
                 unsigned short g5 = (pal555 >> 5) & 0x1F;
                 unsigned short b5 = pal555 & 0x1F;
                 unsigned short rgb565 = (r5 << 11) | (g5 << 6) | b5;
-                *(unsigned int *)(DAT_00489248 * 0x80 + -0x34 + (int)DAT_004892e8) = rgb565 + 30000;
+                entity->palette_value = rgb565 + 30000;
             }
             uVar10 = rand();
             uVar10 = uVar10 & 0x8000007f;
             if ((int)uVar10 < 0) {
                 uVar10 = (uVar10 - 1 | 0xffffff80) + 1;
             }
-            *(unsigned int *)(DAT_00489248 * 0x80 + -0x58 + (int)DAT_004892e8) = uVar10 + 0x80;
+            entity->health_or_damage_28 = uVar10 + 0x80;
 
             param_6 = param_6 + 1;
             fVar3 = (float)param_6;
