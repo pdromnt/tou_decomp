@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install 32-bit MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          update: true
+          install: >-
+            make
+            mingw-w64-i686-binutils
+            mingw-w64-i686-gcc
+
+      - name: Build game
+        shell: msys2 {0}
+        run: make -j2
+
+      - name: Verify 32-bit executable
+        shell: msys2 {0}
+        run: objdump -f TOU.exe | grep -q "file format pei-i386"

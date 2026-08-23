@@ -55,6 +55,10 @@ mingw32-make -j8
 The output is `TOU.exe`. `build.bat` performs the same clean build and closes an
 already-running decomp executable first.
 
+The separate `Build` GitHub Actions workflow performs this 32-bit build for
+every push and pull request. It validates the executable architecture but never
+publishes a release.
+
 To create the same archive layout used by CI:
 
 ```powershell
