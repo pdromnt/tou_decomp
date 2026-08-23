@@ -127,7 +127,10 @@ The runtime pool is now typed as `Entity *DAT_004892e8`. Raw accesses are being
 replaced in small batches so each changed routine can be compared independently
 against its previous generated x86 and, where relevant, the original executable.
 The first batch covers callback record lookup, pre-tick flag reset, and the
-menu/intro entity renderer; simulation and weapon-heavy paths remain raw.
+menu/intro entity renderer. The second batch covers the common dispatcher
+prologue in `FUN_00434310`: previous-position capture, animation bookkeeping,
+callback identity, and the turret-projectile gravity guard. Its large legacy
+behavior fallback and weapon-heavy paths remain raw.
 
 ## Config Ownership
 

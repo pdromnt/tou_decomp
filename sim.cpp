@@ -1937,39 +1937,40 @@ void FUN_00434310(void)
     int i = 0;
 
     while (i < DAT_00489248) {
-        int ebase = i * 0x80 + (int)DAT_004892e8;
-        unsigned char ent_type = *(unsigned char *)(ebase + 0x21);
-        unsigned char ent_state = *(unsigned char *)(ebase + 0x20);
+        Entity *entity = &DAT_004892e8[i];
+        int ebase = (int)entity;
+        unsigned char ent_type = entity->type;
+        unsigned char ent_state = entity->state_20;
         int should_remove = 0;
 
         /* Save previous positions */
-        *(int *)(ebase + 0x04) = *(int *)(ebase + 0x00);
-        *(int *)(ebase + 0x0C) = *(int *)(ebase + 0x08);
+        entity->previous_x = entity->position_x;
+        entity->previous_y = entity->position_y;
 
         /* Advance animation frame counter */
-        unsigned char frame_ctr = *(unsigned char *)(ebase + 0x54) + 1;
-        *(unsigned char *)(ebase + 0x54) = frame_ctr;
+        unsigned char frame_ctr = entity->animation_frame + 1;
+        entity->animation_frame = frame_ctr;
 
         /* Original 0x00434310 uses an unsigned strict-greater comparison. */
-        int type_entry = (unsigned int)*(unsigned char *)(ebase + 0x40) +
+        int type_entry = (unsigned int)entity->subtype +
                          (unsigned int)ent_type * 0x218;
         unsigned char max_frame = DAT_00487abc != NULL
             ? *(unsigned char *)((int)DAT_00487abc + type_entry + 0x12A)
             : 0;
         if (max_frame < frame_ctr) {
-            *(unsigned char *)(ebase + 0x54) = 0;
-            *(int *)(ebase + 0x48) = *(int *)(ebase + 0x48) + 1;
+            entity->animation_frame = 0;
+            entity->scratch_48 = entity->scratch_48 + 1;
 
             unsigned char max_cycles = DAT_00487abc != NULL
                 ? *(unsigned char *)((int)DAT_00487abc + type_entry + 0x124)
                 : 0;
-            if ((unsigned int)max_cycles <= (unsigned int)*(int *)(ebase + 0x48)) {
-                *(int *)(ebase + 0x48) = 0;
+            if ((unsigned int)max_cycles <= (unsigned int)entity->scratch_48) {
+                entity->scratch_48 = 0;
             }
         }
 
         DAT_00481e8f = 0;
-        uint32_t callback_address = tou_binary::load_u32((void *)ebase, 0x34);
+        uint32_t callback_address = entity->callback_address;
         int callback_handled = EntityCallbacks_Dispatch(callback_address, i) ? 1 : 0;
         if (callback_handled) {
             should_remove = DAT_00481e8f == 1;
@@ -1977,8 +1978,8 @@ void FUN_00434310(void)
 
         /* Force type 0x13 turret bullets: zero gravity + zero acceleration every tick.
          * Direct aim is correct at spawn but something keeps modifying velocity. */
-        if (ent_type == 0x13 && *(unsigned char *)(ebase + 0x22) >= 0x50) {
-            *(int *)(ebase + 0x38) = 0;
+        if (ent_type == 0x13 && entity->owner >= 0x50) {
+            entity->gravity_or_motion_38 = 0;
         }
 
         /* === Entity behavior (inline replacement for callback at +0x34) === */
