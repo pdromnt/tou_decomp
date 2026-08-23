@@ -17,7 +17,28 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release source
+        id: release_source
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          git check-ref-format "refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Invalid release tag: $env:RELEASE_TAG"
+          }
+
+          git show-ref --verify --quiet "refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -eq 0) {
+            git checkout --detach "refs/tags/$env:RELEASE_TAG"
+            "tag_exists=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "tag_exists=false" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Install 32-bit MinGW
         uses: msys2/setup-msys2@v2
@@ -42,7 +63,7 @@ jobs:
           "archive=$archive" >> $env:GITHUB_OUTPUT
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tunnels-of-underworld-windows
           path: ${{ steps.package.outputs.archive }}
@@ -53,4 +74,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
-        run: gh release create $env:RELEASE_TAG "${{ steps.package.outputs.archive }}" --target $env:GITHUB_SHA --generate-notes
+          TAG_EXISTS: ${{ steps.release_source.outputs.tag_exists }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG $env:ARCHIVE --clobber
+          } elseif ($env:TAG_EXISTS -eq "true") {
+            gh release create $env:RELEASE_TAG $env:ARCHIVE --verify-tag --generate-notes
+          } else {
+            gh release create $env:RELEASE_TAG $env:ARCHIVE --target $env:GITHUB_SHA --generate-notes
+          }

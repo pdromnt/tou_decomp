@@ -66,7 +66,10 @@ To create the same archive layout used by CI:
 The `Build release` GitHub Actions workflow only runs when started manually.
 Enter the release tag/version (for example `v1.0.0`) when choosing **Run
 workflow**; it builds the game and creates the tagged GitHub Release with the
-package attached. Commits and tag pushes do not trigger releases.
+package attached. If that tag already exists, the workflow builds its exact
+commit; otherwise it creates the tag at the commit selected when starting the
+workflow. Rerunning an existing release replaces its package. Commits and tag
+pushes do not trigger releases.
 
 ## Longer-Term Direction
 
