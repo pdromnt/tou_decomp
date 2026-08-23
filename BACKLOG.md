@@ -30,7 +30,13 @@ the straight and two side projectiles in primary fire, bomb/mine spawning, and
 energy-explosion particles. Their partial initialization and RNG order remain
 intentional. The sixth batch converts all entity construction inside the main
 tile-damage/explosion routine plus the environmental falling-debris constructor,
-including the post-count lifetime, gravity/damage, and palette writes.
+including the post-count lifetime, gravity/damage, and palette writes. The
+expanded seventh-through-twelfth batches cover projectile/structure collision,
+the nine fire-damage entity categories, particle deflection by Moving Suckers,
+enemy/turret projectile construction, trooper and player death fragments, and
+the remaining player-explosion terrain debris constructors. These conversions
+retain strict collision bounds, category ordering, signed state checks, RNG
+ordering, partial initialization, and post-count writes.
 
 **Known layout:**
 ```
