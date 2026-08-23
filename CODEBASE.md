@@ -109,6 +109,24 @@ in `sim.cpp`. The parity pass restored address-based dispatch:
 Callback constants intentionally retain original virtual addresses. They are
 identity keys, not host function pointers.
 
+### Entity record layout
+
+`types.h` documents the verified `Entity` record and asserts its 0x80-byte size
+and stable offsets. `Init_Memory_Pools` allocates `0x51400` bytes at original
+address `0x004203b5`, which is 2600 physical records; the gameplay loop's 2500
+limit is an active-entity cap, not the allocation size.
+
+Several record fields are deliberately named `auxiliary` or `scratch`. Original
+callbacks reuse the same byte or integer as cooldown, color, lifetime, fuse,
+collision guard, or cadence depending on entity type. Do not give one of these
+fields a universal semantic name until every relevant callback has been traced.
+In particular, offsets `+0x54` and `+0x5C` are byte-sized fields, while `+0x34`
+stores a 32-bit guest callback address rather than a native C++ function pointer.
+
+The runtime pool remains `void *DAT_004892e8` for now. Converting that pointer
+and replacing raw accesses is a separate backlog step so each migration can be
+verified independently against the original executable.
+
 ## Config Ownership
 
 `options.cfg` is represented by `g_ConfigBlob`. Much of the menu writes directly
