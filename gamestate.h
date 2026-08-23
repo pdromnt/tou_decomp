@@ -1,0 +1,226 @@
+#ifndef TOU_GAMESTATE_H
+#define TOU_GAMESTATE_H
+
+#include <stddef.h>
+
+#include "compat.h"
+#include "types.h"
+
+/* ===== Error Strings (matching binary string table) ===== */
+/* 0047F0EC */ #define STR_ERR_DDRAW_INSTALL  "DirectDraw Init FAILED.\nInstall DirectX 7.0 to play TOU.\n\nRead readme.txt for more\ninformation."
+/* 0047EF74 */ #define STR_ERR_DDRAW_MODE     "DirectDraw Init FAILED.\nCouldn't set video mode to 640x480 16-bit.\nYour video card must support this\nresolution to play TOU.\nRead readme.txt for more information"
+/* 0047F098 */ #define STR_ERR_DDRAW_MEMORY   "DirectDraw Init FAILED.\nNot enough memory.\n\nRead readme.txt for more\ninformation."
+/* 0047F058 */ #define STR_ERR_DINPUT         "DirectInput Init FAILED.\n\nRead readme.txt for more\ninformation."
+/* 0047F048 */ #define STR_ERR_UNKNOWN        "Unknown error."
+/* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."
+/* 0047F14C */ #define STR_ERR_INIT_NOLEVELS  "Tou init failed!\nYou don't have any levels or GG themes!\n\nYou can't run the game without levels.\n\nRead readme.txt for more information."
+/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.1"
+/* 0047EB10 */ #define STR_CLASSNAME          "TOU"
+
+/* ===== Window / App Globals (winmain.cpp) ===== */
+extern HWND                  hWnd_Main;         /* 00489EDC */
+extern int                   g_bIsActive;       /* 00489EC4 */
+
+/* ===== Game State (winmain.cpp) ===== */
+extern unsigned char         g_GameState;       /* 004877A0 - main state machine */
+
+/* ===== Sub-State Globals (gameloop.cpp) ===== */
+extern char                  g_MouseButtons;    /* 004877BE */
+extern unsigned char         g_ProcessInput;    /* 00489295 */
+extern unsigned char         g_SubState;        /* 00489296 */
+extern unsigned char         g_NeedsRedraw;     /* 00489297 */
+extern unsigned char         g_SurfaceReady;    /* 00489298 */
+extern unsigned char         g_SubState2;       /* 00489299 */
+extern DWORD                 DAT_00489ee8;      /* Key repeat cooldown timestamp */
+extern unsigned int          DAT_00489eec;      /* Last pressed key scan code */
+
+/* ===== Timing (winmain.cpp) ===== */
+extern DWORD                 g_TimerStart;      /* 004892B0 */
+extern int                   g_TimerAux;        /* 004892B4 */
+
+/* ===== Config (init.cpp) ===== */
+extern unsigned char         g_ConfigBlob[];    /* 00481F58 - raw 6408-byte config data */
+extern unsigned char         DAT_00483720[8];   /* Sound config */
+extern unsigned short        DAT_00483820;      /* Fade target color (RGB565) */
+extern unsigned char         DAT_00487640[4];   /* Display mode */
+extern unsigned short        DAT_00483838[4];   /* Team color palette (RGB555) */
+extern DWORD                 g_FrameTimer;      /* 004877F4 */
+extern unsigned char         DAT_004877b1;
+extern unsigned char         DAT_004877a4;
+extern DWORD                 DAT_004892b8;
+extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
+extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
+extern char                  DAT_00483732;      /* config option (preserved across Load_Options_Config) */
+extern char                  DAT_0048372d;      /* fog of war mode: 0=off, 1=full, 2=simplified */
+extern char                  DAT_0048372e;      /* fog of war ray resolution */
+extern char                  DAT_0048372f;      /* fog of war sub-option */
+extern char                  DAT_00483730;      /* fog of war wobble enable */
+
+/* ===== Menu / Session (init.cpp / FUN_0042d8b0) ===== */
+extern char                **g_MenuStrings;     /* 00481D3C - 350-entry menu text table */
+extern void                 *g_GameViewData;    /* 00481D40 - game view item array */
+extern char                **g_KeyNameTable;    /* 00481D88 - 256-entry scan code name table */
+extern unsigned char         g_KeyOrderTable[47]; /* 00481D48 - key sort/priority order */
+extern unsigned char         DAT_00481d84;      /* extra key order byte */
+extern unsigned char         g_KeyboardState[256]; /* 00481D8C - DirectInput keyboard state */
+
+/* ===== Additional State Globals ===== */
+extern unsigned char         DAT_004877a8;      /* game sub-flag */
+extern unsigned char         DAT_004877bc;      /* input flag */
+extern unsigned char         DAT_004877bd;      /* input flag */
+extern unsigned char         DAT_004877c4;      /* render flag */
+extern unsigned char         DAT_004877c9;      /* frame sub-index */
+extern int                   DAT_004877cc;      /* scroll/hover decay counter */
+extern unsigned char         DAT_004877e5;      /* input event trigger */
+extern unsigned char         DAT_004877ec;      /* input accumulator */
+extern int                   DAT_00487824;      /* menu display state */
+extern unsigned char         DAT_00483724[4];   /* display config */
+extern int                   DAT_00487784;      /* turret count */
+extern unsigned char         DAT_00483834;      /* turret flag */
+extern unsigned char         DAT_00483835;      /* trooper flag */
+extern int                   DAT_00489e9c;      /* menu/game counter */
+
+/* ===== Menu Scrollbar (init.cpp) ===== */
+extern int                   DAT_004877d8;      /* scrollbar area width */
+extern int                   DAT_004877dc;      /* scrollbar area top */
+extern int                   DAT_004877e0;      /* scrollbar area height */
+extern int                   DAT_004877ac;      /* scroll item start index */
+extern int                   DAT_004877b0;      /* scroll mode */
+
+/* ===== Gameplay Tick (gameloop.cpp) ===== */
+extern short                 DAT_00483746;       /* tick rate (ticks per second, default 25) */
+extern char                  DAT_00489288;       /* sub-frame counter (0-7) */
+extern char                  DAT_0048373e;       /* activation guard flag */
+
+/* ===== Difficulty / Team Config ===== */
+extern int                   DAT_004892a8;       /* difficulty constant 1 (round length) */
+extern int                   DAT_004892ac;       /* difficulty constant 2 */
+extern char                  DAT_00483740;       /* difficulty setting 1 (from config blob, offset 0x17E8) */
+extern char                  DAT_00483741;       /* difficulty sub-setting (0x17E9) */
+extern char                  DAT_00483742;       /* shield/energy bar enable flag (0x17EA) */
+extern char                  DAT_00483743;       /* minimap/radar enable flag (0x17EB) */
+extern char                  DAT_0048373f;       /* difficulty setting 2 */
+extern int                   DAT_00483748;       /* stat scaling packed (from config blob) */
+extern int                   DAT_0048374c;       /* speed scaling packed (from config blob) */
+extern int                   DAT_00483750;       /* misc config packed */
+extern char                  DAT_00483836;       /* team mode (0=none, 2=teams) */
+extern int                   DAT_00483824;       /* game scaling constant 1 */
+extern int                   DAT_00483828;       /* game scaling constant 2 */
+extern int                   DAT_0048382c;       /* game scaling constant 3 (fire rate scale) */
+extern char                  DAT_0048372a;       /* team count setting */
+extern char                  DAT_0048372b;       /* team mode setting */
+extern char                  DAT_00483729;       /* game type setting */
+extern char                  DAT_00483731;       /* sky/fade color mode / fog of war sub-option */
+extern char                  DAT_00483739;       /* game mode preset index */
+extern float                 DAT_00483854;       /* entity density scale factor */
+extern float                 DAT_00483858;       /* inverse density factor (1.0/density) */
+extern char                  DAT_00489299;       /* sub-state 2 flag */
+
+/* ===== Debug Logging (enabled with --logging launch arg) ===== */
+extern int g_LogEnabled;
+void Log(const char *format, ...);
+#define LOG Log
+
+/* ===== Function Prototypes: winmain.cpp ===== */
+extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+int Handle_Init_Error(HWND hWnd, unsigned char errorCode);
+
+/* ===== Function Prototypes: init.cpp ===== */
+void Early_Init_Vars(void);
+int  System_Init_Check(void);
+int  Init_DirectInput(void);
+void Init_Game_Config(void);
+void Set_Config_Defaults(void);      /* hardcoded defaults → g_ConfigBlob (no I/O) */
+void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → options.cfg → globals */
+void Init_Math_Tables(int *buffer, unsigned int count);
+void FUN_0041a8c0(void);          /* session/level init */
+void FUN_0045c300(void);          /* game mode presets (local) */
+
+/* ===== Function Prototypes: memory.cpp ===== */
+void  Init_Memory_Pools(void);
+void *Mem_Alloc(size_t size);
+void  Mem_Free(void *ptr);
+
+/* ===== Function Prototypes: gameloop.cpp ===== */
+void Game_State_Manager(void);
+void Game_Update_Render(void);
+void Input_Update(void);
+void Handle_Menu_State(void);
+void Intro_Sequence(void);
+int  Init_New_Game(void);
+int  FUN_00423150(void);       /* Load sprites from all3.gfx */
+void Free_Game_Resources(void);
+void FUN_0045e1f0(void);       /* pre-tick entity flag reset */
+
+/* ===== Function Prototypes: menu.cpp ===== */
+int  Menu_Init_And_Loop(void);
+int  Load_Level_Resources(void);
+void FUN_004102b0(void);
+void FUN_0041bc50(void);
+void FUN_0041b010(void);
+void FUN_0041b5d0(void);
+void FUN_0041bad0(void);
+void FUN_0041bb00(void);
+int  FUN_004249c0(void);
+void FUN_00424240(int ship_type, int ship_index, int color_r, int color_g, int color_b, int palette_index);
+void FUN_0041bfe0(void);
+void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned char type, char subtype);
+void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsigned char orientation);
+void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, unsigned char team);
+void FUN_00407080(int x, int y, unsigned char index, unsigned char type);
+void FUN_00407140(int x, int y, unsigned char type);
+void FUN_00440ba0(int x, int y, int team, char param);
+void FUN_00457c70(int index);
+int  FUN_00410030(void);        /* conditional entity spawn */
+void FUN_0041a370(void);        /* player stat scaling */
+void FUN_0041bed0(void);        /* difficulty constants */
+void FUN_00451500(void);        /* team initialization */
+void FUN_0041d2e0(void);        /* edge detection */
+void FUN_0041aea0(void);        /* player spawn init */
+void FUN_00449040(char param);  /* visibility map (0=incremental, 1=full) */
+
+/* ===== Function Prototypes: init.cpp (config) ===== */
+void Load_Options_Config(void);   /* reads options.cfg → g_ConfigBlob */
+void Save_Options_Config(void);   /* writes g_ConfigBlob → options.cfg */
+void Sync_Config_From_Blob(void); /* blob → separate globals (needed at load) */
+void Sync_Config_To_Blob(void);   /* globals → blob (DEAD CODE — see refactor note in init.cpp) */
+
+/* ===== Utility functions (init.cpp) ===== */
+void FUN_004644af(char *dest, const unsigned char *format, ...);
+void FUN_00425840(void);
+void FUN_004265e0(int index);
+
+/* ===== Stub Prototypes (undecompiled functions) ===== */
+void FUN_0041eae0(void);
+/* FUN_0045a060 and FUN_0045b2a0 moved to effects.cpp prototypes above */
+void FUN_0041fc10(void);
+void FUN_0041f900(void);
+void FUN_0042d8b0(void);  /* Session/UI init (init.cpp) */
+int  FUN_00422740(void);
+int  FUN_004252d0(void);    /* Load pal.col + shipal.col color palettes */
+void FUN_00420be0(void);
+void FUN_0041e580(void);
+int  FUN_00414060(void);
+void FUN_00413f70(void);
+void FUN_0041e4a0(void);
+void FUN_0045d7d0(void);
+void FUN_00425fe0(void);  /* Main game/menu render loop (init.cpp) */
+void FUN_0042a470(void);  /* Menu page builder */
+void FUN_00426650(void);  /* Game/menu logic tick */
+void FUN_00427df0(int item_idx, char click_type); /* Menu item click handler */
+void FUN_00427a70(int item_idx); /* Input mode key assignment handler */
+int  FUN_00430200(int x, int y, int string_idx, int color_style, int font_idx,
+                  unsigned char clickable, unsigned char render_mode,
+                  unsigned char alignment, unsigned char nav_target);
+void FUN_0042ff80(int x, int y, int sprite_idx, unsigned char clickable,
+                  unsigned char render_mode, unsigned char alignment,
+                  unsigned char nav_target);
+void FUN_0042fc90(int value);
+void FUN_0042fcf0(void);
+int  FUN_0042fdf0(int y);
+void FUN_0042fcb0(void);
+int  FUN_0042fc40(void);
+void FUN_0042fc10(void);
+void FUN_0041d740(void);
+
+#endif /* TOU_GAMESTATE_H */
