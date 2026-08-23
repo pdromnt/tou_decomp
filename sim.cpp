@@ -7379,7 +7379,7 @@ void FUN_00458010(void)
                 if (DAT_00489240 > 0) {
                     int p = 0;
                     int p_off = 0;
-                    int player_base = DAT_00487810;
+                    int player_base = (int)DAT_00487810;
                     do {
                         /* Skip same-team players and dead/inactive players */
                         if (*(char *)(off + 0x1d + (int)DAT_00481f28) != *(char *)(p_off + 0x2c + player_base) &&
@@ -7423,7 +7423,7 @@ next_player:
                         *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrt((double)best_dist);
 
                         DAT_00481edc = *(int *)(DAT_00487810 + best_target_idx * 0x598);
-                        int tgt_off = DAT_00487810 + best_target_idx * 0x598;
+                        int tgt_off = (int)DAT_00487810 + best_target_idx * 0x598;
                         DAT_00481ee0 = *(int *)(tgt_off + 4);
                         DAT_00481ef4 = *(int *)(tgt_off + 0x10);
                         DAT_00481ef8 = *(int *)(tgt_off + 0x14);
@@ -8069,7 +8069,7 @@ void FUN_00453cd0(void)
                 if (DAT_00489240 > 0) {
                     int poff = 0;
                     int *dmg_ptr = &DAT_00486be8[0];
-                    int pbase = DAT_00487810;
+                    int pbase = (int)DAT_00487810;
                     do {
                         int *hp_ptr = (int *)(poff + 0x20 + pbase);
                         if (*hp_ptr > 0 && pi2 != (unsigned char)p[5]) {
@@ -8100,7 +8100,7 @@ void FUN_00453cd0(void)
                                         }
                                         /* Random knockback (1/500 chance) */
                                         int rk = rand();
-                                        pbase = DAT_00487810;
+                                        pbase = (int)DAT_00487810;
                                         if (rk % 500 == 0) {
                                             unsigned int heading = (unsigned int)(*(int *)(poff + 0x18 + DAT_00487810) - 0x400) & 0x7ff;
                                             *(int *)(poff + 0x10 + DAT_00487810) =
@@ -8108,7 +8108,7 @@ void FUN_00453cd0(void)
                                                 *(int *)((int)DAT_00487ab0 + heading * 4);
                                             int *push_y = (int *)(poff + 0x14 + DAT_00487810);
                                             *push_y = *push_y + *(int *)((int)DAT_00487ab0 + 0x800 + heading * 4);
-                                            pbase = DAT_00487810;
+                                            pbase = (int)DAT_00487810;
                                         }
                                     }
                                     else {
@@ -8123,12 +8123,12 @@ void FUN_00453cd0(void)
                                             if (*(char *)(pbase + 0x2c + (unsigned int)(unsigned char)p[5] * 0x598) !=
                                                 *(char *)(poff + 0x2c + pbase) || DAT_0048373d != '\0') {
                                                 *hp_ptr = *hp_ptr - 0x6400;
-                                                pbase = DAT_00487810;
+                                                pbase = (int)DAT_00487810;
                                             }
                                         }
                                         else {
                                             *hp_ptr = *hp_ptr - 0x6400;
-                                            pbase = DAT_00487810;
+                                            pbase = (int)DAT_00487810;
                                         }
                                     }
                                     /* Set attacker and damage indicator */
@@ -8137,15 +8137,15 @@ void FUN_00453cd0(void)
                                         if (*(char *)(pbase + 0x2c + (unsigned int)att_owner * 0x598) !=
                                             *(char *)(poff + 0x2c + pbase) || DAT_0048373d != '\0') {
                                             *(unsigned char *)(poff + 0x4a1 + pbase) = att_owner;
-                                            pbase = DAT_00487810;
+                                            pbase = (int)DAT_00487810;
                                         }
                                     }
                                     else {
                                         *(unsigned char *)(poff + 0x4a1 + pbase) = 0xff;
-                                        pbase = DAT_00487810;
+                                        pbase = (int)DAT_00487810;
                                     }
                                     *(unsigned char *)(poff + 0x4a2 + pbase) = 0x6e;
-                                    pbase = DAT_00487810;
+                                    pbase = (int)DAT_00487810;
                                 }
                             }
                         }

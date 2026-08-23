@@ -1115,7 +1115,7 @@ void FUN_0041b010(void)
     if (0 < DAT_00489240) {
         offset = 0;
         do {
-            base = DAT_00487810;
+            base = (int)DAT_00487810;
 
             /* Clear velocity/movement */
             *(int *)(offset + 0x10 + base) = 0;
@@ -1213,7 +1213,7 @@ void FUN_0041b010(void)
             *(char *)(offset + 0x4A4 + base) = 0;
 
             /* Ship type selection based on game mode */
-            base = DAT_00487810;
+            base = (int)DAT_00487810;
             if (DAT_00483738 == 1) {
                 /* Mode 1: random from available types */
                 if (0 < *(int *)(offset + 0x38 + base)) {
@@ -1230,7 +1230,7 @@ void FUN_0041b010(void)
                     do {
                         if (*(char *)(offset + base + 0x3C + j) == DAT_004836ce[i]) {
                             *(char *)(offset + 0x34 + base) = (char)j;
-                            base = DAT_00487810;
+                            base = (int)DAT_00487810;
                         }
                         j++;
                     } while (j < *(int *)(offset + 0x38 + base) + 1);
@@ -1240,7 +1240,7 @@ void FUN_0041b010(void)
                 }
             }
 
-            base = DAT_00487810;
+            base = (int)DAT_00487810;
             *(int *)(offset + 0x4AC + base) = 0;
             *(int *)(offset + 0x4A8 + base) = 0;
             *(int *)(offset + 0x4B0 + base) = 0;
@@ -1315,7 +1315,7 @@ void FUN_0041b5d0(void)
     idx = 0;
     i = 0;
     DAT_00487808 = 0;
-    base = DAT_00487810;
+    base = (int)DAT_00487810;
     count = DAT_00489240;
 
     if (0 < count) {
@@ -1325,7 +1325,7 @@ void FUN_0041b5d0(void)
                 if (idx > 3) {
                     /* Max 4 human players */
                     *(char *)(off + 0x480 + base) = 0;
-                    base = DAT_00487810;
+                    base = (int)DAT_00487810;
                     count = DAT_00489240;
                     idx = DAT_00487808;
                 }
@@ -1349,7 +1349,7 @@ void FUN_0041b5d0(void)
             *(int *)(off + 0x488 + DAT_00487810) = 0;
             i++;
             off += 0x598;
-            base = DAT_00487810;
+            base = (int)DAT_00487810;
             idx = DAT_00487808;
         } while (i < DAT_00489240);
     }
@@ -1369,27 +1369,27 @@ void FUN_0041b5d0(void)
             case 0:
                 *(int *)(pidx * 0x598 + 0x484 + base) = 0;
                 *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = 0;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
                 break;
             case 1:
                 *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth;
                 *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
                 break;
             case 2:
                 *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth / 2;
                 *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
                 break;
             case 3:
                 *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth / 2;
                 *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight / 2;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
                 break;
             case 4:
                 *(int *)(pidx * 0x598 + 0x484 + base) = g_DisplayWidth / 2;
                 *(int *)(pidx * 0x598 + 0x488 + DAT_00487810) = g_DisplayHeight / 2;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
                 break;
             }
         }
@@ -1403,39 +1403,39 @@ void FUN_0041b5d0(void)
             if (local_4 == 1) {
                 *(int *)(pidx * 0x598 + 0x48C + base) = 0;
                 *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             } else if (local_4 == 2) {
                 *(int *)(pidx * 0x598 + 0x48C + base) = g_DisplayWidth / 2;
                 *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             } else if (local_4 == 3 || local_4 == 4) {
                 *(int *)(pidx * 0x598 + 0x48C + base) = g_DisplayWidth / 2;
                 *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = g_DisplayHeight / 2;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             }
             break;
         case 1:
             if (local_4 == 2) {
                 *(int *)(pidx * 0x598 + 0x48C + base) = 0;
                 *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             } else if (local_4 == 3 || local_4 == 4) {
                 *(int *)(pidx * 0x598 + 0x48C + base) = 0;
                 *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             }
             break;
         case 2:
             if (local_4 == 3 || local_4 == 4) {
                 *(int *)(pidx * 0x598 + 0x48C + base) = 0;
                 *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = g_DisplayHeight / 2;
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             }
             break;
         case 3:
             *(int *)(pidx * 0x598 + 0x48C + base) = g_DisplayWidth / 2;
             *(int *)(pidx * 0x598 + 0x490 + DAT_00487810) = 0;
-            base = DAT_00487810;
+            base = (int)DAT_00487810;
             break;
         }
     }
@@ -1450,7 +1450,7 @@ void FUN_0041b5d0(void)
                 *(int *)(off + 0x490 + base) += (field_488 - field_484) / 2;
                 *(int *)(off + 0x488 + DAT_00487810) =
                     *(int *)(off + 0x484 + DAT_00487810);
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             }
             field_484 = *(int *)(off + 0x484 + base);
             field_488 = *(int *)(off + 0x488 + base);
@@ -1458,7 +1458,7 @@ void FUN_0041b5d0(void)
                 *(int *)(off + 0x48C + base) += (field_484 - field_488) / 2;
                 *(int *)(off + 0x484 + DAT_00487810) =
                     *(int *)(off + 0x488 + DAT_00487810);
-                base = DAT_00487810;
+                base = (int)DAT_00487810;
             }
         }
     }
@@ -1469,7 +1469,7 @@ void FUN_0041b5d0(void)
         if (*(int *)(base + 0x488 + DAT_004877f8[i] * 0x598) < 200 ||
             *(int *)(off + 0x484) < 0xDC) {
             *(char *)(off + 0x9E) = 0;
-            base = DAT_00487810;
+            base = (int)DAT_00487810;
         }
     }
 

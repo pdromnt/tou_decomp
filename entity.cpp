@@ -4861,7 +4861,7 @@ static void FUN_0044b990(void)
     /* Map key bindings to button flags for each human player */
     for (i = 0; i < DAT_00489240; i++) {
         int off = i * 0x598;
-        int base = DAT_00487810 + off;
+        int base = (int)DAT_00487810 + off;
 
         /* Skip AI-controlled entities (+0xDD != 0) */
         if (*(char *)(base + 0xDD) != '\0')

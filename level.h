@@ -104,7 +104,7 @@ extern char                  DAT_00489d7c[];     /* error string buffer (256 byt
 extern void                 *DAT_00487aa4;      /* large game state buffer */
 extern int                   DAT_00489254;      /* edge count */
 extern void                 *DAT_00489e84;      /* edge record array */
-extern int                   DAT_00487810;      /* player data base address (int used as ptr) */
+extern PlayerData           *DAT_00487810;      /* player/ship runtime records */
 extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
 /* Match-in-progress flag. Set to 1 by the "Start match" menu action

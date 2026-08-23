@@ -1371,7 +1371,7 @@ void FUN_0040d810(int param_1, unsigned int param_2)
  */
 void FUN_0040caf0(int param_1, unsigned int param_2)
 {
-    int player_base = DAT_00487810;
+    int player_base = (int)DAT_00487810;
 
     /* Pass 1: Ship sprites via FUN_0040c590 */
     int offset = 0;
@@ -1402,7 +1402,7 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                                  (py - eh / 2) - DAT_004806e0,
                                  *(unsigned char *)(player_base + 0xa3 + offset),
                                  param_1, param_2, blend);
-                    player_base = DAT_00487810;
+                    player_base = (int)DAT_00487810;
                 }
             }
         }
@@ -1422,7 +1422,7 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                     if (*(int *)(offset + 0xa4 + player_base) != 0 &&
                         *(char *)(*(char *)(offset + 0x34 + player_base) + offset + 0x3c + player_base) == '\r') {
                         int r = rand();
-                        player_base = DAT_00487810;
+                        player_base = (int)DAT_00487810;
                         if (r % 10 == 0) {
                             int r2 = rand();
                             int spr = r2 % 3 + 0x29;
@@ -1437,7 +1437,7 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                             FUN_0040c280(spr, (spx - (sw >> 1)) - DAT_004806dc,
                                          (spy - (sh >> 1)) - DAT_004806e0, 0,
                                          param_1, param_2, darkness);
-                            player_base = DAT_00487810;
+                            player_base = (int)DAT_00487810;
                         }
                     }
 
@@ -1457,7 +1457,7 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                         FUN_0040c280(spr, (spx - (sw >> 1)) - DAT_004806dc,
                                      (spy - (sh >> 1)) - DAT_004806e0, 0,
                                      param_1, param_2, darkness);
-                        player_base = DAT_00487810;
+                        player_base = (int)DAT_00487810;
                     }
 
                     /* Weapon charge glow (sprite 0x198 + charge level) */
@@ -1506,7 +1506,7 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                                         unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)*dst];
                                         *dst = ((unsigned short *)DAT_004876a4[22])[remap]; /* DAT_004876fc = palette[22] */
                                         intensity--;
-                                        player_base = DAT_00487810;
+                                        player_base = (int)DAT_00487810;
                                     }
                                     dst++;
                                     src_idx++;
@@ -1533,7 +1533,7 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
                         FUN_0040c280(spr, (spx - (sw >> 1)) - DAT_004806dc,
                                      (spy - (sh >> 1)) - DAT_004806e0, 0,
                                      param_1, param_2, darkness);
-                        player_base = DAT_00487810;
+                        player_base = (int)DAT_00487810;
                     }
                 }
             }

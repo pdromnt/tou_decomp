@@ -77,6 +77,114 @@ static_assert(offsetof(Entity, timer_5c) == 0x5C, "Entity::timer offset");
 static_assert(offsetof(Entity, scratch_60) == 0x60, "Entity::scratch_60 offset");
 static_assert(offsetof(Entity, scratch_64) == 0x64, "Entity::scratch_64 offset");
 
+/*
+ * Original 0x598-byte player/ship runtime record.
+ *
+ * Only fields whose width and offset are independently established are named.
+ * The remaining ranges stay opaque until their owning routines are lifted.
+ */
+typedef struct PlayerData {
+    int32_t position_x;              /* 0x000 */
+    int32_t position_y;              /* 0x004 */
+    int32_t previous_x;              /* 0x008 */
+    int32_t previous_y;              /* 0x00C */
+    int32_t velocity_x;              /* 0x010 */
+    int32_t velocity_y;              /* 0x014 */
+    int32_t heading;                 /* 0x018 */
+    uint8_t exhaust_counter;         /* 0x01C */
+    uint8_t unknown_01d[3];
+    int32_t health;                  /* 0x020 */
+    uint8_t state_24;                /* 0x024 */
+    uint8_t scratch_25;              /* 0x025 */
+    uint8_t scratch_26;              /* 0x026 */
+    uint8_t scratch_27;              /* 0x027 */
+    int32_t scratch_28;              /* 0x028 */
+    uint8_t team;                    /* 0x02C */
+    uint8_t unknown_02d[3];
+    int32_t timer_30;                /* 0x030 */
+    uint8_t weapon_type;             /* 0x034 */
+    uint8_t weapon_mark;             /* 0x035 */
+    uint8_t unknown_036[2];
+    int32_t scratch_38;              /* 0x038 */
+    int32_t scratch_3c;              /* 0x03C */
+    uint8_t unknown_040[0x4C];       /* 0x040..0x08B */
+    uint8_t primary_weapon_level;    /* 0x08C */
+    uint8_t unknown_08d[3];
+    int32_t timer_90;                /* 0x090 */
+    int32_t timer_94;                /* 0x094 */
+    int32_t scratch_98;              /* 0x098 */
+    uint8_t primary_fire_interval;   /* 0x09C */
+    uint8_t scratch_09d;
+    uint8_t scratch_09e;
+    uint8_t scratch_09f;
+    uint8_t timer_a0;                /* 0x0A0 */
+    uint8_t flag_a1;                 /* 0x0A1 */
+    uint8_t timer_a2;                /* 0x0A2 */
+    uint8_t flag_a3;                 /* 0x0A3 */
+    int32_t timer_a4;                /* 0x0A4 */
+    int32_t timer_a8;                /* 0x0A8 */
+    uint8_t key_scan_codes[7];       /* 0x0AC..0x0B2 */
+    uint8_t unknown_0b3;
+    uint32_t scratch_b4;             /* 0x0B4 */
+    uint32_t buttons;                /* 0x0B8 */
+    uint32_t previous_buttons;       /* 0x0BC */
+    uint8_t unknown_0c0[4];
+    uint8_t timer_c4;                /* 0x0C4 */
+    uint8_t timer_c5;                /* 0x0C5 */
+    uint8_t stun_timer;              /* 0x0C6 */
+    uint8_t scratch_c7;              /* 0x0C7 */
+    uint8_t timer_c8;                /* 0x0C8 */
+    uint8_t hud_banner_timer;        /* 0x0C9 */
+    uint8_t hud_banner_id;           /* 0x0CA */
+    uint8_t timer_cb;                /* 0x0CB */
+    uint8_t timer_cc;                /* 0x0CC */
+    uint8_t unknown_0cd[3];
+    int32_t timer_d0;                /* 0x0D0 */
+    int32_t boost_timer;             /* 0x0D4 */
+    int32_t timer_d8;                /* 0x0D8 */
+    uint8_t timer_dc;                /* 0x0DC */
+    uint8_t ai_level;                /* 0x0DD: zero for human control */
+    uint8_t unknown_0de[0x386];      /* 0x0DE..0x463 */
+    int32_t counter_464;
+    int32_t counter_468;
+    int32_t counter_46c;
+    int32_t counter_470;
+    int32_t counter_474;
+    int32_t counter_478;
+    uint8_t active_47c;
+    uint8_t scratch_47d;
+    uint8_t timer_47e;
+    uint8_t scratch_47f;
+    uint8_t human_controlled;        /* 0x480 */
+    uint8_t unknown_481[3];
+    int32_t scratch_484;
+    int32_t scratch_488;
+    uint8_t unknown_48c[8];
+    int32_t score_494;
+    uint8_t unknown_498[6];
+    uint8_t timer_49e;
+    uint8_t scratch_49f;
+    uint8_t scratch_4a0;
+    uint8_t last_attacker;           /* 0x4A1 */
+    uint8_t timer_4a2;
+    uint8_t timer_4a3;
+    uint8_t unknown_4a4[4];
+    int32_t sound_timer;             /* 0x4A8 */
+    int32_t sound_channel;           /* 0x4AC */
+    int32_t sound_id;                /* 0x4B0 */
+    uint8_t unknown_4b4[0xE4];
+} PlayerData;
+
+static_assert(sizeof(PlayerData) == 0x598, "Player record must retain its original stride");
+static_assert(offsetof(PlayerData, position_x) == 0x00, "PlayerData::position_x offset");
+static_assert(offsetof(PlayerData, velocity_x) == 0x10, "PlayerData::velocity_x offset");
+static_assert(offsetof(PlayerData, health) == 0x20, "PlayerData::health offset");
+static_assert(offsetof(PlayerData, team) == 0x2C, "PlayerData::team offset");
+static_assert(offsetof(PlayerData, weapon_type) == 0x34, "PlayerData::weapon_type offset");
+static_assert(offsetof(PlayerData, buttons) == 0xB8, "PlayerData::buttons offset");
+static_assert(offsetof(PlayerData, ai_level) == 0xDD, "PlayerData::ai_level offset");
+static_assert(offsetof(PlayerData, sound_timer) == 0x4A8, "PlayerData::sound_timer offset");
+
 typedef struct {
     unsigned int handle;    /* FSOUND_SAMPLE* cast to uint */
     unsigned char volume;

@@ -123,7 +123,7 @@ void Init_Memory_Pools(void)
     ALLOC_POOL(DAT_00489e98, 0x40);
     ALLOC_POOL(DAT_00487780, 800);
     ALLOC_POOL(DAT_00487830, 0xc80);   /* Debris/item pickup array (100 x 0x20) */
-    DAT_00487810 = (int)Mem_Alloc(0x1bf80); /* Player/entity data (80 * 0x598) */
+    DAT_00487810 = static_cast<PlayerData *>(Mem_Alloc(0x1bf80)); /* 80 x 0x598 */
     g_MemoryTracker += 0x1bf80;
     DAT_0048780c = Mem_Alloc(0x1400);  /* Ship stats table (80 * 0x40) */
     g_MemoryTracker += 0x1400;
