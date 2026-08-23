@@ -118,6 +118,20 @@ and stable offsets. `Init_Memory_Pools` allocates `0x51400` bytes at original
 address `0x004203b5`, which is 2600 physical records; the gameplay loop's 2500
 limit is an active-entity cap, not the allocation size.
 
+### Player record layout
+
+`types.h` also documents the verified portions of the original 0x598-byte
+`PlayerData` record. Use `Player_Get(index)` for typed access. The underlying
+`DAT_00487810` storage remains an `unsigned char *` on purpose: a large amount
+of unlifted code still expresses original byte offsets directly, and making the
+global a `PlayerData *` would change the meaning of those expressions while
+still compiling successfully.
+
+Typed player code currently covers position snapshots, keyboard input, timer
+updates, steering, thrust/exhaust, core AI/life-state dispatch, and positional
+sound. Opaque fields and raw call sites must be migrated only after their access
+width and meaning are verified from the original binary.
+
 Several record fields are deliberately named `auxiliary` or `scratch`. Original
 callbacks reuse the same byte or integer as cooldown, color, lifetime, fuse,
 collision guard, or cadence depending on entity type. Do not give one of these

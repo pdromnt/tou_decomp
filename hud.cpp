@@ -186,7 +186,7 @@ void FUN_004090e0(int param_1, int param_2, unsigned int param_3)
     } while (x_off < 0x48);
 
     /* Draw player dots */
-    int player_base = DAT_00487810;
+    int player_base = (int)DAT_00487810;
     int poff = 0;
     for (int i = 0; i < DAT_00489240; i++) {
         /* Skip dead players */
@@ -208,7 +208,7 @@ void FUN_004090e0(int param_1, int param_2, unsigned int param_3)
                     (param_1 + 0x4A +
                      ((DAT_004806e8 + DAT_004806e4 - 0x27 + dy) * param_2 + DAT_004806ec + dx) * 2);
                 FUN_00408f90(palette, dot_pos, param_2);
-                player_base = DAT_00487810;  /* Reload after potential side effects */
+                player_base = (int)DAT_00487810;  /* Reload after potential side effects */
             }
         }
         poff += 0x598;
