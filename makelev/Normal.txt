@@ -1,0 +1,135 @@
+#-----------------------------------------------------------------------------------
+# TOU - Tunnels of Underworld. Level options.
+#-----------------------------------------------------------------------------------
+#This file includes all the options you can set to a level.
+#-----------------------------------------------------------------------------------
+#This is a comment line.
+#If you must answer no or yes, you must type the whole word; plain 'n' won't work as no.
+#Before a parameter line there must be a '/ITEMNAME'-line.
+
+#Level author
+/MAKER
+Anonymous
+
+#Author's email (not compulsory, of course)
+/EMAIL
+my@email.com
+
+#Does your level have a parallax background?
+/PARA
+yes
+
+#Civilians. Value 0-100. 0 means no civilians, 100 means lots of civilians.
+/CIVIL
+10
+
+#Bombing. Value 0-100. Percentage of bombing. 100 is always. 0 is never.
+/BOMB
+5
+
+#Water color in RGB. Format: Red,Green,Blue example: 50,50,255 means 50 red, 50 green and 255 blue.
+/WATERC
+50,50,255
+
+#Disable running water (good for levels like "jungle", where all the water is at the bottom of the level)
+/DISABLERUN
+no
+
+#Default gravity in percents. 100 is normal gravity. 200 is double gravity. 0 is no gravity and so on.
+/GRAVITY
+100
+
+#Default air resistance in percents. 100 is normal air resistance.
+/RESISTANCE
+100
+
+#Default wall collision damage for ships in percents. 100 is normal damage.
+/COLLDAMAGE
+100
+
+#Default wall bouncing. 0-400. 400 is maximum (full) bounce. 0 is no bouncing. 100 is normal bouncing.
+/BOUNCING
+100
+
+#Ambient sounds for level:
+#0 - none
+#1 - jungle birds
+#2 - city scheme (traffic etc)
+#3 - dock (ship sirens, wind etc)
+#4 - windy
+#5 - stormy (screen flashes to white when thunder strikes!)
+#6 - scary
+/AMBIENT
+0
+
+#Aftertouch for highly compressed jpegs
+#0 - no after touch (recommended if you have high quality jpegs)
+#1 - blur
+#2 - more blur
+#3 - noise
+#4 - blur and noise
+
+#Aftertouch for a prospective parallax
+/PARALLAXAT
+0
+
+#------------- GG LEVELS (read more from tou documents/level making) ---------------
+#
+#Note: You must only have an attribute map if you want to make GG level. It tells where the
+#walls,repair places and waters are and the GG adds the graphics.
+#
+#Is your level a GG level? If it's not a GG level, you naturally don't have to
+#fill up the following questions.
+/GGLEVEL
+no
+
+#GG theme
+#Themes that come with the game:
+#"the earth", "the beach", "frozen hills", "happyland", "the diablo", "winter", "rocky mountains"
+#If the theme you are giving here isn't found, then the game will choose a random theme.
+/GGTHEME
+the earth
+
+#If the theme you selected has a shaped texture (like rocky mountains), do you want your
+#attribute map to be shaped like that, too?
+/GGSHAPE
+yes
+
+#Let GG handle the repair placing? If this is 0, it means "no", if any other number,
+#it tells the GG how dense the repair placement is (20=default repair density)
+/REPAIR
+20
+
+#Stuff density. 0-100. If this is 100, the level will be full of trees, rocks and such.
+#(20=default stuff density)
+/STUFFD
+20
+
+#Put name signs in the level also? If this is 0, it means "no", if any other number,
+#it tells the GG how dense the sign placement is (20=default sign density)
+/SIGND
+20
+
+#If you want to make your own texts in those GG signs, put them here.
+#The first text here will be used by the first (uppermost) sign in the level, the second
+#text will be used by the second sign and so on.
+#You can have these as many as you want.
+#If you want a one-line-text, use /SIGNTEXT1, if you want a two-line-text, use /SIGNTEXT2
+#and use ',' to distinguish the two words
+#
+#example:
+#/SIGNTEXT1
+#Washington
+#
+#/SIGNTEXT2
+#Mount,Himalaya
+
+
+#Random seed. You can select a random seed (=number, range 0-65535), then compile the level
+#and go check if it looks cool. Well, who bothers ;)
+#If this is set to * then random seed is different every playtime
+#(meaning that trees, rocks and other GG stuff will be in different places every playtime)
+/RANDOMSEED
+54321
+
+#--------------------------------------------------------------------
