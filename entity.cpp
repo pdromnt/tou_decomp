@@ -2915,9 +2915,9 @@ static void FUN_00450080_impl(int *ent, char param_2)
 
     /* Velocity modification */
     if (param_2 != '\0') {
-        /* Original uses __ftol from FPU — halve velocity as approximation */
-        ent[4] = ent[4] / 2;
-        ent[5] = ent[5] / 2;
+        /* Original 004505D9-004505FC: x87 integer -> double, multiply by 0.8,
+         * then __ftol truncation. This is Sticky Waste's drag. */
+        Accuracy_ApplyStickyWasteSlowdown(&ent[4], &ent[5]);
     } else {
         ent[4] = ent[4] / 2;
         ent[5] = ent[5] / 2;

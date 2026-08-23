@@ -572,6 +572,72 @@ int main()
           tou_accuracy::load_u8(entity_pool, 0x5c) == 0 && DAT_00481e8f == 1,
           "Organic Waste I preserves original life/guard removal ordering");
 
+    /* Organic Waste I paints original RGB555 palette colors into our RGB565
+     * compatibility framebuffer without shifting red into green. */
+    memset(entity_pool, 0, 0x80);
+    memset(tilemap, 0, sizeof(tilemap));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    memset(framebuffer, 0, sizeof(framebuffer));
+    tile_properties[1 * 0x20 + 1] = 1;
+    for (int y = 7; y <= 13; ++y) {
+        for (int x = 6; x <= 14; ++x) tilemap[(y << 8) + x] = 1;
+    }
+    tilemap[(10 << 8) + 9] = 0;
+    tilemap[(10 << 8) + 11] = 0;
+    tilemap[(11 << 8) + 9] = 0;
+    tilemap[(11 << 8) + 11] = 0;
+    DAT_00483828 = 0;
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    TOU_Accuracy_Srand(1u);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x02);
+    tou_accuracy::store_u8(entity_pool, 0x20, 10);
+    tou_accuracy::store_u8(entity_pool, 0x26, 0xff);
+    tou_accuracy::store_u8(entity_pool, 0x5c, 1);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    tou_accuracy::store_u32(entity_pool, 0x4c, 30000u + 0x7c00u);
+    Accuracy_DispatchEntityCallback(0x004427e0u, 0);
+    bool found_rgb565_red = false;
+    bool found_unconverted_rgb555 = false;
+    for (unsigned int i = 0; i < sizeof(framebuffer) / sizeof(framebuffer[0]); ++i) {
+        if (framebuffer[i] == 0xf800u) found_rgb565_red = true;
+        if (framebuffer[i] == 0x7c00u) found_unconverted_rgb555 = true;
+    }
+    check(found_rgb565_red && !found_unconverted_rgb555,
+          "Organic Waste I converts its terrain color from RGB555 to RGB565");
+
+    int32_t sticky_vx = 1001;
+    int32_t sticky_vy = -1001;
+    Accuracy_ApplyStickyWasteSlowdown(&sticky_vx, &sticky_vy);
+    check(sticky_vx == 800 && sticky_vy == -800,
+          "Sticky Waste uses the original x87 0.8 velocity multiplier");
+
+    /* Sticky Waste spray motes are type 0x66 siblings of Organic Waste, not
+     * the reconstructed guided missiles that previously stole this type. */
+    memset(entity_pool, 0, 0x80);
+    memset(tilemap, 0, sizeof(tilemap));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    DAT_00483828 = 0;
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x66);
+    tou_accuracy::store_u8(entity_pool, 0x26, 0xff);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x18, 0x1000);
+    tou_accuracy::store_i32(entity_pool, 0x28, 3);
+    check(Accuracy_DispatchEntityCallback(0x004427e0u, 0) &&
+          tou_accuracy::load_i32(entity_pool, 0x28) == 2 && DAT_00481e8f == 0,
+          "Sticky Waste spray motes use the Organic Waste callback and persist");
+    Accuracy_DispatchEntityCallback(0x004427e0u, 0);
+    check(DAT_00481e8f == 1,
+          "Sticky Waste spray motes expire through the original callback");
+
     /* Organic Waste II uses sprite 0x42..0x44 as a masked RGB555 terrain stamp. */
     memset(entity_pool, 0, 0x80);
     memset(tilemap, 0, sizeof(tilemap));

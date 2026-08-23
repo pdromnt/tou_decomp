@@ -67,6 +67,22 @@ uint8_t tile_property(uint8_t tile, int property)
     return static_cast<uint8_t *>(DAT_00487928)[static_cast<unsigned int>(tile) * 0x20u + property];
 }
 
+uint16_t rgb555_to_rgb565(uint16_t color)
+{
+    const uint16_t red = static_cast<uint16_t>((color >> 10) & 0x1fu);
+    const uint16_t green = static_cast<uint16_t>((color >> 5) & 0x1fu);
+    const uint16_t blue = static_cast<uint16_t>(color & 0x1fu);
+    return static_cast<uint16_t>((red << 11) | (green << 6) | blue);
+}
+
+uint16_t rgb565_to_rgb555(uint16_t color)
+{
+    const uint16_t red = static_cast<uint16_t>((color >> 11) & 0x1fu);
+    const uint16_t green = static_cast<uint16_t>((color >> 6) & 0x1fu);
+    const uint16_t blue = static_cast<uint16_t>(color & 0x1fu);
+    return static_cast<uint16_t>((red << 10) | (green << 5) | blue);
+}
+
 void damage_special_tile(uint8_t *entity)
 {
     const int x = tou_accuracy::sar_i32(tou_accuracy::load_i32(entity, 0x00), 0x12);
@@ -2201,11 +2217,11 @@ void smooth_organic_patch(int center_offset)
             const int offset = center_offset + row * DAT_00487a00 + column;
             const uint8_t *properties = static_cast<uint8_t *>(DAT_00487928) + tiles[offset] * 0x20u;
             if (properties[0x0b] != 0u || properties[4] != 0u || properties[0] != 0u) continue;
-            const uint16_t center = pixels[offset];
-            uint16_t left = pixels[offset - 1]; if (left == 0u) left = center;
-            uint16_t right = pixels[offset + 1]; if (right == 0u) right = center;
-            uint16_t above = pixels[offset - DAT_00487a00]; if (above == 0u) above = center;
-            uint16_t below = pixels[offset + DAT_00487a00]; if (below == 0u) below = center;
+            const uint16_t center = rgb565_to_rgb555(pixels[offset]);
+            uint16_t left = rgb565_to_rgb555(pixels[offset - 1]); if (left == 0u) left = center;
+            uint16_t right = rgb565_to_rgb555(pixels[offset + 1]); if (right == 0u) right = center;
+            uint16_t above = rgb565_to_rgb555(pixels[offset - DAT_00487a00]); if (above == 0u) above = center;
+            uint16_t below = rgb565_to_rgb555(pixels[offset + DAT_00487a00]); if (below == 0u) below = center;
             const unsigned int r = (((left >> 10) & 0x1f) + ((right >> 10) & 0x1f) +
                                     ((above >> 10) & 0x1f) + ((below >> 10) & 0x1f) +
                                     ((center >> 10) & 0x1f) * 4u) >> 3;
@@ -2214,7 +2230,8 @@ void smooth_organic_patch(int center_offset)
                                     ((center >> 5) & 0x1f) * 4u) >> 3;
             const unsigned int b = ((left & 0x1f) + (right & 0x1f) + (above & 0x1f) +
                                     (below & 0x1f) + (center & 0x1f) * 4u) >> 3;
-            pixels[offset] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
+            pixels[offset] = rgb555_to_rgb565(
+                static_cast<uint16_t>((r << 10) | (g << 5) | b));
         }
     }
 }
@@ -2366,8 +2383,10 @@ void callback_organic_waste_004427e0(int entity_index)
                 uint8_t &tile = static_cast<uint8_t *>(DAT_0048782c)[offset];
                 if (tile_property(tile, 1) == 1u) {
                     tile = tile_property(tile, 0x0f);
-                    static_cast<uint16_t *>(DAT_00481f50)[offset] =
+                    const uint16_t original_color =
                         static_cast<uint16_t>(color_with_bias - 30000u);
+                    static_cast<uint16_t *>(DAT_00481f50)[offset] =
+                        rgb555_to_rgb565(original_color);
                 }
             }
         }
@@ -2452,6 +2471,16 @@ void Accuracy_InitNucleusMarkIIEntity(void *entity)
     tou_accuracy::store_i32(static_cast<uint8_t *>(entity), 0x28, 0x19);
 }
 
+void Accuracy_ApplyStickyWasteSlowdown(int32_t *velocity_x, int32_t *velocity_y)
+{
+    if (velocity_x == NULL || velocity_y == NULL) return;
+    const long double factor = static_cast<long double>(0.8);
+    *velocity_x = static_cast<int32_t>(
+        tou_accuracy::x87_ftol(static_cast<long double>(*velocity_x) * factor));
+    *velocity_y = static_cast<int32_t>(
+        tou_accuracy::x87_ftol(static_cast<long double>(*velocity_y) * factor));
+}
+
 bool Accuracy_DispatchEntityCallback(uint32_t callback_address, int entity_index)
 {
     uint8_t *entity = entity_at(entity_index);
@@ -2492,7 +2521,7 @@ bool Accuracy_DispatchEntityCallback(uint32_t callback_address, int entity_index
              tou_accuracy::load_i32(entity, 0x28) <= 0 || tou_accuracy::load_u8(entity, 0x26) != 0xffu)) ||
         (callback_address == kCallbackRomanCandle && entity_type != 0x25u) ||
         (callback_address == kCallbackEtna && entity_type != 0x24u) ||
-        (callback_address == kCallbackOrganicWaste && entity_type != 0x02u) ||
+        (callback_address == kCallbackOrganicWaste && entity_type != 0x02u && entity_type != 0x66u) ||
         (callback_address == kCallbackOrganicWasteII && entity_type != 0x14u && entity_type != 0x6bu) ||
         (callback_address == kCallbackNormalFireball && entity_type != 0x11u) ||
         (callback_address == kCallbackTrail && entity_type != 0x67u)) return false;
