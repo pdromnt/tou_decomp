@@ -78,6 +78,7 @@ void FUN_004355d0(unsigned int) {}
 void FUN_004357b0(int, int, int, unsigned char, char, int, int, int, int,
                   char, char, unsigned char) {}
 void FUN_0040f9b0(int, int, int, int, int) {}
+void FUN_00437cf0(int, int, int, int, int) {}
 int FUN_004257e0(int, int, int, int) { return 0; }
 
 int main()
@@ -220,6 +221,95 @@ int main()
     tou_accuracy::store_u8(entity_pool, 0x21, 0x2d);
     check(!Accuracy_DispatchEntityCallback(0x0043f990u, 0),
           "shared Laser callback remains on its separate legacy path");
+
+    /* Batch 2 callbacks are claimed only for their original weapon types. */
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x12);
+    check(!Accuracy_DispatchEntityCallback(0x00438010u, 0),
+          "shared Shotgun callback leaves Pipebomb on its separate path");
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x69);
+    check(!Accuracy_DispatchEntityCallback(0x00438010u, 0),
+          "shared Shotgun callback leaves Mine on its separate path");
+
+    /* Shotgun/Rapidfire expires on the original life 2 -> 1 transition. */
+    memset(entity_pool, 0, 0x80);
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x00);
+    tou_accuracy::store_i32(entity_pool, 0x28, 2);
+    check(Accuracy_DispatchEntityCallback(0x00438010u, 0),
+          "Shotgun/Rapidfire dispatch recognizes type 0");
+    check(tou_accuracy::load_i32(entity_pool, 0x28) == 1 && DAT_00481e8f == 1,
+          "Shotgun/Rapidfire keeps the assembly life-removal ordering");
+
+    /* Dumbfire bounces only while +0x3c is greater than one. */
+    memset(entity_pool, 0, 0x80);
+    memset(tilemap, 0, sizeof(tilemap));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    coarse_grid[0] = 8;
+    DAT_00483828 = 0;
+    DAT_00489248 = 1;
+    DAT_00489250 = 0;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x01);
+    tou_accuracy::store_u8(entity_pool, 0x40, 0x01);
+    tou_accuracy::store_u8(entity_pool, 0x26, 0xff);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x3c, 2);
+    Accuracy_DispatchEntityCallback(0x00438d90u, 0);
+    check(tou_accuracy::load_i32(entity_pool, 0x3c) == 1 && DAT_00481e8f == 0,
+          "Dumbfire counter 2 performs its last bounce");
+    Accuracy_DispatchEntityCallback(0x00438d90u, 0);
+    check(DAT_00481e8f == 1,
+          "Dumbfire counter 1 detonates instead of taking an extra bounce");
+    check(DAT_00489250 == 1 && particle_pool[0x10] >= 13 && particle_pool[0x10] <= 16 &&
+          particle_pool[0x15] == 1,
+          "Bouncy Dumbfire impact emits its original fire-particle family");
+
+    /* Collapser has no invented hand-spawned debris after its crater helper. */
+    memset(entity_pool, 0, 0x80);
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x05);
+    tou_accuracy::store_u8(entity_pool, 0x26, 0xff);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    Accuracy_DispatchEntityCallback(0x00439880u, 0);
+    check(DAT_00481e8f == 1 && DAT_00489248 == 1,
+          "Collapser impact delegates debris to the original crater helper only");
+
+    /* Kicker uses quarter-step physics and the binary's 1/density trail gate. */
+    memset(entity_pool, 0, 0x100);
+    memset(coarse_grid, 0, sizeof(coarse_grid));
+    tile_properties[2] = 1;
+    coarse_grid[0] = 8;
+    DAT_0048385c = 1.0f;
+    DAT_00483828 = 4;
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    TOU_Accuracy_Srand(1u);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x09);
+    tou_accuracy::store_u8(entity_pool, 0x26, 0xff);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x18, 0x40000);
+    tou_accuracy::store_i32(entity_pool, 0x1c, 0);
+    tou_accuracy::store_i32(entity_pool, 0x38, 4);
+    Accuracy_DispatchEntityCallback(0x0043cc20u, 0);
+    check(tou_accuracy::load_i32(entity_pool, 0x00) == (10 << 18) + 0x50000,
+          "Kicker performs five quarter-step horizontal integrations");
+    check(tou_accuracy::load_i32(entity_pool, 0x08) == (10 << 18) + 15,
+          "Kicker accumulates quartered gravity across five substeps");
+    check(DAT_00489248 == 6,
+          "Kicker emits one density-gated trail mote per substep at density 1");
+    DAT_0048385c = 1.0f;
+    DAT_00483828 = 1;
 
     /* Organic Waste I expires on life 2 -> 1, clearing the grow guard first. */
     memset(entity_pool, 0, 0x80);

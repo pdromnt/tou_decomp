@@ -148,6 +148,9 @@ void Init_Memory_Pools(void)
         DAT_004876a4[i] = Mem_Alloc(0x2000);
         g_MemoryTracker += 0x2000;
     }
+    /* Original globals are consecutive pointer slots: 0x004876b8 is
+     * DAT_004876a4[5], not an independently allocated/null pointer. */
+    DAT_004876b8 = DAT_004876a4[5];
 
     /* DAT_0048792c: 48 pointers, 8KB each */
     for (int i = 0; i < 48; i++) {
