@@ -6052,17 +6052,18 @@ void FUN_004527e0(void)
              * (MOVING SUCKER). Original used tracking list which goes stale. */
             if (DAT_00489288 == '\0') {
                 for (int ei = 0; ei < DAT_00489248; ei++) {
-                    int eidx = ei;
-                    int *ent = (int *)(eidx * 0x80 + (int)DAT_004892e8);
-                    if (*(unsigned char *)((int)ent + 0x21) != 0x0E) continue;
-                    unsigned char ent_owner = *(unsigned char *)((int)ent + 0x22);
+                    Entity *entity = &DAT_004892e8[ei];
+                    if (entity->type != 0x0E) continue;
+                    unsigned char ent_owner = entity->owner;
                     unsigned char ent_team = *(unsigned char *)(DAT_00487810 + 0x2C + (unsigned int)ent_owner * 0x598);
                     if (ent_team != (unsigned char)owner_team) {
-                        if (new_x - 0x12C0000 < ent[0] && ent[0] < new_x + 0x12C0000 &&
-                            new_y - 0x12C0000 < ent[2] && ent[2] < new_y + 0x12C0000) {
-                            int angle = FUN_004257e0(ent[0], *(int *)(eidx * 0x80 + 8 + (int)DAT_004892e8),
+                        if (new_x - 0x12C0000 < entity->position_x &&
+                            entity->position_x < new_x + 0x12C0000 &&
+                            new_y - 0x12C0000 < entity->position_y &&
+                            entity->position_y < new_y + 0x12C0000) {
+                            int angle = FUN_004257e0(entity->position_x, entity->position_y,
                                                      new_x, new_y);
-                            if (*(char *)(eidx * 0x80 + 0x40 + (int)DAT_004892e8) == '\0') {
+                            if ((char)entity->subtype == '\0') {
                                 part[2] -= *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
                                 part[3] -= *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
                             } else {
