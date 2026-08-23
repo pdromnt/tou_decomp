@@ -2842,17 +2842,17 @@ static void FUN_00450080_impl(int *ent, char param_2)
         if (DAT_00489248 > 0x9c3) break;
 
         unsigned int uVar9 = (unsigned int)rand();
-        int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+        Entity *spawn = &DAT_004892e8[DAT_00489248];
 
-        *(int *)(base + 0x00) = iVar14 << 0x12;
-        *(int *)(base + 0x08) = iVar5 << 0x12;
+        spawn->position_x = iVar14 << 0x12;
+        spawn->position_y = iVar5 << 0x12;
 
         unsigned int uVar4 = (unsigned int)ent[4];
         int r1 = rand();
         unsigned int uVar13 = (unsigned int)ent[5] >> 0x1f;
         int absVelX = (int)((uVar4 ^ ((int)uVar4 >> 0x1f)) - ((int)uVar4 >> 0x1f));
         int absVelY = (int)(((unsigned int)ent[5] ^ uVar13) - uVar13);
-        *(int *)(base + 0x18) =
+        spawn->velocity_x =
             ((r1 % 2000 + ((absVelX + absVelY) >> 9)) *
             (*(int *)((int)DAT_00487ab0 + (uVar9 & 0x7ff) * 4) >> 1) >> 0xb) - ((int)uVar4 >> 2);
 
@@ -2861,35 +2861,35 @@ static void FUN_00450080_impl(int *ent, char param_2)
         uVar13 = (unsigned int)ent[4] >> 0x1f;
         absVelY = (int)((uVar4 ^ ((int)uVar4 >> 0x1f)) - ((int)uVar4 >> 0x1f));
         absVelX = (int)(((unsigned int)ent[4] ^ uVar13) - uVar13);
-        *(int *)(base + 0x1c) =
+        spawn->velocity_y =
             ((r2 % 2000 + ((absVelY + absVelX) >> 9)) *
             (*(int *)((int)DAT_00487ab0 + 0x800 + (uVar9 & 0x7ff) * 4) >> 1) >> 0xb) - ((int)uVar4 >> 2);
 
-        *(int *)(base + 0x04) = iVar14 << 0x12;
-        *(int *)(base + 0x0c) = iVar5 << 0x12;
-        *(int *)(base + 0x10) = 0;
-        *(int *)(base + 0x14) = 0;
-        *(unsigned char *)(base + 0x21) = 0x66;
-        *(short *)(base + 0x24) = (short)(rand() % 6);
-        *(unsigned char *)(base + 0x20) = 0;
-        *(unsigned char *)(base + 0x26) = 0xff;
-        *(unsigned char *)(base + 0x22) = 0xff;
-        *(int *)(base + 0x28) = 0;
-        *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xd618);
-        *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0xd654);
-        *(int *)(base + 0x48) = 0;
-        *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0xd684);
-        *(unsigned char *)(base + 0x54) = 0;
-        *(unsigned char *)(base + 0x40) = 0;
-        *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xd590);
-        *(int *)(base + 0x3c) = 0;
-        *(unsigned char *)(base + 0x5c) = 0;
+        spawn->previous_x = iVar14 << 0x12;
+        spawn->previous_y = iVar5 << 0x12;
+        spawn->motion_x_10 = 0;
+        spawn->motion_y_14 = 0;
+        spawn->type = 0x66;
+        spawn->variant_24 = (short)(rand() % 6);
+        spawn->state_20 = 0;
+        spawn->auxiliary_26 = 0xff;
+        spawn->owner = 0xff;
+        spawn->health_or_damage_28 = 0;
+        spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd618);
+        spawn->damage_44 = *(int *)((int)DAT_00487abc + 0xd654);
+        spawn->scratch_48 = 0;
+        spawn->palette_value = *(int *)((int)DAT_00487abc + 0xd684);
+        spawn->animation_frame = 0;
+        spawn->subtype = 0;
+        spawn->callback_address = *(int *)((int)DAT_00487abc + 0xd590);
+        spawn->counter_3c = 0;
+        spawn->timer_5c = 0;
 
         DAT_00489248++;
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 0x46 + 0x32;
-        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 0x46 + 0x32;
+        DAT_004892e8[DAT_00489248 - 1].palette_value =
             (((int)uVar10 >> 3) + ((uVar7 & 0x1f8) * 0x20 + (uVar11 & 0x3ff8)) * 4) & 0xffff;
-        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) += 30000;
+        DAT_004892e8[DAT_00489248 - 1].palette_value += 30000;
 
         local_10++;
     }
@@ -3052,44 +3052,44 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
 
                 unsigned int angle = (unsigned int)rand() & 0x7ff;
                 int speed = rand();
-                int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
 
-                *(unsigned int *)(base + 0x00) = puVar1[0];
-                *(unsigned int *)(base + 0x08) = puVar1[1];
-                *(int *)(base + 0x18) = (*(int *)((int)DAT_00487ab0 + angle * 4) *
+                *(unsigned int *)((char *)spawn + 0x00) = puVar1[0];
+                *(unsigned int *)((char *)spawn + 0x08) = puVar1[1];
+                spawn->velocity_x = (*(int *)((int)DAT_00487ab0 + angle * 4) *
                     (speed % 0x32) >> 6) + ((int)puVar1[4] >> 2);
-                *(int *)(base + 0x1c) = (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) *
+                spawn->velocity_y = (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) *
                     (speed % 0x32) >> 6) + ((int)puVar1[5] >> 2);
-                *(unsigned int *)(base + 0x04) = puVar1[0];
-                *(unsigned int *)(base + 0x0c) = puVar1[1];
-                *(int *)(base + 0x10) = 0;
-                *(int *)(base + 0x14) = 0;
-                *(unsigned char *)(base + 0x21) = 0x67;
-                *(unsigned short *)(base + 0x24) = 0;
-                *(unsigned char *)(base + 0x20) = 0;
-                *(unsigned char *)(base + 0x26) = 0xff;
-                *(unsigned char *)(base + 0x22) = 0xff;
-                *(int *)(base + 0x28) = 0;
-                *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xd830);
-                *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0xd86c);
-                *(int *)(base + 0x48) = 0;
-                *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0xd89c);
-                *(unsigned char *)(base + 0x54) = 0;
-                *(unsigned char *)(base + 0x40) = 0;
-                *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xd7a8);
-                *(int *)(base + 0x3c) = 0;
-                *(unsigned char *)(base + 0x5c) = 0;
+                *(unsigned int *)((char *)spawn + 0x04) = puVar1[0];
+                *(unsigned int *)((char *)spawn + 0x0c) = puVar1[1];
+                spawn->motion_x_10 = 0;
+                spawn->motion_y_14 = 0;
+                spawn->type = 0x67;
+                spawn->variant_24 = 0;
+                spawn->state_20 = 0;
+                spawn->auxiliary_26 = 0xff;
+                spawn->owner = 0xff;
+                spawn->health_or_damage_28 = 0;
+                spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd830);
+                spawn->damage_44 = *(int *)((int)DAT_00487abc + 0xd86c);
+                spawn->scratch_48 = 0;
+                spawn->palette_value = *(int *)((int)DAT_00487abc + 0xd89c);
+                spawn->animation_frame = 0;
+                spawn->subtype = 0;
+                spawn->callback_address = *(int *)((int)DAT_00487abc + 0xd7a8);
+                spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
 
                 DAT_00489248++;
-                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 6;
+                DAT_004892e8[DAT_00489248 - 1].timer_5c = 6;
                 int rCol = rand();
-                *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) =
+                DAT_004892e8[DAT_00489248 - 1].scratch_65 =
                     (char)(rCol % 0xc) + '\x14';
-                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x12;
-                int iVar2b = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(unsigned int *)(iVar2b - 0x34) =
+                DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x12;
+                Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
+                last_spawn->palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 +
-                        (unsigned int)*(unsigned char *)(iVar2b - 0x1b) * 2) + 30000;
+                        (unsigned int)last_spawn->scratch_65 * 2) + 30000;
             }
             return;
         }
@@ -3523,39 +3523,39 @@ static void FUN_00401000_impl(int idx)
             iVar13 = rand();
             iVar13 = iVar13 % 0x46 + 0x46;
             {
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x18) = (sincos[uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                *(int *)(p + 0x1c) = (sincos[0x200 + uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                *(unsigned char *)(p + 0x21) = 0;
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                spawn->velocity_y = (sincos[0x200 + uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                spawn->type = 0;
                 uVar8 = rand(); uVar8 &= 0x80000001;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
-                *(short *)(p + 0x24) = (short)uVar8 * 6;
-                *(unsigned char *)(p + 0x20) = 0;
-                *(unsigned char *)(p + 0x26) = 8;
-                *(unsigned char *)(p + 0x22) = uVar9;
-                *(int *)(p + 0x28) = 0;
+                spawn->variant_24 = (short)uVar8 * 6;
+                spawn->state_20 = 0;
+                spawn->auxiliary_26 = 8;
+                spawn->owner = uVar9;
+                spawn->health_or_damage_28 = 0;
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-                *(int *)(p + 0x38) = typeTable[uVar8 + 0x22];
+                spawn->gravity_or_motion_38 = typeTable[uVar8 + 0x22];
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-                *(int *)(p + 0x44) = typeTable[uVar8 + 0x31];
-                *(int *)(p + 0x48) = 0;
+                spawn->damage_44 = typeTable[uVar8 + 0x31];
+                spawn->scratch_48 = 0;
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-                *(int *)(p + 0x4c) = typeTable[uVar8 + 0x3d];
-                *(unsigned char *)(p + 0x54) = 0;
+                spawn->palette_value = typeTable[uVar8 + 0x3d];
+                spawn->animation_frame = 0;
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-                *(char *)(p + 0x40) = (char)uVar8;
-                *(int *)(p + 0x34) = typeTable[0];
-                *(int *)(p + 0x3c) = 0;
-                *(unsigned char *)(p + 0x5c) = 0;
+                *(char *)((char *)spawn + 0x40) = (char)uVar8;
+                spawn->callback_address = typeTable[0];
+                spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
             }
             DAT_00489248++;
             iVar13 = rand();
@@ -3564,13 +3564,13 @@ static void FUN_00401000_impl(int idx)
                 /* Grayscale particle color: X1R5G5B5 packing (gray5 * 0x421).
                  * Renderer subtracts 30000 then decodes as X1R5G5B5→RGB565. */
                 unsigned int gray5 = uVar8 >> 3;
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                DAT_004892e8[DAT_00489248 - 1].palette_value =
                     ((gray5 << 10) | (gray5 << 5) | gray5) + 30000;
             }
             iVar13 = rand();
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = iVar13 % 0x32 + 0x50;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = iVar13 % 0x32 + 0x50;
+            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             local_c++;
             iVar13 = (int)DAT_00487810;
         } while (local_c < 0x1e);
@@ -3588,29 +3588,29 @@ static void FUN_00401000_impl(int idx)
                 do {
                     unsigned int ang = uVar8 & 0x7ff;
                     if (0x9c3 < DAT_00489248) break;
-                    int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                    *(int *)(p) = *(int *)(iVar12 + iVar13);
-                    *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                    *(int *)(p + 0x18) = (sincos[ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                    *(int *)(p + 0x1c) = (sincos[0x200 + ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                    *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-                    *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                    *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                    *(unsigned char *)(p + 0x21) = 1;
-                    *(unsigned short *)(p + 0x24) = 0;
-                    *(unsigned char *)(p + 0x20) = 0;
-                    *(unsigned char *)(p + 0x26) = 0xc;
-                    *(unsigned char *)(p + 0x22) = uVar9;
-                    *(int *)(p + 0x28) = 0;
-                    *(int *)(p + 0x38) = typeTable[0xa8];
-                    *(int *)(p + 0x44) = typeTable[0xb7];
-                    *(int *)(p + 0x48) = 0;
-                    *(int *)(p + 0x4c) = typeTable[0xc3];
-                    *(unsigned char *)(p + 0x54) = 0;
-                    *(unsigned char *)(p + 0x40) = 0;
-                    *(int *)(p + 0x34) = typeTable[0x86];
-                    *(int *)(p + 0x3c) = 0;
-                    *(unsigned char *)(p + 0x5c) = 0;
+                    Entity *spawn = &DAT_004892e8[DAT_00489248];
+                    spawn->position_x = *(int *)(iVar12 + iVar13);
+                    spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    spawn->velocity_x = (sincos[ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                    spawn->velocity_y = (sincos[0x200 + ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                    spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+                    spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                    spawn->type = 1;
+                    spawn->variant_24 = 0;
+                    spawn->state_20 = 0;
+                    spawn->auxiliary_26 = 0xc;
+                    spawn->owner = uVar9;
+                    spawn->health_or_damage_28 = 0;
+                    spawn->gravity_or_motion_38 = typeTable[0xa8];
+                    spawn->damage_44 = typeTable[0xb7];
+                    spawn->scratch_48 = 0;
+                    spawn->palette_value = typeTable[0xc3];
+                    spawn->animation_frame = 0;
+                    spawn->subtype = 0;
+                    spawn->callback_address = typeTable[0x86];
+                    spawn->counter_3c = 0;
+                    spawn->timer_5c = 0;
                     uVar8 = ang + 0x2a;
                     DAT_00489248++;
                     local_c++;
@@ -3618,32 +3618,32 @@ static void FUN_00401000_impl(int idx)
                 } while (local_c < 3);
             }
             else if (cVar3 == '\x02' && DAT_00489248 < 0x9c4) {
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(int *)(p) = *(int *)(iVar12 + iVar13);
-                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x18) = (sincos[uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                *(int *)(p + 0x1c) = (sincos[0x200 + uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                *(unsigned char *)(p + 0x21) = 1;
-                *(unsigned short *)(p + 0x24) = 0;
-                *(unsigned char *)(p + 0x20) = 0;
-                *(unsigned char *)(p + 0x26) = 0xc;
-                *(unsigned char *)(p + 0x22) = uVar9;
-                *(int *)(p + 0x28) = 0;
-                *(int *)(p + 0x38) = typeTable[0xa9];
-                *(int *)(p + 0x44) = typeTable[0xb8];
-                *(int *)(p + 0x48) = 0;
-                *(int *)(p + 0x4c) = typeTable[0xc4];
-                *(unsigned char *)(p + 0x54) = 0;
-                *(unsigned char *)(p + 0x40) = 1;
-                *(int *)(p + 0x34) = typeTable[0x86];
-                *(int *)(p + 0x3c) = 0;
-                *(unsigned char *)(p + 0x5c) = 0;
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                spawn->position_x = *(int *)(iVar12 + iVar13);
+                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->velocity_x = (sincos[uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                spawn->velocity_y = (sincos[0x200 + uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                spawn->type = 1;
+                spawn->variant_24 = 0;
+                spawn->state_20 = 0;
+                spawn->auxiliary_26 = 0xc;
+                spawn->owner = uVar9;
+                spawn->health_or_damage_28 = 0;
+                spawn->gravity_or_motion_38 = typeTable[0xa9];
+                spawn->damage_44 = typeTable[0xb8];
+                spawn->scratch_48 = 0;
+                spawn->palette_value = typeTable[0xc4];
+                spawn->animation_frame = 0;
+                spawn->subtype = 1;
+                spawn->callback_address = typeTable[0x86];
+                spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
                 DAT_00489248++;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 2;
-                piVar1 = (int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3c);
+                DAT_004892e8[DAT_00489248 - 1].counter_3c = 2;
+                piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].damage_44;
                 *piVar1 *= 6;
                 iVar13 = (int)DAT_00487810;
             }
@@ -3651,26 +3651,26 @@ static void FUN_00401000_impl(int idx)
         }
         if (0x9c3 < DAT_00489248) break;
         {
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(p) = *(int *)(iVar12 + iVar13);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = (sincos[uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            *(int *)(p + 0x1c) = (sincos[0x200 + uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(unsigned char *)(p + 0x21) = 1;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0;
-            *(unsigned char *)(p + 0x26) = 0xc;
-            *(unsigned char *)(p + 0x22) = uVar9;
-            *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[0xaa];
-            *(int *)(p + 0x44) = typeTable[0xb9];
-            *(int *)(p + 0x48) = 0;
-            *(int *)(p + 0x4c) = typeTable[0xc5];
-            *(unsigned char *)(p + 0x54) = 0;
-            *(unsigned char *)(p + 0x40) = 2;
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            spawn->position_x = *(int *)(iVar12 + iVar13);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->velocity_x = (sincos[uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            spawn->velocity_y = (sincos[0x200 + uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            spawn->type = 1;
+            spawn->variant_24 = 0;
+            spawn->state_20 = 0;
+            spawn->auxiliary_26 = 0xc;
+            spawn->owner = uVar9;
+            spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[0xaa];
+            spawn->damage_44 = typeTable[0xb9];
+            spawn->scratch_48 = 0;
+            spawn->palette_value = typeTable[0xc5];
+            spawn->animation_frame = 0;
+            spawn->subtype = 2;
         }
         {
             uVar10 = typeTable[0x86];
@@ -3686,71 +3686,71 @@ static void FUN_00401000_impl(int idx)
                 iVar13 = rand();
                 uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
                 iVar13 = idx * 0x40;
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(int *)(p) = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 8) = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x18) = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[uVar8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                *(int *)(p + 0x1c) = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[0x200 + uVar8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                *(int *)(p + 4) = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 0xc) = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                *(unsigned char *)(p + 0x21) = 2;
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                spawn->position_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->position_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->velocity_x = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[uVar8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+                spawn->velocity_y = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[0x200 + uVar8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+                spawn->previous_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->previous_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                spawn->type = 2;
                 iVar13 = rand();
-                *(short *)(p + 0x24) = (short)(iVar13 % 6);
-                *(unsigned char *)(p + 0x20) = 10;
-                *(unsigned char *)(p + 0x26) = 0xf;
-                *(unsigned char *)(p + 0x22) = uVar9;
-                *(int *)(p + 0x28) = 0;
-                *(int *)(p + 0x38) = typeTable[0x12e];
-                *(int *)(p + 0x44) = typeTable[0x13d];
-                *(int *)(p + 0x48) = 0;
-                *(int *)(p + 0x4c) = typeTable[0x149];
-                *(unsigned char *)(p + 0x54) = 0;
-                *(unsigned char *)(p + 0x40) = 0;
-                *(int *)(p + 0x34) = typeTable[0x10c];
-                *(int *)(p + 0x3c) = 0;
-                *(unsigned char *)(p + 0x5c) = 0;
+                spawn->variant_24 = (short)(iVar13 % 6);
+                spawn->state_20 = 10;
+                spawn->auxiliary_26 = 0xf;
+                spawn->owner = uVar9;
+                spawn->health_or_damage_28 = 0;
+                spawn->gravity_or_motion_38 = typeTable[0x12e];
+                spawn->damage_44 = typeTable[0x13d];
+                spawn->scratch_48 = 0;
+                spawn->palette_value = typeTable[0x149];
+                spawn->animation_frame = 0;
+                spawn->subtype = 0;
+                spawn->callback_address = typeTable[0x10c];
+                spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
                 DAT_00489248++;
-                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 0x14;
+                DAT_004892e8[DAT_00489248 - 1].timer_5c = 0x14;
                 uVar8 = rand(); uVar8 &= 0x8000000f;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff0) + 1;
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0x140 + uVar8 * 2) + 30000;
                 iVar13 = rand();
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = iVar13 % 400 + 0x96;
+                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = iVar13 % 400 + 0x96;
                 iVar13 = (int)DAT_00487810;
             }
             break;
         }
         if (0x9c3 < DAT_00489248) break;
         {
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(p) = *(int *)(iVar12 + iVar13);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = (sincos[uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            *(int *)(p + 0x1c) = (sincos[0x200 + uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(unsigned char *)(p + 0x21) = 0x14;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0;
-            *(unsigned char *)(p + 0x26) = 0xff;
-            *(unsigned char *)(p + 0x22) = uVar9;
-            *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[0xa9b];
-            *(int *)(p + 0x44) = typeTable[0xaaa];
-            *(int *)(p + 0x48) = 0;
-            *(int *)(p + 0x4c) = typeTable[0xab6];
-            *(unsigned char *)(p + 0x54) = 0;
-            *(unsigned char *)(p + 0x40) = 1;
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            spawn->position_x = *(int *)(iVar12 + iVar13);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->velocity_x = (sincos[uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            spawn->velocity_y = (sincos[0x200 + uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            spawn->type = 0x14;
+            spawn->variant_24 = 0;
+            spawn->state_20 = 0;
+            spawn->auxiliary_26 = 0xff;
+            spawn->owner = uVar9;
+            spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[0xa9b];
+            spawn->damage_44 = typeTable[0xaaa];
+            spawn->scratch_48 = 0;
+            spawn->palette_value = typeTable[0xab6];
+            spawn->animation_frame = 0;
+            spawn->subtype = 1;
         }
         {
             uVar10 = typeTable[0xa78];
 LAB_00401856:
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 + 0x34) = uVar10;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 + 0x3c) = 0;
-            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 + 0x5c) = 0;
+            DAT_004892e8[DAT_00489248].callback_address = uVar10;
+            DAT_004892e8[DAT_00489248].counter_3c = 0;
+            DAT_004892e8[DAT_00489248].timer_5c = 0;
             DAT_00489248++;
             iVar13 = (int)DAT_00487810;
         }
@@ -3800,35 +3800,36 @@ LAB_00401856:
                 if (0x9c3 < DAT_00489248) break;
                 iVar13 = rand(); iVar11 = rand();
                 uVar8 = (iVar11 % 0x15e + 0x351 + *(int *)(iVar12 + 0x18 + (int)DAT_00487810)) & 0x7ff;
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
-                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
-                *(int *)(p + 0x18) = sincos[uVar8] * (iVar13 % 0x14) >> 3;
-                *(int *)(p + 0x1c) = sincos[0x200 + uVar8] * (iVar13 % 0x14) >> 3;
-                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
-                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                *(unsigned char *)(p + 0x21) = 0x67;
-                iVar13 = rand(); *(short *)(p + 0x24) = (short)(iVar13 % 6);
-                *(unsigned char *)(p + 0x20) = 0;
-                *(unsigned char *)(p + 0x26) = 0xff;
-                *(unsigned char *)(p + 0x22) = 0xff;
-                *(int *)(p + 0x28) = 0;
-                *(int *)(p + 0x38) = typeTable[0x360c]; *(int *)(p + 0x44) = typeTable[0x361b];
-                *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x3627];
-                *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
-                *(int *)(p + 0x34) = typeTable[0x35ea]; *(int *)(p + 0x3c) = 0;
-                *(unsigned char *)(p + 0x5c) = 0;
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
+                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                spawn->velocity_x = sincos[uVar8] * (iVar13 % 0x14) >> 3;
+                spawn->velocity_y = sincos[0x200 + uVar8] * (iVar13 % 0x14) >> 3;
+                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
+                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                spawn->type = 0x67;
+                iVar13 = rand(); spawn->variant_24 = (short)(iVar13 % 6);
+                spawn->state_20 = 0;
+                spawn->auxiliary_26 = 0xff;
+                spawn->owner = 0xff;
+                spawn->health_or_damage_28 = 0;
+                spawn->gravity_or_motion_38 = typeTable[0x360c]; spawn->damage_44 = typeTable[0x361b];
+                spawn->scratch_48 = 0; spawn->palette_value = typeTable[0x3627];
+                spawn->animation_frame = 0; spawn->subtype = 0;
+                spawn->callback_address = typeTable[0x35ea]; spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
                 DAT_00489248++;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 0;
-                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = 3;
+                DAT_004892e8[DAT_00489248 - 1].counter_3c = 0;
+                DAT_004892e8[DAT_00489248 - 1].timer_5c = 3;
                 uVar8 = rand(); uVar8 &= 0x80000007;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff8) + 1;
-                *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = (char)uVar8 + '\x14';
-                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x12;
+                DAT_004892e8[DAT_00489248 - 1].scratch_65 = (char)uVar8 + '\x14';
+                DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x12;
                 {
-                    int pp = (int)DAT_004892e8 + DAT_00489248 * 0x80;
-                    *(unsigned int *)(pp - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp - 0x1b) * 2) + 30000;
+                    Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
+                    last_spawn->palette_value = *(unsigned short *)((int)DAT_00487aa8 +
+                        (unsigned int)last_spawn->scratch_65 * 2) + 30000;
                 }
                 local_c++;
                 iVar13 = (int)DAT_00487810;
@@ -3886,33 +3887,33 @@ LAB_00401856:
                         *(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x12, foundX, foundY);
                     iVar11 = sincos[uVar15];
                     iVar16 = sincos[0x200 + uVar15];
-                    int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                    *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
-                    *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    Entity *spawn = &DAT_004892e8[DAT_00489248];
+                    spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
+                    spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
                     /* Cloud of particles — random direction + slight bias toward destination */
-                    *(int *)(p + 0x18) = ((int)(sincos[angleParam] * (int)uVar6) >> 8) + (iVar11 >> 3);
-                    *(int *)(p + 0x1c) = ((int)(sincos[0x200 + angleParam] * (int)uVar6) >> 8) + (iVar16 >> 3);
-                    *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-                    *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                    *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                    *(unsigned char *)(p + 0x21) = 0x67;
-                    iVar11 = rand(); *(short *)(p + 0x24) = (short)(iVar11 % 6);
-                    *(unsigned char *)(p + 0x20) = 0;
-                    *(unsigned char *)(p + 0x26) = 0xff;
-                    *(unsigned char *)(p + 0x22) = 0xff;
-                    *(int *)(p + 0x28) = 0;
-                    *(int *)(p + 0x38) = typeTable[0x3611]; *(int *)(p + 0x44) = typeTable[0x3620];
-                    *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x362c];
-                    *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 5;
-                    *(int *)(p + 0x34) = typeTable[0x35ea]; *(int *)(p + 0x3c) = 0;
-                    *(unsigned char *)(p + 0x5c) = 0;
+                    spawn->velocity_x = ((int)(sincos[angleParam] * (int)uVar6) >> 8) + (iVar11 >> 3);
+                    spawn->velocity_y = ((int)(sincos[0x200 + angleParam] * (int)uVar6) >> 8) + (iVar16 >> 3);
+                    spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+                    spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                    spawn->type = 0x67;
+                    iVar11 = rand(); spawn->variant_24 = (short)(iVar11 % 6);
+                    spawn->state_20 = 0;
+                    spawn->auxiliary_26 = 0xff;
+                    spawn->owner = 0xff;
+                    spawn->health_or_damage_28 = 0;
+                    spawn->gravity_or_motion_38 = typeTable[0x3611]; spawn->damage_44 = typeTable[0x3620];
+                    spawn->scratch_48 = 0; spawn->palette_value = typeTable[0x362c];
+                    spawn->animation_frame = 0; spawn->subtype = 5;
+                    spawn->callback_address = typeTable[0x35ea]; spawn->counter_3c = 0;
+                    spawn->timer_5c = 0;
                     DAT_00489248++;
                     uVar6 = rand(); uVar6 &= 0x80000007;
                     if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffff8) + 1;
                     angleParam += 0x40;
-                    *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x24) = (char)uVar6 + '\x04';
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0x27;
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0x21;
+                    DAT_004892e8[DAT_00489248 - 1].timer_5c = (char)uVar6 + '\x04';
+                    DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0x27;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x21;
                     {
                         int pp2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
                         *(unsigned int *)(pp2 - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp2 - 0x1b) * 2) + 30000;
@@ -4024,25 +4025,25 @@ LAB_00401856:
             uVar8 = rand(); uVar8 &= 0x800007ff;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffff800) + 1;
             iVar13 = rand(); iVar13 = iVar13 % 0x32 + 0x3c;
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = (sincos[uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x10 + (int)DAT_00487810) >> 1);
-            *(int *)(p + 0x1c) = (sincos[0x200 + uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x14 + (int)DAT_00487810) >> 1);
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(unsigned char *)(p + 0x21) = 0x11;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0x14;
-            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[0x908]; *(int *)(p + 0x44) = typeTable[0x917];
-            *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x923]; /* visible dot */
-            *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
-            *(int *)(p + 0x34) = typeTable[0x8e6]; *(int *)(p + 0x3c) = 0;
-            *(unsigned char *)(p + 0x5c) = 0;
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x10 + (int)DAT_00487810) >> 1);
+            spawn->velocity_y = (sincos[0x200 + uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x14 + (int)DAT_00487810) >> 1);
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            spawn->type = 0x11;
+            spawn->variant_24 = 0;
+            spawn->state_20 = 0; spawn->auxiliary_26 = 0x14;
+            spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[0x908]; spawn->damage_44 = typeTable[0x917];
+            spawn->scratch_48 = 0; spawn->palette_value = typeTable[0x923]; /* visible dot */
+            spawn->animation_frame = 0; spawn->subtype = 0;
+            spawn->callback_address = typeTable[0x8e6]; spawn->counter_3c = 0;
+            spawn->timer_5c = 0;
             DAT_00489248++;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 1;
+            DAT_004892e8[DAT_00489248 - 1].counter_3c = 1;
             local_c++;
             iVar13 = (int)DAT_00487810;
         } while (local_c < 0xe);
@@ -4061,30 +4062,30 @@ LAB_00401856:
                 iVar13 = (int)DAT_00487810;
                 if (0x9c3 < DAT_00489248) break;
                 uVar8 &= 0x7ff;
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x18) = sincos[uVar8] >> 1;
-                *(int *)(p + 0x1c) = sincos[0x200 + uVar8] >> 1;
-                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                *(unsigned char *)(p + 0x21) = 0x19;
-                *(unsigned short *)(p + 0x24) = 0;
-                *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0;
-                *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
-                *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->velocity_x = sincos[uVar8] >> 1;
+                spawn->velocity_y = sincos[0x200 + uVar8] >> 1;
+                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                spawn->type = 0x19;
+                spawn->variant_24 = 0;
+                spawn->state_20 = 0; spawn->auxiliary_26 = 0;
+                spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
+                spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
                 uVar8 += 0x80;
-                *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
-                *(int *)(p + 0x48) = 0;
-                *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
-                *(unsigned char *)(p + 0x54) = 0;
-                *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
-                *(int *)(p + 0x34) = typeTable[0xd16]; *(int *)(p + 0x3c) = 0;
-                *(unsigned char *)(p + 0x5c) = 0;
+                spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
+                spawn->scratch_48 = 0;
+                spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
+                spawn->animation_frame = 0;
+                spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+                spawn->callback_address = typeTable[0xd16]; spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
                 DAT_00489248++;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x9c4;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x9c4;
+                DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
                 local_c++;
                 iVar13 = (int)DAT_00487810;
             } while (local_c < 3);
@@ -4093,27 +4094,27 @@ LAB_00401856:
             FUN_0040f9b0(sndId, *(int *)(iVar12 + iVar13), *(int *)(iVar12 + 4 + iVar13));
             iVar13 = (int)DAT_00487810;
             if (DAT_00489248 < 0x9c4) {
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x18) = 0; *(int *)(p + 0x1c) = 0;
-                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-                *(unsigned char *)(p + 0x21) = 0x19;
-                *(unsigned short *)(p + 0x24) = 0;
-                *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0x32;
-                *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
-                *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
-                *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
-                *(int *)(p + 0x48) = 0;
-                *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
-                *(unsigned char *)(p + 0x54) = 0;
-                *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
-                *(int *)(p + 0x34) = typeTable[0xd16]; *(int *)(p + 0x3c) = 0;
-                *(unsigned char *)(p + 0x5c) = 0;
+                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->velocity_x = 0; spawn->velocity_y = 0;
+                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+                spawn->type = 0x19;
+                spawn->variant_24 = 0;
+                spawn->state_20 = 0; spawn->auxiliary_26 = 0x32;
+                spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
+                spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
+                spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
+                spawn->scratch_48 = 0;
+                spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
+                spawn->animation_frame = 0;
+                spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+                spawn->callback_address = typeTable[0xd16]; spawn->counter_3c = 0;
+                spawn->timer_5c = 0;
                 DAT_00489248++;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 6000;
+                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 6000;
                 iVar13 = (int)DAT_00487810;
             }
         }
@@ -4129,25 +4130,25 @@ LAB_00401856:
         #define SPAWN_BEAM_0x69(angleExpr) do { \
             uVar8 = (angleExpr) & 0x7ff; \
             if (DAT_00489248 < 0x9c4) { \
-                int p = DAT_00489248 * 0x80 + (int)DAT_004892e8; \
-                *(int *)(p) = *(int *)(iVar12 + (int)DAT_00487810); \
-                *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
-                *(int *)(p + 0x18) = (sincos[uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810); \
-                *(int *)(p + 0x1c) = (sincos[0x200 + uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810); \
-                *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810); \
-                *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
-                *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0; \
-                *(unsigned char *)(p + 0x21) = 0x69; \
-                *(unsigned short *)(p + 0x24) = 0; \
-                *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xf; \
-                *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0; \
-                *(int *)(p + 0x38) = typeTable[0x371d]; *(int *)(p + 0x44) = typeTable[0x372c]; \
-                *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x3738]; \
-                *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 5; \
-                *(int *)(p + 0x34) = typeTable[0x36f6]; *(int *)(p + 0x3c) = 0; \
-                *(unsigned char *)(p + 0x5c) = 0; \
+                Entity *spawn = &DAT_004892e8[DAT_00489248]; \
+                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810); \
+                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
+                spawn->velocity_x = (sincos[uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810); \
+                spawn->velocity_y = (sincos[0x200 + uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810); \
+                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810); \
+                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
+                spawn->motion_x_10 = 0; spawn->motion_y_14 = 0; \
+                spawn->type = 0x69; \
+                spawn->variant_24 = 0; \
+                spawn->state_20 = 0; spawn->auxiliary_26 = 0xf; \
+                spawn->owner = uVar9; spawn->health_or_damage_28 = 0; \
+                spawn->gravity_or_motion_38 = typeTable[0x371d]; spawn->damage_44 = typeTable[0x372c]; \
+                spawn->scratch_48 = 0; spawn->palette_value = typeTable[0x3738]; \
+                spawn->animation_frame = 0; spawn->subtype = 5; \
+                spawn->callback_address = typeTable[0x36f6]; spawn->counter_3c = 0; \
+                spawn->timer_5c = 0; \
                 DAT_00489248++; \
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x32; \
+                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x32; \
                 iVar13 = (int)DAT_00487810; \
             } \
         } while(0)
@@ -4235,25 +4236,25 @@ LAB_00401856:
     case 0x2b:
     {
         if (DAT_00489248 < 0x9c4) {
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(p) = *(int *)(iVar12 + iVar13);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = *(int *)(iVar12 + 0x10 + (int)DAT_00487810) / 2;
-            *(int *)(p + 0x1c) = 0;
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(unsigned char *)(p + 0x21) = 0x2b;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xff;
-            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[0x16a4]; *(int *)(p + 0x44) = typeTable[0x16b3];
-            *(int *)(p + 0x48) = 0; *(int *)(p + 0x4c) = typeTable[0x16bf];
-            *(unsigned char *)(p + 0x54) = 0; *(unsigned char *)(p + 0x40) = 0;
-            *(int *)(p + 0x34) = typeTable[0x1682]; *(int *)(p + 0x3c) = 0;
-            *(unsigned char *)(p + 0x5c) = 0;
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            spawn->position_x = *(int *)(iVar12 + iVar13);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->velocity_x = *(int *)(iVar12 + 0x10 + (int)DAT_00487810) / 2;
+            spawn->velocity_y = 0;
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            spawn->type = 0x2b;
+            spawn->variant_24 = 0;
+            spawn->state_20 = 0; spawn->auxiliary_26 = 0xff;
+            spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[0x16a4]; spawn->damage_44 = typeTable[0x16b3];
+            spawn->scratch_48 = 0; spawn->palette_value = typeTable[0x16bf];
+            spawn->animation_frame = 0; spawn->subtype = 0;
+            spawn->callback_address = typeTable[0x1682]; spawn->counter_3c = 0;
+            spawn->timer_5c = 0;
             DAT_00489248++;
-            piVar1 = (int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34);
+            piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].palette_value;
             *piVar1 += (unsigned int)*(unsigned char *)(iVar12 + 0x2c + (int)DAT_00487810) * 100;
             iVar13 = (int)DAT_00487810;
         }
@@ -4266,30 +4267,30 @@ LAB_00401856:
     case 0x2c:
     {
         if (DAT_00489248 < 0x9c4) {
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(p) = *(int *)(iVar12 + iVar13);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = 0;
-            *(int *)(p + 0x1c) = 0;
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(unsigned char *)(p + 0x21) = 0x2c;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xfe;
-            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x172a];
-            *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1739];
-            *(int *)(p + 0x48) = 0;
-            *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1745];
-            *(unsigned char *)(p + 0x54) = 0;
-            *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
-            *(int *)(p + 0x34) = typeTable[0x1708]; *(int *)(p + 0x3c) = 0;
-            *(unsigned char *)(p + 0x5c) = 0;
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            spawn->position_x = *(int *)(iVar12 + iVar13);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->velocity_x = 0;
+            spawn->velocity_y = 0;
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            spawn->type = 0x2c;
+            spawn->variant_24 = 0;
+            spawn->state_20 = 0; spawn->auxiliary_26 = 0xfe;
+            spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x172a];
+            spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1739];
+            spawn->scratch_48 = 0;
+            spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1745];
+            spawn->animation_frame = 0;
+            spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            spawn->callback_address = typeTable[0x1708]; spawn->counter_3c = 0;
+            spawn->timer_5c = 0;
             DAT_00489248++;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].scratch_2c = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             iVar13 = (int)DAT_00487810;
         }
 
@@ -4321,35 +4322,35 @@ LAB_00401856:
     case 0x2d:
     {
         if (DAT_00489248 < 0x9c4) {
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-            *(int *)(p) = *(int *)(iVar12 + iVar13);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            spawn->position_x = *(int *)(iVar12 + iVar13);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             /* Compute velocity from player heading (original callback formula) */
             {
                 unsigned int heading = uVar7 & 0x7FF;
-                *(int *)(p + 0x18) = sincos[heading] * 2;
-                *(int *)(p + 0x1c) = sincos[(heading + 0x200) & 0x7FF] * 2;
+                spawn->velocity_x = sincos[heading] * 2;
+                spawn->velocity_y = sincos[(heading + 0x200) & 0x7FF] * 2;
             }
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(unsigned char *)(p + 0x21) = 0x2d;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = 0; *(unsigned char *)(p + 0x26) = 0xfe;
-            *(unsigned char *)(p + 0x22) = uVar9; *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17b0];
-            *(int *)(p + 0x44) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17bf];
-            *(int *)(p + 0x48) = 0;
-            *(int *)(p + 0x4c) = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17cb];
-            *(unsigned char *)(p + 0x54) = 0;
-            *(unsigned char *)(p + 0x40) = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
-            *(int *)(p + 0x34) = typeTable[0x178e]; *(int *)(p + 0x3c) = 0;
-            *(unsigned char *)(p + 0x5c) = 0;
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            spawn->type = 0x2d;
+            spawn->variant_24 = 0;
+            spawn->state_20 = 0; spawn->auxiliary_26 = 0xfe;
+            spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17b0];
+            spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17bf];
+            spawn->scratch_48 = 0;
+            spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17cb];
+            spawn->animation_frame = 0;
+            spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            spawn->callback_address = typeTable[0x178e]; spawn->counter_3c = 0;
+            spawn->timer_5c = 0;
             DAT_00489248++;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x32;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x32;
+            DAT_004892e8[DAT_00489248 - 1].scratch_2c = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
             iVar13 = (int)DAT_00487810;
         }
         break;
@@ -4387,31 +4388,31 @@ LAB_00401856:
         }
 
         {
-            int p = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+            Entity *spawn = &DAT_004892e8[DAT_00489248];
             int typeOff = local_14 * 0x86;
             unsigned char wl = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
-            *(int *)(p) = *(int *)(iVar12 + iVar13);
-            *(int *)(p + 8) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x18) = (typeTable[wl + typeOff + 0x2b] * sincos[local_8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            *(int *)(p + 0x1c) = (typeTable[wl + typeOff + 0x2b] * sincos[0x200 + local_8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-            *(int *)(p + 4) = *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(p + 0xc) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(p + 0x10) = 0; *(int *)(p + 0x14) = 0;
-            *(char *)(p + 0x21) = (char)local_14;
-            *(unsigned short *)(p + 0x24) = 0;
-            *(unsigned char *)(p + 0x20) = (unsigned char)param1_byte;
-            *(unsigned char *)(p + 0x26) = (unsigned char)localc_byte;
-            *(unsigned char *)(p + 0x22) = uVar9;
-            *(int *)(p + 0x28) = 0;
-            *(int *)(p + 0x38) = typeTable[wl + typeOff + 0x22];
-            *(int *)(p + 0x44) = typeTable[wl + typeOff + 0x31];
-            *(int *)(p + 0x48) = 0;
-            *(int *)(p + 0x4c) = typeTable[wl + typeOff + 0x3d];
-            *(unsigned char *)(p + 0x54) = 0;
-            *(unsigned char *)(p + 0x40) = wl;
-            *(int *)(p + 0x34) = typeTable[local_14 * 0x86];
-            *(int *)(p + 0x3c) = 0;
-            *(unsigned char *)(p + 0x5c) = 0;
+            spawn->position_x = *(int *)(iVar12 + iVar13);
+            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->velocity_x = (typeTable[wl + typeOff + 0x2b] * sincos[local_8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
+            spawn->velocity_y = (typeTable[wl + typeOff + 0x2b] * sincos[0x200 + local_8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
+            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
+            *(char *)((char *)spawn + 0x21) = (char)local_14;
+            spawn->variant_24 = 0;
+            spawn->state_20 = (unsigned char)param1_byte;
+            spawn->auxiliary_26 = (unsigned char)localc_byte;
+            spawn->owner = uVar9;
+            spawn->health_or_damage_28 = 0;
+            spawn->gravity_or_motion_38 = typeTable[wl + typeOff + 0x22];
+            spawn->damage_44 = typeTable[wl + typeOff + 0x31];
+            spawn->scratch_48 = 0;
+            spawn->palette_value = typeTable[wl + typeOff + 0x3d];
+            spawn->animation_frame = 0;
+            spawn->subtype = wl;
+            spawn->callback_address = typeTable[local_14 * 0x86];
+            spawn->counter_3c = 0;
+            spawn->timer_5c = 0;
         }
         DAT_00489248++;
 
@@ -4420,141 +4421,141 @@ LAB_00401856:
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xb4 + uVar8 * 2) + 30000;
             }
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01') {
                 iVar13 = rand();
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xcc + (iVar13 % 5) * 2) + 30000;
             }
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x02') {
                 iVar13 = rand();
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+                DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xf2 + (iVar13 % 3) * 2) + 30000;
             }
         }
 
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x70) = *(int *)(iVar12 + (int)DAT_00487810);
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x6c) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+        DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
+        DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
 
         /* Type-specific post-spawn */
         if (local_14 == 0x16) {
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 0x12;
+            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x12;
         } else if (local_14 == 0xb) {
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+            DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
                 *(int *)(iVar12 + 0x470 + (int)DAT_00487810) += 1;
         } else if (local_14 == 0x2e) {
             /* Smoking Nalle is placed at the firing position. The reconstructed
              * generic projectile speed made it drift through terrain before its
              * stationary callback got a chance to run. */
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = 0;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = 0;
+            DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
+            DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
             piVar1 = (int *)(iVar12 + 0x46c + (int)DAT_00487810); *piVar1 += 1;
         } else if (local_14 == 0x11) {
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = 1;
+            DAT_004892e8[DAT_00489248 - 1].counter_3c = 1;
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
-                *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x60) = 0x1b;
+                DAT_004892e8[DAT_00489248 - 1].state_20 = 0x1b;
             if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x02')
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x48) = (int)0xfffffff0;
+                DAT_004892e8[DAT_00489248 - 1].gravity_or_motion_38 = (int)0xfffffff0;
         } else if (local_14 == 0x1d) {
-            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
-            *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0;
+            DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0;
+            DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0;
         } else if (local_14 == 0x27) {
             *(int *)(iVar12 + 0x468 + (int)DAT_00487810) += 1;
-            *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+            DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
         } else {
             if (local_14 == 0x29 || local_14 == 0x2a) {
                 piVar1 = (int *)(iVar12 + 0x478 + (int)DAT_00487810); *piVar1 += 1;
             }
             if (local_14 == 0x28) {
                 *(int *)(iVar12 + 0x474 + (int)DAT_00487810) += 1;
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = 0x24;
+                DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
+                DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0x24;
             } else if (local_14 == 0x22) {
                 if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
-                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                    DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
                     iVar13 = rand();
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = iVar13 % 10 + 1;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_30 = iVar13 % 10 + 1;
                     uVar8 = rand(); uVar8 &= 0x80000001;
                     if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
-                    *(char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x60) = (char)uVar8;
+                    DAT_004892e8[DAT_00489248 - 1].state_20 = (char)uVar8;
                 } else {
                     *(int *)(iVar12 + 0x464 + (int)DAT_00487810) += 1;
-                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = 0;
+                    DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0;
                 }
             } else if (local_14 == 0x1b) {
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
+                DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
             } else {
                 if (local_14 == 0x1c) {
-                    *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = uVar7;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x157c;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x50) = 0;
+                    DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x157c;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0;
                     goto LAB_00406a71;
                 }
                 if (local_14 == 0x26) {
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
                     iVar13 = rand();
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x44) = iVar13 % 0x7fb;
+                    DAT_004892e8[DAT_00489248 - 1].counter_3c = iVar13 % 0x7fb;
                     if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = sincos[local_8] >> 3;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = sincos[0x200 + local_8] >> 3;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 3;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 3;
                     } else {
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = 0;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = 0;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
                     }
                     goto LAB_0040651d;
                 }
                 if (local_14 == 0xe) {
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x1130;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x1130;
                     if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = sincos[local_8] >> 3;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = sincos[0x200 + local_8] >> 3;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 3;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 3;
                     } else {
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = 0;
-                        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = 0;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
+                        DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
                     }
                     goto LAB_00406a71;
                 }
                 if (local_14 == 0x23) {
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x68) = sincos[local_8] >> 1;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x64) = sincos[0x200 + local_8] >> 1;
+                    DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 1;
+                    DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 1;
                     goto LAB_0040651d;
                 }
                 if (local_14 == 0x1f) {
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x5a) = 0xff;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x54) = 0;
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1b) = 0;
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x9c4;
+                    DAT_004892e8[DAT_00489248 - 1].auxiliary_26 = 0xff;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x9c4;
 LAB_00406a71:
-                    piVar1 = (int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34);
+                    piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].palette_value;
                     *piVar1 += (unsigned int)*(unsigned char *)(iVar12 + 0x2c + (int)DAT_00487810) * 100;
                 }
                 else if (local_14 == 0xf || local_14 == 0x18) goto LAB_00406a71;
 
                 if (local_14 == 0x18)
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 0x157c;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x157c;
                 else if (local_14 == 0xf) {
-                    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x20) = 4000;
-                    *(unsigned char *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x1c) = 0;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 4000;
+                    DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0;
                 }
                 else if (local_14 == 0x17 && *(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
                     /* Original 0x00406b20-0x00406b36: count was already
                      * incremented, so -0x58 addresses the new entity's +0x28. */
                     EntityCallbacks_InitNucleusMarkII(
-                        (void *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x80));
+                        (void *)&DAT_004892e8[DAT_00489248 - 1]);
             }
         }
 
 LAB_0040651d:
         {
-            int pp = (int)DAT_004892e8 + DAT_00489248 * 0x80;
+            Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
             iVar13 = (int)DAT_00487810;
-            if (*(char *)((unsigned int)*(unsigned char *)(pp - 0x40) + local_14 * 0x218 + 0x130 + (int)DAT_00487abc) == '\x01') {
+            if (*(char *)((unsigned int)last_spawn->subtype + local_14 * 0x218 + 0x130 + (int)DAT_00487abc) == '\x01') {
                 unsigned int pIdx2 = 99;
                 if (local_14 == 0xb) pIdx2 = 0;
                 else if (local_14 == 0x17) pIdx2 = 1;
@@ -4565,9 +4566,9 @@ LAB_0040651d:
                 else if (local_14 == 0xe) pIdx2 = 6;
                 else if (local_14 == 0x2e) pIdx2 = 7;
                 else if (local_14 == 0x27) pIdx2 = 8;
-                *(unsigned char *)(pp - 0x24) = 6;
+                last_spawn->timer_5c = 6;
                 *(int *)((int)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = DAT_00489248 - 1;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x30) = DAT_00487834[pIdx2];
+                DAT_004892e8[DAT_00489248 - 1].scratch_50 = DAT_00487834[pIdx2];
                 iVar13 = (int)DAT_00487810;
                 DAT_00487834[pIdx2]++;
             }
@@ -4993,38 +4994,38 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                             unsigned int uVar7 = (heading - 0x400) & 0x7FF;
                             int r = rand();
                             unsigned int uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
-                            int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            Entity *spawn = &DAT_004892e8[DAT_00489248];
 
                             /* Position: slightly behind ship at reverse+side angle */
-                            *(int *)(base + 0x00) = ent[0] + (lut[uVar6] + lut[uVar7] * 2) * 2;
-                            *(int *)(base + 0x08) = ent[1] + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
+                            spawn->position_x = ent[0] + (lut[uVar6] + lut[uVar7] * 2) * 2;
+                            spawn->position_y = ent[1] + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
                             /* Velocity: spread-based */
-                            *(int *)(base + 0x18) = (lut[uVar3] * 0x14 >> 5) + ent[4];
-                            *(int *)(base + 0x1C) = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                            spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + ent[4];
+                            spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
                             /* Previous position = current */
-                            *(int *)(base + 0x04) = *(int *)(base + 0x00);
-                            *(int *)(base + 0x0C) = *(int *)(base + 0x08);
-                            *(int *)(base + 0x10) = 0;
-                            *(int *)(base + 0x14) = 0;
+                            spawn->previous_x = spawn->position_x;
+                            spawn->previous_y = spawn->position_y;
+                            spawn->motion_x_10 = 0;
+                            spawn->motion_y_14 = 0;
                             /* Behavior/type fields */
-                            *(unsigned char *)(base + 0x21) = 0x67;
-                            *(short *)(base + 0x24) = (short)(rand() % 6);
-                            *(unsigned char *)(base + 0x20) = 0;
-                            *(unsigned char *)(base + 0x26) = 0xFE;
-                            *(unsigned char *)(base + 0x22) = (unsigned char)player_idx;
-                            *(int *)(base + 0x28) = 0;
+                            spawn->type = 0x67;
+                            spawn->variant_24 = (short)(rand() % 6);
+                            spawn->state_20 = 0;
+                            spawn->auxiliary_26 = 0xFE;
+                            spawn->owner = (unsigned char)player_idx;
+                            spawn->health_or_damage_28 = 0;
                             /* Sprite/animation data from entity type table */
-                            *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);
-                            *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);
-                            *(int *)(base + 0x3C) = 0;
-                            *(unsigned char *)(base + 0x40) = 0;
-                            *(int *)(base + 0x44) = 0x2800;
-                            *(int *)(base + 0x48) = 0;
-                            *(unsigned char *)(base + 0x54) = 0;
-                            *(unsigned char *)(base + 0x5C) = 1;
-                            *(unsigned char *)(base + 0x64) = 0x72;
-                            *(unsigned char *)(base + 0x65) = 0x7F;
-                            *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                            spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD830);
+                            spawn->callback_address = *(int *)((int)DAT_00487abc + 0xD7A8);
+                            spawn->counter_3c = 0;
+                            spawn->subtype = 0;
+                            spawn->damage_44 = 0x2800;
+                            spawn->scratch_48 = 0;
+                            spawn->animation_frame = 0;
+                            spawn->timer_5c = 1;
+                            spawn->scratch_64 = 0x72;
+                            spawn->scratch_65 = 0x7F;
+                            spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
                             DAT_00489248++;
 
                             /* Second emitter particle on the OPPOSITE side.
@@ -5036,33 +5037,33 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                                 unsigned int uVar7b = (heading - 0x400) & 0x7FF;
                                 r = rand();
                                 uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
-                                base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                spawn = &DAT_004892e8[DAT_00489248];
 
-                                *(int *)(base + 0x00) = ent[0] + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
-                                *(int *)(base + 0x08) = ent[1] + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
-                                *(int *)(base + 0x18) = (lut[uVar3] * 0x14 >> 5) + ent[4];
-                                *(int *)(base + 0x1C) = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
-                                *(int *)(base + 0x04) = *(int *)(base + 0x00);
-                                *(int *)(base + 0x0C) = *(int *)(base + 0x08);
-                                *(int *)(base + 0x10) = 0;
-                                *(int *)(base + 0x14) = 0;
-                                *(unsigned char *)(base + 0x21) = 0x67;
-                                *(short *)(base + 0x24) = (short)(rand() % 6);
-                                *(unsigned char *)(base + 0x20) = 0;
-                                *(unsigned char *)(base + 0x26) = 0xFE;
-                                *(unsigned char *)(base + 0x22) = (unsigned char)player_idx;
-                                *(int *)(base + 0x28) = 0;
-                                *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);
-                                *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);
-                                *(int *)(base + 0x3C) = 0;
-                                *(unsigned char *)(base + 0x40) = 0;
-                                *(int *)(base + 0x44) = 0x2800;
-                                *(int *)(base + 0x48) = 0;
-                                *(unsigned char *)(base + 0x54) = 0;
-                                *(unsigned char *)(base + 0x5C) = 1;
-                                *(unsigned char *)(base + 0x64) = 0x72;
-                                *(unsigned char *)(base + 0x65) = 0x7F;
-                                *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                                spawn->position_x = ent[0] + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
+                                spawn->position_y = ent[1] + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
+                                spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + ent[4];
+                                spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                                spawn->previous_x = spawn->position_x;
+                                spawn->previous_y = spawn->position_y;
+                                spawn->motion_x_10 = 0;
+                                spawn->motion_y_14 = 0;
+                                spawn->type = 0x67;
+                                spawn->variant_24 = (short)(rand() % 6);
+                                spawn->state_20 = 0;
+                                spawn->auxiliary_26 = 0xFE;
+                                spawn->owner = (unsigned char)player_idx;
+                                spawn->health_or_damage_28 = 0;
+                                spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD830);
+                                spawn->callback_address = *(int *)((int)DAT_00487abc + 0xD7A8);
+                                spawn->counter_3c = 0;
+                                spawn->subtype = 0;
+                                spawn->damage_44 = 0x2800;
+                                spawn->scratch_48 = 0;
+                                spawn->animation_frame = 0;
+                                spawn->timer_5c = 1;
+                                spawn->scratch_64 = 0x72;
+                                spawn->scratch_65 = 0x7F;
+                                spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
                                 DAT_00489248++;
                             }
                         }

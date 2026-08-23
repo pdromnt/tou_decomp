@@ -36,7 +36,12 @@ the nine fire-damage entity categories, particle deflection by Moving Suckers,
 enemy/turret projectile construction, trooper and player death fragments, and
 the remaining player-explosion terrain debris constructors. These conversions
 retain strict collision bounds, category ordering, signed state checks, RNG
-ordering, partial initialization, and post-count writes.
+ordering, partial initialization, and post-count writes. The next large batch
+types the full legacy update body and its effect constructors, gameplay firing,
+pickup rewards, ship exhaust, ambient and level spawns, trailing post-count
+writes, and the remaining direct entity-pool scanners. A few intentional packed
+views through an already selected record remain raw and must stay width
+preserving during later cleanup.
 
 **Known layout:**
 ```

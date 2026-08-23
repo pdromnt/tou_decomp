@@ -140,7 +140,12 @@ converts the enemy-proximity, owned-projectile detonation, Moving Sucker, and
 force-field entity-array scanners in `entity.cpp`. The fifth batch converts all
 three primary-fire projectile paths plus bomb/mine and energy-explosion entity
 construction. Constructors still write only the fields written by the recovered
-code; do not zero the whole record as a cleanup.
+code; do not zero the whole record as a cleanup. Later batches now cover the
+complete legacy body of `FUN_00434310`, its weapon-effect constructors and
+post-count writes, `FUN_00401000` gameplay firing, pickup rewards, ship exhaust,
+ambient and level spawns, and the remaining direct pool scanners. Deliberate
+packed-width views inside an already selected record remain raw where a typed
+field would change the original access width.
 
 ## Config Ownership
 
