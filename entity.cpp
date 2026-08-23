@@ -2328,38 +2328,37 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
     {
         int r = rand();
         int iVar5 = r % 0x280 + 0x200;
-        int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+        Entity *debris = &DAT_004892e8[DAT_00489248];
 
-        *(int *)(base + 0x00) = piVar1[0] + 0x1c0000;
-        *(int *)(base + 0x08) = piVar1[1] + 0x100000;
-        *(int *)(base + 0x18) = (rand() % 0x14 + 0x1e) *
+        debris->position_x = piVar1[0] + 0x1c0000;
+        debris->position_y = piVar1[1] + 0x100000;
+        debris->velocity_x = (rand() % 0x14 + 0x1e) *
             (*(int *)((int)DAT_00487ab0 + iVar5 * 4)) >> 6;
-        *(int *)(base + 0x1c) = (rand() % 0x14 + 0x1e) *
+        debris->velocity_y = (rand() % 0x14 + 0x1e) *
             (*(int *)((int)DAT_00487ab0 + 0x800 + iVar5 * 4)) >> 6;
-        *(int *)(base + 0x04) = piVar1[0] + 0x1c0000;
-        *(int *)(base + 0x0c) = piVar1[1] + 0x100000;
-        *(int *)(base + 0x10) = 0;
-        *(int *)(base + 0x14) = 0;
-        *(unsigned char *)(base + 0x21) = 100;
-        *(short *)(base + 0x24) = (short)(rand() % 6);
-        *(unsigned char *)(base + 0x20) = 0;
-        *(unsigned char *)(base + 0x26) = 0xff;
-        *(unsigned char *)(base + 0x22) = 0xff;
-        *(int *)(base + 0x28) = 0;
-        *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xd1e8);
-        *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0xd224);
-        *(int *)(base + 0x48) = 0;
-        *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0xd254);
-        *(unsigned char *)(base + 0x54) = 0;
-        *(unsigned char *)(base + 0x40) = 0;
-        *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xd160);
-        *(int *)(base + 0x3c) = 0;
-        *(unsigned char *)(base + 0x5c) = 0;
+        debris->previous_x = piVar1[0] + 0x1c0000;
+        debris->previous_y = piVar1[1] + 0x100000;
+        debris->motion_x_10 = 0;
+        debris->motion_y_14 = 0;
+        debris->type = 100;
+        debris->variant_24 = (short)(rand() % 6);
+        debris->state_20 = 0;
+        debris->auxiliary_26 = 0xff;
+        debris->owner = 0xff;
+        debris->health_or_damage_28 = 0;
+        debris->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd1e8);
+        debris->damage_44 = *(int *)((int)DAT_00487abc + 0xd224);
+        debris->scratch_48 = 0;
+        debris->palette_value = *(int *)((int)DAT_00487abc + 0xd254);
+        debris->animation_frame = 0;
+        debris->subtype = 0;
+        debris->callback_address = *(int *)((int)DAT_00487abc + 0xd160);
+        debris->counter_3c = 0;
+        debris->timer_5c = 0;
 
         DAT_00489248++;
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 0x3c + 0x46;
-        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-            (DAT_0048384c & 0xffff) + 30000;
+        debris->health_or_damage_28 = rand() % 0x3c + 0x46;
+        debris->palette_value = (DAT_0048384c & 0xffff) + 30000;
     }
 
     /* Area-of-effect tile damage via FUN_004357b0 */
@@ -2400,43 +2399,42 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
                 unsigned int uVar6 = (((signedRand + (signedRand >> 0x1f & 3)) >> 2) + angle) & 0x7ff;
                 int iVar3 = rand() % 0x28 + 10;
 
-                int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                Entity *debris = &DAT_004892e8[DAT_00489248];
 
                 int rx = rand() & 7; if (rx < 0) rx = (rx - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x00) = ((unsigned int)(rx - 4) + (unsigned int)iVar4) * FIXED_SCALE;
+                debris->position_x = ((unsigned int)(rx - 4) + (unsigned int)iVar4) * FIXED_SCALE;
                 int ry = rand() & 7; if (ry < 0) ry = (ry - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x08) = ((unsigned int)(ry - 4) + (unsigned int)iVar5) * FIXED_SCALE;
-                *(int *)(base + 0x18) = *(int *)((int)DAT_00487ab0 + uVar6 * 4) * iVar3 +
+                debris->position_y = ((unsigned int)(ry - 4) + (unsigned int)iVar5) * FIXED_SCALE;
+                debris->velocity_x = *(int *)((int)DAT_00487ab0 + uVar6 * 4) * iVar3 +
                     (piVar1[4] >> 2) >> 6;
-                *(int *)(base + 0x1c) = *(int *)((int)DAT_00487ab0 + 0x800 + uVar6 * 4) * iVar3 +
+                debris->velocity_y = *(int *)((int)DAT_00487ab0 + 0x800 + uVar6 * 4) * iVar3 +
                     (piVar1[4] >> 2) >> 6;
 
                 int rx2 = rand() & 7; if (rx2 < 0) rx2 = (rx2 - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x04) = ((unsigned int)(rx2 - 4) + (unsigned int)iVar4) * FIXED_SCALE;
+                debris->previous_x = ((unsigned int)(rx2 - 4) + (unsigned int)iVar4) * FIXED_SCALE;
                 int ry2 = rand() & 7; if (ry2 < 0) ry2 = (ry2 - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x0c) = ((unsigned int)(ry2 - 4) + (unsigned int)iVar5) * FIXED_SCALE;
-                *(int *)(base + 0x10) = 0;
-                *(int *)(base + 0x14) = 0;
-                *(unsigned char *)(base + 0x21) = 100;
-                *(short *)(base + 0x24) = (short)(rand() % 6);
-                *(unsigned char *)(base + 0x20) = 0;
-                *(unsigned char *)(base + 0x26) = 0xff;
-                *(unsigned char *)(base + 0x22) = 0xff;
-                *(int *)(base + 0x28) = 0;
-                *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xd1e8);
-                *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0xd224);
-                *(int *)(base + 0x48) = 0;
-                *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0xd254);
-                *(unsigned char *)(base + 0x54) = 0;
-                *(unsigned char *)(base + 0x40) = 0;
-                *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xd160);
-                *(int *)(base + 0x3c) = 0;
-                *(unsigned char *)(base + 0x5c) = 0;
+                debris->previous_y = ((unsigned int)(ry2 - 4) + (unsigned int)iVar5) * FIXED_SCALE;
+                debris->motion_x_10 = 0;
+                debris->motion_y_14 = 0;
+                debris->type = 100;
+                debris->variant_24 = (short)(rand() % 6);
+                debris->state_20 = 0;
+                debris->auxiliary_26 = 0xff;
+                debris->owner = 0xff;
+                debris->health_or_damage_28 = 0;
+                debris->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd1e8);
+                debris->damage_44 = *(int *)((int)DAT_00487abc + 0xd224);
+                debris->scratch_48 = 0;
+                debris->palette_value = *(int *)((int)DAT_00487abc + 0xd254);
+                debris->animation_frame = 0;
+                debris->subtype = 0;
+                debris->callback_address = *(int *)((int)DAT_00487abc + 0xd160);
+                debris->counter_3c = 0;
+                debris->timer_5c = 0;
 
                 DAT_00489248++;
-                *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 0x5a + 0x5a;
-                *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                    (unsigned int)DAT_00481e8c + 30000;
+                debris->health_or_damage_28 = rand() % 0x5a + 0x5a;
+                debris->palette_value = (unsigned int)DAT_00481e8c + 30000;
 
                 angle += angleStep;
             }
