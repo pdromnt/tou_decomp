@@ -109,6 +109,8 @@ void Input_Update(void)
 void Game_State_Manager(void)
 {
     int iVar2;
+    HRESULT mouse_hr;
+    HRESULT keyboard_hr;
 
     switch (g_GameState & 0xFF) {
     case 0x01: /* Gameplay rendering */
@@ -181,15 +183,24 @@ void Game_State_Manager(void)
          * (FUN_0042fc40) can cause the window to lose foreground, making
          * DISCL_FOREGROUND DirectInput devices lose acquisition. Force the
          * window to foreground so keyboard/mouse work immediately. */
+        BringWindowToTop(hWnd_Main);
         SetForegroundWindow(hWnd_Main);
+        SetActiveWindow(hWnd_Main);
         SetFocus(hWnd_Main);
 
-        if (lpDI_Mouse != NULL) {
-            lpDI_Mouse->Acquire();
-        }
-        if (lpDI_Keyboard != NULL) {
-            lpDI_Keyboard->Acquire();
-        }
+        mouse_hr = DI_OK;
+        keyboard_hr = DI_OK;
+        if (lpDI_Mouse != NULL)
+            mouse_hr = lpDI_Mouse->Acquire();
+        if (lpDI_Keyboard != NULL)
+            keyboard_hr = lpDI_Keyboard->Acquire();
+
+        g_bIsActive = (GetForegroundWindow() == hWnd_Main) ? 1 : 0;
+        LOG("[MENU TRANSITION] foreground=%p self=%p focus=%p active=%d "
+            "mouse=0x%08lX keyboard=0x%08lX page=%u\n",
+            GetForegroundWindow(), hWnd_Main, GetFocus(), g_bIsActive,
+            (unsigned long)mouse_hr, (unsigned long)keyboard_hr,
+            (unsigned int)DAT_004877a4);
 
         FUN_00425fe0();
         return;

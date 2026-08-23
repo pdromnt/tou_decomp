@@ -14,10 +14,33 @@ unsigned char  g_GameState = 0;      /* 004877A0 */
 DWORD          g_TimerStart = 0;     /* 004892B0 */
 int            g_TimerAux   = 0;     /* 004892B4 */
 
+static void Set_Focus_Audio_Muted(int muted)
+{
+    if (!g_SoundEnabled)
+        return;
+
+    int sfx_volume = muted ? 0 : ((int)DAT_00483720[1] * 0xFF) / 100;
+    int music_volume = muted ? 0 : ((int)DAT_00483720[0] * 0xFF) / 100;
+    FSOUND_SetSFXMasterVolume(sfx_volume);
+    if (g_MusicStream != NULL && g_MusicChannel >= 0)
+        FSOUND_SetPaused(g_MusicChannel, muted ? 1 : (DAT_004877a4 == 0x97));
+    if (g_MusicModule != NULL)
+        FMUSIC_SetMasterVolume(g_MusicModule, music_volume);
+}
+
 /* ===== WndProc (00461F60) ===== */
 extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    if (uMsg == WM_DESTROY) {                       /* 0x02 */
+    if (uMsg == WM_CLOSE) {                         /* 0x10 */
+        /* COMPAT: The original had no window close button, so its only normal
+         * exit path saved options first.  The windowed decomp does have one;
+         * treating Alt+F4 / the title-bar X as a normal exit prevents menu
+         * changes from silently disappearing. */
+        Save_Options_Config();
+        DestroyWindow(hWnd);
+        return 0;
+    }
+    else if (uMsg == WM_DESTROY) {                  /* 0x02 */
         /* COMPAT: Release DirectInput devices before DDraw.
          * Original relied on OS cleanup at process exit, but modern
          * Windows can leave COM objects alive between rapid relaunches. */
@@ -60,15 +83,63 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
         PostQuitMessage(0);
     }
     else if (uMsg == WM_ACTIVATEAPP) {              /* 0x1C */
-        /* COMPAT: Always stay active in windowed mode.
-         * Original ran DDSCL_EXCLUSIVE fullscreen where the window always
-         * had foreground — WM_ACTIVATEAPP(0) never fired during normal play.
-         * In windowed DDSCL_NORMAL mode, DDraw surface operations during
-         * state transitions trigger spurious WM_ACTIVATEAPP(0), which sets
-         * g_bIsActive=0 and freezes the game loop in the inactive pause path.
-         * Since we can't distinguish spurious from real deactivation, always
-         * stay active — matching the original fullscreen behavior. */
+        g_bIsActive = (wParam != 0) ? 1 : 0;
+        if (g_bIsActive) {
+            HRESULT mouse_hr = DI_OK;
+            HRESULT keyboard_hr = DI_OK;
+            if (lpDI_Mouse != NULL) mouse_hr = lpDI_Mouse->Acquire();
+            if (lpDI_Keyboard != NULL) keyboard_hr = lpDI_Keyboard->Acquire();
+            Set_Focus_Audio_Muted(0);
+            LOG("[FOCUS] activate state=%u page=%u mouse=0x%08lX keyboard=0x%08lX\n",
+                (unsigned int)g_GameState, (unsigned int)DAT_004877a4,
+                (unsigned long)mouse_hr, (unsigned long)keyboard_hr);
+        } else {
+            if (GetCapture() == hWnd_Main)
+                ReleaseCapture();
+            if (g_GameState == 0 && g_SubState == 0) {
+                g_SubState = 1;
+                g_NeedsRedraw = 1;
+                g_SurfaceReady = 2;
+                g_TimerStart = timeGetTime();
+                g_TimerAux = 0;
+                g_FrameTimer = timeGetTime();
+            }
+            Set_Focus_Audio_Muted(1);
+            LOG("[FOCUS] deactivate state=%u page=%u substate=%u\n",
+                (unsigned int)g_GameState, (unsigned int)DAT_004877a4,
+                (unsigned int)g_SubState);
+        }
+    }
+    else if (uMsg == WM_MOUSEMOVE) {                /* 0x0200 */
+        /* COMPAT: Menu cursor movement must not depend on DirectInput.
+         * Match active-window client coordinates directly.
+         * Slider drags deliberately freeze the anchor and accumulate X motion
+         * elsewhere, so leave that mode alone. */
+        if (g_bIsActive && g_InputMode == 0) {
+            int mouse_x = (int)(short)LOWORD(lParam);
+            int mouse_y = (int)(short)HIWORD(lParam);
+            int moved = (mouse_x != (g_MouseDeltaX >> 18) ||
+                         mouse_y != (g_MouseDeltaY >> 18));
+            g_MouseDeltaX = mouse_x << 18;
+            g_MouseDeltaY = mouse_y << 18;
+            /* COMPAT: The post-match DDraw transition leaves Windows waiting
+             * for a click before normal hover delivery resumes.  A temporary
+             * capture replaces that click; release it on the first genuine
+             * motion so menus keep normal inside-window behavior afterward. */
+            if (moved && DAT_004877a4 == 0x13 && GetCapture() == hWnd_Main) {
+                LOG("[SCOREBOARD CURSOR] first motion=(%d,%d), releasing capture\n",
+                    mouse_x, mouse_y);
+                ReleaseCapture();
+            }
+        }
+    }
+    else if (uMsg == WM_SETFOCUS) {                 /* 0x0007 */
+        /* A real focus restoration is the correct point to reacquire the
+         * foreground DirectInput devices used by gameplay/keyboard input. */
         g_bIsActive = 1;
+        if (lpDI_Mouse != NULL) lpDI_Mouse->Acquire();
+        if (lpDI_Keyboard != NULL) lpDI_Keyboard->Acquire();
+        Set_Focus_Audio_Muted(0);
     }
     else if (uMsg == WM_SETCURSOR) {                /* 0x20 */
         /* Hide cursor unconditionally — matches original binary exactly.
@@ -298,16 +369,9 @@ MAIN_LOOP:
 
             /* 2. Run one game tick */
             if (g_bIsActive == 0) {
-                /* Original: pause game when WM_ACTIVATEAPP(0) fires.
-                 * COMPAT: WM_ACTIVATEAPP handler now always sets g_bIsActive=1,
-                 * so this path is only reached if g_bIsActive is explicitly
-                 * cleared elsewhere. Kept for correctness. */
-                Sleep(0);
-                g_SubState     = 1;
-                g_NeedsRedraw  = 1;
-                g_SurfaceReady = 2;
-                g_TimerStart   = timeGetTime();
-                g_TimerAux     = 0;
+                /* WM_ACTIVATEAPP performs the one-shot pause/mute work. Keep
+                 * simulation and menu input frozen until Windows reactivates us. */
+                Sleep(1);
             } else {
                 /* App is active - run game */
                 /* COMPAT: Sync cursor from Windows position for windowed mode.
@@ -315,10 +379,14 @@ MAIN_LOOP:
                  * Overrides DirectInput relative deltas with absolute Win32 coords. */
                 {
                     POINT pt;
+                    RECT client;
                     GetCursorPos(&pt);
                     ScreenToClient(hWnd_Main, &pt);
-                    g_MouseDeltaX = pt.x << 18;
-                    g_MouseDeltaY = pt.y << 18;
+                    GetClientRect(hWnd_Main, &client);
+                    if (PtInRect(&client, pt)) {
+                        g_MouseDeltaX = pt.x << 18;
+                        g_MouseDeltaY = pt.y << 18;
+                    }
                 }
                 /* Original binary calls Input_Update() here for g_GameState==1
                  * to poll DirectInput mouse (accumulates DAT_004877e8 for slider drag).

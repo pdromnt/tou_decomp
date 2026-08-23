@@ -2249,14 +2249,28 @@ void FUN_00425fe0(void)
         DAT_004877e8   = 0;
         DAT_004877ec   = 0;
 
-        /* COMPAT: Force window to foreground after all DDraw/rendering.
-         * SetForegroundWindow alone can fail on modern Windows if focus was
-         * lost during DDraw operations. The TOPMOST/NOTOPMOST trick reliably
-         * brings the window to front without making it permanently on top. */
-        SetWindowPos(hWnd_Main, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        SetWindowPos(hWnd_Main, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        /* COMPAT: Restore the window's normal active/focused state after the
+         * menu surface is rebuilt. Avoid TOPMOST toggling here: that causes a
+         * synthetic deactivate/reactivate cycle and can leave DirectInput
+         * waiting for the next mouse click. */
+        BringWindowToTop(hWnd_Main);
         SetForegroundWindow(hWnd_Main);
+        SetActiveWindow(hWnd_Main);
         SetFocus(hWnd_Main);
+
+        /* COMPAT: Temporarily capture the mouse on the post-match scoreboard.
+         * The window is already foreground/focused and both cursor coordinate
+         * systems agree, but Windows still withholds motion until a click
+         * after the DDraw transition. WM_MOUSEMOVE releases this capture on
+         * the first real movement. */
+        if (DAT_004877a4 == 0x13) {
+            HWND captured = SetCapture(hWnd_Main);
+            LOG("[SCOREBOARD CURSOR] capture previous=%p current=%p active=%d "
+                "foreground=%p focus=%p logical=(%d,%d) palette=%04X/%04X/%04X\n",
+                captured, GetCapture(), g_bIsActive, GetForegroundWindow(), GetFocus(),
+                g_MouseDeltaX >> 18, g_MouseDeltaY >> 18,
+                DAT_00483838[0], DAT_00483838[1], DAT_00483838[2]);
+        }
     }
 
     /* ---- Reset per-frame click state ---- */
