@@ -1781,8 +1781,8 @@ void FUN_00416ea0(int param_1, int param_2)
     if (tl < min_val) tl = min_val;
 
     /* Fixed-point 18-bit interpolation */
-    int left_step = (int)(bl - tl) * 0x40000;
-    int right_step = (int)(br - tr) * 0x40000;
+    int left_step = (int)(bl - tl) * FIXED_SCALE;
+    int right_step = (int)(br - tr) * FIXED_SCALE;
     int left_val = (int)tl << 0x12;
     int right_val = (int)tr << 0x12;
 
@@ -1834,8 +1834,8 @@ void FUN_00416fb0(int param_1, int param_2)
     if (br < min_val) br = min_val;
     if (tl < min_val) tl = min_val;
 
-    int left_step = (int)(bl - tl) * 0x40000;
-    int right_step = (int)(br - tr) * 0x40000;
+    int left_step = (int)(bl - tl) * FIXED_SCALE;
+    int right_step = (int)(br - tr) * FIXED_SCALE;
     int left_val = (int)tl << 0x12;
     int right_val = (int)tr << 0x12;
 

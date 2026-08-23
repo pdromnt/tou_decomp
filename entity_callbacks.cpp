@@ -126,8 +126,8 @@ void collision_players(int entity_index)
         if (guard != 0u && guard_team == player_id) continue;
         int ship_size = DAT_0048780c != NULL
             ? tou_binary::load_i32(DAT_0048780c, player * 0x40 + 0x38) : 0;
-        int32_t hx = ship_size + static_cast<int32_t>(collision_w) * 0x40000;
-        int32_t hy = ship_size + static_cast<int32_t>(collision_h) * 0x40000;
+        int32_t hx = ship_size + static_cast<int32_t>(collision_w) * FIXED_SCALE;
+        int32_t hy = ship_size + static_cast<int32_t>(collision_h) * FIXED_SCALE;
         if (DAT_004892e5 != 0) { hx += 0x140000; hy += 0x140000; }
         const int32_t px = tou_binary::load_i32(p, 0x00);
         const int32_t py = tou_binary::load_i32(p, 0x04);
@@ -166,7 +166,7 @@ void collision_tracked(int entity_index)
         0x1c0000, 0x100000, 0x180000, 0x140000
     };
     static const int32_t y_above[9] = {
-        0x40000, 0x100000, 0x40000, 0x40000, 0xc0000,
+        FIXED_SCALE, 0x100000, FIXED_SCALE, FIXED_SCALE, 0xc0000,
         0x1c0000, 0x100000, 0x200000, 0x140000
     };
     static const int32_t y_below[9] = {
@@ -231,7 +231,7 @@ void collision_troopers(int entity_index)
         const int32_t tx = tou_binary::load_i32(trooper, 0x00);
         const int32_t ty = tou_binary::load_i32(trooper, 0x08);
         if (!(tx - 0x140000 < x && x < tx + 0x140000 &&
-              ty - 0x1c0000 < y && y < ty + 0x40000)) continue;
+              ty - 0x1c0000 < y && y < ty + FIXED_SCALE)) continue;
         DAT_00481e8f = 3;
         tou_binary::store_i32(trooper, 0x28,
             tou_binary::load_i32(trooper, 0x28) - tou_binary::load_i32(projectile, 0x44));
@@ -950,7 +950,7 @@ void callback_roman_candle_00446130(int entity_index)
         if (game_rand() % 15 < 14) {
             int dir = (game_rand() & 0xff) + 0x380;
             int speed = game_rand() % 90 + 25;
-            int32_t x = tou_binary::load_i32(entity, 0x04) - 0x40000;
+            int32_t x = tou_binary::load_i32(entity, 0x04) - FIXED_SCALE;
             int32_t y = tou_binary::load_i32(entity, 0x0c) - 0x340000;
             uint8_t *shot = spawn_config_entity(0x6a, 1, x, y, sc[dir] * speed >> 6, sc[dir + 0x200] * speed >> 6, owner);
             if (shot != NULL) {
@@ -2332,7 +2332,7 @@ void callback_organic_waste_004427e0(int entity_index)
         const int previous_x = tou_binary::sar_i32(tou_binary::load_i32(entity, 4), 0x12);
         const int previous_y = tou_binary::sar_i32(tou_binary::load_i32(entity, 0x0c), 0x12);
         if (scan_count > 5 || tile_property(tile_at(previous_x, previous_y), 1) != 0u) break;
-        tou_binary::store_i32(entity, 8, tou_binary::load_i32(entity, 8) - 0x40000);
+        tou_binary::store_i32(entity, 8, tou_binary::load_i32(entity, 8) - FIXED_SCALE);
         tou_binary::store_i32(entity, 0x0c, tou_binary::load_i32(entity, 8));
         tou_binary::store_i32(entity, 4, tou_binary::load_i32(entity, 0));
         tou_binary::store_i32(entity, 0x18, 0);
@@ -2358,8 +2358,8 @@ void callback_organic_waste_004427e0(int entity_index)
         if (tile_property(tile_at(previous_x + direction, previous_y), 1) == 1u &&
             tile_property(tile_at(previous_x + direction, previous_y + 1), 1) == 1u) {
             tou_binary::store_i32(entity, 0x1c, 0x32);
-            tou_binary::store_i32(entity, 0, tou_binary::load_i32(entity, 0) + direction * 0x40000);
-            tou_binary::store_i32(entity, 8, tou_binary::load_i32(entity, 8) + 0x40000);
+            tou_binary::store_i32(entity, 0, tou_binary::load_i32(entity, 0) + direction * FIXED_SCALE);
+            tou_binary::store_i32(entity, 8, tou_binary::load_i32(entity, 8) + FIXED_SCALE);
             tou_binary::store_i32(entity, 0x18, (game_rand() % 0x5a) * direction);
             return;
         }

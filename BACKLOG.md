@@ -107,20 +107,22 @@ Tilemap stores one byte per cell. Magic constants scattered everywhere.
 
 ---
 
-### T1.7 — Fixed-point constant 0x40000  [P1]
+### T1.7 — Fixed-point constant 0x40000  [DONE]
 Fixed-point scale with 18 fractional bits, hardcoded in 50+ locations. One whole
 unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 
 **AC:**
-- `#define FIXED_SCALE 0x40000` and `#define FIXED_SHIFT 18`
+- [x] `#define FIXED_SCALE 0x40000` and `#define FIXED_SHIFT 18`
 - Optional `FIXED_TO_INT()` / `INT_TO_FIXED()` helpers
-- All confirmed fixed-point-scale uses of raw `0x40000` replaced
+- [x] All confirmed fixed-point-scale uses of raw `0x40000` replaced
+- [x] Rebuilt `.text`, `.data`, and `.rdata` match the pre-refactor executable
+  byte-for-byte
 
 ---
 
 ## Theme 2: Headers & Modules
 
-### T2.1 — Split `tou.h` into subsystem headers  [P0]
+### T2.1 — Split `tou.h` into subsystem headers  [IN PROGRESS / P0]
 `tou.h` is 783 lines of intermixed externs. Split into:
 - `types.h` — structs, enums, constants
 - `gfx.h` — DirectDraw globals, render prototypes
@@ -132,6 +134,9 @@ unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 - `compat.h` — Windows/DirectX version macros
 
 Keep `tou.h` as an aggregate include during transition.
+
+**Progress:** `compat.h` now owns the Windows/DirectX API versions and includes;
+`fixed_point.h` owns the verified world-coordinate constants.
 
 **AC:**
 - Each header contains only relevant declarations; no circular includes
@@ -444,6 +449,18 @@ OpenGL 3.3 or D3D11 backend for the software renderer.
 ---
 
 ## Theme 12: Build & Tooling
+
+### T12.0 — Build-only GitHub Actions validation  [DONE]
+The `Build` workflow runs separately from release automation on every push and
+pull request, with optional manual dispatch.
+
+**AC:**
+- [x] Clean 32-bit MinGW build on `windows-latest`
+- [x] Result verified as `pei-i386`
+- [x] Read-only repository permissions
+- [x] No packaging, release creation, or tag mutation
+
+---
 
 ### T12.1 — CMake build system  [P2]
 Replace Makefile with cross-platform CMake.

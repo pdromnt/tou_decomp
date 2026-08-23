@@ -1,15 +1,10 @@
 #ifndef TOU_H
 #define TOU_H
 
-#define DIRECTDRAW_VERSION 0x0100
-#define DIRECTINPUT_VERSION 0x0700
-
-#include <windows.h>
-#include <ddraw.h>
-#include <dinput.h>
-#include <mmsystem.h>
 #include <stdlib.h>
 
+#include "compat.h"
+#include "fixed_point.h"
 #include "fmod.h"
 #include "binary_compat.h"
 #include "entity_callbacks.h"

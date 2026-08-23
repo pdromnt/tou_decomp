@@ -61,14 +61,14 @@ char   DAT_00481ed8 = 0;
 /* ===== Utility functions ===== */
 /* ===== FUN_00410030 — Spawn Random Debris Particle from Top (00410030) ===== */
 /* Entity slot capacity is 0x9c4 (2500); every spawn path in this file uses the
- * same guard. Position uses 18-bit fixed-point: tile*0x40000 = pixels<<18. */
+ * same guard. Position uses 18-bit fixed-point: tile*FIXED_SCALE = pixels<<18. */
 int FUN_00410030(void)
 {
     if (DAT_00489248 >= 0x9c4) return 0;
 
     int iVar1 = rand();
-    /* X in tile range [9, map_w-9], shifted left 18 bits to 18.14 fixed-point. */
-    int iVar2 = (iVar1 % (DAT_004879f0 - 0x12) + 9) * 0x40000;
+    /* X in tile range [9, map_w-9], shifted left by 18 fractional bits. */
+    int iVar2 = (iVar1 % (DAT_004879f0 - 0x12) + 9) * FIXED_SCALE;
     int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
 
     *(int *)(base + 0x00) = iVar2;
@@ -529,13 +529,13 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                 iVar16 = rand();
                                                 int ebase = DAT_00489248 * 0x80 + (int)DAT_004892e8;
                                                 *(int *)(ebase + 0x00) = iVar15 << 0x12;
-                                                *(int *)(ebase + 0x08) = iVar8 * 0x40000;
+                                                *(int *)(ebase + 0x08) = iVar8 * FIXED_SCALE;
                                                 *(int *)(ebase + 0x18) =
                                                     *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar16 % 2000) >> 10;
                                                 *(int *)(ebase + 0x1c) =
                                                     *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar16 % 2000) >> 10;
                                                 *(int *)(ebase + 0x04) = iVar15 << 0x12;
-                                                *(int *)(ebase + 0x0c) = iVar8 * 0x40000;
+                                                *(int *)(ebase + 0x0c) = iVar8 * FIXED_SCALE;
                                                 *(int *)(ebase + 0x10) = 0;
                                                 *(int *)(ebase + 0x14) = 0;
                                                 *(unsigned char *)(ebase + 0x21) = 2;
@@ -580,13 +580,13 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                     iVar16 = rand();
                                                     int eb2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
                                                     *(int *)(eb2 + 0x00) = iVar15 << 0x12;
-                                                    *(int *)(eb2 + 0x08) = iVar8 * 0x40000;
+                                                    *(int *)(eb2 + 0x08) = iVar8 * FIXED_SCALE;
                                                     *(int *)(eb2 + 0x18) =
                                                         *(int *)((int)DAT_00487ab0 + uVar10 * 4) * (iVar16 % 2000) >> 10;
                                                     *(int *)(eb2 + 0x1c) =
                                                         *(int *)((int)DAT_00487ab0 + 0x800 + uVar10 * 4) * (iVar16 % 2000) >> 10;
                                                     *(int *)(eb2 + 0x04) = iVar15 << 0x12;
-                                                    *(int *)(eb2 + 0x0c) = iVar8 * 0x40000;
+                                                    *(int *)(eb2 + 0x0c) = iVar8 * FIXED_SCALE;
                                                     *(int *)(eb2 + 0x10) = 0;
                                                     *(int *)(eb2 + 0x14) = 0;
                                                     *(unsigned char *)(eb2 + 0x21) = 100;
@@ -754,10 +754,10 @@ LAB_00436bc6:
             }
             iVar6 = rand();
             iVar17 = rand();
-            iVar7 = (iVar6 % 6 + -3) * 0x40000 + param_1 * 0x40000;
+            iVar7 = (iVar6 % 6 + -3) * FIXED_SCALE + param_1 * FIXED_SCALE;
             int eb3 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
             *(int *)(eb3 + 0x00) = iVar7;
-            iVar6 = (iVar17 % 6 + -3) * 0x40000 + param_2 * 0x40000;
+            iVar6 = (iVar17 % 6 + -3) * FIXED_SCALE + param_2 * FIXED_SCALE;
             *(int *)(eb3 + 0x08) = iVar6;
             *(int *)(eb3 + 0x18) =
                 (int)(*(int *)((int)DAT_00487ab0 + uVar10 * 4) * (int)(uVar12 & 0xff)) >> 8;
@@ -1616,7 +1616,7 @@ void FUN_00413720(void)
                 int speed = (rand() % 0x46 + 0x5A) * 0x200;
                 int dir_rnd = rand() & 1;
                 char dir = (char)(dir_rnd * 2 - 1);
-                FUN_00407210(cx * 0x40000, cy * 0x40000, 0, 0, dir, speed, 0xFF, '\0');
+                FUN_00407210(cx * FIXED_SCALE, cy * FIXED_SCALE, 0, 0, dir, speed, 0xFF, '\0');
             }
         }
     }
@@ -1649,7 +1649,7 @@ void FUN_00413720(void)
                     } else {
                         trooper_type = (sub_rnd > 0x18) ? 2 : 1;
                     }
-                    FUN_00407140(tx * 0x40000, ty * 0x40000, trooper_type);
+                    FUN_00407140(tx * FIXED_SCALE, ty * FIXED_SCALE, trooper_type);
                 }
             }
         }
@@ -1670,12 +1670,12 @@ void FUN_00413720(void)
                 *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + (py << shift) + px) * 0x20 + 4 + (int)DAT_00487928) == '\x01') {
                 int eoff = DAT_00489248 * 0x80;
                 int ebase = (int)DAT_004892e8 + eoff;
-                *(int *)(ebase) = px * 0x40000;
-                *(int *)(ebase + 8) = py * 0x40000;
+                *(int *)(ebase) = px * FIXED_SCALE;
+                *(int *)(ebase + 8) = py * FIXED_SCALE;
                 *(int *)(ebase + 0x18) = 0;
                 *(int *)(ebase + 0x1C) = 0;
-                *(int *)(ebase + 4) = px * 0x40000;
-                *(int *)(ebase + 0x0C) = py * 0x40000;
+                *(int *)(ebase + 4) = px * FIXED_SCALE;
+                *(int *)(ebase + 0x0C) = py * FIXED_SCALE;
                 *(int *)(ebase + 0x10) = 0;
                 *(int *)(ebase + 0x14) = 0;
                 *(unsigned char *)(ebase + 0x21) = 0x65;
@@ -1758,8 +1758,8 @@ void FUN_00454340(void)
 
                     if (DAT_0048925c < 1500) {
                         int poff = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
-                        *(int *)(poff) = em_x * 0x40000 + lut[em_param] * 0x0C;
-                        *(int *)(poff + 4) = em_y * 0x40000 + lut[(em_param + 0x200) & 0x7FF] * 0x0C;
+                        *(int *)(poff) = em_x * FIXED_SCALE + lut[em_param] * 0x0C;
+                        *(int *)(poff + 4) = em_y * FIXED_SCALE + lut[(em_param + 0x200) & 0x7FF] * 0x0C;
                         *(int *)(poff + 8) = (rand() % 0x14 + 0x0F) * lut[dir & 0x7FF] >> 6;
                         *(int *)(poff + 0x0C) = (rand() % 0x14 + 0x0F) * lut[(dir + 0x200) & 0x7FF] >> 6;
                         *(char *)(poff + 0x10) = sprite;
@@ -1798,8 +1798,8 @@ void FUN_00454340(void)
 
                 if (DAT_00489250 < 2000) {
                     int poff = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                    *(int *)(poff) = em_x * 0x40000 + lut[em_param] * 0x0C;
-                    *(int *)(poff + 4) = em_y * 0x40000 + lut[(em_param + 0x200) & 0x7FF] * 0x0C;
+                    *(int *)(poff) = em_x * FIXED_SCALE + lut[em_param] * 0x0C;
+                    *(int *)(poff + 4) = em_y * FIXED_SCALE + lut[(em_param + 0x200) & 0x7FF] * 0x0C;
                     /* Velocity: LUT * speed_mult, signed divide by 8 */
                     int vx = lut[dir] * speed_mult;
                     *(int *)(poff + 8) = (vx + (vx >> 31 & 7)) >> 3;
@@ -1875,8 +1875,8 @@ void FUN_00454340(void)
                     if (DAT_0048925c < 1500) {
                         int poff = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
                         /* Position with random jitter (-4 to +3 pixels) */
-                        *(unsigned int *)(poff) = (unsigned int)(((rand() & 7) - 4) + em_x) * 0x40000;
-                        *(unsigned int *)(poff + 4) = (unsigned int)(((rand() & 7) - 4) + em_y) * 0x40000;
+                        *(unsigned int *)(poff) = (unsigned int)(((rand() & 7) - 4) + em_x) * FIXED_SCALE;
+                        *(unsigned int *)(poff + 4) = (unsigned int)(((rand() & 7) - 4) + em_y) * FIXED_SCALE;
                         *(int *)(poff + 8) = (rand() % 0x14 + 0x0F) * lut[dir & 0x7FF] >> 6;
                         *(int *)(poff + 0x0C) = (rand() % 0x14 + 0x0F) * lut[(dir + 0x200) & 0x7FF] >> 6;
                         *(char *)(poff + 0x10) = sprite;
@@ -2077,8 +2077,8 @@ void FUN_00434310(void)
 
                 /* Bounds check */
                 if (beam_x < 0 || beam_y < 0 ||
-                    beam_x >= (int)(DAT_004879f0 * 0x40000) ||
-                    beam_y >= (int)(DAT_004879f4 * 0x40000)) {
+                    beam_x >= (int)(DAT_004879f0 * FIXED_SCALE) ||
+                    beam_y >= (int)(DAT_004879f4 * FIXED_SCALE)) {
                     break;
                 }
 
@@ -2996,7 +2996,7 @@ void FUN_00434310(void)
             }
 
             case 0x1F: { /* INSECTS — from Ghidra callback 0x43B370.
-                * Random 4-dir walk: each tick move 0x40000 in random cardinal direction.
+                * Random 4-dir walk: each tick move FIXED_SCALE in random cardinal direction.
                 * No gravity, no velocity-based movement (direct position modification).
                 * Every 30 ticks: scan for nearest enemy within 120px, chase via atan2+LUT.
                 * Lifetime at +0x60 counts down to 0. */
@@ -3017,10 +3017,10 @@ void FUN_00434310(void)
                 *(int *)(ebase + 0x60) -= 1;
                 /* Random 4-direction movement: 16 pixels per tick */
                 int dir = rand() & 3;
-                if (dir == 0) *(int *)(ebase + 0x00) -= 0x40000;
-                else if (dir == 1) *(int *)(ebase + 0x00) += 0x40000;
-                else if (dir == 2) *(int *)(ebase + 0x08) -= 0x40000;
-                else *(int *)(ebase + 0x08) += 0x40000;
+                if (dir == 0) *(int *)(ebase + 0x00) -= FIXED_SCALE;
+                else if (dir == 1) *(int *)(ebase + 0x00) += FIXED_SCALE;
+                else if (dir == 2) *(int *)(ebase + 0x08) -= FIXED_SCALE;
+                else *(int *)(ebase + 0x08) += FIXED_SCALE;
                 /* Zero velocity — movement is direct position, not velocity-based */
                 *(int *)(ebase + 0x18) = 0;
                 *(int *)(ebase + 0x1C) = 0;
@@ -3133,7 +3133,7 @@ void FUN_00434310(void)
                             int dir = (rand() & 0xFF) + 0x380;
                             int spd = rand() % 90 + 25;
                             int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                            int x = *(int *)(ebase + 0x04) - 0x40000;
+                            int x = *(int *)(ebase + 0x04) - FIXED_SCALE;
                             int y = *(int *)(ebase + 0x0C) - 0x340000;
                             memset((void *)ep, 0, 0x80);
                             *(int *)(ep + 0x00) = x; *(int *)(ep + 0x04) = x;
@@ -3287,7 +3287,7 @@ void FUN_00434310(void)
                             int dir = (rand() & 0xFF) + 0x380;
                             int speed = rand() % 90 + 25;
                             int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                            int x = *(int *)(ebase + 0x04) - 0x40000;
+                            int x = *(int *)(ebase + 0x04) - FIXED_SCALE;
                             int y = *(int *)(ebase + 0x0C) - 0x340000;
                             memset((void *)ep, 0, 0x80);
                             *(int *)(ep + 0x00) = x; *(int *)(ep + 0x04) = x;
@@ -3360,7 +3360,7 @@ void FUN_00434310(void)
                         if (!(sh >= 0x3F8 && sh <= 0x408)) {
                             sh &= 0x7FF;
                             int ss = (rand() % 40) + 10;
-                            int sx = *(int *)(ebase + 0x00) - 0x40000;
+                            int sx = *(int *)(ebase + 0x00) - FIXED_SCALE;
                             int sy = *(int *)(ebase + 0x08) - 0x340000;
                             int sp = DAT_00489248 * 0x80 + (int)DAT_004892e8;
                             *(int *)(sp + 0x00) = sx; *(int *)(sp + 0x08) = sy;
@@ -3396,7 +3396,7 @@ void FUN_00434310(void)
                         if (rc_h >= 0x3F8 && rc_h <= 0x408) break;
                         rc_h &= 0x7FF;
                         int *sc = (int *)DAT_00487ab0;
-                        int rc_x = *(int *)(ebase + 0x00) - 0x40000;
+                        int rc_x = *(int *)(ebase + 0x00) - FIXED_SCALE;
                         int rc_y = *(int *)(ebase + 0x08) - 0x340000;
                         if (rc_sub == 0) {
                             /* Mode 1: colored ball (type 0x6A) + flash particle spray */
@@ -3880,9 +3880,9 @@ void FUN_00434310(void)
                     /* Growth movement: move UP one tile + random sideways step per tick.
                      * Direct position modification (original 0x443016), not velocity-based.
                      * This builds the waste mound upward over many ticks. */
-                    *(int *)(ebase + 0x08) -= 0x40000; /* one tile UP */
+                    *(int *)(ebase + 0x08) -= FIXED_SCALE; /* one tile UP */
                     int gdir = (rand() & 1) ? 1 : -1;
-                    *(int *)(ebase + 0x00) += gdir * (rand() % 3 + 1) * 0x40000; /* 1-3 tiles sideways */
+                    *(int *)(ebase + 0x00) += gdir * (rand() % 3 + 1) * FIXED_SCALE; /* 1-3 tiles sideways */
                     *(int *)(ebase + 0x18) = 0; /* zero velocity — movement is direct */
                     *(int *)(ebase + 0x1C) = 0;
 
@@ -4080,8 +4080,8 @@ void FUN_00434310(void)
         int pos_x = *(int *)(ebase + 0x00);
         int pos_y = *(int *)(ebase + 0x08);
         if (pos_x < 0 || pos_y < 0 ||
-            pos_x >= (int)(DAT_004879f0 * 0x40000) ||
-            pos_y >= (int)(DAT_004879f4 * 0x40000)) {
+            pos_x >= (int)(DAT_004879f0 * FIXED_SCALE) ||
+            pos_y >= (int)(DAT_004879f4 * FIXED_SCALE)) {
             if (ent_type == 0x22 || ent_type == 0x18 || ent_type == 0x1C) {
                 /* Turret deployer (0x22), insect (0x18), miniship (0x1C): clamp to map bounds.
                  * Original callbacks clamp each axis and set prev_pos = clamped pos.
@@ -5838,8 +5838,8 @@ void FUN_00434310(void)
 
                     /* AABB collision using config-based dimensions + player ship size */
                     int ship_size = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) : 0;
-                    int h_range = ship_size + (unsigned int)coll_w * 0x40000;
-                    int v_range = ship_size + (unsigned int)coll_h * 0x40000;
+                    int h_range = ship_size + (unsigned int)coll_w * FIXED_SCALE;
+                    int v_range = ship_size + (unsigned int)coll_h * FIXED_SCALE;
                     if (DAT_004892e5 != '\0') {
                         h_range += 0x140000;
                         v_range += 0x140000;
@@ -6624,7 +6624,7 @@ static void FUN_00455a20(int *param_1)
 
     /* Step up: find walkable->non-walkable transition */
     if (scan[0] == '\0' && scan[1] == '\x01') {
-        param_1[2] = uVar2 - 0x40000;
+        param_1[2] = uVar2 - FIXED_SCALE;
     } else if (scan[1] == '\0' && scan[2] == '\x01') {
         param_1[2] = uVar2 - 0x80000;
     } else if (scan[2] == '\0' && scan[3] == '\x01') {
@@ -6666,7 +6666,7 @@ static unsigned int FUN_00455b50(int *param_1)
     char cVar3 = *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + DAT_00487a00 * 2 + uVar5) * 0x20 + 1 + (int)DAT_00487928);
 
     if (cVar2 == '\x01' && cVar3 == '\0') {
-        uVar5 = (unsigned int)(iVar6 + 0x40000);
+        uVar5 = (unsigned int)(iVar6 + FIXED_SCALE);
         param_1[2] = (int)uVar5;
         return uVar5 & 0xffffff00;
     }
@@ -6858,7 +6858,7 @@ void FUN_00454b00(void)
         if (new_x < 0xc0000) {
             *t = 0xc0000;
         } else {
-            int max_x = ((int)DAT_004879f0 - 4) * 0x40000;
+            int max_x = ((int)DAT_004879f0 - 4) * FIXED_SCALE;
             if (new_x > max_x) {
                 *t = max_x;
             }
@@ -6867,7 +6867,7 @@ void FUN_00454b00(void)
         if (new_y < 0xc0000) {
             t[2] = 0xc0000;
         } else {
-            int max_y = ((int)DAT_004879f4 - 4) * 0x40000;
+            int max_y = ((int)DAT_004879f4 - 4) * FIXED_SCALE;
             if (new_y > max_y) {
                 t[2] = max_y;
             }
@@ -8245,24 +8245,24 @@ void FUN_00453cd0(void)
         /* 5. Random pixel jitter */
         int jitter = rand() % 0xc;
         if (jitter == 0) {
-            p[0] = p[0] - 0x40000;
+            p[0] = p[0] - FIXED_SCALE;
         }
         else if (jitter == 1) {
-            p[0] = p[0] + 0x40000;
+            p[0] = p[0] + FIXED_SCALE;
         }
         else if (jitter == 2) {
-            p[1] = p[1] - 0x40000;
+            p[1] = p[1] - FIXED_SCALE;
         }
         else if (jitter == 3) {
-            p[1] = p[1] + 0x40000;
+            p[1] = p[1] + FIXED_SCALE;
         }
 
         /* 6. Boundary check: remove if out of map */
         int tile_x = (int)p[0] >> 0x12;
         int tile_y = (int)p[1] >> 0x12;
-        if ((int)(p[0] & 0xfffc0000) < 0x40000 ||
+        if ((int)(p[0] & 0xfffc0000) < FIXED_SCALE ||
             tile_x >= (int)(DAT_004879f0 - 1) ||
-            (int)(p[1] & 0xfffc0000) < 0x40000 ||
+            (int)(p[1] & 0xfffc0000) < FIXED_SCALE ||
             tile_y >= (int)(DAT_004879f4 - 1))
         {
             goto remove_particle;
@@ -8438,8 +8438,8 @@ void FUN_00455d50(void)
         /* Get sprite dimensions for AABB */
         int sprite_idx = g_EntityConfig ?
             *(int *)((int)g_EntityConfig + (unsigned int)item_anim_type * 8) : 0;
-        int half_w = (DAT_00489e8c ? ((unsigned int)*(unsigned char *)((int)DAT_00489e8c + sprite_idx) * 0x40000) / 2 : 0x40000);
-        int half_h = (DAT_00489e88 ? ((unsigned int)*(unsigned char *)((int)DAT_00489e88 + sprite_idx) * 0x40000) / 2 : 0x40000);
+        int half_w = (DAT_00489e8c ? ((unsigned int)*(unsigned char *)((int)DAT_00489e8c + sprite_idx) * FIXED_SCALE) / 2 : FIXED_SCALE);
+        int half_h = (DAT_00489e88 ? ((unsigned int)*(unsigned char *)((int)DAT_00489e88 + sprite_idx) * FIXED_SCALE) / 2 : FIXED_SCALE);
 
         /* Check each player for AABB collision */
         int item_x = *(int *)(base - 4);
@@ -8447,7 +8447,7 @@ void FUN_00455d50(void)
 
         for (int p = 0; p < DAT_00489240; p++) {
             int poff = p * 0x598;
-            int ship_half = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) / 2 : 0x40000;
+            int ship_half = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) / 2 : FIXED_SCALE;
 
             if (*(int *)(poff + 0x20 + DAT_00487810) > 0) {
                 int px = *(int *)(poff + DAT_00487810);
@@ -8875,7 +8875,7 @@ void FUN_00453a80(void)
 }
 /* ===== FUN_004573e0 — Trap_Door_Update (004573E0) ===== */
 /* Trap door / moving wall record (DAT_00489e80, stride 0x20):
- *   +0x00 x, +0x04 y (anchor tile), +0x08 progress (extension in 18.14 fp),
+ *   +0x00 x, +0x04 y (anchor tile), +0x08 progress (18 fractional bits),
  *   +0x0C target/cooldown progress, +0x10 timer (200 = idle, 0 = move),
  *   +0x15 direction (0=down,1=right,2=up,3=left), +0x16 oscillation delay,
  *   +0x17 PhysicsParams index, +0x18 anim subframe (0..3, ticks once per call),
@@ -9693,7 +9693,7 @@ try_vertical:
 /* Wave/elevator strip simulation. Each segment is a node in a 1D mass-spring
  * chain; DAT_004892cc alternates +1/-1 each call so X and Y velocity updates
  * happen on alternating ticks (Verlet-style). Tile type 0x40 = "active fluid
- * surface tile" used to paint the strip; 0x40000 = 1 tile in 18.14 fp.
+ * surface tile" used to paint the strip; FIXED_SCALE = one tile.
  * Type byte: 0=head, 1=body, 2=anchor (zero velocity). */
 void FUN_004533d0(void)
 {
@@ -9771,13 +9771,13 @@ void FUN_004533d0(void)
                     int wy = *(int *)(wbase + off + 4);
 
                     *(int *)(ebase + eidx * 0x80) = wx << 0x12;
-                    *(int *)(ebase + eidx * 0x80 + 8) = (wy + vert_offset) * 0x40000;
+                    *(int *)(ebase + eidx * 0x80 + 8) = (wy + vert_offset) * FIXED_SCALE;
                     *(int *)(ebase + eidx * 0x80 + 0x18) =
                         *(int *)((int)DAT_00487ab0 + (angle + 0x380) * 4) * particles >> 6;
                     *(int *)(ebase + eidx * 0x80 + 0x1C) =
                         *(int *)((int)DAT_00487ab0 + 0x800 + (angle + 0x380) * 4) * particles >> 6;
                     *(int *)(ebase + eidx * 0x80 + 4) = wx << 0x12;
-                    *(int *)(ebase + eidx * 0x80 + 0xC) = (wy + vert_offset) * 0x40000;
+                    *(int *)(ebase + eidx * 0x80 + 0xC) = (wy + vert_offset) * FIXED_SCALE;
                     *(int *)(ebase + eidx * 0x80 + 0x10) = 0;
                     *(int *)(ebase + eidx * 0x80 + 0x14) = 0;
                     *(unsigned char *)(ebase + eidx * 0x80 + 0x21) = 100;
@@ -10160,7 +10160,7 @@ void FUN_0045fc00(void)
                 int pidx = DAT_00489250;
                 int pbase = (int)DAT_00481f34;
                 *(int *)(pbase + pidx*0x20) = x << 0x12;
-                *(int *)(pbase + pidx*0x20 + 4) = (y + 4) * 0x40000;
+                *(int *)(pbase + pidx*0x20 + 4) = (y + 4) * FIXED_SCALE;
                 *(int *)(pbase + pidx*0x20 + 8) = (50 - rand() % 100) * 0x200;
                 *(int *)(pbase + pidx*0x20 + 0xC) = (-150 - rand() % 140) * 0x200;
                 *(char *)(pbase + pidx*0x20 + 0x10) = (char)(rand() % 6 + 1);
@@ -10230,7 +10230,7 @@ void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
     if (0 < DAT_00489240) {
         do {
             int iVar2 = *(int *)(iVar6 + (int)DAT_00487810);
-            /* 0xf00000 = 60 tiles in 18.14 fixed-point → knockback scan radius. */
+            /* 0xf00000 = 60 tiles with 18 fractional bits: knockback scan radius. */
             if ((iVar2 - 0xf00000 < x) && (x < iVar2 + 0xf00000)) {
                 int iVar5 = *(int *)(iVar6 + 4 + (int)DAT_00487810);
                 if ((iVar5 - 0xf00000 < y) && (y < iVar5 + 0xf00000)) {

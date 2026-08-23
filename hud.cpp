@@ -611,7 +611,7 @@ void FUN_004095e0(unsigned int param_1, int param_2, int param_3)
     {
         int col = 0;
         int col_fx = 0;
-        int col_step_fx = step * 0x40000;
+        int col_step_fx = step * FIXED_SCALE;
 
         while (col <= vp_w) {
             /* Quadrant 1: UP from player (rows 0..player_y-1) */
@@ -785,7 +785,7 @@ void FUN_004095e0(unsigned int param_1, int param_2, int param_3)
     {
         int row = 0;
         int row_fx = 0;
-        int row_step_fx = step * 0x40000;
+        int row_step_fx = step * FIXED_SCALE;
 
         while (row < vp_h) {
             /* Quadrant 3: LEFT from player (cols 0..player_x-1) */
