@@ -12,6 +12,10 @@ uint8_t type_table[0x11030];
 int32_t trig_table[0xa00];
 uint16_t palette[0x100];
 uint8_t particle_pool[0xfa00];
+uint8_t edge_particle_pool[0xbb80];
+uint8_t explosion_descriptor[0xa0];
+uint8_t emitter_pool[0x800];
+uint8_t spatial_game_state[0x10000];
 uint8_t coarse_grid[0x100];
 int link_table[0xc000];
 uint8_t tilemap[0x10000];
@@ -38,9 +42,14 @@ void check(bool condition, const char *message)
 
 int DAT_00489248 = 0;
 int DAT_00489250 = 0;
+int DAT_0048925c = 0;
+int DAT_004892d8 = 0;
 void *DAT_00487ab0 = trig_table;
 void *DAT_004892e8 = entity_pool;
 void *DAT_00481f34 = particle_pool;
+void *DAT_00481f2c = edge_particle_pool;
+void *DAT_00481f20 = explosion_descriptor;
+void *DAT_00487aa0 = emitter_pool;
 void *DAT_00487abc = type_table;
 void *DAT_00487aa8 = palette;
 void *DAT_00487814 = coarse_grid;
@@ -62,17 +71,20 @@ void *DAT_0048780c = ship_stats;
 char DAT_004892e5 = 0;
 char DAT_0048373d = 0;
 void *DAT_00487884 = trooper_pool;
+void *DAT_00487aa4 = spatial_game_state;
 int DAT_0048924c = 0;
 void *DAT_00481f28 = building_pool;
 int DAT_00489260 = 0;
 void *DAT_00487818 = NULL;
 float DAT_0048385c = 1.0f;
+float DAT_00483854 = 1.0f;
 void *DAT_00489e8c = sprite_widths;
 void *DAT_00489e88 = sprite_heights;
 void *DAT_00489234 = sprite_offsets;
 void *DAT_00487ab4 = sprite_pixels;
 int DAT_00483828 = 1;
 char DAT_00489288 = 1;
+unsigned char g_ConfigBlob[6408] = {0};
 
 void FUN_004355d0(unsigned int) {}
 void FUN_004357b0(int, int, int, unsigned char, char, int, int, int, int,
@@ -222,13 +234,182 @@ int main()
     check(!Accuracy_DispatchEntityCallback(0x0043f990u, 0),
           "shared Laser callback remains on its separate legacy path");
 
-    /* Batch 2 callbacks are claimed only for their original weapon types. */
-    tou_accuracy::store_u8(entity_pool, 0x21, 0x12);
-    check(!Accuracy_DispatchEntityCallback(0x00438010u, 0),
-          "shared Shotgun callback leaves Pipebomb on its separate path");
+    /* Shared callbacks are claimed only for the exact lifted entity types. */
     tou_accuracy::store_u8(entity_pool, 0x21, 0x69);
     check(!Accuracy_DispatchEntityCallback(0x00438010u, 0),
           "shared Shotgun callback leaves Mine on its separate path");
+
+    /* Airstrike impact emits the original 82-spoke burst plus its final flash. */
+    memset(entity_pool, 0, 0x80);
+    memset(particle_pool, 0, sizeof(particle_pool));
+    memset(coarse_grid, 0, sizeof(coarse_grid));
+    coarse_grid[0] = 8;
+    DAT_00489248 = 1;
+    DAT_00489250 = 0;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x20, 0xff);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x12);
+    tou_accuracy::store_i32(entity_pool, 0x00, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x08, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x04, 9 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 9 << 18);
+    check(Accuracy_DispatchEntityCallback(0x00438010u, 0),
+          "shared callback recognizes Airstrike type 0x12");
+    check(DAT_00489250 == 83 && DAT_00481e8f == 1,
+          "Airstrike restores its 82-spoke impact burst and final flash");
+
+    /* Batch 3 callback ownership is explicit and does not fall through legacy code. */
+    memset(entity_pool, 0, 0x80);
+    DAT_00489248 = 1;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x20, 0xff);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x11);
+    check(Accuracy_DispatchEntityCallback(0x00441aa0u, 0) && DAT_00481e8f == 1,
+          "Normal Fireball callback recognizes type 0x11");
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x10);
+    check(!Accuracy_DispatchEntityCallback(0x00441aa0u, 0),
+          "Normal Fireball callback rejects Flamethrower type 0x10");
+
+    /* Nuclear Barrel anchors its visible blast above the buried projectile center. */
+    memset(entity_pool, 0, 0x100);
+    memset(particle_pool, 0, sizeof(particle_pool));
+    memset(explosion_descriptor, 0, sizeof(explosion_descriptor));
+    memset(coarse_grid, 0, sizeof(coarse_grid));
+    explosion_descriptor[5] = 16;
+    coarse_grid[0] = 8;
+    DAT_00483854 = 0.0f;
+    DAT_0048385c = 0.0f;
+    DAT_00489248 = 1;
+    DAT_00489250 = 0;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x20, 0xfa);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x0b);
+    tou_accuracy::store_i32(entity_pool, 0, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 8, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 4, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    check(Accuracy_DispatchEntityCallback(0x00431650u, 0),
+          "Nuclear Barrel callback recognizes type 0x0b");
+    check(DAT_00489250 == 1 && tou_accuracy::load_i32(particle_pool, 4) == (7 << 18),
+          "Nuclear Barrel restores the original sprite-height blast offset");
+
+    /* Bone Crusher's dedicated four-team scan instantly kills touching infantry. */
+    memset(entity_pool, 0, 0x80);
+    memset(trooper_pool, 0, sizeof(trooper_pool));
+    memset(spatial_game_state, 0, sizeof(spatial_game_state));
+    memset(coarse_grid, 0, sizeof(coarse_grid));
+    DAT_0048385c = 1.0f;
+    DAT_00489248 = 1;
+    DAT_0048924c = 1;
+    DAT_00489240 = 1;
+    DAT_00481e8f = 0;
+    player_pool[0x2c] = 0;
+    tou_accuracy::store_i32(spatial_game_state, 0x4008, 1);
+    tou_accuracy::store_i32(spatial_game_state, 0x400c, 0);
+    tou_accuracy::store_i32(trooper_pool, 0, 10 << 18);
+    tou_accuracy::store_i32(trooper_pool, 8, 10 << 18);
+    tou_accuracy::store_i32(trooper_pool, 0x28, 100);
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x0f);
+    tou_accuracy::store_u8(entity_pool, 0x22, 0);
+    tou_accuracy::store_u8(entity_pool, 0x64, 3);
+    tou_accuracy::store_i32(entity_pool, 0, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 8, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 4, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x60, 5000);
+    check(Accuracy_DispatchEntityCallback(0x004330c0u, 0),
+          "Bone Crusher callback recognizes type 0x0f");
+    check(tou_accuracy::load_i32(trooper_pool, 0x28) == -1000000,
+          "Bone Crusher uses its original instant-kill infantry state write");
+    check(tou_accuracy::load_i32(entity_pool, 0x60) == 3999 &&
+          tou_accuracy::load_i32(entity_pool, 0x3c) == 59,
+          "Bone Crusher applies the original contact fuse and debris counters");
+
+    /* A normal Mark I Fireball emission produces both flame pools. */
+    memset(entity_pool, 0, 0x80);
+    memset(particle_pool, 0, sizeof(particle_pool));
+    memset(edge_particle_pool, 0, sizeof(edge_particle_pool));
+    memset(coarse_grid, 0, sizeof(coarse_grid));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    coarse_grid[0] = 8;
+    tile_properties[2] = 1;
+    DAT_00489248 = 1;
+    DAT_00489250 = 0;
+    DAT_0048925c = 0;
+    DAT_00481e8f = 0;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x11);
+    tou_accuracy::store_u8(entity_pool, 0x5c, 1);
+    tou_accuracy::store_i32(entity_pool, 0, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 8, 10 << 18);
+    check(Accuracy_DispatchEntityCallback(0x00441aa0u, 0),
+          "Normal Fireball Mark I emits through its lifted callback");
+    check(DAT_00489250 == 1 && DAT_0048925c == 1,
+          "Normal Fireball emits both primary and secondary flame particles");
+    check(particle_pool[0x10] >= 3 && particle_pool[0x10] <= 4 &&
+          edge_particle_pool[0x10] <= 1,
+          "Normal Fireball Mark I uses the original paired flame sprite ranges");
+
+    /* Fireball impact leaves the original persistent flame emitter behind. */
+    memset(entity_pool, 0, 0x80);
+    memset(emitter_pool, 0, sizeof(emitter_pool));
+    memset(tile_properties, 0, sizeof(tile_properties));
+    DAT_00489248 = 1;
+    DAT_00489250 = 0;
+    DAT_0048925c = 0;
+    DAT_004892d8 = 0;
+    DAT_00481e8f = 0;
+    g_ConfigBlob[0x17d0] = 1;
+    tou_accuracy::store_u8(entity_pool, 0x21, 0x11);
+    tou_accuracy::store_i32(entity_pool, 0, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 8, 10 << 18);
+    tou_accuracy::store_i32(entity_pool, 4, 9 << 18);
+    tou_accuracy::store_i32(entity_pool, 0x0c, 8 << 18);
+    check(Accuracy_DispatchEntityCallback(0x00441aa0u, 0),
+          "Normal Fireball impact dispatches through its lifted callback");
+    check(DAT_004892d8 == 1 && tou_accuracy::load_i32(emitter_pool, 0) == 9 &&
+          tou_accuracy::load_i32(emitter_pool, 4) == 8,
+          "Normal Fireball impact restores its previous-position flame emitter");
+    check(tou_accuracy::load_i32(emitter_pool, 8) == 300 && emitter_pool[0x0c] == 3 &&
+          emitter_pool[0x0d] >= 2 && emitter_pool[0x0d] <= 3 && emitter_pool[0x0e] == 2,
+          "Normal Fireball impact emitter matches the original lifetime and sprite family");
+
+    /* Mark II/III unit hits branch to the same impact VFX instead of returning early. */
+    for (int fireball_mode = 1; fireball_mode <= 2; ++fireball_mode) {
+        memset(entity_pool, 0, 0x80);
+        memset(particle_pool, 0, sizeof(particle_pool));
+        memset(emitter_pool, 0, sizeof(emitter_pool));
+        memset(trooper_pool, 0, sizeof(trooper_pool));
+        memset(coarse_grid, 0, sizeof(coarse_grid));
+        coarse_grid[0] = 12; /* infantry collision plus visible-effect region */
+        DAT_00489248 = 1;
+        DAT_00489250 = 0;
+        DAT_0048925c = 0;
+        DAT_004892d8 = 0;
+        DAT_0048924c = 1;
+        DAT_00481e8f = 0;
+        tou_accuracy::store_i32(trooper_pool, 0, 10 << 18);
+        tou_accuracy::store_i32(trooper_pool, 8, 10 << 18);
+        tou_accuracy::store_i32(trooper_pool, 0x20, 0);
+        tou_accuracy::store_i32(trooper_pool, 0x28, 1000000);
+        tou_accuracy::store_u8(trooper_pool, 0x14, 1);
+        tou_accuracy::store_u8(entity_pool, 0x21, 0x11);
+        tou_accuracy::store_u8(entity_pool, 0x22, 0);
+        tou_accuracy::store_u8(entity_pool, 0x40, static_cast<uint8_t>(fireball_mode));
+        tou_accuracy::store_i32(entity_pool, 0, 10 << 18);
+        tou_accuracy::store_i32(entity_pool, 8, 10 << 18);
+        tou_accuracy::store_i32(entity_pool, 4, 9 << 18);
+        tou_accuracy::store_i32(entity_pool, 0x0c, 8 << 18);
+        tou_accuracy::store_i32(entity_pool, 0x44, 100);
+        Accuracy_DispatchEntityCallback(0x00441aa0u, 0);
+        check(DAT_004892d8 == 1 && DAT_00481e8f == 1,
+              fireball_mode == 1
+                  ? "Normal Fireball Mark II unit hit keeps the full impact VFX path"
+                  : "Normal Fireball Mark III unit hit keeps the full impact VFX path");
+        check(DAT_00489250 == (fireball_mode == 1 ? 32 : 48),
+              fireball_mode == 1
+                  ? "Normal Fireball Mark II unit hit emits its 32-particle burst"
+                  : "Normal Fireball Mark III unit hit emits its 48-particle burst");
+    }
 
     /* Shotgun/Rapidfire expires on the original life 2 -> 1 transition. */
     memset(entity_pool, 0, 0x80);
