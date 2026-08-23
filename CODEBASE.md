@@ -74,11 +74,13 @@ The executable expects these paths relative to its working directory:
 | `sfx/` | Weapon, UI, ship, and environment sounds |
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
-| `options.cfg` | Original 6408-byte configuration blob |
+| `options.cfg` | User configuration generated beside the executable on first run |
 | `fmod.dll` | Legacy audio runtime loaded dynamically at startup |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
-release. Keep it synchronized when adding a new required runtime path.
+release. It packages runtime files only: repository Markdown and the local
+`options.cfg` are intentionally excluded. Keep it synchronized when adding a
+new required runtime path.
 
 ## Binary-Compatibility Layer
 
@@ -135,7 +137,10 @@ the complete main gameplay entity renderer in `FUN_0040bb60`. Offset `+0x24`
 still intentionally has both byte and 16-bit views there: the byte selects a
 sprite palette, while the full word selects a pixel-dot shape. The fourth batch
 converts the enemy-proximity, owned-projectile detonation, Moving Sucker, and
-force-field entity-array scanners in `entity.cpp`.
+force-field entity-array scanners in `entity.cpp`. The fifth batch converts all
+three primary-fire projectile paths plus bomb/mine and energy-explosion entity
+construction. Constructors still write only the fields written by the recovered
+code; do not zero the whole record as a cleanup.
 
 ## Config Ownership
 

@@ -25,7 +25,10 @@ views of `+0x24`, without changing render or RNG call order. The pool physically
 allocates 2600 records (`0x51400 / 0x80`), while gameplay limits active entities
 to 2500. The fourth, larger batch converts four complete entity-array scanners:
 enemy proximity, owned-projectile detonation, Moving Sucker attraction/repulsion,
-and force-field repulsion.
+and force-field repulsion. The fifth batch converts five construction paths:
+the straight and two side projectiles in primary fire, bomb/mine spawning, and
+energy-explosion particles. Their partial initialization and RNG order remain
+intentional.
 
 **Known layout:**
 ```

@@ -1925,67 +1925,67 @@ static void FUN_0044ca40_impl(int *ent, int idx)
     /* Spawn primary projectile (straight ahead) */
     if ((*(char *)((int)ent + 0x8D) == '\0' || *(char *)((int)ent + 0x8D) == '\x02') &&
         DAT_00489248 < 0xA28) {
-        int eoff = DAT_00489248 * 0x80;
-        int ebase = (int)DAT_004892e8 + eoff;
+        Entity *projectile = &DAT_004892e8[DAT_00489248];
 
         /* Position: player + 1 unit in heading direction */
-        *(int *)(ebase + 0x00) = lut[heading] + ent[0];
-        *(int *)(ebase + 0x08) = lut[(heading + 0x200) & 0x7FF] + ent[1];
+        projectile->position_x = lut[heading] + ent[0];
+        projectile->position_y = lut[(heading + 0x200) & 0x7FF] + ent[1];
 
         /* Velocity: heading * speed + player velocity */
-        *(int *)(ebase + 0x18) = (lut[heading] * speed >> 6) + ent[4];
-        *(int *)(ebase + 0x1C) = (lut[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
+        projectile->velocity_x = (lut[heading] * speed >> 6) + ent[4];
+        projectile->velocity_y =
+            (lut[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
 
         /* Copy position to prev_position */
-        *(int *)(ebase + 0x04) = *(int *)(ebase + 0x00);
-        *(int *)(ebase + 0x0C) = *(int *)(ebase + 0x08);
+        projectile->previous_x = projectile->position_x;
+        projectile->previous_y = projectile->position_y;
 
         /* Entity metadata */
-        *(unsigned short *)(ebase + 0x24) = 0;      /* state */
-        *(unsigned char *)(ebase + 0x20) = 0;        /* flags */
-        *(unsigned char *)(ebase + 0x26) = 6;        /* lifetime/color */
-        *(unsigned char *)(ebase + 0x22) = (unsigned char)idx;  /* owner */
-        *(int *)(ebase + 0x28) = 0;                  /* health */
+        projectile->variant_24 = 0;
+        projectile->state_20 = 0;
+        projectile->auxiliary_26 = 6;
+        projectile->owner = (unsigned char)idx;
+        projectile->health_or_damage_28 = 0;
 
         /* Sprite/type data from entity type table */
         if (weapon_type < 6) {
-            *(unsigned char *)(ebase + 0x21) = 0;
-            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
-            *(char *)(ebase + 0x40) = (char)weapon_type;
+            projectile->type = 0;
+            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+            projectile->subtype = weapon_type;
         } else {
-            *(unsigned char *)(ebase + 0x21) = 0x69;
-            *(int *)(ebase + 0x38) = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase + 0x44) = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase + 0x4C) = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
-            *(char *)(ebase + 0x40) = (char)weapon_type - 6;
+            projectile->type = 0x69;
+            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+            projectile->subtype = weapon_type - 6;
         }
-        *(int *)(ebase + 0x34) = 0;  /* behavior callback (not implemented) */
-        *(int *)(ebase + 0x48) = 0;
-        *(unsigned char *)(ebase + 0x54) = 0;
-        *(int *)(ebase + 0x3C) = 0;
+        projectile->callback_address = 0;  /* behavior callback (not implemented) */
+        projectile->scratch_48 = 0;
+        projectile->animation_frame = 0;
+        projectile->counter_3c = 0;
 
         DAT_00489248++;
 
         /* Set origin position */
-        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
-        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+        projectile->motion_x_10 = ent[0];
+        projectile->motion_y_14 = ent[1];
 
         /* Set palette color for pixel dot rendering (sprite_idx >= 30000) */
         if (sprIdx != NULL) {
-            *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+            projectile->palette_value =
                 (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
         }
 
         /* Weapon type 8 + ship flag 'd': set special damage type */
         if (weapon_type == 8 && *(char *)(idx * 0x40 + 0x33 + (int)DAT_0048780c) == 'd') {
-            *(unsigned char *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x60) = 0x19;
+            projectile->state_20 = 0x19;
         }
 
         /* Difficulty mode: set energy field */
         if (DAT_004892e5 != '\0') {
-            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x3C) = 0x1d4c000;
+            projectile->damage_44 = 0x1d4c000;
         }
     }
 
@@ -1999,92 +1999,93 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         /* Left side projectile: heading + 0x200 (perpendicular) */
         unsigned int side_angle = (heading + 0x200) & 0x7FF;
         int ship_radius = (int)(unsigned int)*(unsigned char *)(shipStatOff + 0x22 + (int)DAT_0048780c);
-        int eoff = DAT_00489248 * 0x80;
-        int ebase2 = (int)DAT_004892e8 + eoff;
+        Entity *projectile = &DAT_004892e8[DAT_00489248];
 
-        *(int *)(ebase2 + 0x00) = (ship_radius * lut2[side_angle]) / 2 + ent[0];
-        *(int *)(ebase2 + 0x08) = (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
-        *(int *)(ebase2 + 0x18) = (lut2[heading] * speed >> 6) + ent[4];
-        *(int *)(ebase2 + 0x1C) = (lut2[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
-        *(int *)(ebase2 + 0x04) = *(int *)(ebase2 + 0x00);
-        *(int *)(ebase2 + 0x0C) = *(int *)(ebase2 + 0x08);
+        projectile->position_x = (ship_radius * lut2[side_angle]) / 2 + ent[0];
+        projectile->position_y = (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
+        projectile->velocity_x = (lut2[heading] * speed >> 6) + ent[4];
+        projectile->velocity_y =
+            (lut2[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
+        projectile->previous_x = projectile->position_x;
+        projectile->previous_y = projectile->position_y;
 
-        *(unsigned short *)(ebase2 + 0x24) = 0;
-        *(unsigned char *)(ebase2 + 0x20) = 0;
-        *(unsigned char *)(ebase2 + 0x26) = 6;
-        *(unsigned char *)(ebase2 + 0x22) = (unsigned char)idx;
-        *(int *)(ebase2 + 0x28) = 0;
+        projectile->variant_24 = 0;
+        projectile->state_20 = 0;
+        projectile->auxiliary_26 = 6;
+        projectile->owner = (unsigned char)idx;
+        projectile->health_or_damage_28 = 0;
 
         if (weapon_type < 6) {
-            *(unsigned char *)(ebase2 + 0x21) = 0;
-            *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
-            *(char *)(ebase2 + 0x40) = (char)weapon_type;
+            projectile->type = 0;
+            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+            projectile->subtype = weapon_type;
         } else {
-            *(unsigned char *)(ebase2 + 0x21) = 0x69;
-            *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
-            *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
-            *(char *)(ebase2 + 0x40) = (char)weapon_type - 6;
+            projectile->type = 0x69;
+            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+            projectile->subtype = weapon_type - 6;
         }
-        *(int *)(ebase2 + 0x34) = 0;
-        *(int *)(ebase2 + 0x48) = 0;
-        *(unsigned char *)(ebase2 + 0x54) = 0;
-        *(int *)(ebase2 + 0x3C) = 0;
+        projectile->callback_address = 0;
+        projectile->scratch_48 = 0;
+        projectile->animation_frame = 0;
+        projectile->counter_3c = 0;
 
         DAT_00489248++;
 
-        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
-        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+        projectile->motion_x_10 = ent[0];
+        projectile->motion_y_14 = ent[1];
         if (sprIdx != NULL) {
-            *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+            projectile->palette_value =
                 (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
         }
 
         /* Right side projectile: heading - 0x200 (opposite perpendicular) */
         if (DAT_00489248 < 0xA28) {
             side_angle = (heading - 0x200) & 0x7FF;
-            eoff = DAT_00489248 * 0x80;
-            ebase2 = (int)DAT_004892e8 + eoff;
+            projectile = &DAT_004892e8[DAT_00489248];
 
-            *(int *)(ebase2 + 0x00) = (ship_radius * lut2[side_angle]) / 2 + ent[0];
-            *(int *)(ebase2 + 0x08) = (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
-            *(int *)(ebase2 + 0x18) = (lut2[heading] * speed >> 6) + ent[4];
-            *(int *)(ebase2 + 0x1C) = (lut2[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
-            *(int *)(ebase2 + 0x04) = *(int *)(ebase2 + 0x00);
-            *(int *)(ebase2 + 0x0C) = *(int *)(ebase2 + 0x08);
+            projectile->position_x = (ship_radius * lut2[side_angle]) / 2 + ent[0];
+            projectile->position_y =
+                (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
+            projectile->velocity_x = (lut2[heading] * speed >> 6) + ent[4];
+            projectile->velocity_y =
+                (lut2[(heading + 0x200) & 0x7FF] * speed >> 6) + ent[5];
+            projectile->previous_x = projectile->position_x;
+            projectile->previous_y = projectile->position_y;
 
-            *(unsigned short *)(ebase2 + 0x24) = 0;
-            *(unsigned char *)(ebase2 + 0x20) = 0;
-            *(unsigned char *)(ebase2 + 0x26) = 6;
-            *(unsigned char *)(ebase2 + 0x22) = (unsigned char)idx;
-            *(int *)(ebase2 + 0x28) = 0;
+            projectile->variant_24 = 0;
+            projectile->state_20 = 0;
+            projectile->auxiliary_26 = 6;
+            projectile->owner = (unsigned char)idx;
+            projectile->health_or_damage_28 = 0;
 
             if (weapon_type < 6) {
-                *(unsigned char *)(ebase2 + 0x21) = 0;
-                *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
-                *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
-                *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
-                *(char *)(ebase2 + 0x40) = (char)weapon_type;
+                projectile->type = 0;
+                projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+                projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+                projectile->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+                projectile->subtype = weapon_type;
             } else {
-                *(unsigned char *)(ebase2 + 0x21) = 0x69;
-                *(int *)(ebase2 + 0x38) = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
-                *(int *)(ebase2 + 0x44) = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
-                *(int *)(ebase2 + 0x4C) = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
-                *(char *)(ebase2 + 0x40) = (char)weapon_type - 6;
+                projectile->type = 0x69;
+                projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+                projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+                projectile->palette_value = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+                projectile->subtype = weapon_type - 6;
             }
-            *(int *)(ebase2 + 0x34) = 0;
-            *(int *)(ebase2 + 0x48) = 0;
-            *(unsigned char *)(ebase2 + 0x54) = 0;
-            *(int *)(ebase2 + 0x3C) = 0;
+            projectile->callback_address = 0;
+            projectile->scratch_48 = 0;
+            projectile->animation_frame = 0;
+            projectile->counter_3c = 0;
 
             DAT_00489248++;
 
-            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x70) = ent[0];
-            *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x6C) = ent[1];
+            projectile->motion_x_10 = ent[0];
+            projectile->motion_y_14 = ent[1];
             if (sprIdx != NULL) {
-                *(unsigned int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x34) =
+                projectile->palette_value =
                     (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
             }
         }
@@ -4679,34 +4680,34 @@ static void FUN_0044dbb0_impl(int *ent, int idx)
 
     FUN_0040f9b0(0x12, ent[0], ent[1]);
 
-    int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+    Entity *bomb = &DAT_004892e8[DAT_00489248];
 
-    *(int *)(base + 0x00) = ent[0];
-    *(int *)(base + 0x08) = ent[1] + 0x100000;
-    *(int *)(base + 0x18) = ent[4] >> 3;
-    *(int *)(base + 0x1c) = 0x14;
-    *(int *)(base + 0x04) = ent[0];
-    *(int *)(base + 0x0c) = ent[1] + 0x100000;
-    *(int *)(base + 0x10) = 0;
-    *(int *)(base + 0x14) = 0;
-    *(unsigned char *)(base + 0x21) = 0x12;
-    *(unsigned short *)(base + 0x24) = 0;
-    *(unsigned char *)(base + 0x20) = 0;
-    *(unsigned char *)(base + 0x26) = 0xfe;
-    *(unsigned char *)(base + 0x22) = (unsigned char)idx;
-    *(int *)(base + 0x28) = 0;
-    *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0x2638);
-    *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0x2674);
-    *(int *)(base + 0x48) = 0;
-    *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0x26a4);
-    *(unsigned char *)(base + 0x54) = 0;
-    *(unsigned char *)(base + 0x40) = 0;
-    *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0x25b0);
-    *(int *)(base + 0x3c) = 0;
-    *(unsigned char *)(base + 0x5c) = 0;
+    bomb->position_x = ent[0];
+    bomb->position_y = ent[1] + 0x100000;
+    bomb->velocity_x = ent[4] >> 3;
+    bomb->velocity_y = 0x14;
+    bomb->previous_x = ent[0];
+    bomb->previous_y = ent[1] + 0x100000;
+    bomb->motion_x_10 = 0;
+    bomb->motion_y_14 = 0;
+    bomb->type = 0x12;
+    bomb->variant_24 = 0;
+    bomb->state_20 = 0;
+    bomb->auxiliary_26 = 0xfe;
+    bomb->owner = (unsigned char)idx;
+    bomb->health_or_damage_28 = 0;
+    bomb->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x2638);
+    bomb->damage_44 = *(int *)((int)DAT_00487abc + 0x2674);
+    bomb->scratch_48 = 0;
+    bomb->palette_value = *(int *)((int)DAT_00487abc + 0x26a4);
+    bomb->animation_frame = 0;
+    bomb->subtype = 0;
+    bomb->callback_address = *(int *)((int)DAT_00487abc + 0x25b0);
+    bomb->counter_3c = 0;
+    bomb->timer_5c = 0;
 
     DAT_00489248++;
-    *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = 600;
+    bomb->health_or_damage_28 = 600;
 }
 
 /* ===== FUN_0044ea70 — Energy Explosion Particles (0044EA70) ===== */
@@ -4724,37 +4725,38 @@ static void FUN_0044ea70_impl(int *ent)
         unsigned int angle = rand() & 0x7ff;
         int speed = rand() % 0x28;
 
-        int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+        Entity *particle = &DAT_004892e8[DAT_00489248];
 
-        *(int *)(base + 0x00) = ent[2];
-        *(int *)(base + 0x08) = ent[3];
-        *(int *)(base + 0x18) = *(int *)((int)DAT_00487ab0 + angle * 4) * speed >> 7;
-        *(int *)(base + 0x1c) = *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) * speed >> 7;
-        *(int *)(base + 0x04) = ent[2];
-        *(int *)(base + 0x0c) = ent[3];
-        *(int *)(base + 0x10) = 0;
-        *(int *)(base + 0x14) = 0;
-        *(unsigned char *)(base + 0x21) = 100;
-        *(short *)(base + 0x24) = (short)(rand() % 6);
-        *(unsigned char *)(base + 0x20) = 0;
-        *(unsigned char *)(base + 0x26) = 0xff;
-        *(unsigned char *)(base + 0x22) = 0xff;
-        *(int *)(base + 0x28) = 0;
-        *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xd1e8);
-        *(int *)(base + 0x44) = *(int *)((int)DAT_00487abc + 0xd224);
-        *(int *)(base + 0x48) = 0;
-        *(int *)(base + 0x4c) = *(int *)((int)DAT_00487abc + 0xd254);
-        *(unsigned char *)(base + 0x54) = 0;
-        *(unsigned char *)(base + 0x40) = 0;
-        *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xd160);
-        *(int *)(base + 0x3c) = 0;
-        *(unsigned char *)(base + 0x5c) = 0;
+        particle->position_x = ent[2];
+        particle->position_y = ent[3];
+        particle->velocity_x = *(int *)((int)DAT_00487ab0 + angle * 4) * speed >> 7;
+        particle->velocity_y =
+            *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) * speed >> 7;
+        particle->previous_x = ent[2];
+        particle->previous_y = ent[3];
+        particle->motion_x_10 = 0;
+        particle->motion_y_14 = 0;
+        particle->type = 100;
+        particle->variant_24 = (short)(rand() % 6);
+        particle->state_20 = 0;
+        particle->auxiliary_26 = 0xff;
+        particle->owner = 0xff;
+        particle->health_or_damage_28 = 0;
+        particle->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd1e8);
+        particle->damage_44 = *(int *)((int)DAT_00487abc + 0xd224);
+        particle->scratch_48 = 0;
+        particle->palette_value = *(int *)((int)DAT_00487abc + 0xd254);
+        particle->animation_frame = 0;
+        particle->subtype = 0;
+        particle->callback_address = *(int *)((int)DAT_00487abc + 0xd160);
+        particle->counter_3c = 0;
+        particle->timer_5c = 0;
 
         DAT_00489248++;
 
-        *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 0x50 + 0x32;
+        particle->health_or_damage_28 = rand() % 0x50 + 0x32;
         int colorIdx = rand() % 0xc;
-        *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
+        particle->palette_value =
             *(unsigned short *)((int)DAT_00487aa8 + 0xc6 + colorIdx * 2) + 30000;
     }
 }

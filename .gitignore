@@ -45,5 +45,8 @@ debug.txt
 # system junk
 NUL
 
+# user config files
+*.cfg
+
 # Generated runtime and release artifacts
 /dist/

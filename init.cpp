@@ -4074,9 +4074,9 @@ void FUN_00427df0(int param_1, char param_2)
             int wpn_idx = click_item->color_style;
             unsigned char player_idx = click_item->flag1;
             if (*data != 0 && g_ConfigBlob[0x1804 + wpn_idx] != 0) {
-                g_StartWeapon[(int)player_idx] = (unsigned char)wpn_idx;
-                /* Persist to config blob so it survives restarts */
-                g_ConfigBlob[0x1870 + (int)player_idx] = (unsigned char)wpn_idx;
+                /* DAT_004836ce aliases the original config address, so this
+                 * updates both the runtime selection and persisted blob. */
+                DAT_004836ce[(int)player_idx] = (char)wpn_idx;
             }
         }
         break;
@@ -6423,10 +6423,6 @@ void Sync_Config_From_Blob(void)
 
     /* Weather threshold */
     DAT_0048385c      = *(float *)&g_ConfigBlob[0x1904];
-
-    /* Per-player start weapon (stored at blob offset 0x1870, 64 bytes).
-     * Set by right-click in weapon loadout grid, persisted across restarts. */
-    memcpy(g_StartWeapon, &g_ConfigBlob[0x1870], 64);
 
     /* Player config: DAT_0048227c is now a macro alias into g_ConfigBlob[0x324],
      * so no copy needed (they're the same memory). */
