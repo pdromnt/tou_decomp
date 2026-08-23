@@ -65,14 +65,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 
         /* Release DirectDraw (matches original WndProc) */
         if (lpDD != NULL) {
-            if (lpDDS_Primary != NULL) {
-                lpDDS_Primary->Release();
-                lpDDS_Primary = NULL;
-            }
-            if (lpDDS_Offscreen != NULL) {
-                lpDDS_Offscreen->Release();
-                lpDDS_Offscreen = NULL;
-            }
+            Release_DirectDraw_Surfaces();
             lpDD->Release();
             lpDD = NULL;
         }
@@ -116,8 +109,11 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
          * Slider drags deliberately freeze the anchor and accumulate X motion
          * elsewhere, so leave that mode alone. */
         if (g_bIsActive && g_InputMode == 0) {
-            int mouse_x = (int)(short)LOWORD(lParam);
-            int mouse_y = (int)(short)HIWORD(lParam);
+            int mouse_x;
+            int mouse_y;
+            Client_To_Game_Coordinates((int)(short)LOWORD(lParam),
+                                       (int)(short)HIWORD(lParam),
+                                       &mouse_x, &mouse_y);
             int moved = (mouse_x != (g_MouseDeltaX >> 18) ||
                          mouse_y != (g_MouseDeltaY >> 18));
             g_MouseDeltaX = mouse_x << 18;
@@ -288,6 +284,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         timeEndPeriod(1);
         return 0;
     }
+    Apply_Display_Settings();
 
     /* 5. DirectDraw Create */
     LOG("[INIT] DirectDrawCreate...\n");
@@ -384,8 +381,10 @@ MAIN_LOOP:
                     ScreenToClient(hWnd_Main, &pt);
                     GetClientRect(hWnd_Main, &client);
                     if (PtInRect(&client, pt)) {
-                        g_MouseDeltaX = pt.x << 18;
-                        g_MouseDeltaY = pt.y << 18;
+                        int game_x, game_y;
+                        Client_To_Game_Coordinates(pt.x, pt.y, &game_x, &game_y);
+                        g_MouseDeltaX = game_x << 18;
+                        g_MouseDeltaY = game_y << 18;
                     }
                 }
                 /* Original binary calls Input_Update() here for g_GameState==1

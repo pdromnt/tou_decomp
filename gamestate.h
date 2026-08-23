@@ -14,7 +14,7 @@
 /* 0047F048 */ #define STR_ERR_UNKNOWN        "Unknown error."
 /* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."
 /* 0047F14C */ #define STR_ERR_INIT_NOLEVELS  "Tou init failed!\nYou don't have any levels or GG themes!\n\nYou can't run the game without levels.\n\nRead readme.txt for more information."
-/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.2"
+/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.3"
 /* 0047EB10 */ #define STR_CLASSNAME          "TOU"
 
 /* ===== Window / App Globals (winmain.cpp) ===== */
@@ -75,6 +75,7 @@ extern unsigned char         DAT_004877e5;      /* input event trigger */
 extern unsigned char         DAT_004877ec;      /* input accumulator */
 extern int                   DAT_00487824;      /* menu display state */
 extern unsigned char         DAT_00483724[4];   /* display config */
+extern unsigned char         g_WindowMode;      /* 0=windowed, 1=borderless fullscreen */
 extern int                   DAT_00487784;      /* turret count */
 extern unsigned char         DAT_00483834;      /* turret flag */
 extern unsigned char         DAT_00483835;      /* trooper flag */
