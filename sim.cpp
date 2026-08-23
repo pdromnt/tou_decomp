@@ -1795,10 +1795,10 @@ void FUN_00434310(void)
                 entity->health_or_damage_28 = t67_life;
                 if (t67_life <= 0) { should_remove = 1; }
                 entity->velocity_x = (int)((double)entity->velocity_x * 0.95);
-                *(int *)(ebase + 0x1C) = (int)((double)*(int *)(ebase + 0x1C) * 0.95);
+                entity->velocity_y = (int)((double)entity->velocity_y * 0.95);
                 entity->position_x += entity->velocity_x;
-                entity->position_y += *(int *)(ebase + 0x1C);
-                *(int *)(ebase + 0x1C) += entity->gravity_or_motion_38 * DAT_00483828;
+                entity->position_y += entity->velocity_y;
+                entity->velocity_y += entity->gravity_or_motion_38 * DAT_00483828;
             }
             /* +0x28 == 0: cosmetic trail (ship exhaust etc) — leave untouched */
         }
@@ -1838,12 +1838,12 @@ void FUN_00434310(void)
          * The laser entity itself is invisible (entity[0x4C]=30000).
          * After tracing, the entity is removed. */
         if (ent_type == 0x2d && !should_remove) {
-            int beam_dir = *(int *)(ebase + 0x2C) & 0x7FF;
+            int beam_dir = entity->scratch_2c & 0x7FF;
             int *beam_sc = (int *)DAT_00487ab0;
             int beam_vx = beam_sc[beam_dir] << 1;
             int beam_vy = beam_sc[beam_dir + 0x200] << 1;
             entity->velocity_x = beam_vx;
-            *(int *)(ebase + 0x1C) = beam_vy;
+            entity->velocity_y = beam_vy;
             int beam_life = entity->health_or_damage_28;
             if (beam_life < 1) beam_life = 50;
             int beam_x = entity->position_x;
@@ -1951,7 +1951,7 @@ void FUN_00434310(void)
          * Type 0x22 excluded: wavy fireworks overwrite velocity from heading each
          * tick (gravity would accumulate and distort the wave pattern). */
         if (is_projectile && !is_debris && ent_type != 0x22 && ent_type != 0x1B && ent_type != 0x26) {
-            *(int *)(ebase + 0x1C) += entity->gravity_or_motion_38 * DAT_00483828;
+            entity->velocity_y += entity->gravity_or_motion_38 * DAT_00483828;
         }
 
         /* === Homing/guidance + special movement — per-type ===
@@ -1968,42 +1968,42 @@ void FUN_00434310(void)
                 /* Always orbit from spawn. */
                 {
                     /* Save orbit center + initial velocity on first tick */
-                    if (*(int *)(ebase + 0x2C) == 0 && entity->scratch_30 == 0) {
-                        *(int *)(ebase + 0x2C) = entity->previous_x;
-                        entity->scratch_30 = *(int *)(ebase + 0x0C);
+                    if (entity->scratch_2c == 0 && entity->scratch_30 == 0) {
+                        entity->scratch_2c = entity->previous_x;
+                        entity->scratch_30 = entity->previous_y;
                         /* Save initial velocity to +0x10/+0x14 for center drift */
                         entity->motion_x_10 = entity->velocity_x;
-                        entity->motion_y_14 = *(int *)(ebase + 0x1C);
+                        entity->motion_y_14 = entity->velocity_y;
                     }
                     /* Drift orbit center forward along initial velocity */
-                    *(int *)(ebase + 0x2C) += entity->motion_x_10;
+                    entity->scratch_2c += entity->motion_x_10;
                     entity->scratch_30 += entity->motion_y_14;
                     /* Radius grows +2/tick, capped 150, 10-tick delay */
                     unsigned char ang = entity->state_20;
-                    unsigned char delay = *(unsigned char *)(ebase + 0x5C);
+                    unsigned char delay = entity->timer_5c;
                     if (delay < 10) {
-                        *(unsigned char *)(ebase + 0x5C) = delay + 1;
+                        entity->timer_5c = delay + 1;
                     } else {
                         ang += 2;
                         if (ang > 150) ang = 150;
                         entity->state_20 = ang;
                     }
                     /* Angular position: +64 per tick */
-                    int rad = *(int *)(ebase + 0x3C);
+                    int rad = entity->counter_3c;
                     rad += 64;
                     if (rad >= 2048) rad -= 2048;
-                    *(int *)(ebase + 0x3C) = rad;
+                    entity->counter_3c = rad;
                     /* Position = drifting center + orbit offset */
                     int *lut = (int *)DAT_00487ab0;
                     int cy = entity->scratch_30;
-                    int cx = *(int *)(ebase + 0x2C);
+                    int cx = entity->scratch_2c;
                     int cos_v = lut[rad & 0x7FF];
                     int sin_v = lut[(rad + 0x200) & 0x7FF];
                     entity->position_y = cy + ((cos_v * (int)ang) >> 3);
                     entity->position_x = cx + ((sin_v * (int)ang) >> 3);
                     /* Zero velocity to prevent shared integration */
                     entity->velocity_x = 0;
-                    *(int *)(ebase + 0x1C) = 0;
+                    entity->velocity_y = 0;
                 }
                 /* else: state != 1, flying with full gravity (handled by shared code) */
                 break;
@@ -2013,7 +2013,7 @@ void FUN_00434310(void)
                 * When on a solid tile, spawn type 0x67 particle with palette 0x93-0x9F.
                 * This creates the "trail" effect — only on tile contact, not per-tick. */
                 int kx = entity->previous_x; /* backup position */
-                int ky = *(int *)(ebase + 0x0C);
+                int ky = entity->previous_y;
                 int ktx = kx >> 0x16;
                 int kty = ky >> 0x16;
                 if (ktx >= 0 && kty >= 0 && ktx < (int)DAT_004879f0 && kty < (int)DAT_004879f4) {
@@ -2025,7 +2025,7 @@ void FUN_00434310(void)
                             tp->position_x = kx;
                             tp->position_y = ky;
                             tp->velocity_x = entity->velocity_x >> 6;
-                            tp->velocity_y = *(int *)(ebase + 0x1C) >> 6;
+                            tp->velocity_y = entity->velocity_y >> 6;
                             tp->previous_x = kx;
                             tp->previous_y = ky;
                             tp->motion_x_10 = 0; tp->motion_y_14 = 0;
@@ -2082,7 +2082,7 @@ void FUN_00434310(void)
                     int dx = tgt_x - mx;
                     int dy = tgt_y - my;
                     int vx = entity->velocity_x;
-                    int vy = *(int *)(ebase + 0x1C);
+                    int vy = entity->velocity_y;
                     /* Small turn rate: add 1/16 of direction-to-target */
                     vx += dx / 64;
                     vy += dy / 64;
@@ -2107,7 +2107,7 @@ void FUN_00434310(void)
                         }
                     }
                     entity->velocity_x = vx;
-                    *(int *)(ebase + 0x1C) = vy;
+                    entity->velocity_y = vy;
                 }
                 break;
             }
@@ -2133,16 +2133,16 @@ void FUN_00434310(void)
                     }
                     if (fb_found) {
                         entity->velocity_x += (fb_tx - fb_x) / 64;
-                        *(int *)(ebase + 0x1C) += (fb_ty - fb_y) / 64;
+                        entity->velocity_y += (fb_ty - fb_y) / 64;
                         /* Speed cap */
                         int svx = entity->velocity_x >> 8;
-                        int svy = *(int *)(ebase + 0x1C) >> 8;
+                        int svy = entity->velocity_y >> 8;
                         int spd = svx * svx + svy * svy;
                         if (spd > 0xB06440) {
                             double mag = sqrt((double)spd);
                             double cap = 3400.0;
                             entity->velocity_x = (int)(svx * cap / mag) << 8;
-                            *(int *)(ebase + 0x1C) = (int)(svy * cap / mag) << 8;
+                            entity->velocity_y = (int)(svy * cap / mag) << 8;
                         }
                     }
                 }
@@ -2169,7 +2169,7 @@ void FUN_00434310(void)
                 * from the player's own bullets right after spawning. */
                 /* Zero velocity — nucleus dots are stationary trail */
                 entity->velocity_x = 0;
-                *(int *)(ebase + 0x1C) = 0;
+                entity->velocity_y = 0;
                 unsigned char nc_sub = entity->subtype;
                 /* Mode 2 auto-detonate: countdown at +0x60 (avoids +0x28 conflict with damage tracking) */
                 if (nc_sub == 1) {
@@ -2183,10 +2183,10 @@ void FUN_00434310(void)
                 }
                 /* Decrement invuln timer */
                 {
-                    unsigned char nc_inv = *(unsigned char *)(ebase + 0x5C);
+                    unsigned char nc_inv = entity->timer_5c;
                     if (nc_inv > 0) {
                         nc_inv--;
-                        *(unsigned char *)(ebase + 0x5C) = nc_inv;
+                        entity->timer_5c = nc_inv;
                     }
                 }
                 /* State 0xFA: ring explosion — spawn ~12 type-0x00 entities */
@@ -2363,10 +2363,10 @@ void FUN_00434310(void)
                 unsigned char lm_sub = entity->subtype;
                 if (lm_sub == 0) {
                     /* Mode 0: flying beams — velocity deceleration + position integration */
-                    int lm_grounded = *(int *)(ebase + 0x2C);
+                    int lm_grounded = entity->scratch_2c;
                     if (lm_grounded == 0) {
                         int lm_vx = entity->velocity_x;
-                        int lm_vy = *(int *)(ebase + 0x1C);
+                        int lm_vy = entity->velocity_y;
                         int svx = lm_vx >> 8;
                         int svy = lm_vy >> 8;
                         int spd_sq = svx * svx + svy * svy;
@@ -2374,26 +2374,26 @@ void FUN_00434310(void)
                         if (spd_sq > 0x10000) {
                             double mag = sqrt((double)spd_sq);
                             entity->velocity_x = (int)((double)svx * 256.0 / mag) << 8;
-                            *(int *)(ebase + 0x1C) = (int)((double)svy * 256.0 / mag) << 8;
+                            entity->velocity_y = (int)((double)svy * 256.0 / mag) << 8;
                         }
                         /* Self position integration */
                         entity->position_x += entity->velocity_x;
-                        entity->position_y += *(int *)(ebase + 0x1C);
+                        entity->position_y += entity->velocity_y;
                     }
                 } else {
                     /* Mode 1/2: stationary mine */
                     unsigned char lm_g2 = entity->auxiliary_26;
                     if (lm_g2 > 0) {
                         /* Guard active: save current position */
-                        *(int *)(ebase + 0x2C) = entity->position_x;
+                        entity->scratch_2c = entity->position_x;
                         entity->scratch_30 = entity->position_y;
                     } else {
                         /* Guard expired: bobbing oscillation */
-                        int lm_phase = *(int *)(ebase + 0x3C);
+                        int lm_phase = entity->counter_3c;
                         lm_phase += 20;
                         if (lm_phase >= 0x800)
                             lm_phase -= 0x800;
-                        *(int *)(ebase + 0x3C) = lm_phase;
+                        entity->counter_3c = lm_phase;
                         int *sc = (int *)DAT_00487ab0;
                         int saved_y = entity->scratch_30;
                         entity->position_y = saved_y + sc[lm_phase] * 4;
@@ -2429,13 +2429,13 @@ void FUN_00434310(void)
                 /* Spiral flight — type 0x6B ONLY (ROMAN CANDLE sub-projectile).
                  * Types 0x13/0x14 are standard ballistic, do NOT spiral. */
                 int vx = entity->velocity_x;
-                int vy = *(int *)(ebase + 0x1C);
+                int vy = entity->velocity_y;
                 /* Spiral: rotate velocity by ~2 degrees per tick.
                  * cos(2°)≈1, sin(2°)≈0.035 → vx' = vx - vy/29, vy' = vy + vx/29 */
                 int nvx = vx - vy / 29;
                 int nvy = vy + vx / 29;
                 entity->velocity_x = nvx;
-                *(int *)(ebase + 0x1C) = nvy;
+                entity->velocity_y = nvy;
                 break;
             }
 
@@ -2559,7 +2559,7 @@ void FUN_00434310(void)
                 }
                 /* Self position integration */
                 entity->position_x += entity->velocity_x;
-                entity->position_y += *(int *)(ebase + 0x1C);
+                entity->position_y += entity->velocity_y;
                 /* Boundary: revert to backup, zero velocity, clamp to (0..map-8) */
                 {
                     int ms_x = entity->position_x;
@@ -2568,9 +2568,9 @@ void FUN_00434310(void)
                     if (ms_x < 0 || (ms_x >> 0x12) >= (int)DAT_004879f0 ||
                         ms_y < 0 || (ms_y >> 0x12) >= (int)DAT_004879f4) {
                         entity->position_x = entity->previous_x;
-                        entity->position_y = *(int *)(ebase + 0x0C);
+                        entity->position_y = entity->previous_y;
                         entity->velocity_x = 0;
-                        *(int *)(ebase + 0x1C) = 0;
+                        entity->velocity_y = 0;
                         need_clamp = 1;
                     }
                     if (need_clamp) {
@@ -2587,8 +2587,8 @@ void FUN_00434310(void)
                 /* Invuln countdown — keep minimum 1 so same-team bullets can't
                  * damage this miniship via the +0x5C==0 friendly-fire bypass. */
                 {
-                    unsigned char ms_inv = *(unsigned char *)(ebase + 0x5C);
-                    if (ms_inv > 1) { ms_inv--; *(unsigned char *)(ebase + 0x5C) = ms_inv; }
+                    unsigned char ms_inv = entity->timer_5c;
+                    if (ms_inv > 1) { ms_inv--; entity->timer_5c = ms_inv; }
                 }
                 /* Enemy scan: find closest enemy player (different team) */
                 unsigned char ms_own = entity->owner;
@@ -2623,12 +2623,12 @@ void FUN_00434310(void)
                 if (!ms_found_enemy || ms_best_dist > 22500) {
                     /* No enemy in range: decelerate (multiply vx/vy by ~0.97) */
                     entity->velocity_x = (int)((double)entity->velocity_x * 0.97);
-                    *(int *)(ebase + 0x1C) = (int)((double)*(int *)(ebase + 0x1C) * 0.97);
+                    entity->velocity_y = (int)((double)entity->velocity_y * 0.97);
                 } else {
                     /* Steer toward target: heading-based turn-rate-limited pursuit.
                      * FUN_004257e0 returns angle from src to dst. Add 0x400 offset
                      * to match sincos velocity convention (same as kamikaze). */
-                    int ms_heading = *(int *)(ebase + 0x3C);
+                    int ms_heading = entity->counter_3c;
                     int desired = ((int)FUN_004257e0(
                         entity->position_x, entity->position_y, ms_tx, ms_ty) + 0x400) & 0x7FF;
                     int diff = ((desired - ms_heading) + 0x400) & 0x7FF;
@@ -2639,33 +2639,33 @@ void FUN_00434310(void)
                     else if (diff < -turn_rate) diff = -turn_rate;
                     else if (diff == 0) diff = (rand() & 1) ? turn_rate : -turn_rate;
                     ms_heading = (ms_heading + diff) & 0x7FF;
-                    *(int *)(ebase + 0x3C) = ms_heading;
+                    entity->counter_3c = ms_heading;
                     /* Apply velocity from heading: vx += sincos[heading] >> 5 */
                     int *sc = (int *)DAT_00487ab0;
                     entity->velocity_x += sc[ms_heading & 0x7FF] >> 5;
-                    *(int *)(ebase + 0x1C) += sc[(ms_heading + 0x200) & 0x7FF] >> 5;
+                    entity->velocity_y += sc[(ms_heading + 0x200) & 0x7FF] >> 5;
                     /* Add gravity */
-                    *(int *)(ebase + 0x1C) += DAT_00483824;
+                    entity->velocity_y += DAT_00483824;
                     /* Speed cap: normalize if speed² > 0x225510 */
                     {
                         int svx = entity->velocity_x >> 8;
-                        int svy = *(int *)(ebase + 0x1C) >> 8;
+                        int svy = entity->velocity_y >> 8;
                         int spd_sq = svx * svx + svy * svy;
                         if (spd_sq > 0x225510 && spd_sq > 0) {
                             double mag = sqrt((double)spd_sq);
                             double cap = 1500.0; /* approximate speed cap from binary */
                             entity->velocity_x = (int)(svx * cap / mag) << 8;
-                            *(int *)(ebase + 0x1C) = (int)(svy * cap / mag) << 8;
+                            entity->velocity_y = (int)(svy * cap / mag) << 8;
                         }
                     }
                 }
                 /* Fire type 0x67 bullet every ~10 ticks — only when chasing enemy */
                 if (ms_found_enemy && ms_best_dist <= 22500) {
-                    int bc = *(int *)(ebase + 0x2C);
+                    int bc = entity->scratch_2c;
                     bc++;
                     if (bc >= 10 && DAT_00489248 < 0x9C4) {
                         bc = 0;
-                        int heading = *(int *)(ebase + 0x3C);
+                        int heading = entity->counter_3c;
                         int *sc = (int *)DAT_00487ab0;
                         int *tt = (int *)DAT_00487abc;
                         Entity *bp = &DAT_004892e8[DAT_00489248];
@@ -2675,7 +2675,7 @@ void FUN_00434310(void)
                         bp->previous_y = entity->position_y;
                         int bh = heading & 0x7FF;
                         int bvx = entity->velocity_x / 2;
-                        int bvy = *(int *)(ebase + 0x1C) / 2;
+                        int bvy = entity->velocity_y / 2;
                         bp->velocity_x = (sc[bh] * 5 << 4 >> 6) + bvx;
                         bp->velocity_y = (sc[(bh + 0x200) & 0x7FF] * 5 << 4 >> 6) + bvy;
                         bp->motion_x_10 = 0; bp->motion_y_14 = 0;
@@ -2703,7 +2703,7 @@ void FUN_00434310(void)
                                 (unsigned int)pal + 30000;
                         }
                     }
-                    *(int *)(ebase + 0x2C) = bc;
+                    entity->scratch_2c = bc;
                 } /* end bullet firing gate */
                 break;
             }
@@ -2714,10 +2714,10 @@ void FUN_00434310(void)
                 unsigned char km_own = entity->owner;
                 /* Original integrates before acquiring/predicting its target. */
                 entity->position_x += entity->velocity_x;
-                entity->position_y += *(int *)(ebase + 0x1C);
+                entity->position_y += entity->velocity_y;
                 int km_x = entity->position_x;
                 int km_y = entity->position_y;
-                int km_heading = *(int *)(ebase + 0x3C);
+                int km_heading = entity->counter_3c;
                 /* Find nearest enemy player */
                 int km_best = 0x15F90; /* original only acquires within 300 pixels */
                 int km_tx = km_x, km_ty = km_y;
@@ -2744,30 +2744,30 @@ void FUN_00434310(void)
                     int desired = (int)FUN_004257e0(
                         km_x, km_y,
                         km_tx - entity->velocity_x * lead,
-                        km_ty - *(int *)(ebase + 0x1C) * lead);
+                        km_ty - entity->velocity_y * lead);
                     /* Turn-rate-limited steering: adjust heading by ±0x40 per tick */
                     int diff = (((desired - km_heading) + 0x400) & 0x7FF) - 0x400;
                     if (diff == -0x400) diff = 0x08;
                     if (diff > 0x40) diff = 0x40;
                     else if (diff < -0x40) diff = -0x40;
                     km_heading = (km_heading + diff) & 0x7FF;
-                    *(int *)(ebase + 0x3C) = km_heading;
+                    entity->counter_3c = km_heading;
                     int *sc = (int *)DAT_00487ab0;
                     entity->velocity_x += sc[km_heading] >> 4;
-                    *(int *)(ebase + 0x1C) += sc[km_heading + 0x200] >> 4;
+                    entity->velocity_y += sc[km_heading + 0x200] >> 4;
                 } else {
-                    *(int *)(ebase + 0x1C) += entity->gravity_or_motion_38 * DAT_00483828;
+                    entity->velocity_y += entity->gravity_or_motion_38 * DAT_00483828;
                 }
                 /* Speed cap: if speed^2 > 16000000, normalize */
                 {
                     int svx = entity->velocity_x >> 8;
-                    int svy = *(int *)(ebase + 0x1C) >> 8;
+                    int svy = entity->velocity_y >> 8;
                     int spd_sq = svx * svx + svy * svy;
                     if (spd_sq > 16000000 && spd_sq > 0) {
                         double mag = sqrt((double)spd_sq);
                         double cap = 4000.0; /* approximate max speed constant */
                         entity->velocity_x = (int)(svx * cap / mag) << 8;
-                        *(int *)(ebase + 0x1C) = (int)(svy * cap / mag) << 8;
+                        entity->velocity_y = (int)(svy * cap / mag) << 8;
                     }
                 }
                 break;
@@ -2801,11 +2801,11 @@ void FUN_00434310(void)
                 else entity->position_y += FIXED_SCALE;
                 /* Zero velocity — movement is direct position, not velocity-based */
                 entity->velocity_x = 0;
-                *(int *)(ebase + 0x1C) = 0;
-                int ins_cooldown = *(int *)(ebase + 0x3C);
+                entity->velocity_y = 0;
+                int ins_cooldown = entity->counter_3c;
                 if (ins_cooldown > 0) {
                     ins_cooldown--;
-                    *(int *)(ebase + 0x3C) = ins_cooldown;
+                    entity->counter_3c = ins_cooldown;
                 }
                 /* 30-tick retarget scan */
                 unsigned char retarget = entity->scratch_65;
@@ -2834,18 +2834,18 @@ void FUN_00434310(void)
                         }
                     }
                     if (ins_found) {
-                        *(int *)(ebase + 0x2C) = ins_tx;
+                        entity->scratch_2c = ins_tx;
                         entity->scratch_30 = ins_ty;
                     } else {
-                        *(int *)(ebase + 0x2C) = 0;
+                        entity->scratch_2c = 0;
                     }
                 }
                 entity->scratch_65 = retarget;
                 /* Chase saved target: apply LUT velocity toward target */
-                if (*(int *)(ebase + 0x2C) != 0) {
+                if (entity->scratch_2c != 0) {
                     int angle = (int)FUN_004257e0(
                         entity->position_x, entity->position_y,
-                        *(int *)(ebase + 0x2C), entity->scratch_30);
+                        entity->scratch_2c, entity->scratch_30);
                     int *lut = (int *)DAT_00487ab0;
                     entity->position_x += lut[angle & 0x7FF];
                     entity->position_y += lut[(angle + 0x200) & 0x7FF];
@@ -2875,7 +2875,7 @@ void FUN_00434310(void)
                 }
                 if (found) {
                     entity->velocity_x += (tgt_x - mx) / 96;
-                    *(int *)(ebase + 0x1C) += (tgt_y - my) / 96;
+                    entity->velocity_y += (tgt_y - my) / 96;
                 }
                 break;
             }
@@ -2899,20 +2899,20 @@ void FUN_00434310(void)
                  * model below was invented and is intentionally bypassed. */
                 if (0) {
                     unsigned char rc_sub = entity->subtype;
-                    int rc_cnt = *(int *)(ebase + 0x3C) + 1;
-                    *(int *)(ebase + 0x3C) = rc_cnt;
+                    int rc_cnt = entity->counter_3c + 1;
+                    entity->counter_3c = rc_cnt;
                     int *sc = (int *)DAT_00487ab0;
                     int *tt = (int *)DAT_00487abc;
                     unsigned char own = entity->owner;
                     if (rc_sub == 0 && rc_cnt > 0x50) {
-                        *(int *)(ebase + 0x3C) = 0;
+                        entity->counter_3c = 0;
                         /* 14/15 launches succeed in the original. */
                         if (rand() % 15 < 14 && DAT_00489248 < 0x9C4) {
                             int dir = (rand() & 0xFF) + 0x380;
                             int spd = rand() % 90 + 25;
                             Entity *ep = &DAT_004892e8[DAT_00489248];
                             int x = entity->previous_x - FIXED_SCALE;
-                            int y = *(int *)(ebase + 0x0C) - 0x340000;
+                            int y = entity->previous_y - 0x340000;
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = x; ep->previous_x = x;
                             ep->position_y = y; ep->previous_y = y;
@@ -2932,13 +2932,13 @@ void FUN_00434310(void)
                                 *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) += rand() % color_span;
                         }
                     } else if (rc_sub == 1 && rc_cnt > 0x19) {
-                        *(int *)(ebase + 0x3C) = 0;
+                        entity->counter_3c = 0;
                         if (DAT_00489248 < 0x9C4) {
                             unsigned char stage = entity->state_20;
                             int xoff = (3 - ((unsigned int)stage >> 2)) << 0x12;
                             Entity *ep = &DAT_004892e8[DAT_00489248];
                             int x = entity->previous_x + xoff;
-                            int y = *(int *)(ebase + 0x0C) - 0x1C0000;
+                            int y = entity->previous_y - 0x1C0000;
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = x; ep->previous_x = x;
                             ep->position_y = y; ep->previous_y = y;
@@ -2981,8 +2981,8 @@ void FUN_00434310(void)
                     }
                     /* Startup delay: counter at +0x3C counts from -80 to 0 */
                     {
-                        int et_delay = *(int *)(ebase + 0x3C);
-                        if (et_delay < 0) { *(int *)(ebase + 0x3C) = et_delay + 1; break; }
+                        int et_delay = entity->counter_3c;
+                        if (et_delay < 0) { entity->counter_3c = et_delay + 1; break; }
                     }
                     /* Spray one flechette upward */
                     if (DAT_00489248 < 0x9C4) {
@@ -3054,19 +3054,19 @@ void FUN_00434310(void)
                 * Dies with small flash when +0x60 timer expires. */
                 {
                     unsigned char sub = entity->subtype;
-                    int count = *(int *)(ebase + 0x3C) + 1;
-                    *(int *)(ebase + 0x3C) = count;
+                    int count = entity->counter_3c + 1;
+                    entity->counter_3c = count;
                     int *sc = (int *)DAT_00487ab0;
                     int *tt = (int *)DAT_00487abc;
                     unsigned char own = entity->owner;
                     if (sub == 0 && count > 0x50) {
-                        *(int *)(ebase + 0x3C) = 0;
+                        entity->counter_3c = 0;
                         if (rand() % 15 < 14 && DAT_00489248 < 0x9C4) {
                             int dir = (rand() & 0xFF) + 0x380;
                             int speed = rand() % 90 + 25;
                             Entity *ep = &DAT_004892e8[DAT_00489248];
                             int x = entity->previous_x - FIXED_SCALE;
-                            int y = *(int *)(ebase + 0x0C) - 0x340000;
+                            int y = entity->previous_y - 0x340000;
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = x; ep->previous_x = x;
                             ep->position_y = y; ep->previous_y = y;
@@ -3083,11 +3083,11 @@ void FUN_00434310(void)
                             *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 50 + 90;
                         }
                     } else if (sub == 1 && count > 0x19) {
-                        *(int *)(ebase + 0x3C) = 0;
+                        entity->counter_3c = 0;
                         if (DAT_00489248 < 0x9C4) {
                             unsigned char stage = entity->state_20;
                             int x = entity->previous_x + ((3 - ((unsigned int)stage >> 2)) << 0x12);
-                            int y = *(int *)(ebase + 0x0C) - 0x1C0000;
+                            int y = entity->previous_y - 0x1C0000;
                             Entity *ep = &DAT_004892e8[DAT_00489248];
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = x; ep->previous_x = x;
@@ -3163,12 +3163,12 @@ void FUN_00434310(void)
                         }
                     }
                     /* Counter at +0x3C: increment, spawn ball/firework every 80 ticks */
-                    int rc_cnt = *(int *)(ebase + 0x3C);
+                    int rc_cnt = entity->counter_3c;
                     rc_cnt++;
-                    *(int *)(ebase + 0x3C) = rc_cnt;
+                    entity->counter_3c = rc_cnt;
                     int rc_threshold = (rc_sub >= 2) ? 0xC8 : 0x50; /* mode 3 waits longer */
                     if (rc_cnt > rc_threshold && DAT_00489248 < 0x9C4) {
-                        *(int *)(ebase + 0x3C) = 0;
+                        entity->counter_3c = 0;
                         unsigned char rc_sub = entity->subtype;
                         int rc_h = (rand() & 0xFF) + 0x380;
                         if (rc_h >= 0x3F8 && rc_h <= 0x408) break;
@@ -3354,23 +3354,23 @@ void FUN_00434310(void)
                 unsigned char mode = entity->subtype;
                 if (mode == 0) {
                     int vx8 = entity->velocity_x >> 8;
-                    int vy8 = *(int *)(ebase + 0x1C) >> 8;
+                    int vy8 = entity->velocity_y >> 8;
                     int speed2 = vx8 * vx8 + vy8 * vy8;
                     if (speed2 > 0x10000) {
                         double mag = sqrt((double)speed2);
                         entity->velocity_x = (int)(vx8 * 256.0 / mag) << 8;
-                        *(int *)(ebase + 0x1C) = (int)(vy8 * 256.0 / mag) << 8;
+                        entity->velocity_y = (int)(vy8 * 256.0 / mag) << 8;
                     }
                     entity->position_x += entity->velocity_x;
-                    entity->position_y += *(int *)(ebase + 0x1C);
+                    entity->position_y += entity->velocity_y;
                 }
-                int phase = (*(int *)(ebase + 0x3C) + (*(int *)(ebase + 0x2C) >> 5)) & 0x7FF;
-                *(int *)(ebase + 0x3C) = phase;
+                int phase = (entity->counter_3c + (entity->scratch_2c >> 5)) & 0x7FF;
+                entity->counter_3c = phase;
                 int age = entity->health_or_damage_28;
-                int radius = *(int *)(ebase + 0x2C);
+                int radius = entity->scratch_2c;
                 if (age > 10 && age < 400 && radius < 400) {
                     radius += 14;
-                    *(int *)(ebase + 0x2C) = radius;
+                    entity->scratch_2c = radius;
                 }
                 unsigned char emit_tick = (unsigned char)(entity->state_20 + 1);
                 entity->state_20 = emit_tick;
@@ -3397,7 +3397,7 @@ void FUN_00434310(void)
                 }
                 age++;
                 entity->health_or_damage_28 = age;
-                if (age >= 400) *(int *)(ebase + 0x2C) -= 8;
+                if (age >= 400) entity->scratch_2c -= 8;
                 if (age == 450) {
                     if (DAT_00489250 < 2000) {
                         int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
@@ -3430,20 +3430,20 @@ void FUN_00434310(void)
                 * Explodes on wall hit with large flash cluster + KB. */
                 /* Speed deceleration */
                 int gb_vx = entity->velocity_x >> 8;
-                int gb_vy = *(int *)(ebase + 0x1C) >> 8;
+                int gb_vy = entity->velocity_y >> 8;
                 int gb_spd = gb_vx * gb_vx + gb_vy * gb_vy;
                 if (gb_spd > 0x10000) {
                     double mag = sqrt((double)gb_spd);
                     entity->velocity_x = (int)((double)gb_vx * 256.0 / mag) << 8;
-                    *(int *)(ebase + 0x1C) = (int)((double)gb_vy * 256.0 / mag) << 8;
+                    entity->velocity_y = (int)((double)gb_vy * 256.0 / mag) << 8;
                 }
                 /* Fuse counter: sound every 36 ticks */
                 {
-                    int fuse = *(int *)(ebase + 0x3C);
+                    int fuse = entity->counter_3c;
                     fuse++;
-                    *(int *)(ebase + 0x3C) = fuse;
+                    entity->counter_3c = fuse;
                     if (fuse >= 0x24) {
-                        *(int *)(ebase + 0x3C) = 0;
+                        entity->counter_3c = 0;
                         FUN_0040f9b0(0x11C, entity->position_x, entity->position_y);
                     }
                 }
@@ -3473,7 +3473,7 @@ void FUN_00434310(void)
                     }
                 }
                 int vx = entity->velocity_x;
-                int vy = *(int *)(ebase + 0x1C);
+                int vy = entity->velocity_y;
                 if (found) {
                     /* Steer toward target */
                     vx += (tgt_x - mx) / 48;
@@ -3495,7 +3495,7 @@ void FUN_00434310(void)
                     }
                 }
                 entity->velocity_x = vx;
-                *(int *)(ebase + 0x1C) = vy;
+                entity->velocity_y = vy;
                 break;
             }
 
@@ -3531,18 +3531,18 @@ void FUN_00434310(void)
                     if (wf_state > 0) {
                         wf_state--;
                         entity->state_20 = wf_state;
-                        int wf_heading = *(int *)(ebase + 0x3C);
+                        int wf_heading = entity->counter_3c;
                         int *wf_sc = (int *)DAT_00487ab0;
                         int sv = wf_sc[wf_heading & 0x7FF];
                         int cv = wf_sc[(wf_heading + 0x200) & 0x7FF];
                         if (entity->health_or_damage_28 != 0) {
                             /* Fast acceleration */
                             entity->velocity_x += sv >> 5;
-                            *(int *)(ebase + 0x1C) += cv >> 5;
+                            entity->velocity_y += cv >> 5;
                         } else {
                             /* Slow acceleration */
                             entity->velocity_x += (sv * 3) >> 6;
-                            *(int *)(ebase + 0x1C) += (cv * 3) >> 6;
+                            entity->velocity_y += (cv * 3) >> 6;
                         }
                     }
                 } else {
@@ -3572,20 +3572,20 @@ void FUN_00434310(void)
                     }
                     entity->scratch_30 = wf_timer;
                     /* Heading oscillation */
-                    int wf_heading = *(int *)(ebase + 0x3C);
+                    int wf_heading = entity->counter_3c;
                     if (entity->state_20 == 0)
                         wf_heading -= 10;
                     else
                         wf_heading += 10;
                     wf_heading &= 0x7FF;
-                    *(int *)(ebase + 0x3C) = wf_heading;
+                    entity->counter_3c = wf_heading;
                     /* Set velocity from heading: sincos*3 (~6px/tick).
                      * Shared integration (x+=vx, y+=vy) applies the movement.
                      * Overwrites any gravity accumulated by shared gravity code
                      * (wavy fireworks don't fall — matches original behavior). */
                     int *wf_sc = (int *)DAT_00487ab0;
                     entity->velocity_x = wf_sc[wf_heading] * 3;
-                    *(int *)(ebase + 0x1C) = wf_sc[wf_heading + 0x200] * 3;
+                    entity->velocity_y = wf_sc[wf_heading + 0x200] * 3;
                 }
                 break;
             }
@@ -3613,7 +3613,7 @@ void FUN_00434310(void)
                  * Threshold: (vx>>9)^2 + (vy>>9)^2 > 1000 = still flying.
                  * At/below 1000 = landed, start growing. */
                 int svx = entity->velocity_x >> 9;
-                int svy = *(int *)(ebase + 0x1C) >> 9;
+                int svy = entity->velocity_y >> 9;
                 int ow_speed_sq = svx * svx + svy * svy;
 
                 /* Speed check + ground proximity: must be slow AND near solid ground.
@@ -3662,7 +3662,7 @@ void FUN_00434310(void)
                     int gdir = (rand() & 1) ? 1 : -1;
                     entity->position_x += gdir * (rand() % 3 + 1) * FIXED_SCALE; /* 1-3 tiles sideways */
                     entity->velocity_x = 0; /* zero velocity — movement is direct */
-                    *(int *)(ebase + 0x1C) = 0;
+                    entity->velocity_y = 0;
 
                     /* Recompute tile position after movement */
                     ow_tx = entity->position_x >> 0x12;
@@ -3696,7 +3696,7 @@ void FUN_00434310(void)
                     /* Phase B: paint terrain in expanding triangle (0x442ec0).
                      * 4 rows: widths 1, 3, 5, 7. Starts 1-2 tiles above entity Y.
                      * Each row one lower + one wider. Different color each tick = texture. */
-                    unsigned int ow_color = *(unsigned int *)(ebase + 0x4C);
+                    unsigned int ow_color = entity->palette_value;
                     unsigned short ow_rgb = (unsigned short)(ow_color - 30000);
                     int paint_start_y = ow_ty - (rand() % 2) - 1;
                     int col_count = 1;
@@ -3732,7 +3732,7 @@ void FUN_00434310(void)
                 {
                     unsigned short *pal = (unsigned short *)DAT_00487aa8;
                     if (pal) {
-                        *(unsigned int *)(ebase + 0x4C) = (unsigned int)pal[0xA0 + rand() % 16] + 30000;
+                        entity->palette_value = (unsigned int)pal[0xA0 + rand() % 16] + 30000;
                     }
                 }
                 break;
@@ -3757,7 +3757,7 @@ void FUN_00434310(void)
          *   0x2D LASER      — instant beam trace, no per-tick movement */
         if (ent_type != 0x2d && ent_type != 0x1b && ent_type != 0x1C && ent_type != 0x19 && ent_type != 0x26) {
             entity->position_x += entity->velocity_x;
-            entity->position_y += *(int *)(ebase + 0x1C);
+            entity->position_y += entity->velocity_y;
         }
 
         /* Entity-vs-tracked-entity collision (FUN_00437120 equivalent).
@@ -3831,10 +3831,10 @@ void FUN_00434310(void)
 
         /* Apply gravity + drag for debris entities (AFTER position update) */
         if (is_debris) {
-            *(int *)(ebase + 0x1C) += DAT_00483824;  /* debris gravity */
+            entity->velocity_y += DAT_00483824;  /* debris gravity */
             /* Apply drag */
             entity->velocity_x = (int)((double)entity->velocity_x * 0.97);
-            *(int *)(ebase + 0x1C) = (int)((double)*(int *)(ebase + 0x1C) * 0.97);
+            entity->velocity_y = (int)((double)entity->velocity_y * 0.97);
         }
 
         /* Debris ground collision: type 100 (0x64) debris dies on non-air tile.
@@ -3874,16 +3874,16 @@ void FUN_00434310(void)
                 }
                 if (pos_y < 0) {
                     entity->position_y = 0;
-                    *(int *)(ebase + 0x0C) = 0;
+                    entity->previous_y = 0;
                 } else if ((pos_y >> 0x12) >= (int)DAT_004879f4) {
                     int max_y = (int)(DAT_004879f4 << 0x12);
                     entity->position_y = max_y;
-                    *(int *)(ebase + 0x0C) = max_y;
+                    entity->previous_y = max_y;
                 }
                 /* Insect: zero velocity on boundary hit */
                 if (ent_type == 0x18) {
                     entity->velocity_x = 0;
-                    *(int *)(ebase + 0x1C) = 0;
+                    entity->velocity_y = 0;
                 }
                 pos_x = entity->position_x;
                 pos_y = entity->position_y;
@@ -3932,7 +3932,7 @@ void FUN_00434310(void)
                 if (DAT_00489250 < 2000) {
                     int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
                     *(int *)(fp + 0x00) = entity->previous_x;  /* prev pos for trail behind */
-                    *(int *)(fp + 0x04) = *(int *)(ebase + 0x0C);
+                    *(int *)(fp + 0x04) = entity->previous_y;
                     *(int *)(fp + 0x08) = 0;
                     *(int *)(fp + 0x0c) = 0;
                     *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 1) + 1;
@@ -3961,7 +3961,7 @@ void FUN_00434310(void)
                     int wf_h;
                     int wf_spd;
                     if (wf_trail_sub >= 2) {
-                        wf_h = (rand() % 0x80 + *(int *)(ebase + 0x3C) + 0x3C0) & 0x7FF;
+                        wf_h = (rand() % 0x80 + entity->counter_3c + 0x3C0) & 0x7FF;
                         wf_spd = rand() % 0x28 + 0x14;
                     } else {
                         wf_h = rand() & 0x7FF;
@@ -3978,7 +3978,7 @@ void FUN_00434310(void)
                     ep->velocity_y = wf_sc[wf_h + 0x200] * wf_spd >> 6;
                     if (wf_trail_sub < 2) {
                         ep->velocity_x += entity->velocity_x >> 1;
-                        ep->velocity_y += *(int *)(ebase + 0x1C) >> 1;
+                        ep->velocity_y += entity->velocity_y >> 1;
                     }
                     ep->motion_x_10 = 0; ep->motion_y_14 = 0;
                     ep->type = 0x67;
@@ -4025,7 +4025,7 @@ void FUN_00434310(void)
 
                     /* Velocity: parent velocity / divisor + random jitter */
                     tp->velocity_x = entity->velocity_x / trail_vel_div + ((rand() & 0x3FFF) - 0x2000);
-                    tp->velocity_y = *(int *)(ebase + 0x1C) / trail_vel_div + ((rand() & 0x3FFF) - 0x2000);
+                    tp->velocity_y = entity->velocity_y / trail_vel_div + ((rand() & 0x3FFF) - 0x2000);
 
                     /* Identity */
                     tp->type = (unsigned char)trail_type;
@@ -4138,7 +4138,7 @@ void FUN_00434310(void)
                 {
                     int vx = entity->velocity_x;
                     int angular = entity->scratch_30;
-                    int angle = *(int *)(ebase + 0x3C);
+                    int angle = entity->counter_3c;
                     if (vx < 1) {
                         angle += angular;
                         if (angle >= 0x800) {
@@ -4154,7 +4154,7 @@ void FUN_00434310(void)
                     }
                     if (angular < 0) angular = 0;
                     entity->scratch_30 = angular;
-                    *(int *)(ebase + 0x3C) = angle;
+                    entity->counter_3c = angle;
                 }
                 if (entity->state_20 == 0xFA) {
                     int det_x = entity->position_x;
@@ -4200,7 +4200,7 @@ void FUN_00434310(void)
                  * record, and health = damage * 1600. */
                 if (entity->state_20 == 0xFA) {
                     int turr_x = entity->previous_x;  /* prev_x */
-                    int turr_y = *(int *)(ebase + 0x0C);  /* prev_y */
+                    int turr_y = entity->previous_y;  /* prev_y */
                     unsigned char turr_etype = entity->type;
                     unsigned char turr_sub = entity->subtype;
                     unsigned char turr_raw_owner = entity->owner;
@@ -4237,14 +4237,14 @@ void FUN_00434310(void)
                 * When damage >= threshold, state +0x20 is set to 0xFA → explosion.
                 * Original callback 0x431650: KB(0x190=400, -1), two particle loops. */
                 /* Decrement immunity timer (original at 0x431800) */
-                if (*(unsigned char *)(ebase + 0x5C) > 0)
-                    *(unsigned char *)(ebase + 0x5C) = *(unsigned char *)(ebase + 0x5C) - 1;
+                if (entity->timer_5c > 0)
+                    entity->timer_5c = entity->timer_5c - 1;
                 unsigned char nb_state = entity->state_20;
                 if (nb_state == 0xFA) {
                     int det_x = entity->position_x;
                     int det_y = entity->position_y;
                     int det_vx = entity->velocity_x;
-                    int det_vy = *(int *)(ebase + 0x1C);
+                    int det_vy = entity->velocity_y;
                     unsigned char own = entity->owner;
                     unsigned char sub = entity->subtype;
                     int dtx = det_x >> 0x12;
@@ -4406,7 +4406,7 @@ void FUN_00434310(void)
                          * 0x23 GAMMA BOOM, 0x2E NALLE all play explosion sounds.
                          * 0x22 (turret/fireworks), 0x24 ETNA, 0x25 ROMAN CANDLE are silent. */
                         int bx = entity->previous_x;
-                        int by = *(int *)(ebase + 0x0C);
+                        int by = entity->previous_y;
                         switch (ent_type) {
                         case 0x00:                        /* basic bullet — silent */
                         case 0x69:                        /* mine — silent */
@@ -4495,7 +4495,7 @@ void FUN_00434310(void)
                     int did_bounce = 0;
                     {
                         int prev_x = entity->previous_x;
-                        int prev_y = *(int *)(ebase + 0x0C);
+                        int prev_y = entity->previous_y;
                         unsigned char sub_t = entity->subtype;
                         int flash_count = 0;
 
@@ -4539,12 +4539,12 @@ void FUN_00434310(void)
                         /* Callback 0x438D90: BOUNCE with 50% energy retention.
                          * Bounce counter at +0x3C. On last bounce: detonate. */
                         case 0x01: { /* Bounce missile */
-                            int bc = *(int *)(ebase + 0x3C);
+                            int bc = entity->counter_3c;
                             if (bc > 0) {
                                 /* Bounce: reflect velocity, halve speed */
                                 if (prev_tx != tx) entity->velocity_x = -(entity->velocity_x / 2);
-                                if (prev_ty != ty) *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C) / 2);
-                                *(int *)(ebase + 0x3C) = bc - 1;
+                                if (prev_ty != ty) entity->velocity_y = -(entity->velocity_y / 2);
+                                entity->counter_3c = bc - 1;
                                 FUN_0040f9b0(0x32, prev_x, prev_y);
                                 did_bounce = 1;
                             } else {
@@ -4565,12 +4565,12 @@ void FUN_00434310(void)
                             int *sc = (int *)DAT_00487ab0;
                             FUN_004357b0(tx, ty, 0x17, stored_tile, is_water,
                                          cl_x, cl_y,
-                                         entity->previous_x, *(int *)(ebase + 0x0C),
+                                         entity->previous_x, entity->previous_y,
                                          '\x02', '\0', owner);
                             /* Extra ground-colored debris — spray in projectile direction */
                             {
                                 int cl_vx = entity->velocity_x;
-                                int cl_vy = *(int *)(ebase + 0x1C);
+                                int cl_vy = entity->velocity_y;
                                 unsigned int impact_angle = (unsigned int)FUN_004257e0(0, 0, cl_vx, cl_vy);
                             for (int cd = 0; cd < 12 && DAT_00489248 < 0x9C4; cd++) {
                                 /* Bias angle toward impact direction with spread +/- 0x200 (~90 degrees) */
@@ -4662,7 +4662,7 @@ void FUN_00434310(void)
                          * handled in Phase 3 timer section. Keep bouncing until then. */
                         case 0x0B: {
                             if (prev_tx != tx) entity->velocity_x = -(entity->velocity_x / 8);
-                            if (prev_ty != ty) *(int *)(ebase + 0x1C) = *(int *)(ebase + 0x1C) / 8;
+                            if (prev_ty != ty) entity->velocity_y = entity->velocity_y / 8;
                             did_bounce = 1;
                             break;
                         }
@@ -4681,7 +4681,7 @@ void FUN_00434310(void)
                         case 0x02: {
                             int div = (rand() & 7) + 6;
                             if (prev_tx != tx) entity->velocity_x = -(entity->velocity_x / div);
-                            if (prev_ty != ty) *(int *)(ebase + 0x1C) = *(int *)(ebase + 0x1C) / div;
+                            if (prev_ty != ty) entity->velocity_y = entity->velocity_y / div;
                             did_bounce = 1;
                             break;
                         }
@@ -4691,7 +4691,7 @@ void FUN_00434310(void)
                          * Just drop dead where it hits. */
                         case 0x0F:
                             entity->velocity_x = 0;  /* zero velocity */
-                            *(int *)(ebase + 0x1C) = 0;
+                            entity->velocity_y = 0;
                             entity->gravity_or_motion_38 = 0;  /* kill gravity too */
                             did_bounce = 1;
                             break;
@@ -4936,7 +4936,7 @@ void FUN_00434310(void)
                          * Set lifetime at +0x60 so it stays alive for ~100 seconds. */
                         case 0x18:
                             entity->velocity_x = 0;
-                            *(int *)(ebase + 0x1C) = 0;
+                            entity->velocity_y = 0;
                             entity->state_20 = 0xFA;
                             entity->scratch_60 = 6000; /* ~100 sec at 60fps */
                             did_bounce = 1; /* prevent removal */
@@ -4950,10 +4950,10 @@ void FUN_00434310(void)
                         case 0x19: {
                             if (entity->subtype == 0) {
                                 entity->position_x = entity->previous_x;
-                                entity->position_y = *(int *)(ebase + 0x0C);
+                                entity->position_y = entity->previous_y;
                                 entity->velocity_x = 0;
-                                *(int *)(ebase + 0x1C) = 0;
-                                *(int *)(ebase + 0x2C) = 1;
+                                entity->velocity_y = 0;
+                                entity->scratch_2c = 1;
                                 did_bounce = 1;
                             }
                             break;
@@ -5012,11 +5012,11 @@ void FUN_00434310(void)
                          * the axis that crossed a tile boundary. Stays alive (did_bounce). */
                         case 0x1C: {
                             entity->position_x = entity->previous_x;
-                            entity->position_y = *(int *)(ebase + 0x0C);
+                            entity->position_y = entity->previous_y;
                             int ms_vx = entity->velocity_x;
-                            int ms_vy = *(int *)(ebase + 0x1C);
+                            int ms_vy = entity->velocity_y;
                             if (prev_tx != tx) entity->velocity_x = -ms_vx;
-                            if (prev_ty != ty) *(int *)(ebase + 0x1C) = -ms_vy;
+                            if (prev_ty != ty) entity->velocity_y = -ms_vy;
                             did_bounce = 1;
                             break;
                         }
@@ -5026,9 +5026,9 @@ void FUN_00434310(void)
                             int mb_x = entity->position_x;
                             int mb_y = entity->position_y;
                             int mb_effect_x = entity->previous_x;
-                            int mb_effect_y = *(int *)(ebase + 0x0C);
+                            int mb_effect_y = entity->previous_y;
                             int mb_vx = entity->velocity_x;
-                            int mb_vy = *(int *)(ebase + 0x1C);
+                            int mb_vy = entity->velocity_y;
                             int *sc = (int *)DAT_00487ab0;
                             int *tt = (int *)DAT_00487abc;
 
@@ -5037,7 +5037,7 @@ void FUN_00434310(void)
 
                             /* Tile damage */
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         mb_x, mb_y, entity->previous_x, *(int *)(ebase + 0x0C),
+                                         mb_x, mb_y, entity->previous_x, entity->previous_y,
                                          '\0', '\0', owner);
 
                             /* Loop 1: Fire debris (entity_type 0, render_mode 4) */
@@ -5155,7 +5155,7 @@ void FUN_00434310(void)
                         case 0x1F: /* INSECTS — pass through walls. No death, no sound.
                             * Original reverts position on wall hit but stays alive. */
                             entity->position_x = entity->previous_x;
-                            entity->position_y = *(int *)(ebase + 0x0C);
+                            entity->position_y = entity->previous_y;
                             did_bounce = 1; /* stay alive */
                             break;
 
@@ -5204,7 +5204,7 @@ void FUN_00434310(void)
                                         bp->previous_x = prev_x;
                                         bp->previous_y = prev_y;
                                         bp->velocity_x = (sc22[dir] * speed >> 6) + (entity->velocity_x >> 1);
-                                        bp->velocity_y = (sc22[dir + 0x200] * speed >> 6) + (*(int *)(ebase + 0x1C) >> 1);
+                                        bp->velocity_y = (sc22[dir + 0x200] * speed >> 6) + (entity->velocity_y >> 1);
                                         bp->type = 0x6A;
                                         bp->owner = owner;
                                         bp->auxiliary_26 = 0;
@@ -5249,7 +5249,7 @@ void FUN_00434310(void)
                             int gx = entity->position_x;
                             int gy = entity->position_y;
                             int gvx = entity->velocity_x;
-                            int gvy = *(int *)(ebase + 0x1C);
+                            int gvy = entity->velocity_y;
                             int *sc = (int *)DAT_00487ab0;
                             int *tt = (int *)DAT_00487abc;
                             FUN_004357b0(tx, ty, 9, stored_tile, is_water,
@@ -5313,12 +5313,12 @@ void FUN_00434310(void)
                         case 0x24: {
                             if (entity->state_20 != 0xC8) {
                                 entity->position_x = entity->previous_x;
-                                entity->position_y = *(int *)(ebase + 0x0C);
+                                entity->position_y = entity->previous_y;
                                 entity->velocity_x = 0;
-                                *(int *)(ebase + 0x1C) = 0;
+                                entity->velocity_y = 0;
                                 entity->state_20 = 0xC8;
                                 entity->scratch_60 = 900;
-                                *(int *)(ebase + 0x3C) = -80; /* startup delay */
+                                entity->counter_3c = -80; /* startup delay */
                             }
                             did_bounce = 1;
                             break;
@@ -5326,10 +5326,10 @@ void FUN_00434310(void)
                         /* DEAD CODE — old burst, replaced by deploy+spray */
                         if (0) {
                             int parent_x = entity->previous_x;
-                            int parent_y = *(int *)(ebase + 0x0C);
+                            int parent_y = entity->previous_y;
                             unsigned char own = entity->owner;
                             int pvx = entity->velocity_x;
-                            int pvy = *(int *)(ebase + 0x1C);
+                            int pvy = entity->velocity_y;
                             for (int s = 0; s < 10 && DAT_00489248 < 0x9c4; s++) {
                                 Entity *tp = &DAT_004892e8[DAT_00489248];
                                 memset((void *)tp, 0, 0x80);
@@ -5367,9 +5367,9 @@ void FUN_00434310(void)
                          * Spray logic handled in behavior switch (mode-dependent). */
                         case 0x25: {
                             entity->position_x = entity->previous_x;
-                            entity->position_y = *(int *)(ebase + 0x0C);
+                            entity->position_y = entity->previous_y;
                             entity->velocity_x = 0;
-                            *(int *)(ebase + 0x1C) = 0;
+                            entity->velocity_y = 0;
                             did_bounce = 1; /* always stay alive */
                             break;
                         }
@@ -5383,12 +5383,12 @@ void FUN_00434310(void)
 
                         case 0x27: { /* KOMET BOMB terminal burst, 0x43E411-0x43E883. */
                             int kvx = entity->velocity_x;
-                            int kvy = *(int *)(ebase + 0x1C);
+                            int kvy = entity->velocity_y;
                             int kspeed = (kvx < 0 ? -kvx : kvx) + (kvy < 0 ? -kvy : kvy);
-                            if (*(int *)(ebase + 0x2C) == 0 && kspeed < 0xC0000) {
+                            if (entity->scratch_2c == 0 && kspeed < 0xC0000) {
                                 entity->velocity_x = 0;
-                                *(int *)(ebase + 0x1C) = 0;
-                                *(int *)(ebase + 0x2C) = 1;
+                                entity->velocity_y = 0;
+                                entity->scratch_2c = 1;
                                 did_bounce = 1;
                                 break;
                             }
@@ -5447,29 +5447,29 @@ void FUN_00434310(void)
                             if (hit_x && hit_y) {
                                 /* Corner: both axes negate + /8 */
                                 entity->velocity_x = -(entity->velocity_x >> 3);
-                                *(int *)(ebase + 0x1C) = -(*(int *)(ebase + 0x1C) >> 3);
+                                entity->velocity_y = -(entity->velocity_y >> 3);
                             } else if (hit_y) {
                                 /* Floor/ceiling: vel_y = -vel_y/4, vel_x *= 0.8 */
-                                int vy = *(int *)(ebase + 0x1C);
+                                int vy = entity->velocity_y;
                                 int vx = entity->velocity_x;
-                                *(int *)(ebase + 0x1C) = -(vy >> 2);
+                                entity->velocity_y = -(vy >> 2);
                                 entity->velocity_x = (int)((float)vx * 0.8f);
                             } else if (hit_x) {
                                 /* Wall: vel_x = -vel_x/4, vel_y *= 0.8 */
                                 int vx = entity->velocity_x;
-                                int vy = *(int *)(ebase + 0x1C);
+                                int vy = entity->velocity_y;
                                 entity->velocity_x = -(vx >> 2);
-                                *(int *)(ebase + 0x1C) = (int)((float)vy * 0.8f);
+                                entity->velocity_y = (int)((float)vy * 0.8f);
                             }
                             if ((entity->velocity_x < 0 ? -entity->velocity_x : entity->velocity_x) +
-                                (*(int *)(ebase + 0x1C) < 0 ? -*(int *)(ebase + 0x1C) : *(int *)(ebase + 0x1C)) < 0x20000) {
+                                (entity->velocity_y < 0 ? -entity->velocity_y : entity->velocity_y) < 0x20000) {
                                 entity->velocity_x = 0;
-                                *(int *)(ebase + 0x1C) = 0;
+                                entity->velocity_y = 0;
                             }
                             entity->scratch_30 -= 2;
                             if (entity->scratch_30 < 0) entity->scratch_30 = 0;
                             entity->position_x = entity->previous_x;
-                            entity->position_y = *(int *)(ebase + 0x0C);
+                            entity->position_y = entity->previous_y;
                             did_bounce = 1;
                             break;
                         }
@@ -5478,9 +5478,9 @@ void FUN_00434310(void)
                         case 0x29:
                         case 0x2A:
                             entity->velocity_x = 0;
-                            *(int *)(ebase + 0x1C) = 0;
+                            entity->velocity_y = 0;
                             entity->position_x = entity->previous_x;
-                            entity->position_y = *(int *)(ebase + 0x0C);
+                            entity->position_y = entity->previous_y;
                             entity->state_20 = 0xFA;
                             did_bounce = 1;
                             break;
@@ -5541,7 +5541,7 @@ void FUN_00434310(void)
                         /* Revert position to pre-collision for bounced entities.
                          * This prevents the entity from getting stuck inside the wall. */
                         entity->position_x = entity->previous_x;
-                        entity->position_y = *(int *)(ebase + 0x0C);
+                        entity->position_y = entity->previous_y;
                     }
                 }
             } else {
@@ -5563,7 +5563,7 @@ void FUN_00434310(void)
              *                   below that skips self/allies. Only detonates on
              *                   enemy player contact (Ghidra 0x443862). */
             if (!should_remove && DAT_00489240 > 0 &&
-                (ent_type != 0x1F || *(int *)(ebase + 0x3C) == 0) &&
+                (ent_type != 0x1F || entity->counter_3c == 0) &&
                 ent_type != 0x1C && ent_type != 0x17 && ent_type != 0x26 &&
                 ent_type != 0x28 && ent_type != 0x2E) {
                 unsigned char raw_owner = entity->owner;
@@ -5686,7 +5686,7 @@ void FUN_00434310(void)
                             unsigned char kb_div = *(unsigned char *)((int)DAT_00487abc + (unsigned int)sub_type + 0xa6 + (unsigned int)ent_type * 0x218);
                             if (kb_div != 99 && kb_div != 0) {
                                 int proj_vx = entity->velocity_x;
-                                int proj_vy = *(int *)(ebase + 0x1C);
+                                int proj_vy = entity->velocity_y;
                                 *(int *)(poff + 0x10 + DAT_00487810) += proj_vx / (int)(unsigned int)kb_div;
                                 *(int *)(poff + 0x14 + DAT_00487810) += proj_vy / (int)(unsigned int)kb_div;
                             }
@@ -5706,7 +5706,7 @@ void FUN_00434310(void)
                             /* Runtime parity: the literal binary range is 300..999,
                              * but at the decomp's 60 Hz callback cadence that leaves
                              * insects inert far longer than the original runtime. */
-                            *(int *)(ebase + 0x3C) = rand() % 121 + 60;
+                            entity->counter_3c = rand() % 121 + 60;
                         }
                         /* LANDMINE hit result — Ghidra 0x443862.
                          * Second team check at hit resolution (redundant with pre-check
@@ -5821,16 +5821,16 @@ void FUN_00434310(void)
 
             /* Apply gravity for types other than 0x65, and only when sub_type != 5 */
             if (ent_type != 0x65 && sub_type != 5) {
-                *(int *)(ebase + 0x1C) += entity->gravity_or_motion_38 * DAT_00483828;
+                entity->velocity_y += entity->gravity_or_motion_38 * DAT_00483828;
             }
 
             /* Velocity damping + jitter: ONLY for sub_type == 5 (original: 0x430534) */
             if (sub_type == 5) {
                 /* Velocity damping: multiply by ~0.985 (double at 0x004756d0) */
                 double vx = (double)entity->velocity_x;
-                double vy = (double)*(int *)(ebase + 0x1C);
+                double vy = (double)entity->velocity_y;
                 entity->velocity_x = (int)(vx * 0.985);
-                *(int *)(ebase + 0x1C) = (int)(vy * 0.985);
+                entity->velocity_y = (int)(vy * 0.985);
 
                 /* Random position jitter: (128 - rand()%256) << 12 on each axis */
                 int jx = (128 - (rand() & 0xFF)) << 12;
@@ -5846,12 +5846,12 @@ void FUN_00434310(void)
              * entity[0x64] = minimum palette index (death threshold)
              * entity[0x4C] = palette[entity[0x65]] + 30000 (color+lifetime value) */
             if (ent_type == 0x67) {
-                int frame_cnt = *(int *)(ebase + 0x3C) + 1;
-                *(int *)(ebase + 0x3C) = frame_cnt;
-                unsigned char threshold = *(unsigned char *)(ebase + 0x5C);
+                int frame_cnt = entity->counter_3c + 1;
+                entity->counter_3c = frame_cnt;
+                unsigned char threshold = entity->timer_5c;
                 if (threshold > 0 && frame_cnt >= (int)threshold) {
                     /* Reset counter and step palette index down */
-                    *(int *)(ebase + 0x3C) = 0;
+                    entity->counter_3c = 0;
                     unsigned char pal_idx = entity->scratch_65;
                     unsigned char min_idx = entity->scratch_64;
                     if (pal_idx > min_idx) {
@@ -5860,7 +5860,7 @@ void FUN_00434310(void)
                         /* Recompute entity[0x4C] from palette */
                         if (DAT_00487aa8 != NULL) {
                             unsigned short *pal = (unsigned short *)DAT_00487aa8;
-                            *(int *)(ebase + 0x4C) = (int)pal[pal_idx] + 30000;
+                            entity->palette_value = (int)pal[pal_idx] + 30000;
                         }
                     } else {
                         should_remove = 1;
@@ -5872,7 +5872,7 @@ void FUN_00434310(void)
             int bx = entity->position_x;
             int by = entity->position_y;
             if (bx < 0) { entity->position_x = 0; entity->previous_x = 0; should_remove = 1; }
-            if (by < 0) { entity->position_y = 0; *(int *)(ebase + 0x0C) = 0; should_remove = 1; }
+            if (by < 0) { entity->position_y = 0; entity->previous_y = 0; should_remove = 1; }
             if (bx >> 0x12 >= (int)DAT_004879f0) should_remove = 1;
             if (by >> 0x12 >= (int)DAT_004879f4) should_remove = 1;
 
@@ -5882,8 +5882,8 @@ void FUN_00434310(void)
              * entity[0x28] is a conditional countdown (only on water + visible). */
             if (ent_type == 0x65 && !should_remove) {
                 /* Base buoyancy: vel_y -= 0x800 (upward force every tick) */
-                int cur_vy = *(int *)(ebase + 0x1C) - 0x800;
-                *(int *)(ebase + 0x1C) = cur_vy;
+                int cur_vy = entity->velocity_y - 0x800;
+                entity->velocity_y = cur_vy;
 
                 /* Read tile index at entity pixel position */
                 int px = entity->position_x >> 0x12;
@@ -5893,12 +5893,12 @@ void FUN_00434310(void)
 
                 /* Tile-based water currents (0x4308fd-0x430985) */
                 switch (tile_idx) {
-                    case 0x40: cur_vy -= 0x600; *(int *)(ebase + 0x1C) = cur_vy; break;
-                    case 0x41: cur_vy += 0x600; *(int *)(ebase + 0x1C) = cur_vy; break;
+                    case 0x40: cur_vy -= 0x600; entity->velocity_y = cur_vy; break;
+                    case 0x41: cur_vy += 0x600; entity->velocity_y = cur_vy; break;
                     case 0x42: entity->velocity_x -= 0x600; break;
                     case 0x43: entity->velocity_x += 0x600; break;
-                    case 0x44: cur_vy -= 0xC00; *(int *)(ebase + 0x1C) = cur_vy; break;
-                    case 0x45: cur_vy += 0xC00; *(int *)(ebase + 0x1C) = cur_vy; break;
+                    case 0x44: cur_vy -= 0xC00; entity->velocity_y = cur_vy; break;
+                    case 0x45: cur_vy += 0xC00; entity->velocity_y = cur_vy; break;
                     case 0x46: entity->velocity_x -= 0xC00; break;
                     case 0x47: entity->velocity_x += 0xC00; break;
                 }
@@ -5956,7 +5956,7 @@ void FUN_00434310(void)
 
         /* Projectiles with zero lifetime and zero velocity — remove */
         if (ent_type == 0 && entity->health_or_damage_28 == 0 &&
-            entity->velocity_x == 0 && *(int *)(ebase + 0x1C) == 0) {
+            entity->velocity_x == 0 && entity->velocity_y == 0) {
             should_remove = 1;
         }
         }
