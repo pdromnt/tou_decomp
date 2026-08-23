@@ -7991,22 +7991,21 @@ void FUN_00453cd0(void)
 
             /* Particle deflection from MOVING SUCKER — scan entity array directly */
             for (int ei = 0; ei < DAT_00489248; ei++) {
-                int *ent = (int *)(ei * 0x80 + (int)DAT_004892e8);
-                if (*(unsigned char *)((int)ent + 0x21) != 0x0E) continue;
-                unsigned char ent_owner = *(unsigned char *)((int)ent + 0x22);
+                Entity *entity = &DAT_004892e8[ei];
+                if (entity->type != 0x0E) continue;
+                unsigned char ent_owner = entity->owner;
                 char ent_team = *(char *)(DAT_00487810 + 0x2c + (unsigned int)ent_owner * 0x598);
                 if (ent_team != particle_team) {
-                    if (((int)(new_x - 0x12C0000) < ent[0]) &&
-                        (ent[0] < (int)(new_x + 0x12C0000)) &&
-                        ((int)(new_y - 0x12C0000) < ent[2]) &&
-                        (ent[2] < (int)(new_y + 0x12C0000)))
+                    if (((int)(new_x - 0x12C0000) < entity->position_x) &&
+                        (entity->position_x < (int)(new_x + 0x12C0000)) &&
+                        ((int)(new_y - 0x12C0000) < entity->position_y) &&
+                        (entity->position_y < (int)(new_y + 0x12C0000)))
                     {
-                        int ent_off = ei * 0x80;
                         int angle = FUN_004257e0(
-                            *(int *)(ent_off + (int)DAT_004892e8),
-                            *(int *)(ent_off + 8 + (int)DAT_004892e8),
+                            entity->position_x,
+                            entity->position_y,
                             (int)new_x, (int)new_y);
-                        if (*(char *)(ent_off + 0x40 + (int)DAT_004892e8) == '\0') {
+                        if (entity->subtype == 0) {
                             p[2] = (unsigned int)((int)p[2] - (*(int *)((int)DAT_00487ab0 + angle * 4) >> 1));
                             p[3] = (unsigned int)((int)p[3] - (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1));
                         } else {

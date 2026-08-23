@@ -245,8 +245,8 @@ gg_level_ready:
 
     /* Clear extended entity state (matches original loop) */
     if (DAT_004892e8) {
-        for (int i = 0; i < 0x51400; i += 0x80) {
-            *(int *)((char *)DAT_004892e8 + i + 0x34) = 0;
+        for (int i = 0; i < 2600; i++) {
+            DAT_004892e8[i].callback_address = 0;
         }
     }
 
@@ -2741,45 +2741,45 @@ void FUN_0041bfe0(void)
             case 2:
                 /* Main entity */
                 if (DAT_00489248 < 0x9c4) {
-                    int ebase = (int)DAT_004892e8 + DAT_00489248 * 0x80;
+                    Entity *entity = &DAT_004892e8[DAT_00489248];
 
-                    *(int *)(ebase + 0x00) = *(int *)(iVar3 + iVar11) << 0x12;
-                    *(int *)(ebase + 0x08) = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
-                    *(int *)(ebase + 0x18) = 0;
-                    *(int *)(ebase + 0x1c) = 0;
-                    *(int *)(ebase + 0x04) = *(int *)(iVar3 + (int)DAT_00487828) << 0x12;
-                    *(int *)(ebase + 0x0c) = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
-                    *(int *)(ebase + 0x10) = 0;
-                    *(int *)(ebase + 0x14) = 0;
-                    *(unsigned char *)(ebase + 0x21) = 0x19;
-                    *(unsigned short *)(ebase + 0x24) = 0;
-                    *(unsigned char *)(ebase + 0x20) = 0;
+                    entity->position_x = *(int *)(iVar3 + iVar11) << 0x12;
+                    entity->position_y = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
+                    entity->velocity_x = 0;
+                    entity->velocity_y = 0;
+                    entity->previous_x = *(int *)(iVar3 + (int)DAT_00487828) << 0x12;
+                    entity->previous_y = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
+                    entity->motion_x_10 = 0;
+                    entity->motion_y_14 = 0;
+                    entity->type = 0x19;
+                    entity->variant_24 = 0;
+                    entity->state_20 = 0;
 
                     iVar9 = rand();
-                    *(char *)(ebase + 0x26) = (char)(iVar9 % 0x3c) + 2;
-                    *(unsigned char *)(ebase + 0x22) = 0xFF;
-                    *(int *)(ebase + 0x28) = 0;
+                    entity->auxiliary_26 = (char)(iVar9 % 0x3c) + 2;
+                    entity->owner = 0xFF;
+                    entity->health_or_damage_28 = 0;
 
                     unsigned char etype = *(unsigned char *)(iVar3 + 10 + (int)DAT_00487828);
-                    *(int *)(ebase + 0x38) =
+                    entity->gravity_or_motion_38 =
                         *(int *)((int)DAT_00487abc + 0x34e0 + (unsigned int)etype * 4);
-                    *(int *)(ebase + 0x44) =
+                    entity->damage_44 =
                         *(int *)((int)DAT_00487abc + 0x351c + (unsigned int)etype * 4);
-                    *(int *)(ebase + 0x48) = 0;
-                    *(int *)(ebase + 0x4c) =
+                    entity->scratch_48 = 0;
+                    entity->palette_value =
                         *(int *)((int)DAT_00487abc + 0x354c + (unsigned int)etype * 4);
-                    *(unsigned char *)(ebase + 0x54) = 0;
-                    *(unsigned char *)(ebase + 0x40) = etype;
-                    *(int *)(ebase + 0x34) = *(int *)((int)DAT_00487abc + 0x3458);
-                    *(int *)(ebase + 0x3c) = 0;
-                    *(unsigned char *)(ebase + 0x5c) = 0;
+                    entity->animation_frame = 0;
+                    entity->subtype = etype;
+                    entity->callback_address = *(int *)((int)DAT_00487abc + 0x3458);
+                    entity->counter_3c = 0;
+                    entity->timer_5c = 0;
 
                     DAT_00489248 = DAT_00489248 + 1;
                     iVar11 = (int)DAT_00487828;
 
                     if (etype == 0) {
-                        *(int *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x54) = 1;
-                        *(unsigned char *)((int)DAT_004892e8 + DAT_00489248 * 0x80 - 0x5a) = 0;
+                        entity->scratch_2c = 1;
+                        entity->auxiliary_26 = 0;
                         iVar11 = (int)DAT_00487828;
                     }
                 }
