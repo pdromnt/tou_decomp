@@ -397,15 +397,8 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             entity->health_or_damage_28 = iVar6 % 100 + 0x78;
             entity->damage_44 = 0x3e800;
             iVar6 = rand();
-            {
-                unsigned short pal555 = *(unsigned short *)((int)DAT_00487aa8 + 0x1ec + (iVar6 % 10) * 2);
-                /* Convert X1R5G5B5 → RGB565 (our framebuffer is 565, not 555) */
-                unsigned short r5 = (pal555 >> 10) & 0x1F;
-                unsigned short g5 = (pal555 >> 5) & 0x1F;
-                unsigned short b5 = pal555 & 0x1F;
-                unsigned short rgb565 = (r5 << 11) | (g5 << 6) | b5;
-                entity->palette_value = rgb565 + 30000;
-            }
+            entity->palette_value =
+                *(unsigned short *)((int)DAT_00487aa8 + 0x1ec + (iVar6 % 10) * 2) + 30000;
 
             param_6 = param_6 + 0x100;
         } while (param_6 < 0x800);
@@ -783,15 +776,8 @@ LAB_00436bc6:
             DAT_00489248 = DAT_00489248 + 1;
 
             iVar6 = rand();
-            {
-                unsigned short pal555 = *(unsigned short *)((int)DAT_00487aa8 + 0x44 + (iVar6 % 6) * 2);
-                /* Convert X1R5G5B5 → RGB565 (our framebuffer is 565, not 555) */
-                unsigned short r5 = (pal555 >> 10) & 0x1F;
-                unsigned short g5 = (pal555 >> 5) & 0x1F;
-                unsigned short b5 = pal555 & 0x1F;
-                unsigned short rgb565 = (r5 << 11) | (g5 << 6) | b5;
-                entity->palette_value = rgb565 + 30000;
-            }
+            entity->palette_value =
+                *(unsigned short *)((int)DAT_00487aa8 + 0x44 + (iVar6 % 6) * 2) + 30000;
             uVar10 = rand();
             uVar10 = uVar10 & 0x8000007f;
             if ((int)uVar10 < 0) {
@@ -5245,6 +5231,8 @@ void FUN_00434310(void)
                         case 0x1D: { /* MEGABOMB — KB + tile damage + fire debris + mushroom fire */
                             int mb_x = *(int *)(ebase + 0x00);
                             int mb_y = *(int *)(ebase + 0x08);
+                            int mb_effect_x = *(int *)(ebase + 0x04);
+                            int mb_effect_y = *(int *)(ebase + 0x0C);
                             int mb_vx = *(int *)(ebase + 0x18);
                             int mb_vy = *(int *)(ebase + 0x1C);
                             int *sc = (int *)DAT_00487ab0;
@@ -5268,12 +5256,12 @@ void FUN_00434310(void)
                                     unsigned int dir = rand() & 0x7FF;
                                     int spd = rand() % 80;
                                     int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                    *(int *)(ep + 0x00) = mb_x;
-                                    *(int *)(ep + 0x08) = mb_y;
+                                    *(int *)(ep + 0x00) = mb_effect_x;
+                                    *(int *)(ep + 0x08) = mb_effect_y;
                                     *(int *)(ep + 0x18) = (sc[dir] * spd >> 6) + (mb_vx >> 5);
                                     *(int *)(ep + 0x1C) = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
-                                    *(int *)(ep + 0x04) = mb_x;
-                                    *(int *)(ep + 0x0C) = mb_y;
+                                    *(int *)(ep + 0x04) = mb_effect_x;
+                                    *(int *)(ep + 0x0C) = mb_effect_y;
                                     *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
                                     *(unsigned char *)(ep + 0x21) = 0;
                                     *(short *)(ep + 0x24) = (short)(rand() % 6);
@@ -5292,12 +5280,8 @@ void FUN_00434310(void)
                                     *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 120;
                                     {
                                         int ci = rand() % 10;
-                                        unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
-                                        unsigned short r5 = (pal >> 10) & 0x1F;
-                                        unsigned short g5 = (pal >> 5) & 0x1F;
-                                        unsigned short b5 = pal & 0x1F;
                                         *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                                            (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                                            *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2) + 30000;
                                     }
                                     *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = angle_step;
                                 }
@@ -5312,12 +5296,12 @@ void FUN_00434310(void)
                                     unsigned int dir = rand() & 0x7FF;
                                     int spd = rand() % 80;
                                     int ep = DAT_00489248 * 0x80 + (int)DAT_004892e8;
-                                    *(int *)(ep + 0x00) = mb_x;
-                                    *(int *)(ep + 0x08) = mb_y;
+                                    *(int *)(ep + 0x00) = mb_effect_x;
+                                    *(int *)(ep + 0x08) = mb_effect_y;
                                     *(int *)(ep + 0x18) = (sc[dir] * spd >> 6) + (mb_vx >> 5);
                                     *(int *)(ep + 0x1C) = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
-                                    *(int *)(ep + 0x04) = mb_x;
-                                    *(int *)(ep + 0x0C) = mb_y;
+                                    *(int *)(ep + 0x04) = mb_effect_x;
+                                    *(int *)(ep + 0x0C) = mb_effect_y;
                                     *(int *)(ep + 0x10) = 0; *(int *)(ep + 0x14) = 0;
                                     *(unsigned char *)(ep + 0x21) = 0x64;
                                     *(short *)(ep + 0x24) = (short)(rand() % 6);
@@ -5338,12 +5322,8 @@ void FUN_00434310(void)
                                     *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x58) = rand() % 100 + 120;
                                     {
                                         int ci = rand() % 10;
-                                        unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
-                                        unsigned short r5 = (pal >> 10) & 0x1F;
-                                        unsigned short g5 = (pal >> 5) & 0x1F;
-                                        unsigned short b5 = pal & 0x1F;
                                         *(unsigned int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x34) =
-                                            (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
+                                            *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2) + 30000;
                                     }
                                     *(int *)(DAT_00489248 * 0x80 + (int)DAT_004892e8 - 0x3C) = 0;
                                 }
@@ -5352,8 +5332,13 @@ void FUN_00434310(void)
                             /* Flash particle + sound */
                             if (DAT_00489250 < 2000) {
                                 int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                int flash_y = mb_y;
+                                if (DAT_00481f20 != NULL) {
+                                    int sprite_height = *(unsigned char *)((int)DAT_00481f20 + 5) & 0xFE;
+                                    flash_y += 0x140000 - sprite_height * 0x20000;
+                                }
                                 *(int *)(fp + 0x00) = mb_x;
-                                *(int *)(fp + 0x04) = mb_y;
+                                *(int *)(fp + 0x04) = flash_y;
                                 *(int *)(fp + 0x08) = 0;
                                 *(int *)(fp + 0x0C) = 0;
                                 *(unsigned char *)(fp + 0x10) = 0;
