@@ -4994,38 +4994,38 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                             unsigned int uVar7 = (heading - 0x400) & 0x7FF;
                             int r = rand();
                             unsigned int uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
-                            int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                            Entity *spawn = &DAT_004892e8[DAT_00489248];
 
                             /* Position: slightly behind ship at reverse+side angle */
-                            *(int *)(base + 0x00) = ent[0] + (lut[uVar6] + lut[uVar7] * 2) * 2;
-                            *(int *)(base + 0x08) = ent[1] + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
+                            spawn->position_x = ent[0] + (lut[uVar6] + lut[uVar7] * 2) * 2;
+                            spawn->position_y = ent[1] + (lut[(uVar6 + 0x200) & 0x7FF] + lut[(uVar7 + 0x200) & 0x7FF] * 2) * 2;
                             /* Velocity: spread-based */
-                            *(int *)(base + 0x18) = (lut[uVar3] * 0x14 >> 5) + ent[4];
-                            *(int *)(base + 0x1C) = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                            spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + ent[4];
+                            spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
                             /* Previous position = current */
-                            *(int *)(base + 0x04) = *(int *)(base + 0x00);
-                            *(int *)(base + 0x0C) = *(int *)(base + 0x08);
-                            *(int *)(base + 0x10) = 0;
-                            *(int *)(base + 0x14) = 0;
+                            spawn->previous_x = spawn->position_x;
+                            spawn->previous_y = spawn->position_y;
+                            spawn->motion_x_10 = 0;
+                            spawn->motion_y_14 = 0;
                             /* Behavior/type fields */
-                            *(unsigned char *)(base + 0x21) = 0x67;
-                            *(short *)(base + 0x24) = (short)(rand() % 6);
-                            *(unsigned char *)(base + 0x20) = 0;
-                            *(unsigned char *)(base + 0x26) = 0xFE;
-                            *(unsigned char *)(base + 0x22) = (unsigned char)player_idx;
-                            *(int *)(base + 0x28) = 0;
+                            spawn->type = 0x67;
+                            spawn->variant_24 = (short)(rand() % 6);
+                            spawn->state_20 = 0;
+                            spawn->auxiliary_26 = 0xFE;
+                            spawn->owner = (unsigned char)player_idx;
+                            spawn->health_or_damage_28 = 0;
                             /* Sprite/animation data from entity type table */
-                            *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);
-                            *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);
-                            *(int *)(base + 0x3C) = 0;
-                            *(unsigned char *)(base + 0x40) = 0;
-                            *(int *)(base + 0x44) = 0x2800;
-                            *(int *)(base + 0x48) = 0;
-                            *(unsigned char *)(base + 0x54) = 0;
-                            *(unsigned char *)(base + 0x5C) = 1;
-                            *(unsigned char *)(base + 0x64) = 0x72;
-                            *(unsigned char *)(base + 0x65) = 0x7F;
-                            *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                            spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD830);
+                            spawn->callback_address = *(int *)((int)DAT_00487abc + 0xD7A8);
+                            spawn->counter_3c = 0;
+                            spawn->subtype = 0;
+                            spawn->damage_44 = 0x2800;
+                            spawn->scratch_48 = 0;
+                            spawn->animation_frame = 0;
+                            spawn->timer_5c = 1;
+                            spawn->scratch_64 = 0x72;
+                            spawn->scratch_65 = 0x7F;
+                            spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
                             DAT_00489248++;
 
                             /* Second emitter particle on the OPPOSITE side.
@@ -5037,33 +5037,33 @@ static void FUN_0044bfa0(int *ent, int player_idx)
                                 unsigned int uVar7b = (heading - 0x400) & 0x7FF;
                                 r = rand();
                                 uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
-                                base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                                spawn = &DAT_004892e8[DAT_00489248];
 
-                                *(int *)(base + 0x00) = ent[0] + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
-                                *(int *)(base + 0x08) = ent[1] + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
-                                *(int *)(base + 0x18) = (lut[uVar3] * 0x14 >> 5) + ent[4];
-                                *(int *)(base + 0x1C) = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
-                                *(int *)(base + 0x04) = *(int *)(base + 0x00);
-                                *(int *)(base + 0x0C) = *(int *)(base + 0x08);
-                                *(int *)(base + 0x10) = 0;
-                                *(int *)(base + 0x14) = 0;
-                                *(unsigned char *)(base + 0x21) = 0x67;
-                                *(short *)(base + 0x24) = (short)(rand() % 6);
-                                *(unsigned char *)(base + 0x20) = 0;
-                                *(unsigned char *)(base + 0x26) = 0xFE;
-                                *(unsigned char *)(base + 0x22) = (unsigned char)player_idx;
-                                *(int *)(base + 0x28) = 0;
-                                *(int *)(base + 0x38) = *(int *)((int)DAT_00487abc + 0xD830);
-                                *(int *)(base + 0x34) = *(int *)((int)DAT_00487abc + 0xD7A8);
-                                *(int *)(base + 0x3C) = 0;
-                                *(unsigned char *)(base + 0x40) = 0;
-                                *(int *)(base + 0x44) = 0x2800;
-                                *(int *)(base + 0x48) = 0;
-                                *(unsigned char *)(base + 0x54) = 0;
-                                *(unsigned char *)(base + 0x5C) = 1;
-                                *(unsigned char *)(base + 0x64) = 0x72;
-                                *(unsigned char *)(base + 0x65) = 0x7F;
-                                *(int *)(base + 0x4C) = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                                spawn->position_x = ent[0] + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
+                                spawn->position_y = ent[1] + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
+                                spawn->velocity_x = (lut[uVar3] * 0x14 >> 5) + ent[4];
+                                spawn->velocity_y = (lut[(uVar3 + 0x200) & 0x7FF] * 0x14 >> 5) + ent[5];
+                                spawn->previous_x = spawn->position_x;
+                                spawn->previous_y = spawn->position_y;
+                                spawn->motion_x_10 = 0;
+                                spawn->motion_y_14 = 0;
+                                spawn->type = 0x67;
+                                spawn->variant_24 = (short)(rand() % 6);
+                                spawn->state_20 = 0;
+                                spawn->auxiliary_26 = 0xFE;
+                                spawn->owner = (unsigned char)player_idx;
+                                spawn->health_or_damage_28 = 0;
+                                spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD830);
+                                spawn->callback_address = *(int *)((int)DAT_00487abc + 0xD7A8);
+                                spawn->counter_3c = 0;
+                                spawn->subtype = 0;
+                                spawn->damage_44 = 0x2800;
+                                spawn->scratch_48 = 0;
+                                spawn->animation_frame = 0;
+                                spawn->timer_5c = 1;
+                                spawn->scratch_64 = 0x72;
+                                spawn->scratch_65 = 0x7F;
+                                spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
                                 DAT_00489248++;
                             }
                         }
