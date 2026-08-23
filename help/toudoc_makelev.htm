@@ -1,0 +1,226 @@
+<html>
+<head>
+<title>TOU document</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+
+<body bgcolor="#003333" text="#FFFFFF" link="#00CCFF" vlink="#0099CC" alink="#0099FF">
+<table width="750" border="0" cellspacing="0" cellpadding="3" align="center" bgcolor="#000000">
+  <tr>
+    <td>
+      <table width="100%" border="0" cellspacing="0" cellpadding="8">
+        <tr>
+          <td bgcolor="#003366"> 
+            <h1 align="left">9.0 Level making</h1>
+            <h4>Important note:</h4>
+            <ol>
+              <li>All the TGA-pictures (targa) that you need in level making must 
+                be saved in 24-bit format without any kind of packing (compression).</li>
+              <li>All the JPEGs must be saved in truecolor format (so not in greycolor 
+                format). And their extension must be JPG, not jpeg.</li>
+            </ol>
+            <h2><a name="normal">9.1 Making normal levels</a></h2>
+            <p>Maybe the easiest way to learn level making is to look at the jungle.jpg, 
+              jungle.tga, junglep.jpg and jungle.txt in the makelev-directory. 
+              Also check out normal.txt</p>
+            <p>To make a new level, do this:</p>
+            <ol>
+              <li>Draw the level's graphics and save the picture in jpeg-format. 
+                The extension of this file must be jpg. <b>Example: Jungle.jpg</b></li>
+              <li>Draw the attribute map for your level and save the picture in 
+                24-bit uncompressed TGA-format. The name of this file must be 
+                the level's name. <b>Example: Jungle.tga</b></li>
+              <li>Draw the parallax background for your level if you want to, 
+                and save it in jpeg-format. The extension of this file must be 
+                jpg and the name of the file must be the level's name +&quot;P&quot;. 
+                <b>Example: Junglep.jpg</b></li>
+              <li>Go to makelev-directory and open the &quot;normal.txt&quot; 
+                with notepad. Answer to the questions it has and &quot;save as&quot; 
+                it as your level's config file. <b>Example: Jungle.txt</b></li>
+            </ol>
+            <h4>More info on attribute map:</h4>
+            <p>This &quot;attribute map&quot; tells the game where are repair 
+              places, burning material, explosive material, water and so on. To 
+              see what an attribute map looks like, take a look at the jungle.tga<a href="http://tou.has.it"></a>. 
+              I think you'll get a pretty good picture about attribute maps then.</p>
+            <p>Open <i>colors.png </i>from makelev-directory, to know which attribute 
+              map colors correspond to which land types. Just use the color picker-tool 
+              and select the attribute map colors from <i>colors.png</i>. Some 
+              of the colors are better explained here:</p>
+            <ul>
+              <li><b>Repair that never destroys (and you can't repair in it)</b>. 
+                This is a repair place that always remains in level. You can change 
+                weapons in there and land there after your team has won, but you 
+                can't repair your ship there. (then why is it called repair? don't 
+                ask!)</li>
+              <li><b>Burning2 (ashes remain)</b>. This is used in &quot;the jungle&quot; 
+                when the palm trees burn. It leaves a dark trunk after burning.</li>
+              <li><b>Air (transparent)</b>. Everything that is drawn with this 
+                color (black) in attribute map, is transparent in the game.</li>
+              <li><b>Air (non-transparent)</b>. To create walls in level that 
+                you can fly through, use this color. Not used in Tou's original 
+                levels.</li>
+              <li><b>Air streams</b>.<b> </b>These air streams are very powerful. 
+                You can use some sort of spray tool to make less effective air 
+                streams.</li>
+              <li><b>Normal land under water</b>. Use these &quot;under water&quot;-stuffs 
+                if you want that when this wall destroys, it will create water. 
+                Look at the bottom of &quot;the jungle&quot;. If you shoot the 
+                wall there, it won't create air but water.</li>
+            </ul>
+            <p>Note: You can make only single-coloured water! This is because 
+              of the running water and waves, that would look ugly if the water 
+              had colors. To define the water color, fill up the <a href="#cfg">config-file</a>.</p>
+            <p>Also note: Make sure you use sharp brush when drawing and not smooth 
+              brush. Examples below:</p>
+            <table width="710" border="0" cellspacing="0" cellpadding="0" align="center">
+              <tr> 
+                <td width="350"> 
+                  <center>
+                    <b>Wrong way</b> 
+                  </center>
+                </td>
+                <td width="50">&nbsp;</td>
+                <td width="350"> 
+                  <center>
+                    <b>Right way</b> 
+                  </center>
+                </td>
+              </tr>
+              <tr> 
+                <td width="350"><img src="helpgfx/attrib_wrong.JPG" width="350" height="350"></td>
+                <td width="50">&nbsp;</td>
+                <td width="350"><img src="helpgfx/attrib_right.GIF" width="350" height="350"></td>
+              </tr>
+            </table>
+            <h4>To put turrets, mines, gates etc. in the level:</h4>
+            <p>Use COLPICK.EXE and answer the questions it gives you. After that 
+              you will get the red, green and blue-values that you will put in 
+              your <b>attribute map</b>. Note that just one single pixel of &quot;turret-color&quot; 
+              will make you one turret. If you draw a line with that color, you 
+              will get hundreds of turrets (that overlap annoyingly).</p>
+            <h4>More info on parallax background:</h4>
+            <p>Parallax can be any size if it's smaller or equally sized with 
+              the actual level. I mean, <i>both</i> width and height must be smaller 
+              or equal, not just the total area.</p>
+            <h4><a name="cfg">More info on level's config file:</a></h4>
+            <p>The config file has some questions about the level. Just answer 
+              them, the config-file is quite well documented.</p>
+            <h4>Converting the level:</h4>
+            <p>Copy all your level files to makelev-directory and start the makelev.exe. 
+              Then give the level's name: <b>Example: jungle.</b></p>
+            <p><b>Maximum level size:</b></p>
+            <p>Both width and height must be less than 8000 pixels. By the way, 
+              a 8000x8000 map would take 196 megabytes of memory!</p>
+            <h4>Info on memory usage:</h4>
+            <p>I strongly suggest keeping your level's width less than 2034 pixels! 
+              The heigh can be whatever you want.</p>
+            <h2><a name="gg">9.2 Making GG levels</a></h2>
+            <p>If you choose to make a GG level, you don't have to draw the graphics 
+              for your level. Only the attribute map and config file are used 
+              in GG levels.</p>
+            <p>Draw the attribute map normally and then fill up the config file. 
+              At the bottom of the config file, there is a GG-section. Of course, 
+              answer &quot;yes&quot; to the question &quot;is your level a GG 
+              level?&quot;. Then answer all the questions there and that's it. 
+              Note that you can't have your own parallax background in a GG level.</p>
+            <p>But you <i>can</i> place repair places and signs in GG levels. 
+              It's a bit tricky to explain but I'll try. To make a repair place 
+              in GG level, draw the repair in attribute map (some abitarily sized 
+              blob of repair-color). Then edit config-file and find a place where 
+              it says &quot;Let GG handle the repair placing?&quot;. Answer 0 
+              there. Ok, that was simple after all! To make a custom sign in GG 
+              level, choose the most bottom color from colors.tga. Then draw the 
+              sign place in attribute map. Then edit config-file and find a place 
+              where it says &quot;Put name signs in the level also?&quot;. Answer 
+              0 there. Then look the next question in config-file if you want 
+              to write your own texts in signs (otherwise the texts will be randomly 
+              generated). Phew, that's about it. I hope you could follow :)</p>
+            <h2><a name="ggtheme">9.3 Making themes for GG</a></h2>
+            <p>All the tgas you draw here must be 24-bit tgas without compression! 
+              And all the jpegs must have the extension &quot;jpg&quot;.</p>
+            <p>Make a new directory under ggstuff. It will be your theme's name.</p>
+            <p>Every GG theme needs an info file. It's called info.txt. Copy it 
+              from other GG theme's directory. Then edit it with notepad and answer 
+              all the questions there. </p>
+            <p>Then to the pictures. Look at the pictures in other GG themes. 
+              They will tell you much of how it's done.</p>
+            <p>You only have to draw two pictures to get your GG theme working: 
+              s1.tga and t1.jpg. S1.tga tells the shape of the filler (usually 
+              quite round and small) and t1.jpg is the theme's texture. After 
+              you have drawn those, go test your new GG theme! :)</p>
+            <h4><img src="helpgfx/gg1.gif" width="57" height="59"> 1. Shapes</h4>
+            <p>Name these as <b>S1.TGA</b>, <b>S2.TGA</b>, <b>S3.TGA</b> and so 
+              on. These will fill the level. If you have more than one of these, 
+              the generator uses them randomly. Black color does not fill, any 
+              other color will.</p>
+            <h4><img src="helpgfx/gg3.jpg" width="118" height="125"> 2. Textures</h4>
+            <p>You can only have one texture. Name it <b>T1.JPG</b>.</p>
+            <h4><img src="helpgfx/gg4.jpg" width="16" height="16"> 3. Lawn (optional)</h4>
+            <p>Lawn looks cool but it's optional. If you want grass, name it <b>L1.TGA</b>. 
+              You can also have L2.TGA and L3.TGA and so on, and the game will 
+              use them randomly. But who bothers to have more than one lawn bitmap? 
+              :)</p>
+            <h4><img src="helpgfx/gg5.jpg" width="55" height="16"> 4. Repair (optional)</h4>
+            <p>You don't have to draw repairs, but then your theme doesn't have 
+              any repair places. Name this <b>D1.TGA</b>. If you want lots different 
+              looking repairs, name them D2.TGA, D3.TGA and so on.</p>
+            <h4><img src="helpgfx/gg6.jpg" width="45" height="63"> 5. Sign (optional)</h4>
+            <p>Name: <b>X1.TGA</b>. If you want many different looking signs in 
+              one level, name them X2.TGA, X3.TGA and so on.</p>
+            <h4><img src="helpgfx/gg7.jpg" width="44" height="90"> 6. Additional 
+              pictures (optional)</h4>
+            <p>Name: <b>P1.TGA</b>, <b>P2.TGA</b>, <b>P3.TGA</b> and so on. Have 
+              lots of these.</p>
+            <h4><img src="helpgfx/gg2.gif" width="56" height="57"> 7. Extra shapes 
+              (optional)</h4>
+            <p>These will fill the bottom of the ground blocks. Name: <b>SD1.TGA</b>, 
+              <b>SD2.TGA</b> and so on.</p>
+            <h4>8. Parallax background (optional)</h4>
+            <p>This is a texture also. Save it as <b>PX1.JPG</b>. If you don't 
+              have your own parallax, the GG will use your normal texture as parallax, 
+              scale it to half the size and darken it a bit.</p>
+            <h4>9. Extra textures (optional)</h4>
+            <p>Look at &quot;Rocky mountains&quot;-theme. <b>T2.TGA</b> tells 
+              what shaped the rocks are. Use unique color for every rock you draw. 
+              <b>T3.TGA</b> (optional, even if you have T2.TGA) tells where are 
+              the trashes, that shouldn't be in the texture's 'borders' (real 
+              fine tuning, you probably don't want to bother! I did though).</p>
+            <h4>10. Explosive texture (optional)</h4>
+            <p>In some <a href="#gg">GG levels</a> there can be explosive land. 
+              Explosive land is textured as normal ground if you don't have this 
+              texture. Name: ex1.jpg</p>
+            </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<br>
+<table width="400" border="0" cellspacing="0" cellpadding="0" align="center" bgcolor="#000000">
+  <tr> 
+    <td> 
+      <table width="100%" border="0" cellspacing="3" cellpadding="6">
+        <tr bgcolor="#003366"> 
+          <td width="33%"> 
+            <center>
+              <a href="toudoc_ships.htm">Previous page</a>
+</center>
+          </td>
+          <td width="33%"> 
+            <center>
+              <a href="toudoc.htm">Back to index</a> 
+            </center>
+          </td>
+          <td width="34%"> 
+            <center>
+              <a href="toudoc_credits.htm">Next page</a>
+</center>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
