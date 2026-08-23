@@ -1,5 +1,7 @@
 # RE/Decompilation of Tunnels of Underworld
-<img width="641" height="504" alt="image" src="https://github.com/user-attachments/assets/d9d58472-6413-4061-baef-b6deca4c8dd8" />
+<img width="321" height="252" alt="image" src="https://github.com/user-attachments/assets/d9d58472-6413-4061-baef-b6deca4c8dd8" />
+<img width="321" height="252" alt="image" src="https://github.com/user-attachments/assets/b1d9f5a9-fc8d-4ef4-9b14-34e09aa18163" />
+
 
 This repository contains a behavior-focused reconstruction of **Tunnels of
 Underworld** (TOU), an old Windows game created by
