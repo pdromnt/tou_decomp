@@ -51,6 +51,8 @@ structure strides, overflow, and x87 behavior are part of the reconstruction.
 | `math.cpp` | Small math compatibility helpers |
 | `utils.cpp` | Optional debug logging |
 | `tou.h` | Shared declarations; still oversized and scheduled for gradual splitting |
+| `compat.h` | Legacy Windows and DirectX API-level includes |
+| `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
 
 ## Runtime Data
 
@@ -117,8 +119,12 @@ mingw32-make clean
 ```
 
 The Makefile compiles every C/C++ source as 32-bit and embeds `icon.ico` through
-`tou.rc`. Generated objects, executables, traces, logs, and `dist/` packages are
-ignored by Git.
+`tou.rc`. Generated objects, executables, logs, and `dist/` packages are ignored
+by Git.
+
+`.github/workflows/build.yml` repeats the 32-bit build and PE architecture check
+on pushes and pull requests. It is build-only; publishing remains exclusive to
+the manually dispatched release workflow.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it
