@@ -57,7 +57,7 @@ extern void                 *DAT_00481f20;      /* Explode descriptor table (160
 extern void                 *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
 extern void                 *DAT_0048787c;      /* Explode pixel data (430KB) */
 extern void                 *DAT_00487aac;      /* Explosion rotation frames (~6.4MB) */
-extern void                 *DAT_004892e8;      /* Entity pool: 2600 allocated, 2500 active cap */
+extern Entity               *DAT_004892e8;      /* Entity pool: 2600 allocated, 2500 active cap */
 extern void                 *DAT_00489230;      /* Brightness remap LUT (128KB) */
 extern void                 *DAT_004876a4[100]; /* Color palette tables */
 extern void                 *DAT_0048792c[48];  /* Blend LUT tables */

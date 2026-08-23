@@ -29,14 +29,13 @@ const uint32_t kCallbackOrganicWaste = 0x004427e0u;
 const uint32_t kCallbackOrganicWasteII = 0x0043a4b0u;
 const uint32_t kCallbackNormalFireball = 0x00441aa0u;
 const uint32_t kCallbackTrail = 0x00430480u;
-const int kEntityStride = 0x80;
 const int kEntityCapacity = 0x9c4;
 const int kParticleStride = 0x20;
 const int kParticleCapacity = 0x7d0;
 
 uint8_t *entity_at(int index)
 {
-    return static_cast<uint8_t *>(DAT_004892e8) + index * kEntityStride;
+    return reinterpret_cast<uint8_t *>(&DAT_004892e8[index]);
 }
 
 int game_rand()

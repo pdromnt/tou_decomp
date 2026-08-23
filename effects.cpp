@@ -1781,16 +1781,15 @@ void FUN_004075f0(int buffer, int stride)
 {
     if (DAT_00489248 <= 0) return;
 
-    unsigned char *ent_base = (unsigned char *)DAT_004892e8;
     int count = DAT_00489248;
 
     for (int i = 0; i < count; i++) {
-        int *ent = (int *)(ent_base + i * 0x80);
-        unsigned char ent_type = *((unsigned char *)(ent_base + i * 0x80 + 0x21));
+        const Entity *entity = &DAT_004892e8[i];
+        unsigned char ent_type = entity->type;
 
         /* Get pixel position from 18-bit fixed point */
-        int px = ent[0] >> 0x12;
-        int py = ent[2] >> 0x12;  /* entity[0x08] = ent[2] */
+        int px = entity->position_x >> 0x12;
+        int py = entity->position_y >> 0x12;
 
         /* Viewport bounds check with 7-pixel margin */
         if (px + 7 <= DAT_004806dc) continue;
@@ -1802,7 +1801,7 @@ void FUN_004075f0(int buffer, int stride)
          * sprite_idx >= 30000 means they can't use FUN_0040c280; draw inline. */
         if (ent_type == 0x67 || ent_type == 0x65) {
             /* Read X1R5G5B5 color from entity[0x4C] offset trick */
-            unsigned short x1r5 = (unsigned short)(*(short *)(ent_base + i * 0x80 + 0x4C) + (short)0x8AD0);
+            unsigned short x1r5 = (unsigned short)((short)entity->palette_value + (short)0x8AD0);
             /* Convert X1R5G5B5 → RGB565 */
             unsigned short r5 = (x1r5 >> 10) & 0x1F;
             unsigned short g5 = (x1r5 >> 5) & 0x1F;
@@ -1824,7 +1823,7 @@ void FUN_004075f0(int buffer, int stride)
         }
 
         /* Compute sprite index: animation base + current frame offset */
-        int sprite_idx = ent[0x4C / 4] + ent[0x48 / 4];
+        int sprite_idx = (int)entity->palette_value + entity->scratch_48;
 
         /* Bounds check: some entity types store non-sprite data in 0x4C.
          * The sprite arrays (DAT_00489e8c/e88) are only 20000 entries. */
