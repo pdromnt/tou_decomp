@@ -360,16 +360,16 @@ static int FUN_004495e0(int param_1, int param_2, int param_3, int param_4,
         iVar2 += param_5;
         iVar3 += param_6;
         if ((0 < iVar1) && (0 < param_2) &&
-            (iVar1 < (int)DAT_004879f0 * 0x40000) &&
-            (param_2 < (int)DAT_004879f4 * 0x40000) &&
+            (iVar1 < (int)DAT_004879f0 * FIXED_SCALE) &&
+            (param_2 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar1 >> 0x12) +
                        (int)DAT_0048782c +
                        ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
                        0x20 + 1 + (int)DAT_00487928) == '\0'))
             return 1;
         if ((0 < iVar2) && (0 < iVar3) &&
-            (iVar2 < (int)DAT_004879f0 * 0x40000) &&
-            (iVar3 < (int)DAT_004879f4 * 0x40000) &&
+            (iVar2 < (int)DAT_004879f0 * FIXED_SCALE) &&
+            (iVar3 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar2 >> 0x12) +
                        (int)DAT_0048782c +
                        ((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
@@ -398,8 +398,8 @@ static int FUN_004494e0(int param_1, int param_2, int param_3, int param_4, int 
         param_1 += param_3;
         param_2 += param_4;
         if ((0 < param_1) && (0 < param_2) &&
-            (param_1 < (int)DAT_004879f0 * 0x40000) &&
-            (param_2 < (int)DAT_004879f4 * 0x40000) &&
+            (param_1 < (int)DAT_004879f0 * FIXED_SCALE) &&
+            (param_2 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((param_1 >> 0x12) +
                        (int)DAT_0048782c +
                        ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
@@ -589,8 +589,8 @@ static int FUN_00449420(int *param_1)
         iVar3 += vy;
         vy += DAT_00483824 * 0x40;
         if ((0 < iVar2) && (0 < iVar3) &&
-            (iVar2 < (int)DAT_004879f0 * 0x40000) &&
-            (iVar3 < (int)DAT_004879f4 * 0x40000)) {
+            (iVar2 < (int)DAT_004879f0 * FIXED_SCALE) &&
+            (iVar3 < (int)DAT_004879f4 * FIXED_SCALE)) {
             unsigned int tileOff = (unsigned int)*(unsigned char *)((iVar2 >> 0x12) +
                 (int)DAT_0048782c +
                 ((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20;
@@ -763,8 +763,8 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
         iVar6 = iVar6 + *(int *)((int)DAT_00487ab0 + uVar3 * 4);
         iVar4b = iVar4b + *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4);
         if ((0 < iVar6) && (0 < iVar4b) &&
-            (iVar6 < (int)DAT_004879f0 * 0x40000) &&
-            (iVar4b < (int)DAT_004879f4 * 0x40000) &&
+            (iVar6 < (int)DAT_004879f0 * FIXED_SCALE) &&
+            (iVar4b < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar6 >> 0x12) +
                 (int)DAT_0048782c +
                 ((iVar4b >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
@@ -781,8 +781,8 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
         iVar4b = iVar4b + *(int *)((int)DAT_00487ab0 + uVar2 * 4);
         iVar6 = iVar6 + *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4);
         if ((0 < iVar4b) && (0 < iVar6) &&
-            (iVar4b < (int)DAT_004879f0 * 0x40000) &&
-            (iVar6 < (int)DAT_004879f4 * 0x40000) &&
+            (iVar4b < (int)DAT_004879f0 * FIXED_SCALE) &&
+            (iVar6 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar4b >> 0x12) +
                 (int)DAT_0048782c +
                 ((iVar6 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
@@ -1122,7 +1122,7 @@ skip_proj:
                         int dist_y = local_54 - local_6c;
                         if (dist_y < 0) dist_y = local_6c - local_54;
 
-                        if (dist_y + dist_x < local_3c * 0x40000) {
+                        if (dist_y + dist_x < local_3c * FIXED_SCALE) {
                             param_1[0x2e] = param_1[0x2e] | 0x10;
                             return;
                         }
@@ -1231,7 +1231,7 @@ static void FUN_0044a6b0(int *param_1)
                     int dist_y = local_54 - local_50;
                     if (dist_y < 0) dist_y = local_50 - local_54;
 
-                    if (dist_y + dist_x < local_4c * 0x40000) {
+                    if (dist_y + dist_x < local_4c * FIXED_SCALE) {
                         param_1[0x2e] = param_1[0x2e] | 8;
                         return;
                     }
@@ -1823,13 +1823,13 @@ static void FUN_0044bd50(int *ent)
     }
 
     if (*(char *)(ent + 0x11f) == '\0') {
-        iVar2 = (ent[0x121] / 2) * 0x40000;
+        iVar2 = (ent[0x121] / 2) * FIXED_SCALE;
         if (ent[0] < iVar2) ent[0] = iVar2;
-        iVar2 = (ent[0x122] / 2) * 0x40000;
+        iVar2 = (ent[0x122] / 2) * FIXED_SCALE;
         if (ent[1] < iVar2) ent[1] = iVar2;
-        iVar2 = (DAT_004879f0 - ent[0x121] / 2) * 0x40000;
+        iVar2 = (DAT_004879f0 - ent[0x121] / 2) * FIXED_SCALE;
         if (iVar2 < ent[0]) ent[0] = iVar2;
-        iVar2 = (DAT_004879f4 - ent[0x122] / 2) * 0x40000;
+        iVar2 = (DAT_004879f4 - ent[0x122] / 2) * FIXED_SCALE;
         if (iVar2 < ent[1]) ent[1] = iVar2;
     }
 }
@@ -2240,10 +2240,10 @@ static void FUN_0044e950_impl(int *ent, int idx)
                 ent[4] = 0;
                 ent[5] = 0;
                 *(unsigned char *)((int)ent + 0x4a0) = 0xff;
-                ent[0] = iVar1 * 0x40000;
-                ent[1] = iVar2 * 0x40000;
-                ent[2] = iVar1 * 0x40000;
-                ent[3] = iVar2 * 0x40000;
+                ent[0] = iVar1 * FIXED_SCALE;
+                ent[1] = iVar2 * FIXED_SCALE;
+                ent[2] = iVar1 * FIXED_SCALE;
+                ent[3] = iVar2 * FIXED_SCALE;
                 return;
             }
         }
@@ -2266,8 +2266,8 @@ static void FUN_0044e5a0_impl(int *ent)
 
     int base = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
 
-    *(int *)(base + 0x00) = (rand() % 10 - 5) * 0x40000 + ent[0];
-    *(int *)(base + 0x04) = (rand() % 10 - 5) * 0x40000 + ent[1];
+    *(int *)(base + 0x00) = (rand() % 10 - 5) * FIXED_SCALE + ent[0];
+    *(int *)(base + 0x04) = (rand() % 10 - 5) * FIXED_SCALE + ent[1];
 
     int speed = rand() % 0x1e + 10;
     *(int *)(base + 0x08) = speed * *(int *)((int)DAT_00487ab0 + (angle + 0x300) * 4) >> 6;
@@ -2410,18 +2410,18 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
                 int base = DAT_00489248 * 0x80 + (int)DAT_004892e8;
 
                 int rx = rand() & 7; if (rx < 0) rx = (rx - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x00) = ((unsigned int)(rx - 4) + (unsigned int)iVar4) * 0x40000;
+                *(unsigned int *)(base + 0x00) = ((unsigned int)(rx - 4) + (unsigned int)iVar4) * FIXED_SCALE;
                 int ry = rand() & 7; if (ry < 0) ry = (ry - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x08) = ((unsigned int)(ry - 4) + (unsigned int)iVar5) * 0x40000;
+                *(unsigned int *)(base + 0x08) = ((unsigned int)(ry - 4) + (unsigned int)iVar5) * FIXED_SCALE;
                 *(int *)(base + 0x18) = *(int *)((int)DAT_00487ab0 + uVar6 * 4) * iVar3 +
                     (piVar1[4] >> 2) >> 6;
                 *(int *)(base + 0x1c) = *(int *)((int)DAT_00487ab0 + 0x800 + uVar6 * 4) * iVar3 +
                     (piVar1[4] >> 2) >> 6;
 
                 int rx2 = rand() & 7; if (rx2 < 0) rx2 = (rx2 - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x04) = ((unsigned int)(rx2 - 4) + (unsigned int)iVar4) * 0x40000;
+                *(unsigned int *)(base + 0x04) = ((unsigned int)(rx2 - 4) + (unsigned int)iVar4) * FIXED_SCALE;
                 int ry2 = rand() & 7; if (ry2 < 0) ry2 = (ry2 - 1 | (int)0xfffffff8) + 1;
-                *(unsigned int *)(base + 0x0c) = ((unsigned int)(ry2 - 4) + (unsigned int)iVar5) * 0x40000;
+                *(unsigned int *)(base + 0x0c) = ((unsigned int)(ry2 - 4) + (unsigned int)iVar5) * FIXED_SCALE;
                 *(int *)(base + 0x10) = 0;
                 *(int *)(base + 0x14) = 0;
                 *(unsigned char *)(base + 0x21) = 100;
@@ -3013,9 +3013,9 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
         if (0 < (int)((unsigned int)param_1 & 0xfffc0000))
             param_1 = (unsigned int *)((int)param_1 - 0x10000);
         if ((int)local_8 >> 0x12 < (int)DAT_004879f4 - 1)
-            local_8 += 0x40000;
+            local_8 += FIXED_SCALE;
         if (0 < (int)(local_c & 0xfffc0000))
-            local_c -= 0x40000;
+            local_c -= FIXED_SCALE;
 
         unsigned int uVar3 = FUN_00450dd0((int)puVar5, puVar1[1]);
         if ((char)uVar3 == '\0') {
@@ -3955,8 +3955,8 @@ LAB_00401856:
                     } while (iVar11 < 0x20);
                 }
                 /* Teleport entity */
-                *(int *)(iVar12 + (int)DAT_00487810) = foundX * 0x40000;
-                *(unsigned int *)(iVar12 + 4 + (int)DAT_00487810) = (unsigned int)foundY * 0x40000;
+                *(int *)(iVar12 + (int)DAT_00487810) = foundX * FIXED_SCALE;
+                *(unsigned int *)(iVar12 + 4 + (int)DAT_00487810) = (unsigned int)foundY * FIXED_SCALE;
                 *(int *)(iVar12 + 8 + (int)DAT_00487810) = *(int *)(iVar12 + (int)DAT_00487810);
                 *(int *)(iVar12 + 0xc + (int)DAT_00487810) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
                 *(unsigned char *)(iVar12 + 0x4a0 + (int)DAT_00487810) = 0xff;
@@ -5123,7 +5123,8 @@ static void FUN_0044bfa0(int *ent, int player_idx)
 /* ===== FUN_0044e510 — Boundary_Clamp ===== */
 /* Prevents entity from going off the map. Resets position to edge and
  * zeroes velocity if out of bounds.
- * ent[0]/[1] = pos x/y (18.14 fp), ent[2]/[3] = prev_x/prev_y, ent[4]/[5] = vel x/y.
+ * ent[0]/[1] = pos x/y (18 fractional bits), ent[2]/[3] = prev_x/prev_y,
+ * ent[4]/[5] = vel x/y.
  * Restoring the *other* axis from prev avoids "popping" along the perpendicular. */
 void FUN_0044e510(int *ent)
 {
@@ -5135,8 +5136,8 @@ void FUN_0044e510(int *ent)
         ent[5] = 0;
     }
     /* Right boundary */
-    if (ent[0] >= (int)(DAT_004879f0 * 0x40000)) {
-        ent[0] = ((int)DAT_004879f0 - 3) * 0x40000;
+    if (ent[0] >= (int)(DAT_004879f0 * FIXED_SCALE)) {
+        ent[0] = ((int)DAT_004879f0 - 3) * FIXED_SCALE;
         ent[4] = 0;
         ent[1] = ent[3];
         ent[5] = 0;
@@ -5149,8 +5150,8 @@ void FUN_0044e510(int *ent)
         ent[5] = 0;
     }
     /* Bottom boundary */
-    if (ent[1] >= (int)(DAT_004879f4 * 0x40000)) {
-        ent[1] = ((int)DAT_004879f4 - 3) * 0x40000;
+    if (ent[1] >= (int)(DAT_004879f4 * FIXED_SCALE)) {
+        ent[1] = ((int)DAT_004879f4 - 3) * FIXED_SCALE;
         ent[4] = 0;
         ent[0] = ent[2];
         ent[5] = 0;
@@ -5895,7 +5896,7 @@ void FUN_0044b0b0(void)
         {
             int do_lava = 1;
             if ((int)ent[8] >= 1 && (int)ent[1] >= 0x80001 &&
-                (int)ent[1] < (int)((DAT_004879f4 - 2) * 0x40000)) {
+                (int)ent[1] < (int)((DAT_004879f4 - 2) * FIXED_SCALE)) {
                 /* In bounds with health: check tile enclosure for weapon selection */
                 int ty2 = (int)ent[1] >> 0x12;
                 int tx2 = (int)ent[0] >> 0x12;

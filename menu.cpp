@@ -2580,7 +2580,7 @@ void FUN_0041bfe0(void)
             if ((int)uVar5 < 0) {
                 uVar5 = (uVar5 - 1 | 0xFFFFFFFE) + 1;
             }
-            FUN_00407210(iVar9 * 0x40000, iVar3 * 0x40000, 0, 0,
+            FUN_00407210(iVar9 * FIXED_SCALE, iVar3 * FIXED_SCALE, 0, 0,
                          (char)uVar5 * 2 - 1, iVar4, uVar13, cVar14);
         }
     }
@@ -2620,7 +2620,7 @@ void FUN_0041bfe0(void)
             bVar7 = 0;
             uVar13 = 3;
             iVar4 = rand();
-            FUN_00406d20(iVar9 * 0x40000, iVar3 * 0x40000, (char)(iVar4 % 7), 0x4e2000, uVar13, bVar7);
+            FUN_00406d20(iVar9 * FIXED_SCALE, iVar3 * FIXED_SCALE, (char)(iVar4 % 7), 0x4e2000, uVar13, bVar7);
         }
     }
 

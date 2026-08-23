@@ -2446,7 +2446,7 @@ void FUN_00425fe0(void)
     else if (g_MouseDeltaY > 0x7440000) g_MouseDeltaY = 0x7440000;
 
     /* ---- Scroll/hover decay ---- */
-    DAT_004877cc += (int)DAT_004877f0 * -0x40000;
+    DAT_004877cc += (int)DAT_004877f0 * -FIXED_SCALE;
     if (DAT_004877cc < 0) DAT_004877cc = 0;
 
     /* ---- Main game/menu logic tick ---- */
@@ -6586,11 +6586,11 @@ MainInit:
     *(int *)((char *)g_PhysicsParams + 0x10) = 0x32;
     *(int *)((char *)g_PhysicsParams + 0x1C) = 0x2710000;
     *(int *)((char *)g_PhysicsParams + 0x28) = 0;
-    *(int *)((char *)g_PhysicsParams + 0x24) = 0x40000;
+    *(int *)((char *)g_PhysicsParams + 0x24) = FIXED_SCALE;
     *(int *)((char *)g_PhysicsParams + 0x20) = 0;
     *(int *)((char *)g_PhysicsParams + 0x2C) = 0x2710000;
     *(int *)((char *)g_PhysicsParams + 0x38) = 0;
-    *(int *)((char *)g_PhysicsParams + 0x34) = 0x40000;
+    *(int *)((char *)g_PhysicsParams + 0x34) = FIXED_SCALE;
     *(int *)((char *)g_PhysicsParams + 0x30) = 0;
     *(int *)((char *)g_PhysicsParams + 0x3C) = 0x2710000;
 

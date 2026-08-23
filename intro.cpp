@@ -47,8 +47,8 @@ static void Spawn_Particles(int count, int y_base, int y_range)
         int idx = DAT_00489250;
         int *part = (int *)((char *)DAT_00481f34 + idx * 0x20);
 
-        part[0] = px * 0x40000;     /* x (fixed point) */
-        part[1] = py * 0x40000;     /* y (fixed point) */
+        part[0] = px * FIXED_SCALE;     /* x (fixed point) */
+        part[1] = py * FIXED_SCALE;     /* y (fixed point) */
 
         /* Velocity: random magnitude * sin/cos of angle */
         int mag = rand() % 100;
@@ -93,8 +93,8 @@ static void Spawn_Entities(int max_count, int y_base, int y_range, int vel_max)
         int *ent = (int *)((unsigned char *)DAT_004892e8 + idx * 0x80);
         unsigned char *eb = (unsigned char *)ent;
 
-        int fx = px * 0x40000;
-        int fy = py * 0x40000;
+        int fx = px * FIXED_SCALE;
+        int fy = py * FIXED_SCALE;
 
         ent[0] = fx;              /* +0x00: x (fixed point) */
         ent[2] = fy;              /* +0x08: y (fixed point) */
