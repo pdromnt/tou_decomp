@@ -1687,7 +1687,8 @@ void callback_normal_fireball_00441aa0(int entity_index)
         particle->color_index = 0;
     }
     FUN_0040f9b0(0x11, tou_binary::load_i32(entity, 0), tou_binary::load_i32(entity, 8));
-    if (g_ConfigBlob[0x17d0] != 0u && DAT_004892d8 < 0x78 && DAT_00487aa0 != NULL) {
+    if (g_GameConfig.values.ambient_emitters != 0u &&
+        DAT_004892d8 < 0x78 && DAT_00487aa0 != NULL) {
         uint8_t *emitter = static_cast<uint8_t *>(DAT_00487aa0) + DAT_004892d8 * 0x10;
         tou_binary::store_i32(emitter, 0,
             tou_binary::sar_i32(tou_binary::load_i32(entity, 4), 0x12));

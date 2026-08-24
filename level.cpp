@@ -35,6 +35,7 @@ void         *DAT_0048782c = NULL;    /* tilemap pointer */
 void         *DAT_00481f50 = NULL;    /* background RGB565 pixels */
 int           DAT_00489278 = 0;       /* entity placement count */
 unsigned char DAT_00483860[0x39c];    /* tile type table */
+LevelPhysicsTuning g_LevelPhysicsTuning = {};
 void         *DAT_00487814 = NULL;    /* coarse grid buffer */
 void         *DAT_00489ea4 = NULL;    /* shadow grid 1 */
 void         *DAT_00489ea8 = NULL;    /* shadow grid 2 */
@@ -42,7 +43,6 @@ void         *DAT_00489ea0 = NULL;    /* swap/heightmap */
 void         *DAT_00487820 = NULL;    /* edge/boundary navigation data */
 int           DAT_00487a0c = 0;       /* swap width */
 int           DAT_00487a10 = 0;       /* swap height */
-unsigned short DAT_0048384c = 0;      /* tile fill color */
 char          DAT_0048396d = 0;       /* generated-map flag */
 char          DAT_00483960 = 0;       /* swap-file enabled flag */
 char         *DAT_00486938 = NULL;    /* current level name ptr */
@@ -52,7 +52,7 @@ char          DAT_004892e5 = 0;       /* difficulty flag */
 char          DAT_00489d7c[256];      /* error string buffer */
 void         *DAT_00487aa4 = NULL;    /* large game state buffer */
 int           DAT_00489254 = 0;       /* edge count */
-unsigned char *DAT_00487810 = NULL;   /* player/ship runtime record storage */
+PlayerData    *DAT_00487810 = NULL;   /* player/ship runtime record storage */
 int           DAT_00489240 = 0;       /* player count */
 int           DAT_00489244 = 0;       /* active player count */
 /* DAT_0048764a defined in init.cpp */
@@ -630,18 +630,17 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     }
 
     /* ---- 10. Initialize game config defaults (from FUN_00416ad0) ---- */
-    /* These are gameplay tuning values set each time a level's grid is built.
-     * Addresses 0x483963-0x48396c = g_ConfigBlob offsets 0x1A0B-0x1A14 */
-    g_ConfigBlob[0x1A0B] = 0x28;  /* 40 — spawn timer? */
-    g_ConfigBlob[0x1A0C] = 0x3C;  /* 60 — respawn delay? */
-    g_ConfigBlob[0x1A0D] = (char)0x8C;  /* 140 — ? */
-    g_ConfigBlob[0x1A0E] = 1;     /* flag */
-    g_ConfigBlob[0x1A0F] = 0x0A;  /* 10 */
-    g_ConfigBlob[0x1A10] = 0x0A;  /* 10 — drag factor */
-    g_ConfigBlob[0x1A11] = 0x0A;  /* 10 — wall collision damage multiplier */
-    g_ConfigBlob[0x1A12] = 0x0A;  /* 10 — wall collision bounce factor */
-    g_ConfigBlob[0x1A13] = 0;
-    g_ConfigBlob[0x1A14] = 0;
+    /* Original addresses 0x483963-0x48396c are after the saved config range. */
+    g_LevelPhysicsTuning.spawn_timer = 0x28;
+    g_LevelPhysicsTuning.respawn_delay = 0x3c;
+    g_LevelPhysicsTuning.unknown_02 = 0x8c;
+    g_LevelPhysicsTuning.enabled = 1;
+    g_LevelPhysicsTuning.unknown_04 = 0x0a;
+    g_LevelPhysicsTuning.drag_factor = 0x0a;
+    g_LevelPhysicsTuning.wall_damage = 0x0a;
+    g_LevelPhysicsTuning.wall_bounce = 0x0a;
+    g_LevelPhysicsTuning.unknown_08 = 0;
+    g_LevelPhysicsTuning.unknown_09 = 0;
 
     return 1;
 }

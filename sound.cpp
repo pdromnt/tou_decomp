@@ -13,7 +13,6 @@ SoundEntry     *g_SoundTable   = NULL;   /* 00487874 */
 FSOUND_STREAM  *g_MusicStream  = NULL;   /* 004806F8 */
 FMUSIC_MODULE  *g_MusicModule  = NULL;   /* 004806F4 */
 int             g_MusicChannel = -1;     /* 004806FC */
-char            DAT_0048371e   = 1;      /* music enable flag */
 
 /* ===== Init_Sound_Hardware (0040DF60) ===== */
 /* Original at 0040DF60 (was mislabeled as 0040E530).
@@ -244,7 +243,9 @@ void FUN_0040e130(void)
 
     /* Select track: menu/intro states use MAINMENU, otherwise random */
     int trackIdx;
-    if (g_GameState == 3 || DAT_004877a4 == 0x98 || DAT_004877a4 == 0x97) {
+    if (g_GameState == GAME_STATE_INIT_GAMEPLAY ||
+        DAT_004877a4 == GAME_STATE_NEW_GAME ||
+        DAT_004877a4 == GAME_STATE_INTRO_RUN) {
         trackIdx = DAT_00485fd0;
     } else {
         trackIdx = rand() % DAT_00485fcc;

@@ -20,9 +20,6 @@ LPDIRECTINPUTDEVICE  lpDI_Keyboard  = NULL;  /* 00489EE4 */
 LPDIRECTINPUTDEVICE  lpDI_Mouse     = NULL;  /* 00489EC0 */
 HANDLE               hMouseEvent    = NULL;  /* 00489EE0 */
 
-/* Sound config */
-unsigned char DAT_00483720[8] = {0x5A,0x46,1,1, 0x40,0,0,0}; /* [0]=music vol 90%, [1]=SFX vol 70%, [2]=flag, [3]=output type 1=DSOUND */
-
 /* Display mode struct: {flags, current_mode, desired_mode, ...} */
 unsigned char DAT_00487640[4] = {0, 0xFF, 5, 0};
 
@@ -44,23 +41,11 @@ DWORD        g_FrameTimer   = 0;     /* 004877F4 */
 unsigned char DAT_004877b1  = 0;
 unsigned char DAT_004877a4  = 0;
 DWORD        DAT_004892b8   = 0;
-char         DAT_00483731   = 0;     /* sky/fade color mode */
-char         DAT_00483739   = 0;     /* game mode preset index */
-char         DAT_00489299   = 0;     /* sub-state 2 flag */
+GameConfig g_GameConfig = {};       /* original config range 00481F58-0048385F */
 
-/* Config globals (004207c0 area) */
-unsigned char g_ConfigBlob[6408]; /* 00481F58 - raw config data */
-
-/* Helper: map original binary address to config blob pointer (32-bit only).
- * Menu items use this to write DIRECTLY into g_ConfigBlob, bypassing the
- * separate globals (DAT_004837xx). This is why Sync_Config_To_Blob must NOT
- * be called before saving — it would overwrite these direct writes with
- * stale global values. See refactor notes in Sync_Config_To_Blob. */
+/* Helper for recovered menu descriptors that still store original absolute
+ * config addresses. All named config fields alias this same byte-exact record. */
 #define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
-
-/* Team color palette (RGB555 values, 4 entries) - init'd in Init_Game_Config */
-unsigned short DAT_00483838[4] = {0};
-unsigned short DAT_00483820 = 0;  /* Fade target color (RGB565) for blend-to-background LUTs */
 
 /* Tournament/network mode globals */
 int DAT_0048764b = 0;
@@ -77,8 +62,6 @@ char          DAT_00487635[6]  = {0}; /* team award winner indices */
 unsigned char DAT_00487648     = 0;   /* highest team score */
 char          DAT_00487644[4]  = {0}; /* winning team indices */
 unsigned int  DAT_004892bc     = 0;   /* elapsed round time */
-char          DAT_00483732     = 0;   /* config option */
-char          DAT_0048372d     = 0;   /* config option */
 
 /* Menu / session init (FUN_0042d8b0) */
 char        **g_MenuStrings  = NULL;  /* 00481D3C */
@@ -86,8 +69,6 @@ void         *g_GameViewData = NULL;  /* 00481D40 */
 char        **g_KeyNameTable = NULL;  /* 00481D88 */
 unsigned char g_KeyOrderTable[47] = {0}; /* 00481D48 */
 unsigned char DAT_00481d84   = 0;
-unsigned char DAT_004837ba   = 0;   /* Configurable pause key scan code */
-unsigned char DAT_004837bb   = 0;   /* Configurable camera cycle key scan code */
 unsigned char DAT_004877a8   = 0;
 unsigned char DAT_004877bc   = 0;
 unsigned char DAT_004877bd   = 0;
@@ -96,11 +77,8 @@ unsigned char DAT_004877c9   = 0;  /* byte after g_FrameIndex */
 int           DAT_004877cc   = 0;
 unsigned char DAT_004877ec   = 0;
 int           DAT_00487824   = 0;
-unsigned char DAT_00483724[4] = {0};
 unsigned char g_WindowMode = 0;
 int           DAT_00487784   = 0;
-unsigned char DAT_00483834   = 0;
-unsigned char DAT_00483835   = 0;
 int           DAT_00489e9c   = 0;
 unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - DirectInput keyboard state */
 unsigned char DAT_004877e5   = 0;  /* input event trigger */
@@ -113,18 +91,20 @@ int           DAT_004877ac   = 0;  /* scroll item start index */
 int           DAT_004877b0   = 0;  /* scroll mode */
 
 /* Level/map counts and arrays */
+enum { LEVEL_CATALOG_CAPACITY = 300, MUSIC_CATALOG_CAPACITY = 300 };
+
 int DAT_00485088 = 0;   /* total map/level count */
 int DAT_0048508c = 0;   /* GG theme/official level count */
-void *DAT_00485090[300] = {0};  /* level name strings (256 bytes each) */
-void *DAT_00485540[300] = {0};  /* level tile type data (256 bytes each) */
-void *DAT_004859f0[300] = {0};  /* level extra data (256 bytes each) */
-char  DAT_00485ea0[300] = {0};  /* level generated-map flags */
+void *DAT_00485090[LEVEL_CATALOG_CAPACITY] = {0};  /* level name strings */
+void *DAT_00485540[LEVEL_CATALOG_CAPACITY] = {0};  /* level tile type data */
+void *DAT_004859f0[LEVEL_CATALOG_CAPACITY] = {0};  /* level extra data */
+char  DAT_00485ea0[LEVEL_CATALOG_CAPACITY] = {0};  /* generated-map flags */
 char  DAT_00487f70[256] = {0};  /* formatted level count string */
 char  DAT_00480740[256] = {0};  /* current GG theme name buffer */
 
 /* GG theme arrays */
 int   DAT_00486484 = 0;         /* GG theme count */
-void *DAT_00486488[300] = {0};  /* GG theme directory name strings */
+void *DAT_00486488[LEVEL_CATALOG_CAPACITY] = {0};  /* GG theme directory names */
 
 /* Hover metadata buffers for the Levels page corner display. These are
  * pointed at by g_MenuStrings[0x149..0x14C] so that FUN_00430200 menu
@@ -142,7 +122,7 @@ static void Update_Level_Hover_Metadata(int level_idx);
 /* Music scanner */
 int   DAT_00485fcc = 0;         /* music file count */
 int   DAT_00485fd0 = 0;         /* selected music index */
-void *DAT_00485fd4[300] = {0};  /* music file name strings */
+void *DAT_00485fd4[MUSIC_CATALOG_CAPACITY] = {0};  /* music file name strings */
 
 /* ===== Stub functions (to be decompiled later) ===== */
 
@@ -576,8 +556,8 @@ void FUN_0041eae0(void)
 void FUN_004265e0(int index)
 {
     unsigned int start = (unsigned int)(unsigned char)DAT_004836ce[index];
-    unsigned char *keyAvail = &g_ConfigBlob[0x4B6 + index * 0x3c];
-    unsigned char *globalAvail = &g_ConfigBlob[0x1804];
+    unsigned char *keyAvail = g_GameConfig.values.player_weapon_enabled[index];
+    unsigned char *globalAvail = g_GameConfig.values.global_weapon_enabled;
 
     /* Search forward from current position to 0x2e */
     for (unsigned int i = start; (int)i < 0x2f; i++) {
@@ -737,7 +717,7 @@ void FUN_0042d8b0(void)
     void *pvVar;
 
     /* --- Game state initialization --- */
-    g_GameState = 0x96;              /* INTRO_INIT */
+    GameState_Transition(GAME_STATE_INTRO_INIT);
     DAT_00483838[3] = 0x7FF0;       /* palette[3] = bright gold (X1R5G5B5) */
     g_MouseDeltaX   = 0x5000000;    /* center mouse X (fixed-point) */
     g_MouseDeltaY   = 0x3c00000;    /* center mouse Y (fixed-point) */
@@ -1955,6 +1935,11 @@ static int FUN_00420f80(char *header)
  * Sets the generated-map flag and increments total level count. */
 static void FUN_00413d40(const char *name, const char *tiledata, const char *extradata)
 {
+    if (DAT_00485088 >= LEVEL_CATALOG_CAPACITY) {
+        LOG("[LEVEL] catalog full; ignoring '%s'\n", name);
+        return;
+    }
+
     /* Level name buffer */
     void *buf1 = Mem_Alloc(0x100);
     g_MemoryTracker += 0x100;
@@ -1989,6 +1974,10 @@ static void FUN_00413e70(const char *pattern)
     do {
         /* Skip directories */
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        if (DAT_00485fcc >= MUSIC_CATALOG_CAPACITY) {
+            LOG("[MUSIC] catalog full; ignoring remaining files\n");
+            break;
+        }
 
         /* Allocate name buffer and store filename */
         void *buf = Mem_Alloc(0x100);
@@ -2066,6 +2055,10 @@ int FUN_00414060(void)
             /* Only directories (skip . and ..) */
             if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
             if (fd.cFileName[0] == '.') continue;
+            if (DAT_00486484 >= LEVEL_CATALOG_CAPACITY) {
+                LOG("[GG] theme catalog full; ignoring remaining directories\n");
+                break;
+            }
 
             /* Check if it's a valid GG directory (has subdirectories) */
             char subpath[512];
@@ -2102,13 +2095,14 @@ int FUN_00414060(void)
     /* If round count is still the default (1) and we have multiple levels,
      * set it to the actual level count so all levels play through. Once the
      * user saves via the menu, their preference persists in options.cfg. */
-    if (g_ConfigBlob[0] == 1 && DAT_00485088 > 1) {
-        g_ConfigBlob[0] = (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
+    if (g_GameConfig.values.active_level_count == 1 && DAT_00485088 > 1) {
+        g_GameConfig.values.active_level_count =
+            (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
     }
 
     /* DAT_00481f5c is g_ConfigBlob + 4; scan up to 0x48227c */
-    unsigned int *pIdx = (unsigned int *)&g_ConfigBlob[4];
-    unsigned int *pEnd = (unsigned int *)&g_ConfigBlob[0x48227c - 0x481F58];
+    unsigned int *pIdx = reinterpret_cast<unsigned int *>(g_GameConfig.values.level_order);
+    unsigned int *pEnd = pIdx + 200;
     while (pIdx < pEnd) {
         if (*pIdx >= (unsigned int)DAT_00485088) {
             *pIdx = rand() % DAT_00485088;
@@ -2229,7 +2223,7 @@ void FUN_00425fe0(void)
 
         /* If FUN_0042a470 set g_GameState to 0x04 (start game), just return.
          * The main loop will dispatch to Game_State_Manager case 0x04. */
-        if (g_GameState == 0x04) {
+        if (g_GameState == GAME_STATE_QUICK_RESTART) {
             DAT_004877b1 = 0;
             return;
         }
@@ -2240,7 +2234,7 @@ void FUN_00425fe0(void)
 
         /* Render the game view (menu items etc.) to Software_Buffer */
         if (Render_Game_View() == 0) {
-            g_GameState = 0xFE;  /* Fatal render error → shutdown */
+            GameState_Transition(GAME_STATE_SHUTDOWN);
             return;
         }
 
@@ -2992,7 +2986,7 @@ void FUN_0042a470(void)
 
     case 0x03: /* Start game - transition to gameplay */
         DAT_0048764a = 0;
-        g_GameState = 0x04;
+        GameState_Transition(GAME_STATE_QUICK_RESTART);
         DAT_004877b1 = 0;
         return;
 
@@ -3911,7 +3905,7 @@ void FUN_0042a470(void)
 
     case 0x1E: /* Start match */
         DAT_0048764a = 1;
-        g_GameState = 0x04;
+        GameState_Transition(GAME_STATE_QUICK_RESTART);
         DAT_004877b1 = 0;
         return;
 
@@ -3986,12 +3980,9 @@ void FUN_0042a470(void)
         return;
 
     case 0xFE: /* Exit - save options and shutdown */
-        /* Original at 0042d541 calls Save_Options_Config directly.
-         * No Sync_Config_To_Blob needed: menu writes directly to g_ConfigBlob
-         * via CFG_ADDR pointers, so the blob already has correct values.
-         * (In the original binary, config globals ARE the blob — aliases.) */
+        /* Named fields and recovered menu pointers share the same record. */
         Save_Options_Config();
-        g_GameState = 0xFE;
+        GameState_Transition(GAME_STATE_SHUTDOWN);
         DAT_004877b1 = 0;
         return;
 
@@ -4041,14 +4032,14 @@ void FUN_00427df0(int param_1, char param_2)
     if (item->type == 1) {
         float fVar3;
         if (DAT_004877a4 == 0x11) {
-            int iVar4 = (int)(g_ConfigBlob[0] & 0xFF) - 0x0F;
+            int iVar4 = (int)g_GameConfig.values.active_level_count - 0x0F;
             fVar3 = (float)((iVar4 + ((unsigned)(iVar4 >> 31) >> 29)) >> 3);
         } else if (DAT_004877a4 == 0x12) {
-            fVar3 = (float)(((int)(g_ConfigBlob[0x324] & 0xFF) - 10) / 6);
+            fVar3 = (float)(((int)g_GameConfig.values.player_count - 10) / 6);
         } else if (DAT_004877a4 == 0x1A) {
-            fVar3 = (float)(((int)(g_ConfigBlob[0x324] & 0xFF) - 3) / 2);
+            fVar3 = (float)(((int)g_GameConfig.values.player_count - 3) / 2);
         } else if (DAT_004877a4 == 0x14) {
-            fVar3 = (float)(((int)(g_ConfigBlob[0x324] & 0xFF) - 7) / 5);
+            fVar3 = (float)(((int)g_GameConfig.values.player_count - 7) / 5);
         } else {
             fVar3 = 1.0f;
         }
@@ -4087,7 +4078,7 @@ void FUN_00427df0(int param_1, char param_2)
             MenuItem *click_item = &((MenuItem *)g_GameViewData)[param_1];
             int wpn_idx = click_item->color_style;
             unsigned char player_idx = click_item->flag1;
-            if (*data != 0 && g_ConfigBlob[0x1804 + wpn_idx] != 0) {
+            if (*data != 0 && g_GameConfig.values.global_weapon_enabled[wpn_idx] != 0) {
                 /* DAT_004836ce aliases the original config address, so this
                  * updates both the runtime selection and persisted blob. */
                 DAT_004836ce[(int)player_idx] = (char)wpn_idx;
@@ -4099,8 +4090,8 @@ void FUN_00427df0(int param_1, char param_2)
         *data = (*data == 0) ? 1 : 0;
         /* Key binding pages: flag1==0xFA means this toggles a key enable/disable */
         if (item->flag1 == 0xFA) {
-            unsigned char *keyBindings = &g_ConfigBlob[0x1776]; /* DAT_004836ce */
-            unsigned char *keyEnabled  = &g_ConfigBlob[0x1804]; /* DAT_0048375c */
+            unsigned char *keyBindings = g_GameConfig.values.starting_weapon;
+            unsigned char *keyEnabled = g_GameConfig.values.global_weapon_enabled;
             unsigned int scanCode = (unsigned int)item->height;
             for (int i = 0; i < 0x40; i++) {
                 if (keyEnabled[scanCode] == 0) {
@@ -4196,10 +4187,10 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x0C: { /* Randomize level order */
-        int *levelOrder = (int *)&g_ConfigBlob[4]; /* DAT_00481f5c */
+        int *levelOrder = g_GameConfig.values.level_order;
         int totalMaps = DAT_00485088;
         int ggThemes = DAT_0048508c;
-        unsigned char threshold = g_ConfigBlob[3]; /* high byte of first config dword */
+        unsigned char threshold = g_GameConfig.values.level_flags[2];
         int numEntries = (0x48227c - 0x481f5c) / 4; /* 200 level slots */
         for (int i = 0; i < numEntries; i++) {
             if (totalMaps <= ggThemes ||
@@ -4328,22 +4319,22 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2B: { /* Increment game counter */
-        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        int *counter = &g_GameConfig.values.setup_counter;
         (*counter)++;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2C: { /* Decrement game counter */
-        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        int *counter = &g_GameConfig.values.setup_counter;
         (*counter)--;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2D: { /* Cycle game mode (DAT_004837e8: 0-2) */
-        int *mode    = (int *)&g_ConfigBlob[0x1890]; /* DAT_004837e8 */
-        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        int *mode = &g_GameConfig.values.setup_mode;
+        int *counter = &g_GameConfig.values.setup_counter;
         if (cVar9 == -1) {
             (*mode)--;
             *counter = 0;
@@ -4364,11 +4355,11 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2E: { /* Modify game config array value */
-        int *mode      = (int *)&g_ConfigBlob[0x1890]; /* DAT_004837e8 */
-        int *toggle    = (int *)&g_ConfigBlob[0x188C]; /* DAT_004837e4 */
-        int *configArr = (int *)&g_ConfigBlob[0x1898]; /* DAT_004837f0 */
-        int *limitArr  = (int *)&g_ConfigBlob[0x18B0]; /* DAT_00483808 */
-        int *counter   = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        int *mode = &g_GameConfig.values.setup_mode;
+        int *toggle = &g_GameConfig.values.setup_toggle;
+        int *configArr = g_GameConfig.values.setup_values;
+        int *limitArr = g_GameConfig.values.setup_limits;
+        int *counter = &g_GameConfig.values.setup_counter;
         int idx = *mode + *toggle * 3;
         if (cVar9 == -1) {
             if (configArr[idx] > 0) {
@@ -4389,8 +4380,8 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2F: { /* Toggle team selection (DAT_004837e4) */
-        int *toggle  = (int *)&g_ConfigBlob[0x188C]; /* DAT_004837e4 */
-        int *counter = (int *)&g_ConfigBlob[0x1894]; /* DAT_004837ec */
+        int *toggle = &g_GameConfig.values.setup_toggle;
+        int *counter = &g_GameConfig.values.setup_counter;
         *toggle = (*toggle == 0) ? 1 : 0;
         *counter = 0;
         DAT_004877b1 = 1;
@@ -4529,8 +4520,8 @@ void FUN_00427a70(int param_1)
         else if (v > 4) v = 0;
         *data = (unsigned char)v;
         /* Update player enable flags */
-        unsigned char playerCount = g_ConfigBlob[0x325];
-        unsigned char *playerEnable = &g_ConfigBlob[0x376];
+        unsigned char playerCount = g_GameConfig.values.human_player_count;
+        unsigned char *playerEnable = g_GameConfig.values.player_enabled;
         int j = 0;
         if (playerCount != 0) {
             do { playerEnable[j] = 1; j++; } while (j < (int)(unsigned int)playerCount);
@@ -4583,7 +4574,7 @@ void FUN_00426650(void)
 
     /* Page 0x11: Level list (scrollable) */
     if (DAT_004877a4 == 0x11 && DAT_004877b0 != 0) {
-        int numLevels = g_ConfigBlob[0] & 0xFF;  /* active level slot count */
+        int numLevels = g_GameConfig.values.active_level_count;
         int visible = 15;   /* max 15 items visible at once */
         int scrollOff = 0;
 
@@ -4601,7 +4592,7 @@ void FUN_00426650(void)
         DAT_004877a8 = DAT_004877ac;
 
         if (visible > 0) {
-            int *levelOrder = (int *)&g_ConfigBlob[4]; /* DAT_00481f5c */
+            int *levelOrder = g_GameConfig.values.level_order;
             int yPos = 0x8C;  /* first level entry Y position */
 
             for (int i = 0; i < visible; i++) {
@@ -4623,7 +4614,7 @@ void FUN_00426650(void)
 
     /* Page 0x12: Players (dynamic rows) */
     if (DAT_004877a4 == 0x12 && DAT_004877b0 != 0) {
-        unsigned int playerCount = g_ConfigBlob[0x324] & 0xFF;  /* total players */
+        unsigned int playerCount = g_GameConfig.values.player_count;
 
         /* Inline slider preview: if dragging on the player count item,
          * preview the adjusted count without committing yet */
@@ -4658,7 +4649,7 @@ void FUN_00426650(void)
         if (maxVisible < 1) goto players_done;
 
         /* puVar22 = &g_ConfigBlob[0x3C6 + scrollOff] (team data base) */
-        unsigned char *puVar22 = &g_ConfigBlob[0x3C6 + scrollOff];
+        unsigned char *puVar22 = &g_GameConfig.values.player_team[scrollOff];
         int yPos = 0x6D;  /* first row Y */
         int strIdx = 0x71; /* dynamic string buffer start */
 
@@ -4736,7 +4727,7 @@ void FUN_00426650(void)
 
     /* Page 0x14: Score display (scrollable, max 6 visible) */
     if (DAT_004877a4 == 0x14 && DAT_004877b0 != 0) {
-        unsigned int playerCount = g_ConfigBlob[0x324] & 0xFF;
+        unsigned int playerCount = g_GameConfig.values.player_count;
         unsigned int maxVisible = 6;
         int scrollOff = 0;
 
@@ -4793,7 +4784,7 @@ void FUN_00426650(void)
 
     /* Page 0x1A: Key bindings (scrollable, max 3 visible players) */
     if (DAT_004877a4 == 0x1A && DAT_004877b0 != 0) {
-        unsigned int playerCount = g_ConfigBlob[0x324] & 0xFF;
+        unsigned int playerCount = g_GameConfig.values.player_count;
 
         /* Handle scroll wheel adjustment of player count preview */
         if (g_InputMode == 1 && g_GameViewData) {
@@ -4825,7 +4816,8 @@ void FUN_00426650(void)
         DAT_004877a8 = DAT_004877ac;
 
         if (maxVisible > 0) {
-            unsigned char *actionMapBase = &g_ConfigBlob[0x4B6 + scrollOff * 0x3C];
+            unsigned char *actionMapBase =
+                g_GameConfig.values.player_weapon_enabled[scrollOff];
             int playerNum = scrollOff + 1;
             int yPos = 0x82; /* shifted down to clear header text */
             int strIdx = 0x71;
@@ -4847,7 +4839,8 @@ void FUN_00426650(void)
                      * Circle background drawn by renderer based on state. */
                     {
                         /* Check global ban: banned weapons are non-clickable */
-                        int is_banned = (g_ConfigBlob[0x1804 + k] == 0) ? 1 : 0;
+                        int is_banned =
+                            (g_GameConfig.values.global_weapon_enabled[k] == 0) ? 1 : 0;
                         unsigned char click = is_banned ? 0 : 1;
                         FUN_00430200(xPos, yPos, 0x22, k, 2, click, 0x26, 0, 0xFF);
                         if (g_GameViewData && DAT_004877a8 > 0) {
@@ -4872,7 +4865,7 @@ void FUN_00426650(void)
 
                 playerNum++;
                 scrollOff++;
-                actionMapBase = &g_ConfigBlob[0x4B6 + scrollOff * 0x3C];
+                actionMapBase = g_GameConfig.values.player_weapon_enabled[scrollOff];
                 yPos += 0x75;
             }
         }
@@ -4974,13 +4967,13 @@ void FUN_00426650(void)
                         }
                     }
                     if (g_InputMode == 3 && DAT_004877e8 != 0x100) {
-                        unsigned char bVar12 = g_ConfigBlob[0x325];
+                        unsigned char bVar12 = g_GameConfig.values.human_player_count;
                         MenuItem *tgtItem = &items[(unsigned char)DAT_004877e6];
                         switch (tgtItem->render_mode) {
-                        case 0x20: /* Randomize player names */
+                        case 0x20: /* Randomize player colors */
                             if (DAT_004877e8 == 1) {
                                 for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x466 + j] = (char)rand();
+                                    g_GameConfig.values.player_color[j] = (char)rand();
                             } else {
                                 unsigned int teamNames[4];
                                 for (int t = 0; t < 4; t++) {
@@ -4988,27 +4981,28 @@ void FUN_00426650(void)
                                     teamNames[t] = (unsigned int)((unsigned char)r);
                                 }
                                 for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x466 + j] =
-                                        (char)teamNames[(unsigned char)g_ConfigBlob[0x3C6 + j]];
+                                    g_GameConfig.values.player_color[j] =
+                                        (char)teamNames[g_GameConfig.values.player_team[j]];
                             }
                             break;
                         case 0x21: /* Randomize teams */
                             if (DAT_004877e8 == 1) {
                                 for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x3C6 + j] = (char)(j % 3);
+                                    g_GameConfig.values.player_team[j] = (char)(j % 3);
                             } else if (DAT_004877e8 == 2) {
                                 int na = (int)(unsigned int)bVar12;
                                 for (int j = 0; j < na && j < 64; j++)
-                                    g_ConfigBlob[0x3C6 + j] = 0;
+                                    g_GameConfig.values.player_team[j] = 0;
                                 if (na < 64)
-                                    memset(&g_ConfigBlob[0x3C6 + na], 1, 64 - na);
+                                    memset(&g_GameConfig.values.player_team[na], 1,
+                                           GAME_CONFIG_PLAYER_CAPACITY - na);
                             } else if (bVar12 != 0) {
                                 int nt = (int)(unsigned int)bVar12;
                                 int maxT = nt > 3 ? 3 : nt;
-                                for (int j = 0; j < nt && j < 64; j++)
-                                    g_ConfigBlob[0x3C6 + j] = (char)(j % 3);
-                                for (int j = nt; j < 64; j++)
-                                    g_ConfigBlob[0x3C6 + j] = (char)((j - nt) % maxT);
+                                for (int j = 0; j < nt && j < GAME_CONFIG_PLAYER_CAPACITY; j++)
+                                    g_GameConfig.values.player_team[j] = (char)(j % 3);
+                                for (int j = nt; j < GAME_CONFIG_PLAYER_CAPACITY; j++)
+                                    g_GameConfig.values.player_team[j] = (char)((j - nt) % maxT);
                             }
                             break;
                         case 0x22: { /* Randomize ships */
@@ -5017,8 +5011,8 @@ void FUN_00426650(void)
                                 if (DAT_0048378e[j] != 0) avail--;
                             if (DAT_004877e8 == 1) {
                                 if (avail > 0) {
-                                    unsigned char *sp = (unsigned char *)&g_ConfigBlob[0x416];
-                                    while (sp < (unsigned char *)&g_ConfigBlob[0x416 + 64]) {
+                                    unsigned char *sp = g_GameConfig.values.player_ship;
+                                    while (sp < g_GameConfig.values.player_ship + GAME_CONFIG_PLAYER_CAPACITY) {
                                         int r = rand() % 9;
                                         *sp = (unsigned char)r;
                                         if (DAT_0048378e[r] != 0) sp--;
@@ -5026,71 +5020,74 @@ void FUN_00426650(void)
                                     }
                                 }
                             } else if (DAT_004877e8 == 2) {
-                                memset(&g_ConfigBlob[0x416], 9, 64);
+                                memset(g_GameConfig.values.player_ship, 9,
+                                       GAME_CONFIG_PLAYER_CAPACITY);
                             } else {
                                 /* Shuffle ships by team: team[j]->ship mapping */
                                 int shipByTeam[4];
-                                for (int j = 63; j >= 0; j--)
-                                    shipByTeam[(unsigned char)g_ConfigBlob[0x3C6 + j] - 4] =
-                                        (int)(unsigned char)g_ConfigBlob[0x416 + j];
-                                for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x416 + j] =
-                                        (char)shipByTeam[(unsigned char)g_ConfigBlob[0x3C6 + j] - 4];
+                                for (int j = GAME_CONFIG_PLAYER_CAPACITY - 1; j >= 0; j--)
+                                    shipByTeam[g_GameConfig.values.player_team[j] - 4] =
+                                        (int)g_GameConfig.values.player_ship[j];
+                                for (int j = 0; j < GAME_CONFIG_PLAYER_CAPACITY; j++)
+                                    g_GameConfig.values.player_ship[j] =
+                                        (char)shipByTeam[g_GameConfig.values.player_team[j] - 4];
                             }
                             break;
                         }
                         case 0x23: /* Randomize enable flags */
                             if (DAT_004877e8 == 1) {
                                 int na = (int)(unsigned int)bVar12;
-                                for (int j = 0; j < na && j < 64; j++)
-                                    g_ConfigBlob[0x376 + j] = 1;
-                                if (na < 64)
-                                    memset(&g_ConfigBlob[0x376 + na], 0, 64 - na);
+                                for (int j = 0; j < na && j < GAME_CONFIG_PLAYER_CAPACITY; j++)
+                                    g_GameConfig.values.player_enabled[j] = 1;
+                                if (na < GAME_CONFIG_PLAYER_CAPACITY)
+                                    memset(&g_GameConfig.values.player_enabled[na], 0,
+                                           GAME_CONFIG_PLAYER_CAPACITY - na);
                             } else {
-                                for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x376 + j] =
-                                        (g_ConfigBlob[0x3C6 + j] == 0) ? 1 : 0;
+                                for (int j = 0; j < GAME_CONFIG_PLAYER_CAPACITY; j++)
+                                    g_GameConfig.values.player_enabled[j] =
+                                        (g_GameConfig.values.player_team[j] == 0) ? 1 : 0;
                             }
                             break;
                         case 0x24: /* Randomize handicaps */
                             if (DAT_004877e8 == 1) {
                                 for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x326 + j] = (char)(rand() % 5);
+                                    g_GameConfig.values.player_difficulty[j] = (char)(rand() % 5);
                             } else if (DAT_004877e8 == 2) {
                                 for (int j = 0; j < 64; j++) {
-                                    char team = g_ConfigBlob[0x3C6 + j];
+                                    char team = g_GameConfig.values.player_team[j];
                                     if (team == 0) {
                                         int r = rand(); r &= 1;
-                                        g_ConfigBlob[0x326 + j] = (char)r;
+                                        g_GameConfig.values.player_difficulty[j] = (char)r;
                                     } else if (team == 1) {
-                                        g_ConfigBlob[0x326 + j] = (char)(rand() % 3 + 1);
+                                        g_GameConfig.values.player_difficulty[j] =
+                                            (char)(rand() % 3 + 1);
                                     } else if (team == 2) {
                                         int r = rand(); r &= 1;
-                                        g_ConfigBlob[0x326 + j] = (char)(r + 3);
+                                        g_GameConfig.values.player_difficulty[j] = (char)(r + 3);
                                     }
                                 }
                             } else if (DAT_004877e8 == 3) {
                                 for (int j = 0; j < 64; j++) {
                                     int r = rand(); r &= 1;
-                                    g_ConfigBlob[0x326 + j] = (char)r;
+                                    g_GameConfig.values.player_difficulty[j] = (char)r;
                                 }
                             } else if (DAT_004877e8 == 4) {
                                 for (int j = 0; j < 64; j++)
-                                    g_ConfigBlob[0x326 + j] = (char)(rand() % 3 + 1);
+                                    g_GameConfig.values.player_difficulty[j] =
+                                        (char)(rand() % 3 + 1);
                             } else {
                                 for (int j = 0; j < 64; j++) {
                                     int r = rand(); r &= 1;
-                                    g_ConfigBlob[0x326 + j] = (char)(r + 3);
+                                    g_GameConfig.values.player_difficulty[j] = (char)(r + 3);
                                 }
                             }
                             break;
                         case 0x25: { /* Randomize action maps */
-                            unsigned char *shipAvail = &g_ConfigBlob[0x1804];
+                            unsigned char *shipAvail = g_GameConfig.values.global_weapon_enabled;
                             if (DAT_004877e8 == 1) {
-                                int mapOff = 0;
                                 for (int pi = 0; pi < 64; pi++) {
                                     for (int a = 0; a < 0x2F; a++)
-                                        g_ConfigBlob[0x4B6 + mapOff + a] =
+                                        g_GameConfig.values.player_weapon_enabled[pi][a] =
                                             (shipAvail[a] == 1) ? 1 : 0;
                                     /* Pick random active ship for this player */
                                     int cnt = 0;
@@ -5105,16 +5102,14 @@ void FUN_00426650(void)
                                         DAT_004836ce[pi] = (char)candidates[rand() % cnt];
                                     else
                                         DAT_004836ce[pi] = 0;
-                                    mapOff += 0x3C;
                                 }
                             } else {
                                 int actionCounts[] = {0, 1, 2, 4, 8, 0x10, 0x20};
                                 int numActions = actionCounts[DAT_004877e8];
                                 /* Clear all action maps */
-                                for (int off = 0; off < 64 * 0x3C; off += 0x3C) {
-                                    memset(&g_ConfigBlob[0x4B6 + off], 0, 0x2F);
+                                for (int pi = 0; pi < 64; pi++) {
+                                    memset(g_GameConfig.values.player_weapon_enabled[pi], 0, 0x2f);
                                 }
-                                int mapOff = 0;
                                 for (int pi = 0; pi < 64; pi++) {
                                     /* Build list of available ships */
                                     int cnt = 0;
@@ -5129,7 +5124,7 @@ void FUN_00426650(void)
                                     int picked = 0;
                                     while (picked < numActions && cnt > 0) {
                                         int r = rand() % cnt;
-                                        g_ConfigBlob[0x4B6 + candidates[r] + mapOff] = 1;
+                                        g_GameConfig.values.player_weapon_enabled[pi][candidates[r]] = 1;
                                         candidates[r] = candidates[cnt - 1];
                                         cnt--;
                                         picked++;
@@ -5138,7 +5133,7 @@ void FUN_00426650(void)
                                     int activeCnt = 0;
                                     int active[60];
                                     for (int a = 0; a < 0x2F; a++) {
-                                        if (g_ConfigBlob[0x4B6 + mapOff + a] != 0) {
+                                        if (g_GameConfig.values.player_weapon_enabled[pi][a] != 0) {
                                             active[activeCnt] = a;
                                             activeCnt++;
                                         }
@@ -5147,7 +5142,6 @@ void FUN_00426650(void)
                                         DAT_004836ce[pi] = (char)active[rand() % activeCnt];
                                     else
                                         DAT_004836ce[pi] = 0;
-                                    mapOff += 0x3C;
                                 }
                             }
                             break;
@@ -5265,9 +5259,9 @@ void FUN_0045c300(void)
         /* Reset ship availability for all players: clear 60 bytes, enable 2 ships */
         for (int i = 0; i < 64; i++) {
             DAT_004836ce[i] = 0x29;
-            memset(&g_ConfigBlob[0x4B6 + i * 0x3C], 0, 60);
-            g_ConfigBlob[0x4DF + i * 0x3C] = 1;
-            g_ConfigBlob[0x4E0 + i * 0x3C] = 1;
+            memset(g_GameConfig.values.player_weapon_enabled[i], 0, 60);
+            g_GameConfig.values.player_weapon_enabled[i][0x29] = 1;
+            g_GameConfig.values.player_weapon_enabled[i][0x2a] = 1;
         }
         if (DAT_0048373a < 0x32) {
             DAT_0048373a = 0x32;
@@ -5360,8 +5354,9 @@ void FUN_0045c300(void)
         DAT_00483754[3] = 1;
         DAT_004892e5 = 1;
         /* Clear ship type table (64 bytes at blob offset 0x416) */
-        memset(&g_ConfigBlob[0x416], 0, 64);
-        /* Clear ship enable flags (60 bytes at blob offset 0x1804) */
+        memset(g_GameConfig.values.player_ship, 0, GAME_CONFIG_PLAYER_CAPACITY);
+        /* Original preset clears the 50 weapon flags plus the following ten
+         * ship-state bytes as one 60-byte span. Preserve that cross-field write. */
         memset(&g_ConfigBlob[0x1804], 0, 60);
         ((unsigned char *)&DAT_00483758)[2] = 0;
         return;
@@ -5412,7 +5407,7 @@ void FUN_0041a8c0(void)
     int i, j;
 
     /* 1. Set sub-state flags */
-    DAT_00489299 = 1;
+    g_SubState2 = 1;
     /* Original sets desired display mode from config:
      *   DAT_00487640[2] = DAT_00483724[1];
      * This triggers a resolution switch in Menu_Init_And_Loop. The original
@@ -5437,15 +5432,9 @@ void FUN_0041a8c0(void)
         FUN_0045adc0();
     }
 
-    /* 3. Save current config, then reload.
-     * Original at 0x0041a946 writes DAT_00483732 then calls Save_Options_Config.
-     * No full Sync_Config_To_Blob: that would clobber menu's direct blob writes.
-     * Only sync the two globals that code above just modified. */
-    *(unsigned short *)&g_ConfigBlob[0x18C8] = DAT_00483820;
-    g_ConfigBlob[0x17DA] = (unsigned char)DAT_00483732;
+    /* 3. Save and reload the one canonical config record. */
     Save_Options_Config();
     Load_Options_Config();
-    Sync_Config_From_Blob();
     DAT_004892e5 = 0;
 
     /* 4. Apply game mode presets (only when not mid-match — the match-time
@@ -5558,7 +5547,7 @@ void FUN_0041a8c0(void)
          * Maps to player offsets +0xAC..+0xB2 in a remapped order. */
         for (i = 0; i < (int)DAT_00489244; i++) {
             PlayerData *player = Player_Get(i);
-            unsigned char *kb = &g_ConfigBlob[0x186A + i * 8];
+            unsigned char *kb = g_GameConfig.values.player_keys[i];
             player->key_scan_codes[0] = kb[2];
             player->key_scan_codes[1] = kb[3];
             player->key_scan_codes[2] = kb[0];
@@ -5571,8 +5560,8 @@ void FUN_0041a8c0(void)
         /* 13. Assign team index and human flag per player */
         for (i = 0; i < (int)DAT_00489240; i++) {
             PlayerData *player = Player_Get(i);
-            player->team = g_ConfigBlob[0x3C6 + i];
-            player->human_controlled = g_ConfigBlob[0x376 + i];
+            player->team = g_GameConfig.values.player_team[i];
+            player->human_controlled = g_GameConfig.values.player_enabled[i];
         }
 
         /* 14. Build per-player ship type availability list.
@@ -5582,10 +5571,10 @@ void FUN_0041a8c0(void)
         for (i = 0; i < (int)DAT_00489240; i++) {
             PlayerData *player = Player_Get(i);
             int count = 0;
-            unsigned char *ship_avail = &g_ConfigBlob[0x4B6 + i * 0x3C];
+            unsigned char *ship_avail = g_GameConfig.values.player_weapon_enabled[i];
 
             for (j = 0; j < 0x2F; j++) {
-                if (g_ConfigBlob[0x1804 + j] != 0 && ship_avail[j] != 0) {
+                if (g_GameConfig.values.global_weapon_enabled[j] != 0 && ship_avail[j] != 0) {
                     player->weapon_slots[count] = static_cast<uint8_t>(j);
                     count++;
                 }
@@ -5650,7 +5639,6 @@ void FUN_0041d740(void)
     unsigned char saved_cfg_72d = DAT_0048372d;
 
     Load_Options_Config();
-    Sync_Config_From_Blob();
 
     if (DAT_0048764a == 0) {
         /* Not tournament mode - restore pre-load values */
@@ -6078,105 +6066,93 @@ void Set_Config_Defaults(void)
     g_WindowMode = 0;
 
     /* === Basic config (offsets 0-3) === */
-    g_ConfigBlob[0] = 1;     /* DAT_00481f58: active level slots (1 = first slot active) */
-    g_ConfigBlob[1] = 0;     /* DAT_00481f59 */
-    g_ConfigBlob[2] = 1;     /* DAT_00481f5a */
-    g_ConfigBlob[3] = 0x32;  /* DAT_00481f5b = 50 (default round limit) */
+    g_GameConfig.values.active_level_count = 1;
+    g_GameConfig.values.level_flags[0] = 0;
+    g_GameConfig.values.level_flags[1] = 1;
+    g_GameConfig.values.level_flags[2] = 0x32;
 
     /* === Level indirection table (200 ints at offset 4) ===
      * Original zeros this, relying on options.cfg for saved level order.
      * Sequential default ensures levels play in scanned order without options.cfg. */
     {
-        int *levelOrder = (int *)&g_ConfigBlob[4];
         for (int i = 0; i < 200; i++)
-            levelOrder[i] = i;
+            g_GameConfig.values.level_order[i] = i;
     }
 
     /* === Per-player config (64 players) === */
-    g_ConfigBlob[0x324] = 2;   /* DAT_0048227c[0]: player count low = 2 */
-    g_ConfigBlob[0x325] = 1;   /* DAT_0048227c[1]: player count high = 1 */
+    g_GameConfig.values.player_count = 2;
+    g_GameConfig.values.human_player_count = 1;
 
     for (int i = 0; i < 64; i++) {
-        g_ConfigBlob[0x326 + i] = 0;                 /* Handicap: 0 */
-        g_ConfigBlob[0x376 + i] = 0;                 /* Enable: 0 (first set below) */
-        g_ConfigBlob[0x3C6 + i] = (char)(i % 3);     /* Team: round-robin 0,1,2 */
-        g_ConfigBlob[0x416 + i] = (char)(i % 9);     /* Ship: round-robin 0-8 */
-        g_ConfigBlob[0x466 + i] = (char)rand();       /* Name: random byte */
+        g_GameConfig.values.player_difficulty[i] = 0;
+        g_GameConfig.values.player_enabled[i] = 0;
+        g_GameConfig.values.player_team[i] = (uint8_t)(i % 3);
+        g_GameConfig.values.player_ship[i] = (uint8_t)(i % 9);
+        g_GameConfig.values.player_color[i] = (uint8_t)rand();
         DAT_004836ce[i] = 0;                          /* Action assignment: 0 */
         /* Action maps: all enabled (0x3C bytes per player, fill with 0x01) */
-        memset(&g_ConfigBlob[0x4B6 + i * 0x3C], 0x01, 0x3C);
+        memset(g_GameConfig.values.player_weapon_enabled[i], 0x01, 0x3c);
     }
-    g_ConfigBlob[0x376] = 1;  /* First player enabled by default */
+    g_GameConfig.values.player_enabled[0] = 1;
 
     /* === Display/audio config (offset 0x17C6+) === */
-    g_ConfigBlob[0x17C6] = 1;    /* DAT_0048371e: music enable */
-    g_ConfigBlob[0x17C7] = 1;    /* DAT_0048371f: SFX enable */
-    g_ConfigBlob[0x17C8] = 0x5A; /* DAT_00483720[0]: music volume */
-    g_ConfigBlob[0x17C9] = 0x46; /* DAT_00483720[1]: SFX volume */
-    g_ConfigBlob[0x17CA] = 1;    /* DAT_00483720[2] */
-    g_ConfigBlob[0x17CB] = 0;    /* DAT_00483720[3] */
-    g_ConfigBlob[0x17CC] = 0x40; /* DAT_00483724[0] */
-    g_ConfigBlob[0x17CD] = 5;    /* DAT_00483724[1]: resolution index */
-    g_ConfigBlob[0x17CE] = 0;    /* DAT_00483724[2] */
-    g_ConfigBlob[0x17CF] = 1;    /* DAT_00483724[3] */
+    g_GameConfig.values.music_enabled = 1;
+    g_GameConfig.values.sound_enabled = 1;
+    g_GameConfig.values.music_volume = 0x5a;
+    g_GameConfig.values.sound_volume = 0x46;
+    g_GameConfig.values.sound_flags[0] = 1;
+    g_GameConfig.values.sound_flags[1] = 0;
+    g_GameConfig.values.display_flags = 0x40;
+    g_GameConfig.values.resolution_index = 5;
+    g_GameConfig.values.display_reserved = 0;
+    g_GameConfig.values.display_detail = 1;
 
     /* === Game rules config === */
-    g_ConfigBlob[0x17D0] = 1;    /* DAT_00483728 */
-    g_ConfigBlob[0x17D1] = 1;    /* DAT_00483729: game mode */
-    g_ConfigBlob[0x17D2] = 2;    /* DAT_0048372a: particle density */
-    g_ConfigBlob[0x17D3] = 1;    /* DAT_0048372b */
-    g_ConfigBlob[0x17D4] = 1;    /* DAT_0048372c */
-    g_ConfigBlob[0x17D5] = 0;    /* DAT_0048372d */
-    g_ConfigBlob[0x17D6] = 0x1E; /* DAT_0048372e = 30 */
-    g_ConfigBlob[0x17D7] = 3;    /* DAT_0048372f */
-    g_ConfigBlob[0x17D8] = 1;    /* DAT_00483730 */
-    g_ConfigBlob[0x17D9] = 1;    /* DAT_00483731 */
-    g_ConfigBlob[0x17DA] = 0xFF; /* DAT_00483732 (set at end in original, moved here) */
-    g_ConfigBlob[0x17DC] = 0;    /* DAT_00483734 */
-    g_ConfigBlob[0x17DD] = 0;    /* DAT_00483735 */
-    g_ConfigBlob[0x17DE] = 0;    /* DAT_00483736 */
-    g_ConfigBlob[0x17DF] = 0;    /* DAT_00483737 */
-    g_ConfigBlob[0x17E0] = 0;    /* DAT_00483738 */
-    g_ConfigBlob[0x17E1] = 0;    /* DAT_00483739 */
-    g_ConfigBlob[0x17E2] = 3;    /* DAT_0048373a */
-    g_ConfigBlob[0x17E3] = 0;    /* DAT_0048373b */
-    g_ConfigBlob[0x17E4] = 0;    /* DAT_0048373c */
-    g_ConfigBlob[0x17E5] = 1;    /* DAT_0048373d */
-    g_ConfigBlob[0x17E6] = 1;    /* DAT_0048373e */
-    g_ConfigBlob[0x17E7] = 5;    /* DAT_0048373f */
-    g_ConfigBlob[0x17E8] = 9;    /* DAT_00483740[0] */
-    g_ConfigBlob[0x17E9] = 3;    /* DAT_00483740[1] */
-    g_ConfigBlob[0x17EA] = 1;    /* DAT_00483740[2] */
-    g_ConfigBlob[0x17EB] = 1;    /* DAT_00483740[3] */
-    g_ConfigBlob[0x17EC] = 2;    /* DAT_00483744 */
-    g_ConfigBlob[0x17ED] = 1;    /* DAT_00483745 */
-    g_ConfigBlob[0x17EE] = 0x3C; /* DAT_00483746: tick rate = 60 */
-    g_ConfigBlob[0x17EF] = 1;    /* DAT_00483747 */
+    g_GameConfig.values.ambient_emitters = 1;
+    g_GameConfig.values.game_type = 1;
+    g_GameConfig.values.team_count = 2;
+    g_GameConfig.values.team_mode = 1;
+    g_GameConfig.values.ambient_particles = 1;
+    g_GameConfig.values.fog_mode = 0;
+    g_GameConfig.values.fog_ray_resolution = 0x1e;
+    g_GameConfig.values.fog_detail = 3;
+    g_GameConfig.values.fog_wobble = 1;
+    g_GameConfig.values.sky_color_mode = 1;
+    g_GameConfig.values.saved_color_option = -1;
+    g_GameConfig.values.critter_spawns = 0;
+    g_GameConfig.values.team_base_placement = 0;
+    g_GameConfig.values.debris_difficulty = 0;
+    g_GameConfig.values.trooper_difficulty = 0;
+    g_GameConfig.values.game_mode = 0;
+    g_GameConfig.values.game_mode_preset = 0;
+    g_GameConfig.values.initial_lives = 3;
+    g_GameConfig.values.shared_lives = 0;
+    g_GameConfig.values.team_rules = 0;
+    g_GameConfig.values.friendly_fire = 1;
+    g_GameConfig.values.activation_guard = 1;
+    g_GameConfig.values.difficulty_secondary = 5;
+    g_GameConfig.values.round_time = 9;
+    g_GameConfig.values.difficulty_detail = 3;
+    g_GameConfig.values.shield_bar = 1;
+    g_GameConfig.values.radar = 1;
+    g_GameConfig.values.respawn_delay = 2;
+    g_GameConfig.values.detonation_mode = 1;
+    g_GameConfig.values.tick_rate = 0x3c;
+    g_GameConfig.values.weapon_auto_release = 1;
 
     /* === Entity/physics defaults === */
-    g_ConfigBlob[0x17F0] = 0x14; /* DAT_00483748[0] */
-    g_ConfigBlob[0x17F1] = 4;    /* DAT_00483748[1] */
-    g_ConfigBlob[0x17F2] = 0x14; /* DAT_00483748[2] */
-    g_ConfigBlob[0x17F3] = 0x14; /* DAT_00483748[3] */
-    g_ConfigBlob[0x17F4] = 0x14; /* DAT_0048374c[0] */
-    g_ConfigBlob[0x17F5] = 0x14; /* DAT_0048374c[1] */
-    g_ConfigBlob[0x17F6] = 0x14; /* DAT_0048374c[2] */
-    g_ConfigBlob[0x17F7] = 0x14; /* DAT_0048374c[3] */
-    g_ConfigBlob[0x17F8] = 0x14; /* DAT_00483750[0] */
-    g_ConfigBlob[0x17F9] = 0x14; /* DAT_00483750[1] */
-    g_ConfigBlob[0x17FA] = 0x14; /* DAT_00483750[2] */
-    g_ConfigBlob[0x17FB] = 1;    /* DAT_00483750[3] */
-    g_ConfigBlob[0x17FC] = 2;    /* DAT_00483754[0] */
-    g_ConfigBlob[0x17FD] = 0x14; /* DAT_00483754[1] */
-    g_ConfigBlob[0x17FE] = 1;    /* DAT_00483754[2] */
-    g_ConfigBlob[0x17FF] = 1;    /* DAT_00483754[3] */
-    g_ConfigBlob[0x1800] = 3;    /* DAT_00483758[0]: sky config */
-    g_ConfigBlob[0x1801] = 3;    /* DAT_00483758[1] */
-    g_ConfigBlob[0x1802] = 1;    /* DAT_00483758[2] */
-    g_ConfigBlob[0x1803] = 2;    /* DAT_00483758[3]: sky type */
+    g_GameConfig.values.stat_scaling = 0x14140414;
+    g_GameConfig.values.speed_scaling = 0x14141414;
+    g_GameConfig.values.misc_scaling = 0x01141414;
+    g_GameConfig.values.entity_flags[0] = 2;
+    g_GameConfig.values.entity_flags[1] = 0x14;
+    g_GameConfig.values.entity_flags[2] = 1;
+    g_GameConfig.values.entity_flags[3] = 1;
+    g_GameConfig.values.sky_settings = 0x02010303;
 
     /* === Ship availability flags (50 bytes at offset 0x1804, all enabled) === */
-    memset(&g_ConfigBlob[0x1804], 0x01, 50);
+    memset(g_GameConfig.values.global_weapon_enabled, 1,
+           sizeof(g_GameConfig.values.global_weapon_enabled));
 
     /* === Ship stats / per-ship data (zeroed) === */
     /* _DAT_0048378e (offset 0x1836): 4 bytes */
@@ -6190,80 +6166,49 @@ void Set_Config_Defaults(void)
     /* _DAT_0048379e (offset 0x1846): 4 bytes */
     memset(&g_ConfigBlob[0x1846], 0, 4);
     /* DAT_004837e4 (offset 0x188C) */
-    memset(&g_ConfigBlob[0x188C], 0, 4);
-    /* DAT_004837e8 (offset 0x1890) = 1 */
-    g_ConfigBlob[0x1890] = 1;
-    g_ConfigBlob[0x1891] = 0; g_ConfigBlob[0x1892] = 0; g_ConfigBlob[0x1893] = 0;
-    /* DAT_004837ec (offset 0x1894) */
-    memset(&g_ConfigBlob[0x1894], 0, 4);
+    g_GameConfig.values.setup_toggle = 0;
+    g_GameConfig.values.setup_mode = 1;
+    g_GameConfig.values.setup_counter = 0;
 
     /* === Two parallel stat tables (6 ints each, zeroed) === */
     /* Table at offset 0x1898 (DAT_004837f0) and 0x18B0 (DAT_00483808) */
-    memset(&g_ConfigBlob[0x1898], 0, 24);
-    memset(&g_ConfigBlob[0x18B0], 0, 24);
+    memset(g_GameConfig.values.setup_values, 0,
+           sizeof(g_GameConfig.values.setup_values));
+    memset(g_GameConfig.values.setup_limits, 0,
+           sizeof(g_GameConfig.values.setup_limits));
 
     /* === Default key bindings (DirectInput scan codes) === */
-    g_ConfigBlob[0x1862] = 0x19;  /* DAT_004837ba: Pause = P */
-    g_ConfigBlob[0x1863] = 0x40;  /* DAT_004837bb: F6 */
-    g_ConfigBlob[0x1864] = (char)0xC9;  /* DAT_004837bc[0]: Page Up */
-    g_ConfigBlob[0x1865] = (char)0xD1;  /* DAT_004837bc[1]: Page Down */
+    g_GameConfig.values.pause_key = 0x19;
+    g_GameConfig.values.camera_key = 0x40;
+    g_GameConfig.values.menu_keys[0] = 0xc9;
+    g_GameConfig.values.menu_keys[1] = 0xd1;
 
     /* Player 1: Up/Down/Left/Right/Fire/Special/Weapon1/Weapon2 */
-    g_ConfigBlob[0x186A] = (char)0xC8;  /* Up Arrow */
-    g_ConfigBlob[0x186B] = (char)0xD0;  /* Down Arrow */
-    g_ConfigBlob[0x186C] = (char)0xCB;  /* Left Arrow */
-    g_ConfigBlob[0x186D] = (char)0xCD;  /* Right Arrow */
-    g_ConfigBlob[0x186E] = 0x36;  /* Right Shift */
-    g_ConfigBlob[0x186F] = (char)0x9D;  /* Right Ctrl */
-    g_ConfigBlob[0x1870] = 0x35;  /* Numpad / */
-    g_ConfigBlob[0x1871] = 0x34;  /* Numpad . */
-
-    /* Player 2: WASD + Tab/Q/1/2 */
-    g_ConfigBlob[0x1872] = 0x11;  /* W */
-    g_ConfigBlob[0x1873] = 0x1F;  /* S */
-    g_ConfigBlob[0x1874] = 0x1E;  /* A */
-    g_ConfigBlob[0x1875] = 0x20;  /* D */
-    g_ConfigBlob[0x1876] = 0x0F;  /* Tab */
-    g_ConfigBlob[0x1877] = 0x10;  /* Q */
-    g_ConfigBlob[0x1878] = 0x02;  /* 1 */
-    g_ConfigBlob[0x1879] = 0x03;  /* 2 */
-
-    /* Player 3: IKJL + B/V/N/H */
-    g_ConfigBlob[0x187A] = 0x17;  /* I */
-    g_ConfigBlob[0x187B] = 0x25;  /* K */
-    g_ConfigBlob[0x187C] = 0x24;  /* J */
-    g_ConfigBlob[0x187D] = 0x26;  /* L */
-    g_ConfigBlob[0x187E] = 0x30;  /* B */
-    g_ConfigBlob[0x187F] = 0x2F;  /* V */
-    g_ConfigBlob[0x1880] = 0x31;  /* N */
-    g_ConfigBlob[0x1881] = 0x23;  /* H */
-
-    /* Player 4: Numpad 5/2/1/3/7/8/9/4 */
-    g_ConfigBlob[0x1882] = 0x4C;  /* Numpad 5 */
-    g_ConfigBlob[0x1883] = 0x50;  /* Numpad 2 */
-    g_ConfigBlob[0x1884] = 0x4F;  /* Numpad 1 */
-    g_ConfigBlob[0x1885] = 0x51;  /* Numpad 3 */
-    g_ConfigBlob[0x1886] = 0x47;  /* Numpad 7 */
-    g_ConfigBlob[0x1887] = 0x48;  /* Numpad 8 */
-    g_ConfigBlob[0x1888] = 0x49;  /* Numpad 9 */
-    g_ConfigBlob[0x1889] = 0x4B;  /* Numpad 4 */
+    const uint8_t default_player_keys[4][8] = {
+        {0xc8, 0xd0, 0xcb, 0xcd, 0x36, 0x9d, 0x35, 0x34},
+        {0x11, 0x1f, 0x1e, 0x20, 0x0f, 0x10, 0x02, 0x03},
+        {0x17, 0x25, 0x24, 0x26, 0x30, 0x2f, 0x31, 0x23},
+        {0x4c, 0x50, 0x4f, 0x51, 0x47, 0x48, 0x49, 0x4b}
+    };
+    memcpy(g_GameConfig.values.player_keys, default_player_keys,
+           sizeof(default_player_keys));
 
     /* === Team color palette (X1R5G5B5) === */
-    DAT_00483838[0] = 0x1A56;  /* Teal/cyan */
-    DAT_00483838[1] = 0x2ACA;  /* Green */
-    DAT_00483838[2] = 0x6508;  /* Red */
-    DAT_00483838[3] = 0x4A52;  /* Initial value (overwritten below and by FUN_0042d8b0) */
+    g_GameConfig.values.team_colors[0] = 0x1a56;
+    g_GameConfig.values.team_colors[1] = 0x2aca;
+    g_GameConfig.values.team_colors[2] = 0x6508;
+    g_GameConfig.values.team_colors[3] = 0x4a52;
 
     /* === Physics/render constants (int-sized at offsets 0x18E8+) === */
-    *(int *)&g_ConfigBlob[0x18E8] = 0x1F;   /* DAT_00483840 */
-    *(int *)&g_ConfigBlob[0x18EC] = 0x40;   /* DAT_00483844 */
-    *(int *)&g_ConfigBlob[0x18F0] = 9;      /* DAT_00483848 */
-    *(int *)&g_ConfigBlob[0x18F4] = 0xD01;  /* DAT_0048384c: water color */
-    *(short *)&g_ConfigBlob[0x18F6] = 0x1943; /* _DAT_0048384e */
-    *(int *)&g_ConfigBlob[0x18F8] = 0x4A0;  /* DAT_00483850 */
-    *(int *)&g_ConfigBlob[0x18FC] = 0x3F800000; /* _DAT_00483854: float 1.0 */
-    *(int *)&g_ConfigBlob[0x1900] = 0x3F800000; /* _DAT_00483858: float 1.0 */
-    *(int *)&g_ConfigBlob[0x1904] = 0x3F800000; /* _DAT_0048385c: float 1.0 */
+    g_GameConfig.values.water_red = 0x1f;
+    g_GameConfig.values.water_green = 0x40;
+    g_GameConfig.values.water_blue = 9;
+    g_GameConfig.values.water_color = 0x0d01;
+    g_GameConfig.values.water_light_color = 0x1943;
+    g_GameConfig.values.water_dark_color = 0x04a0;
+    g_GameConfig.values.entity_density = 1.0f;
+    g_GameConfig.values.inverse_entity_density = 1.0f;
+    g_GameConfig.values.weather_density = 1.0f;
 }
 
 /* ===== Init_Game_Config (004207C0) ===== */
@@ -6281,8 +6226,7 @@ void Init_Game_Config(void)
         static const unsigned short default_team_colors[4] = {
             0x1A56, 0x2ACA, 0x6508, 0x4A52
         };
-        unsigned short *saved_team_colors =
-            (unsigned short *)&g_ConfigBlob[0x18E0];
+        unsigned short *saved_team_colors = g_GameConfig.values.team_colors;
         for (int i = 0; i < 4; i++) {
             if (saved_team_colors[i] == 0)
                 saved_team_colors[i] = default_team_colors[i];
@@ -6292,7 +6236,6 @@ void Init_Game_Config(void)
     /* Final overrides (applied AFTER loading saved config) */
     DAT_00483838[3] = 0x6739;  /* Gray palette (will be overwritten to gold by FUN_0042d8b0) */
 
-    Sync_Config_From_Blob();
 }
 
 /* ===== Reset_Config_To_Defaults =====
@@ -6309,7 +6252,6 @@ void Reset_Config_To_Defaults(void)
     Set_Config_Defaults();
     DAT_00483838[3] = 0x6739;
     Save_Options_Config();
-    Sync_Config_From_Blob();
 }
 
 /* ===== Load_Options_Config (0042F360) ===== */
@@ -6319,7 +6261,7 @@ void Load_Options_Config(void)
 {
     FILE *fp = fopen("options.cfg", "rb");
     if (fp != NULL) {
-        fread(g_ConfigBlob, 1, 6408, fp);
+        fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp);
         unsigned char savedWindowMode = 0;
         if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
             g_WindowMode = savedWindowMode;
@@ -6333,211 +6275,10 @@ void Save_Options_Config(void)
 {
     FILE *fp = fopen("options.cfg", "wb");
     if (fp != NULL) {
-        fwrite(g_ConfigBlob, 1, 6408, fp);
+        fwrite(&g_GameConfig, 1, sizeof(g_GameConfig), fp);
         fwrite(&g_WindowMode, 1, 1, fp);
         fclose(fp);
     }
-}
-
-/* ===== Sync_Config_From_Blob ===== */
-/* REFACTOR NOTE: This function IS still needed (unlike Sync_Config_To_Blob).
- *
- * In the original binary, config globals at 0x00481F58-0x0048385F are
- * aliases into the config blob memory. Our decomp defines them as separate
- * variables, so we must sync after loading the blob from options.cfg.
- *
- * Called at startup after Load_Options_Config() and after level list reload.
- * Game systems read these separate globals during gameplay — they MUST be
- * kept in sync with the blob.
- *
- * IDEAL REFACTOR: Same as Sync_Config_To_Blob — convert globals to #define
- * macros aliasing into g_ConfigBlob, then delete both Sync functions. */
-void Sync_Config_From_Blob(void)
-{
-    /* Sound / display config */
-    DAT_0048371e      = (char)g_ConfigBlob[0x17C6];
-    DAT_0048371f      = (char)g_ConfigBlob[0x17C7];
-    memcpy(DAT_00483720, &g_ConfigBlob[0x17C8], 8);
-    memcpy(DAT_00483724, &g_ConfigBlob[0x17CC], 4);
-
-    /* Game type / team / particles */
-    DAT_00483729      = (char)g_ConfigBlob[0x17D1];
-    DAT_0048372a      = (char)g_ConfigBlob[0x17D2];
-    DAT_0048372b      = (char)g_ConfigBlob[0x17D3];
-    DAT_0048372c      = (char)g_ConfigBlob[0x17D4];
-    DAT_0048372d      = (char)g_ConfigBlob[0x17D5];
-    DAT_0048372e      = (char)g_ConfigBlob[0x17D6];
-    DAT_0048372f      = (char)g_ConfigBlob[0x17D7];
-    DAT_00483730      = (char)g_ConfigBlob[0x17D8];
-
-    /* Misc config */
-    DAT_00483731      = (char)g_ConfigBlob[0x17D9];
-    DAT_00483732      = (char)g_ConfigBlob[0x17DA];
-    DAT_00483734      = (char)g_ConfigBlob[0x17DC];
-    DAT_00483735      = (char)g_ConfigBlob[0x17DD];
-    DAT_00483736      = (char)g_ConfigBlob[0x17DE];
-    DAT_00483737      = (char)g_ConfigBlob[0x17DF];
-    DAT_00483738      = (char)g_ConfigBlob[0x17E0];
-    DAT_00483739      = (char)g_ConfigBlob[0x17E1];
-    DAT_0048373a      = (short)g_ConfigBlob[0x17E2];  /* single byte; 0x17E3 is DAT_0048373b */
-    DAT_0048373b      = (char)g_ConfigBlob[0x17E3];
-    DAT_0048373c      = (char)g_ConfigBlob[0x17E4];
-    DAT_0048373d      = (char)g_ConfigBlob[0x17E5];
-    DAT_0048373e      = (char)g_ConfigBlob[0x17E6];
-    DAT_0048373f      = (char)g_ConfigBlob[0x17E7];
-    DAT_00483740      = (char)g_ConfigBlob[0x17E8];
-    DAT_00483741      = (char)g_ConfigBlob[0x17E9];
-    DAT_00483742      = (char)g_ConfigBlob[0x17EA];
-    DAT_00483743      = (char)g_ConfigBlob[0x17EB];
-    DAT_00483744      = (char)g_ConfigBlob[0x17EC];
-    DAT_00483745      = (char)g_ConfigBlob[0x17ED];
-    DAT_00483746      = (short)g_ConfigBlob[0x17EE];  /* single byte; 0x17EF is DAT_00483747 */
-    DAT_00483747      = (char)g_ConfigBlob[0x17EF];
-    DAT_00483748      = *(int *)&g_ConfigBlob[0x17F0];
-    DAT_0048374c      = *(int *)&g_ConfigBlob[0x17F4];
-    DAT_00483750      = *(int *)&g_ConfigBlob[0x17F8];
-    memcpy(DAT_00483754, &g_ConfigBlob[0x17FC], 4);
-    DAT_00483758      = *(int *)&g_ConfigBlob[0x1800];
-
-    /* Ship-taken flags */
-    memcpy(DAT_0048378e, &g_ConfigBlob[0x1836], 9);
-
-    /* Key bindings */
-    DAT_004837ba      = g_ConfigBlob[0x1862];
-    DAT_004837bb      = g_ConfigBlob[0x1863];
-
-    /* Rendering / scaling constants */
-    DAT_00483820      = *(unsigned short *)&g_ConfigBlob[0x18C8];
-    DAT_00483824      = *(int *)&g_ConfigBlob[0x18CC];
-    DAT_00483828      = *(int *)&g_ConfigBlob[0x18D0];
-    DAT_0048382c      = *(int *)&g_ConfigBlob[0x18D4];
-    DAT_00483830      = *(int *)&g_ConfigBlob[0x18D8];
-    DAT_00483834      = g_ConfigBlob[0x18DC];
-    DAT_00483835      = g_ConfigBlob[0x18DD];
-    DAT_00483836      = (char)g_ConfigBlob[0x18DE];
-
-    /* Team color palette */
-    memcpy(DAT_00483838, &g_ConfigBlob[0x18E0], 8);
-
-    /* Fire color thresholds */
-    DAT_00483840      = *(unsigned int *)&g_ConfigBlob[0x18E8];
-    DAT_00483844      = *(unsigned int *)&g_ConfigBlob[0x18EC];
-    DAT_00483848      = *(unsigned int *)&g_ConfigBlob[0x18F0];
-
-    /* Tile / entity colors */
-    DAT_0048384c      = *(unsigned short *)&g_ConfigBlob[0x18F4];
-    DAT_0048384e      = *(unsigned short *)&g_ConfigBlob[0x18F6];
-    DAT_00483850      = *(unsigned short *)&g_ConfigBlob[0x18F8];
-
-    /* Entity density factors */
-    DAT_00483854      = *(float *)&g_ConfigBlob[0x18FC];
-    DAT_00483858      = *(float *)&g_ConfigBlob[0x1900];
-
-    /* Weather threshold */
-    DAT_0048385c      = *(float *)&g_ConfigBlob[0x1904];
-
-    /* Player config: DAT_0048227c is now a macro alias into g_ConfigBlob[0x324],
-     * so no copy needed (they're the same memory). */
-}
-
-/* ===== Sync_Config_To_Blob ===== */
-/* REFACTOR NOTE: This function is largely DEAD CODE.
- *
- * In the original binary, config globals (DAT_0048371e, etc.) are aliases into
- * g_ConfigBlob — same memory. Our decomp defines them as separate variables,
- * so this function was created to bridge the gap before saving.
- *
- * However, the menu system writes directly to g_ConfigBlob via CFG_ADDR
- * pointers. Calling Sync_Config_To_Blob before save would OVERWRITE those
- * menu changes with stale separate globals (the config persistence bug).
- *
- * Current state:
- *   - Removed from case 0xFE (exit/save) — menu writes blob directly.
- *   - Only called from the level list reload path (~line 5083), where we
- *     manually sync just the 2 modified globals instead of calling this.
- *   - The function itself is complete but vestigial.
- *
- * Known gap: DAT_0048373f is NOT synced back (missing from this function),
- * but this doesn't matter since we don't call it on the save path.
- *
- * IDEAL REFACTOR: Convert all DAT_004837xx globals to #define macros that
- * alias into g_ConfigBlob (matching the original binary's memory layout).
- * Then both Sync functions can be deleted entirely. */
-void Sync_Config_To_Blob(void)
-{
-    g_ConfigBlob[0x17C6]                          = (unsigned char)DAT_0048371e;
-    g_ConfigBlob[0x17C7]                          = (unsigned char)DAT_0048371f;
-    memcpy(&g_ConfigBlob[0x17C8], DAT_00483720, 8);
-    memcpy(&g_ConfigBlob[0x17CC], DAT_00483724, 4);
-
-    g_ConfigBlob[0x17D1]                          = (unsigned char)DAT_00483729;
-    g_ConfigBlob[0x17D2]                          = (unsigned char)DAT_0048372a;
-    g_ConfigBlob[0x17D3]                          = (unsigned char)DAT_0048372b;
-    g_ConfigBlob[0x17D4]                          = (unsigned char)DAT_0048372c;
-    g_ConfigBlob[0x17D5]                          = (unsigned char)DAT_0048372d;
-    g_ConfigBlob[0x17D6]                          = (unsigned char)DAT_0048372e;
-    g_ConfigBlob[0x17D7]                          = (unsigned char)DAT_0048372f;
-    g_ConfigBlob[0x17D8]                          = (unsigned char)DAT_00483730;
-
-    g_ConfigBlob[0x17D9]                          = (unsigned char)DAT_00483731;
-    g_ConfigBlob[0x17DA]                          = (unsigned char)DAT_00483732;
-    g_ConfigBlob[0x17DC]                          = (unsigned char)DAT_00483734;
-    g_ConfigBlob[0x17DD]                          = (unsigned char)DAT_00483735;
-    g_ConfigBlob[0x17DE]                          = (unsigned char)DAT_00483736;
-    g_ConfigBlob[0x17DF]                          = (unsigned char)DAT_00483737;
-    g_ConfigBlob[0x17E0]                          = (unsigned char)DAT_00483738;
-    g_ConfigBlob[0x17E1]                          = (unsigned char)DAT_00483739;
-    g_ConfigBlob[0x17E2]                          = (unsigned char)DAT_0048373a;
-    g_ConfigBlob[0x17E3]                          = (unsigned char)DAT_0048373b;
-    g_ConfigBlob[0x17E4]                          = (unsigned char)DAT_0048373c;
-    g_ConfigBlob[0x17E5]                          = (unsigned char)DAT_0048373d;
-    g_ConfigBlob[0x17E6]                          = (unsigned char)DAT_0048373e;
-    g_ConfigBlob[0x17E7]                          = (unsigned char)DAT_0048373f;
-    g_ConfigBlob[0x17E8]                          = (unsigned char)DAT_00483740;
-    g_ConfigBlob[0x17E9]                          = (unsigned char)DAT_00483741;
-    g_ConfigBlob[0x17EA]                          = (unsigned char)DAT_00483742;
-    g_ConfigBlob[0x17EB]                          = (unsigned char)DAT_00483743;
-    g_ConfigBlob[0x17EC]                          = (unsigned char)DAT_00483744;
-    g_ConfigBlob[0x17ED]                          = (unsigned char)DAT_00483745;
-    g_ConfigBlob[0x17EE]                          = (unsigned char)DAT_00483746;
-    g_ConfigBlob[0x17EF]                          = (unsigned char)DAT_00483747;
-    *(int *)&g_ConfigBlob[0x17F0]                 = DAT_00483748;
-    *(int *)&g_ConfigBlob[0x17F4]                 = DAT_0048374c;
-    *(int *)&g_ConfigBlob[0x17F8]                 = DAT_00483750;
-    memcpy(&g_ConfigBlob[0x17FC], DAT_00483754, 4);
-    *(int *)&g_ConfigBlob[0x1800]                 = DAT_00483758;
-
-    memcpy(&g_ConfigBlob[0x1836], DAT_0048378e, 9);
-
-    g_ConfigBlob[0x1862]                          = DAT_004837ba;
-    g_ConfigBlob[0x1863]                          = DAT_004837bb;
-
-    *(unsigned short *)&g_ConfigBlob[0x18C8]      = DAT_00483820;
-    *(int *)&g_ConfigBlob[0x18CC]                 = DAT_00483824;
-    *(int *)&g_ConfigBlob[0x18D0]                 = DAT_00483828;
-    *(int *)&g_ConfigBlob[0x18D4]                 = DAT_0048382c;
-    *(int *)&g_ConfigBlob[0x18D8]                 = DAT_00483830;
-    g_ConfigBlob[0x18DC]                          = DAT_00483834;
-    g_ConfigBlob[0x18DD]                          = DAT_00483835;
-    g_ConfigBlob[0x18DE]                          = (unsigned char)DAT_00483836;
-
-    memcpy(&g_ConfigBlob[0x18E0], DAT_00483838, 8);
-
-    *(unsigned int *)&g_ConfigBlob[0x18E8]        = DAT_00483840;
-    *(unsigned int *)&g_ConfigBlob[0x18EC]        = DAT_00483844;
-    *(unsigned int *)&g_ConfigBlob[0x18F0]        = DAT_00483848;
-
-    *(unsigned short *)&g_ConfigBlob[0x18F4]      = DAT_0048384c;
-    *(unsigned short *)&g_ConfigBlob[0x18F6]      = DAT_0048384e;
-    *(unsigned short *)&g_ConfigBlob[0x18F8]      = DAT_00483850;
-
-    *(float *)&g_ConfigBlob[0x18FC]               = DAT_00483854;
-    *(float *)&g_ConfigBlob[0x1900]               = DAT_00483858;
-
-    *(float *)&g_ConfigBlob[0x1904]               = DAT_0048385c;
-
-    /* Player config: DAT_0048227c is now a macro alias into g_ConfigBlob[0x324],
-     * so no copy needed (they're the same memory). */
 }
 
 /* ===== Init_Math_Tables (00425780) ===== */
@@ -6661,7 +6402,7 @@ MainInit:
     g_ModeWidths[8] = 1152;  g_ModeHeights[8] = 864;
     g_ModeWidths[9] = 1280;  g_ModeHeights[9] = 1024;
 
-    g_SubState = 0;
+    g_SubState = GAMEPLAY_ACTIVE;
     g_NeedsRedraw = 0;
     g_NumDisplayModes = 10;
 

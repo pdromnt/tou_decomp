@@ -267,7 +267,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
      *   0 → sprite 0x40, 1 → sprite 0x45, 2 → sprite 0x46 (default)
      *   3 → solid color 0x446, ≥4 → black */
     {
-        unsigned char sky_type = g_ConfigBlob[0x1803];
+        unsigned char sky_type = g_GameConfig.values.sky_settings_bytes[3];
         if (sky_type < 3 && DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
             int sky_sprite = (sky_type == 0) ? 0x40 : ((sky_type == 1) ? 0x45 : 0x46);
             int spr_w = (int)((unsigned char *)DAT_00489e8c)[sky_sprite];
@@ -343,8 +343,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
             vp_top  += (rand() % 6) - 3;
         }
     } else {
-        vp_left = ((int)DAT_004879f0 - vp_w) / 2;
-        vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
+        vp_left = (g_SpectatorCameraX >> FIXED_SHIFT) - vp_w / 2;
+        vp_top  = (g_SpectatorCameraY >> FIXED_SHIFT) - vp_h / 2;
     }
 
     /* Clamp to 7-pixel border */
@@ -585,8 +585,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
     } /* end per-viewport loop */
 
     /* ---- Pause / overlay states (end of FUN_00407720) ---- */
-    if (g_SubState != 0) {
-        if (g_SubState == 1) {
+    if (g_SubState != GAMEPLAY_ACTIVE) {
+        if (g_SubState == GAMEPLAY_PAUSED) {
             /* State 1 (Pause key): text overlay with key name + version string.
              * Original: "Game Paused. Press \"[KEY]\" to continue." + "TOU v1.0" */
             char pause_msg[100];
@@ -601,7 +601,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                 buffer + (DAT_0048923c - 0x0f) * stride + 8,
                 stride, 0, DAT_00489238 - 0x10, 0);
         }
-        else if (g_SubState == 2) {
+        else if (g_SubState == GAMEPLAY_EXIT_MENU) {
             /* State 2 (ESC menu): render sprite 0x37 centered on screen */
             if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
                 int frame_off = ((int *)DAT_00489234)[0x37];
@@ -627,7 +627,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                 }
             }
         }
-        else if ((unsigned char)DAT_0048693c < g_ConfigBlob[0]) {
+        else if ((unsigned char)DAT_0048693c < g_GameConfig.values.active_level_count) {
             /* States 3/4 (round-end stats / level preview): render sprite 0x3F panel
              * with level number, round result, and team win counts.
              * Original at end of FUN_00407720: draws for any substate not 0/1/2
@@ -662,7 +662,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     /* Level count: "N / M" (original format at 0x47b110) */
                     FUN_004644af(text_buf, (const unsigned char *)"%d / %d",
                                  (int)(unsigned char)DAT_0048693c,
-                                 (int)(unsigned char)g_ConfigBlob[0]);
+                                 (int)g_GameConfig.values.active_level_count);
                     Draw_Text_To_Buffer(text_buf, 2, 0,
                         buffer + (panel_y + 10) * stride + panel_x + 0x73,
                         stride, 0, 0xFA, 0);
@@ -744,7 +744,7 @@ void Render_Frame(void)
     /* 1. Draw background into scratch buffer.
      *    Gameplay state (g_GameState==0) with level data: blit level background.
      *    Menu/intro: copy Software_Buffer (JPEG background). */
-    if (g_GameState == 0 && DAT_00481f50 != NULL) {
+    if (g_GameState == GAME_STATE_GAMEPLAY && DAT_00481f50 != NULL) {
         /* Game world: blit visible viewport from level background */
         Render_Game_World(&framebuffer);
     } else {
@@ -760,7 +760,7 @@ void Render_Frame(void)
      *    and FUN_004076d0 are menu/intro-only in the original binary —
      *    calling them during gameplay would draw stale menu text and apply
      *    fog a second time, making the screen too dark. */
-    if (g_GameState != 0) {
+    if (g_GameState != GAME_STATE_GAMEPLAY) {
         Render_Game_View_To(&framebuffer);
         FUN_004076d0(&framebuffer);
     }
@@ -872,7 +872,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                      * Most weapons have indices in 200-240 range. */
                     /* 3-state circle: red=banned, blue=on, gray=off */
                     int per_player_val = cfgPtr ? (int)*cfgPtr : 0;
-                    int globally_banned = (g_ConfigBlob[0x1804 + wpn_idx] == 0) ? 1 : 0;
+                    int globally_banned =
+                        (g_GameConfig.values.global_weapon_enabled[wpn_idx] == 0) ? 1 : 0;
                     /* Circle background sprites — from Ghidra FUN_0040aaf0.
                      * 4 states: 0xC8=red(banned), 0xD4=blue(selected), 0xEE=normal, 0xEF=gray(nonexistent).
                      * Priority: gray > blue > red/normal. */
@@ -885,7 +886,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                         if (wpn_idx == (int)(unsigned char)DAT_004836ce[player_idx])
                             color_state = 1; /* blue = selected */
                         /* Check if weapon exists */
-                        if (g_ConfigBlob[0x1804 + wpn_idx] == 0)
+                        if (g_GameConfig.values.global_weapon_enabled[wpn_idx] == 0)
                             color_state = 3; /* gray = nonexistent/globally banned */
                         int circle_spr;
                         switch (color_state) {
@@ -1229,7 +1230,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             /* Computer/CPU: stars for CPU players, "-" for humans */
             case 0x1F: {
                 unsigned char cpuDiff = cfgPtr ? *cfgPtr : 0;
-                unsigned int humanCount = g_ConfigBlob[0x325] & 0xFF;
+                unsigned int humanCount = g_GameConfig.values.human_player_count;
 
                 /* Inline slider preview for human count */
                 if (g_InputMode == 1 && g_GameViewData) {

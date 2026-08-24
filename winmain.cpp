@@ -10,9 +10,15 @@
 /* ===== Globals defined in this module ===== */
 HWND           hWnd_Main   = NULL;   /* 00489EDC */
 int            g_bIsActive = 0;      /* 00489EC4 */
-unsigned char  g_GameState = 0;      /* 004877A0 */
+GameState      g_GameState = GAME_STATE_GAMEPLAY; /* 004877A0 */
 DWORD          g_TimerStart = 0;     /* 004892B0 */
 int            g_TimerAux   = 0;     /* 004892B4 */
+
+void GameState_Transition(GameState next_state)
+{
+    LOG("[STATE] main %u -> %u\n", (unsigned)g_GameState, (unsigned)next_state);
+    g_GameState = next_state;
+}
 
 static void Set_Focus_Audio_Muted(int muted)
 {
@@ -84,8 +90,8 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
         } else {
             if (GetCapture() == hWnd_Main)
                 ReleaseCapture();
-            if (g_GameState == 0 && g_SubState == 0) {
-                g_SubState = 1;
+            if (g_GameState == GAME_STATE_GAMEPLAY && g_SubState == GAMEPLAY_ACTIVE) {
+                g_SubState = GAMEPLAY_PAUSED;
                 g_NeedsRedraw = 1;
                 g_SurfaceReady = 2;
                 g_TimerStart = timeGetTime();
@@ -299,7 +305,7 @@ MAIN_LOOP:
 
         /* Game_Update_Render (state 0) is the full gameplay loop (Phase 6).
          * Until it's decompiled, start at intro init instead. */
-        g_GameState = 0x96;
+        GameState_Transition(GAME_STATE_INTRO_INIT);
 
         /* COMPAT: Time-limited message pump.
          * Original uses PeekMessage(PM_NOREMOVE) + GetMessage, processing
@@ -359,7 +365,7 @@ MAIN_LOOP:
                  * DAT_004877e8 since both DirectInput and Win32 cursor delta report
                  * the same physical mouse movement. */
                 g_ProcessInput = 1;
-                if (g_GameState == 0x00) {
+                if (g_GameState == GAME_STATE_GAMEPLAY) {
                     Game_Update_Render();
                 } else {
                     Game_State_Manager();

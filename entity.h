@@ -40,14 +40,11 @@ extern void                 *DAT_00487aa8;      /* particle color palette (256 x
 extern void                 *DAT_00481f4c;      /* ship color palette (256 x RGB555, from shipal.col) */
 #define                      DAT_0048784c DAT_00487834[6]  /* alias: same memory in original */
 extern void                 *DAT_0048781c;      /* entity link table base */
-extern char                  DAT_0048373d;       /* friendly fire enabled flag */
 extern void                 *DAT_00487ab8;      /* tile edge sprite table */
 extern void                 *DAT_004876a0;      /* spawn point array (0xc00, stride 0xc) */
 extern void                 *DAT_00487aa0;      /* decoration array (0x800, stride 0x10) */
 extern void                 *DAT_00489e80;      /* wall segment array (16 * 0x20) */
 extern void                 *DAT_00489e7c;      /* fluid source array (5000 * 0x20) */
-extern unsigned short        DAT_0048384e;      /* laser pixel color A */
-extern unsigned short        DAT_00483850;      /* laser pixel color B */
 
 /* ===== Entity type definitions (memory.cpp) ===== */
 extern void                 *DAT_00487abc;      /* Entity type table (0x11030 bytes, 128 types * 0x218 each) */
@@ -64,14 +61,10 @@ extern void                 *DAT_0048792c[48];  /* Blend LUT tables */
 
 /* ===== Ship/Player Data ===== */
 extern int                   DAT_004877f8[4];   /* active player index table (up to 4 viewports) */
-extern char                  DAT_00483738;       /* game mode (0=normal, 1=random, 2=config) */
-extern short                 DAT_0048373a;       /* initial lives */
-extern int                   DAT_00483830;       /* starting health */
 extern void                 *DAT_0048780c;       /* ship stats table (0x40 per ship, 9 ships) */
 extern unsigned char         DAT_0048236e[];     /* ship type per player (from level data) */
 /* Original 0x004836CE: per-player selected starting weapon type IDs. */
 #define DAT_004836ce ((char *)&g_ConfigBlob[0x1776])
-extern char                  DAT_0048378e[];     /* ship-taken flags (9 entries) */
 extern void                 *DAT_00489eac[4];    /* per-player visibility buffers */
 extern int                   DAT_00487788[4];    /* per-player stat counters */
 
@@ -84,15 +77,7 @@ extern unsigned char         DAT_00487648;       /* highest team score */
 extern char                  DAT_00487644[4];    /* winning team indices */
 
 /* ===== Entity Spawning Config ===== */
-extern char                  DAT_00483737;       /* trooper difficulty (0=none, 1-3=density) */
-extern char                  DAT_00483736;       /* debris difficulty */
-extern char                  DAT_00483735;       /* team base placement mode */
-extern char                  DAT_00483734;       /* critter spawn enable flag */
-extern char                  DAT_0048373c;       /* team mode flag */
-extern char                  DAT_0048372c;       /* ambient particle spawn mode (0=3x, 1=1x, 2=off) */
 extern unsigned char         DAT_00483962;       /* team base probability % */
-extern unsigned char         DAT_00483754[4];    /* entity enable flags [2]=walls, [3]=projectiles */
-extern int                   DAT_00483758;       /* entity density config packed */
 
 /* ===== Entity Spawning Counts ===== */
 extern int                   DAT_00489270;       /* wall segment count */
@@ -107,7 +92,6 @@ extern char                  DAT_004892a4;       /* team victory flag */
 extern char                  DAT_004892a5;       /* activation flag */
 extern int                   DAT_00487834[12];   /* entity tracking counters */
 extern float                 DAT_004892d0;       /* water level / weather effect */
-extern float                 DAT_0048385c;       /* weather/temperature threshold */
 
 /* ===== Entity Behavior (entity.cpp) ===== */
 extern int  DAT_00486944[4];       /* per-team stat counters A */
@@ -121,8 +105,6 @@ extern int  DAT_00486e68[PLAYER_STORAGE_CAPACITY]; /* damage dealt */
 extern int  DAT_00486fa8[PLAYER_STORAGE_CAPACITY]; /* distance traveled */
 extern int  DAT_004870e8[PLAYER_STORAGE_CAPACITY]; /* explosion stats */
 extern int  DAT_00487228[PLAYER_STORAGE_CAPACITY]; /* pickup counter */
-extern char DAT_00483747;           /* weapon auto-release mode flag */
-extern char DAT_00483745;           /* detonation mode flag */
 
 /* ===== Turret LOS / Targeting (FUN_00458010) ===== */
 extern int                   DAT_00481ed0;       /* gravity for current weapon */
@@ -169,12 +151,7 @@ extern unsigned short        DAT_00481e8c;      /* tile explosion color accumula
 extern unsigned short        DAT_00481e8e;      /* tile explosion count accumulator */
 extern unsigned char         DAT_00481e8f;      /* building collision result flag */
 /* DAT_00487880 == g_PhysicsParams (defined in memory.cpp) */
-extern char                  DAT_0048373b;      /* shared lives mode flag */
-extern char                  DAT_00483744;      /* respawn delay mode */
 extern void                 *DAT_00487704[4];   /* color degradation LUT pointers (palette[24..27]) */
-extern unsigned int          DAT_00483840;      /* fire color match R threshold */
-extern unsigned int          DAT_00483844;      /* fire color match G threshold */
-extern unsigned int          DAT_00483848;      /* fire color match B threshold */
 
 /* ===== Sub-functions ===== */
 void FUN_0040fd70(int entity_idx, int snd, int x, int y, int vol_override = 0xFF, int param6 = 0x3E8); /* looping positional sound */

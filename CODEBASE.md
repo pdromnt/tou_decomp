@@ -49,6 +49,7 @@ without changing gameplay rendering.
 | `winmain.cpp` | Windows entry point, focus handling, window/input ownership |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
+| `config.h` | Byte-exact typed `options.cfg` layout and recovered field aliases |
 | `menu.cpp` | Menu behavior, player setup, rendering helpers, config interaction |
 | `sim.cpp` | Main simulation dispatcher and legacy entity behavior fallback |
 | `entity.cpp` | Player ships, AI, physics, weapons, collisions, entity lifecycle |
@@ -144,11 +145,9 @@ names are intentional where different subtypes reuse the same offset.
 ### Player record layout
 
 `types.h` also documents the verified portions of the original 0x598-byte
-`PlayerData` record. Use `Player_Get(index)` for typed access. The underlying
-`DAT_00487810` storage remains an `unsigned char *` on purpose: a large amount
-of unlifted code still expresses original byte offsets directly, and making the
-global a `PlayerData *` would change the meaning of those expressions while
-still compiling successfully.
+`PlayerData` record. The storage pool is now a `PlayerData *`, and
+`Player_Get(index)` is the common typed boundary. This conversion was delayed
+until the last direct byte-offset call sites had been lifted.
 
 Typed player code currently covers position snapshots, keyboard input, timer
 updates, steering, thrust/exhaust, core AI/life-state dispatch, positional
@@ -183,12 +182,20 @@ operations into independent field assignments can change behavior.
 
 ## Config Ownership
 
-`options.cfg` is represented by `g_ConfigBlob`. Much of the menu writes directly
-to blob offsets while runtime code also mirrors selected values in globals.
-That split is ugly but currently intentional. Do not make
-`Sync_Config_To_Blob()` a universal save step: it can overwrite newer menu
-values with stale globals. The typed-config migration in `BACKLOG.md` must solve
-ownership before changing this behavior.
+`options.cfg` has one canonical, packed `GameConfig` representation in
+`config.h`. Its typed layout is exactly 6408 bytes; the extra window-mode byte
+remains appended for compatibility with decomp-generated saves. Recovered
+`DAT_004837xx` names are aliases into that same record, so menu writes, runtime
+reads, loading, and saving cannot drift into stale copies anymore.
+
+`g_ConfigBlob` remains as a byte view for menu descriptors and fields whose
+semantics are not proven yet. It is not separate storage. Offset assertions in
+`config.h` protect the known binary layout, and the obsolete two-way sync
+functions have been removed.
+
+The ten bytes at original addresses `0x483963..0x48396c` are per-level physics
+tuning, not part of the saved record. They now live in `LevelPhysicsTuning`;
+the old reconstruction wrote them past the end of the config allocation.
 
 ## Building and Cleaning
 
