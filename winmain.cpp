@@ -82,7 +82,6 @@ static void Handle_App_Focus(int active)
         HRESULT keyboard_hr = DI_OK;
         if (lpDI_Mouse != NULL) mouse_hr = lpDI_Mouse->Acquire();
         if (lpDI_Keyboard != NULL) keyboard_hr = lpDI_Keyboard->Acquire();
-        Set_Focus_Audio_Muted(0);
         LOG("[FOCUS] activate state=%u page=%u mouse=0x%08lX keyboard=0x%08lX\n",
             (unsigned int)g_GameState, (unsigned int)DAT_004877a4,
             (unsigned long)mouse_hr, (unsigned long)keyboard_hr);
@@ -90,6 +89,7 @@ static void Handle_App_Focus(int active)
         LOG("[FOCUS] activate state=%u page=%u\n",
             (unsigned int)g_GameState, (unsigned int)DAT_004877a4);
 #endif
+        Set_Focus_Audio_Muted(0);
     } else {
 #ifndef TOU_HAS_SDL
         if (GetCapture() == hWnd_Main) ReleaseCapture();
