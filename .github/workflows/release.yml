@@ -12,8 +12,11 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      source_ref: ${{ steps.source.outputs.source_ref }}
+      tag_exists: ${{ steps.source.outputs.tag_exists }}
 
     steps:
       - name: Check out source
@@ -22,23 +25,30 @@ jobs:
           fetch-depth: 0
 
       - name: Resolve release source
-        id: release_source
-        shell: pwsh
+        id: source
+        shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          git check-ref-format "refs/tags/$env:RELEASE_TAG"
-          if ($LASTEXITCODE -ne 0) {
-            throw "Invalid release tag: $env:RELEASE_TAG"
-          }
+          git check-ref-format "refs/tags/$RELEASE_TAG"
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "source_ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "source_ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
-          git show-ref --verify --quiet "refs/tags/$env:RELEASE_TAG"
-          if ($LASTEXITCODE -eq 0) {
-            git checkout --detach "refs/tags/$env:RELEASE_TAG"
-            "tag_exists=true" >> $env:GITHUB_OUTPUT
-          } else {
-            "tag_exists=false" >> $env:GITHUB_OUTPUT
-          }
+  windows-x86:
+    name: Windows x86
+    needs: prepare
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_ref }}
 
       - name: Install 32-bit MinGW and CMake
         uses: msys2/setup-msys2@v2
@@ -50,41 +60,147 @@ jobs:
             mingw-w64-i686-gcc
             mingw-w64-i686-ninja
 
-      - name: Build game
+      - name: Build and stage game
         shell: msys2 {0}
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel 2
+          cmake --install build --prefix stage
 
-      - name: Package runtime files
-        id: package
+      - name: Package runtime
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          $archive = & ./scripts/package-release.ps1 -Version $env:RELEASE_TAG
-          "archive=$archive" >> $env:GITHUB_OUTPUT
+        run: >-
+          ./scripts/package-release.ps1
+          -Version $env:RELEASE_TAG
+          -Platform windows-x86
+          -ExecutablePath stage/TOU.exe
 
-      - name: Upload workflow artifact
+      - name: Upload release archive
         uses: actions/upload-artifact@v6
         with:
-          name: tunnels-of-underworld-windows
-          path: ${{ steps.package.outputs.archive }}
+          name: release-windows-x86
+          path: dist/*.zip
           if-no-files-found: error
 
-      - name: Create GitHub release
+  native:
+    name: ${{ matrix.name }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            platform: windows-x64
+            cmake_arch: x64
+            executable: stage/TOU.exe
+          - name: Windows ARM64
+            runner: windows-11-arm
+            platform: windows-arm64
+            cmake_arch: ARM64
+            executable: stage/TOU.exe
+          - name: Linux x64
+            runner: ubuntu-24.04
+            platform: linux-x64
+            executable: stage/TOU
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            platform: linux-arm64
+            executable: stage/TOU
+          - name: macOS Intel
+            runner: macos-15-intel
+            platform: macos-x64
+            executable: stage/TOU
+          - name: macOS Apple Silicon
+            runner: macos-15
+            platform: macos-arm64
+            executable: stage/TOU
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_ref }}
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config build-essential \
+            libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev libudev-dev
+
+      - name: Configure Windows build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure Unix build
+        if: runner.os != 'Windows'
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build and stage game
+        run: |
+          cmake --build build --config Release --parallel 2
+          cmake --install build --config Release --prefix stage
+
+      - name: Package runtime
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: >-
+          ./scripts/package-release.ps1
+          -Version $env:RELEASE_TAG
+          -Platform ${{ matrix.platform }}
+          -ExecutablePath ${{ matrix.executable }}
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [prepare, windows-x86, native]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v6
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create or update GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
-          TAG_EXISTS: ${{ steps.release_source.outputs.tag_exists }}
-          ARCHIVE: ${{ steps.package.outputs.archive }}
+          TAG_EXISTS: ${{ needs.prepare.outputs.tag_exists }}
+          SOURCE_REF: ${{ needs.prepare.outputs.source_ref }}
         run: |
+          $archives = @(Get-ChildItem -LiteralPath release-assets -Filter *.zip |
+            Sort-Object Name |
+            ForEach-Object { $_.FullName })
+          if ($archives.Count -ne 7) {
+            throw "Expected 7 release archives, found $($archives.Count)"
+          }
+
           gh release view $env:RELEASE_TAG *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:RELEASE_TAG $env:ARCHIVE --clobber
+            & gh release upload $env:RELEASE_TAG @archives --clobber
           } elseif ($env:TAG_EXISTS -eq "true") {
-            gh release create $env:RELEASE_TAG $env:ARCHIVE --verify-tag --generate-notes
+            & gh release create $env:RELEASE_TAG @archives --verify-tag --generate-notes
           } else {
-            gh release create $env:RELEASE_TAG $env:ARCHIVE --target $env:GITHUB_SHA --generate-notes
+            & gh release create $env:RELEASE_TAG @archives --target $env:SOURCE_REF --generate-notes
           }
