@@ -2316,7 +2316,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
         (*(char *)((unsigned int)*(unsigned char *)((piVar1[0] >> 0x12) + 7 +
             (int)DAT_0048782c + ((piVar1[1] >> 0x12) + 4 <<
             ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (int)DAT_00487928) == '\x01') &&
-        (DAT_00489248 < 0x9c4))
+        (DAT_00489248 < ENTITY_ACTIVE_CAPACITY))
     {
         int r = rand();
         int iVar5 = r % 0x280 + 0x200;
@@ -2383,7 +2383,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
             int angleStep = 0x800 / (int)destroyedCount;
             int angle = 0;
             while (angle < 0x800) {
-                if (DAT_00489248 > 0x9c3) return;
+                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
 
                 unsigned int randAngle = (unsigned int)rand() & 0x7ff;
                 int signedRand = (int)randAngle;
@@ -2831,7 +2831,7 @@ static void FUN_00450080_impl(int *ent, char param_2)
     /* Spawn debris particles for each destroyed tile */
     int local_10 = 0;
     while (local_10 < local_1c) {
-        if (DAT_00489248 > 0x9c3) break;
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
 
         unsigned int uVar9 = (unsigned int)rand();
         Entity *spawn = &DAT_004892e8[DAT_00489248];
@@ -3040,7 +3040,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
             if (rFreq % freq != 0) return;
 
             for (int p = 0; p < particleCount; p++) {
-                if (DAT_00489248 > 0x9c3) return;
+                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
 
                 unsigned int angle = (unsigned int)rand() & 0x7ff;
                 int speed = rand();
@@ -3187,7 +3187,7 @@ LAB_apply:
         0, 0, 0, 0, '\0', '\0', (unsigned char)param_2);
 
     /* Spawn death flash particle */
-    if (DAT_00489250 < 2000) {
+    if (DAT_00489250 < PARTICLE_CAPACITY) {
         int base2 = DAT_00489250 * 0x20 + (int)DAT_00481f34;
         *(int *)(base2 + 0x00) = ent[0];
         *(int *)(base2 + 0x04) = ent[1];
@@ -3217,7 +3217,7 @@ LAB_apply:
     int debrisAngleSin = 0;
     int debrisAngleCos = 0x800;
     for (int i = 0; i < 0x80; i++) {
-        if (DAT_00489250 >= 2000) break;
+        if (DAT_00489250 >= PARTICLE_CAPACITY) break;
 
         int nextCos = debrisAngleCos + 0x40;
         int nextSin = debrisAngleSin + 0x40;
@@ -3228,7 +3228,7 @@ LAB_apply:
 
         unsigned int ptype = (unsigned int)rand() & 3;
 
-        if (DAT_00489250 < 2000) {
+        if (DAT_00489250 < PARTICLE_CAPACITY) {
             int base2 = DAT_00489250 * 0x20 + (int)DAT_00481f34;
             *(int *)(base2 + 0x00) = ent[0];
             *(int *)(base2 + 0x04) = ent[1];
@@ -3253,7 +3253,7 @@ LAB_apply:
     /* The original uses __ftol to get particle count from FPU — approximate with 10 */
     int fragmentCount = 10;
     for (int i = 0; i < fragmentCount; i++) {
-        if (DAT_00489248 > 0x9c3) return;
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
 
         unsigned int uVar5 = (unsigned int)rand() & 0x7ff;
         int speed = rand() % 0x46 + 10;
@@ -3411,7 +3411,7 @@ static void FUN_0040fb70_impl(int idx)
 static void FUN_00401000_impl(int idx)
 {
     int *piVar1;
-    int iVar11, iVar12, iVar13, iVar16;
+    int iVar11, iVar13, iVar16;
     unsigned int uVar6, uVar7, uVar8;
     int local_c;
     unsigned int local_14;
@@ -3419,31 +3419,29 @@ static void FUN_00401000_impl(int idx)
     int uVar10;
     unsigned char uVar9 = (unsigned char)idx;
 
+    PlayerData *player = Player_Get(idx);
     int *typeTable = (int *)DAT_00487abc;
     int *sincos    = (int *)DAT_00487ab0;
     /* sincos[angle] = sin, sincos[0x200 + angle] = cos (2048 entries each) */
 
-    iVar12 = idx * 0x598;
-    uVar7  = *(unsigned int *)(iVar12 + 0x18 + (int)DAT_00487810);
+    uVar7  = (unsigned int)player->heading;
 
-    local_14 = (unsigned int)*(unsigned char *)(
-        *(char *)(iVar12 + 0x34 + (int)DAT_00487810) +
-        iVar12 + 0x3c + (int)DAT_00487810);
+    local_14 = (unsigned int)player->weapon_slots[player->weapon_type];
 
     if (local_14 == 0x32) return;
 
     if (local_14 == 0x17) {
-        if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01' &&
-            *(int *)(iVar12 + 0xa4 + (int)DAT_00487810) == 0) {
+        if ((char)player->weapon_mark == '\x01' &&
+            player->timer_a4 == 0) {
             local_14 = 0x5a;
         }
     }
 
     /* === Sound dispatch (first jump table in original) === */
     {
-        int ex = *(int *)(iVar12 + (int)DAT_00487810);
-        int ey = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-        char field35 = *(char *)(iVar12 + 0x35 + (int)DAT_00487810);
+        int ex = player->position_x;
+        int ey = player->position_y;
+        char field35 = (char)player->weapon_mark;
 
         if (local_14 > 0x2c) {
             /* Types > 44 (including 0x5a override): play sound using type as index */
@@ -3495,7 +3493,7 @@ static void FUN_00401000_impl(int idx)
     }
 
     /* Stats update (runs for ALL weapon types) */
-    iVar13 = (int)DAT_00487810;
+
     DAT_00486d28[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481ca8 + local_14);
     DAT_004870e8[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481c58 + local_14);
 
@@ -3508,19 +3506,19 @@ static void FUN_00401000_impl(int idx)
     {
         local_c = 0;
         do {
-            if (0x9c3 < DAT_00489248) break;
+            if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
             iVar13 = rand();
             uVar8 = (iVar13 % 0x46 - 0x23 + uVar7) & 0x7ff;
             iVar13 = rand();
             iVar13 = iVar13 % 0x46 + 0x46;
             {
                 Entity *spawn = &DAT_004892e8[DAT_00489248];
-                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                spawn->velocity_y = (sincos[0x200 + uVar8] * iVar13 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->position_x = player->position_x;
+                spawn->position_y = player->position_y;
+                spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + player->velocity_x;
+                spawn->velocity_y = (sincos[0x200 + uVar8] * iVar13 >> 6) + player->velocity_y;
+                spawn->previous_x = player->position_x;
+                spawn->previous_y = player->position_y;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 0;
                 uVar8 = rand(); uVar8 &= 0x80000001;
@@ -3560,10 +3558,10 @@ static void FUN_00401000_impl(int idx)
             }
             iVar13 = rand();
             DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = iVar13 % 0x32 + 0x50;
-            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
-            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
+            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
             local_c++;
-            iVar13 = (int)DAT_00487810;
+
         } while (local_c < 0x1e);
         break;
     }
@@ -3571,21 +3569,21 @@ static void FUN_00401000_impl(int idx)
     /* ===== CASE 1: Beam projectiles ===== */
     case 1:
     {
-        char cVar3 = *(char *)(iVar12 + 0x35 + iVar13);
+        char cVar3 = (char)player->weapon_mark;
         if (cVar3 != '\0') {
             if (cVar3 == '\x01') {
                 uVar8 = uVar7 - 0x2a;
                 local_c = 0;
                 do {
                     unsigned int ang = uVar8 & 0x7ff;
-                    if (0x9c3 < DAT_00489248) break;
+                    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
                     Entity *spawn = &DAT_004892e8[DAT_00489248];
-                    spawn->position_x = *(int *)(iVar12 + iVar13);
-                    spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                    spawn->velocity_x = (sincos[ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                    spawn->velocity_y = (sincos[0x200 + ang] * typeTable[0xb1] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                    spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-                    spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    spawn->position_x = player->position_x;
+                    spawn->position_y = player->position_y;
+                    spawn->velocity_x = (sincos[ang] * typeTable[0xb1] >> 6) + player->velocity_x;
+                    spawn->velocity_y = (sincos[0x200 + ang] * typeTable[0xb1] >> 6) + player->velocity_y;
+                    spawn->previous_x = player->position_x;
+                    spawn->previous_y = player->position_y;
                     spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                     spawn->type = 1;
                     spawn->variant_24 = 0;
@@ -3605,17 +3603,17 @@ static void FUN_00401000_impl(int idx)
                     uVar8 = ang + 0x2a;
                     DAT_00489248++;
                     local_c++;
-                    iVar13 = (int)DAT_00487810;
+
                 } while (local_c < 3);
             }
-            else if (cVar3 == '\x02' && DAT_00489248 < 0x9c4) {
+            else if (cVar3 == '\x02' && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
                 Entity *spawn = &DAT_004892e8[DAT_00489248];
-                spawn->position_x = *(int *)(iVar12 + iVar13);
-                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                spawn->velocity_x = (sincos[uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                spawn->velocity_y = (sincos[0x200 + uVar7] * typeTable[0xb2] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->position_x = player->position_x;
+                spawn->position_y = player->position_y;
+                spawn->velocity_x = (sincos[uVar7] * typeTable[0xb2] >> 6) + player->velocity_x;
+                spawn->velocity_y = (sincos[0x200 + uVar7] * typeTable[0xb2] >> 6) + player->velocity_y;
+                spawn->previous_x = player->position_x;
+                spawn->previous_y = player->position_y;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 1;
                 spawn->variant_24 = 0;
@@ -3636,19 +3634,19 @@ static void FUN_00401000_impl(int idx)
                 DAT_004892e8[DAT_00489248 - 1].counter_3c = 2;
                 piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].damage_44;
                 *piVar1 *= 6;
-                iVar13 = (int)DAT_00487810;
+
             }
             break;
         }
-        if (0x9c3 < DAT_00489248) break;
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
         {
             Entity *spawn = &DAT_004892e8[DAT_00489248];
-            spawn->position_x = *(int *)(iVar12 + iVar13);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            spawn->velocity_x = (sincos[uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            spawn->velocity_y = (sincos[0x200 + uVar7] * typeTable[0xb3] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
+            spawn->velocity_x = (sincos[uVar7] * typeTable[0xb3] >> 6) + player->velocity_x;
+            spawn->velocity_y = (sincos[0x200 + uVar7] * typeTable[0xb3] >> 6) + player->velocity_y;
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             spawn->type = 1;
             spawn->variant_24 = 0;
@@ -3672,18 +3670,18 @@ static void FUN_00401000_impl(int idx)
     /* ===== CASE 2 ===== */
     case 2:
     {
-        if (*(char *)(iVar12 + 0x35 + iVar13) == '\0') {
-            if (DAT_00489248 < 0x9c4) {
+        if ((char)player->weapon_mark == '\0') {
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
                 iVar13 = rand();
                 uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
                 iVar13 = idx * 0x40;
                 Entity *spawn = &DAT_004892e8[DAT_00489248];
-                spawn->position_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->position_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                spawn->velocity_x = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[uVar8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-                spawn->velocity_y = (typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x137] * sincos[0x200 + uVar8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-                spawn->previous_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->previous_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->position_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_x;
+                spawn->position_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_y;
+                spawn->velocity_x = (typeTable[player->weapon_mark + 0x137] * sincos[uVar8] >> 6) + player->velocity_x;
+                spawn->velocity_y = (typeTable[player->weapon_mark + 0x137] * sincos[0x200 + uVar8] >> 6) + player->velocity_y;
+                spawn->previous_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_x;
+                spawn->previous_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_y;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 2;
                 iVar13 = rand();
@@ -3709,19 +3707,19 @@ static void FUN_00401000_impl(int idx)
                     *(unsigned short *)((int)DAT_00487aa8 + 0x140 + uVar8 * 2) + 30000;
                 iVar13 = rand();
                 DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = iVar13 % 400 + 0x96;
-                iVar13 = (int)DAT_00487810;
+
             }
             break;
         }
-        if (0x9c3 < DAT_00489248) break;
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
         {
             Entity *spawn = &DAT_004892e8[DAT_00489248];
-            spawn->position_x = *(int *)(iVar12 + iVar13);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            spawn->velocity_x = (sincos[uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            spawn->velocity_y = (sincos[0x200 + uVar7] * 0x14 >> 4) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
+            spawn->velocity_x = (sincos[uVar7] * 0x14 >> 4) + player->velocity_x;
+            spawn->velocity_y = (sincos[0x200 + uVar7] * 0x14 >> 4) + player->velocity_y;
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             spawn->type = 0x14;
             spawn->variant_24 = 0;
@@ -3743,7 +3741,7 @@ LAB_00401856:
             DAT_004892e8[DAT_00489248].counter_3c = 0;
             DAT_004892e8[DAT_00489248].timer_5c = 0;
             DAT_00489248++;
-            iVar13 = (int)DAT_00487810;
+
         }
         break;
     }
@@ -3751,52 +3749,52 @@ LAB_00401856:
     /* ===== CASE 3: Trooper spawn ===== */
     case 3:
     {
-        if (399 < DAT_0048924c) break;
-        if (*(char *)(iVar12 + 0x35 + iVar13) == '\0') {
+        if (DAT_0048924c >= TROOPER_CAPACITY) break;
+        if ((char)player->weapon_mark == '\0') {
             iVar13 = rand(); iVar11 = iVar13 % 0x3c + 0x5a;
         } else {
             iVar13 = rand(); iVar11 = iVar13 % 0x1e + 200;
         }
         iVar11 <<= 9;
-        iVar13 = iVar12 + (int)DAT_00487810;
-        uVar9 = *(unsigned char *)(iVar13 + 0x2c);
+        uVar9 = player->team;
         {
-            char cVar3a = *(char *)(iVar13 + 0x35) << 1;
+            char cVar3a = (char)player->weapon_mark << 1;
             uVar8 = rand(); uVar8 &= 0x80000001;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
             char cVar4 = (char)uVar8;
-            FUN_00407210(*(int *)(iVar13 + 8), *(int *)(iVar13 + 0xc), 0, 0, cVar4 * '\x02' + -1, iVar11, uVar9, cVar3a);
+            FUN_00407210(player->previous_x, player->previous_y,
+                         0, 0, cVar4 * '\x02' + -1, iVar11, uVar9, cVar3a);
         }
-        iVar13 = (int)DAT_00487810;
+
         break;
     }
 
     /* ===== CASE 4: TURBO BOOST — velocity + trail particles ===== */
     /* Original at 0x402C69: adds sincos[heading]>>3 to velocity,
-     * then spawns trail particles if in viewport and DAT_004892d0 > 0. */
+     * then spawns a detail-scaled trail when the player is in water. */
     case 4:
     {
-        *(int *)(iVar12 + 0x10 + (int)DAT_00487810) += sincos[uVar7] >> 3;
-        *(int *)(iVar12 + 0x14 + (int)DAT_00487810) += sincos[0x200 + uVar7] >> 3;
-        iVar13 = (int)DAT_00487810;
-        if ((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
-             (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0)
+        player->velocity_x += sincos[uVar7] >> 3;
+        player->velocity_y += sincos[0x200 + uVar7] >> 3;
+
+        if ((*(unsigned char *)((player->position_x >> 0x16) +
+             (int)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0)
         {
             /* 0x402CCA-0x402CE7: x87_ftol(DAT_0048385c * 14.0f + 1.0f). */
             int ftol_count = static_cast<int>(tou_binary::x87_ftol(
                 static_cast<long double>(DAT_0048385c) * 14.0L + 1.0L));
             local_c = 0;
             do {
-                if (0x9c3 < DAT_00489248) break;
+                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
                 iVar13 = rand(); iVar11 = rand();
-                uVar8 = (iVar11 % 0x15e + 0x351 + *(int *)(iVar12 + 0x18 + (int)DAT_00487810)) & 0x7ff;
+                uVar8 = (iVar11 % 0x15e + 0x351 + player->heading) & 0x7ff;
                 Entity *spawn = &DAT_004892e8[DAT_00489248];
-                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
-                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                spawn->position_x = player->position_x + sincos[uVar7] * -8;
+                spawn->position_y = player->position_y + sincos[0x200 + uVar7] * -8;
                 spawn->velocity_x = sincos[uVar8] * (iVar13 % 0x14) >> 3;
                 spawn->velocity_y = sincos[0x200 + uVar8] * (iVar13 % 0x14) >> 3;
-                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810) + sincos[uVar7] * -8;
-                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810) + sincos[0x200 + uVar7] * -8;
+                spawn->previous_x = player->position_x + sincos[uVar7] * -8;
+                spawn->previous_y = player->position_y + sincos[0x200 + uVar7] * -8;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 0x67;
                 iVar13 = rand(); spawn->variant_24 = (short)(iVar13 % 6);
@@ -3822,7 +3820,7 @@ LAB_00401856:
                         (unsigned int)last_spawn->scratch_65 * 2) + 30000;
                 }
                 local_c++;
-                iVar13 = (int)DAT_00487810;
+
             } while (local_c < ftol_count);
         }
         break;
@@ -3831,14 +3829,14 @@ LAB_00401856:
     /* ===== CASE 6: Trooper dynamic spawn ===== */
     case 6:
     {
-        if (399 < DAT_0048924c) break;
-        uVar9 = *(unsigned char *)(iVar12 + 0x2c + iVar13);
+        if (DAT_0048924c >= TROOPER_CAPACITY) break;
+        uVar9 = player->team;
         iVar11 = rand(); iVar11 = (iVar11 % 100 + 300) * 0x200;
         uVar8 = rand(); uVar8 &= 0x80000001;
         if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
-        FUN_00407210(*(int *)(iVar12 + iVar13 + 8), *(int *)(iVar12 + iVar13 + 0xc),
+        FUN_00407210(player->previous_x, player->previous_y,
                      0, 0, (char)uVar8 * '\x02' + -1, iVar11, uVar9, '\x01');
-        iVar13 = (int)DAT_00487810;
+
         break;
     }
 
@@ -3847,39 +3845,39 @@ LAB_00401856:
     {
         iVar13 = rand();
         if (iVar13 % 10 == 0) {
-            piVar1 = (int *)(iVar12 + 0x20 + (int)DAT_00487810);
+            piVar1 = &player->health;
             *piVar1 += -0x4e2000;
-            iVar13 = (int)DAT_00487810;
+
         } else {
             local_c = 0;
             int foundX = 0, foundY = 0;
             int found = 0;
             do {
                 iVar13 = rand();
-                foundX = iVar13 % 600 - 300 + (*(int *)(iVar12 + (int)DAT_00487810) >> 0x12);
+                foundX = iVar13 % 600 - 300 + (player->position_x >> 0x12);
                 iVar11 = rand();
-                foundY = iVar11 % 600 - 300 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x12);
+                foundY = iVar11 % 600 - 300 + (player->position_y >> 0x12);
                 uVar6 = FUN_0044de10(foundX, foundY);
                 if ((char)uVar6 == '\x01') { found = 1; break; }
                 local_c++;
-                iVar13 = (int)DAT_00487810;
+
             } while (local_c < 10);
 
             if (found) {
                 /* Spawn teleport particles in circle around entity */
                 unsigned int angleParam = 0;
                 while (1) {
-                    if (0x9c3 < DAT_00489248) break;
+                    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
                     uVar6 = rand(); uVar6 &= 0x8000003f;
                     if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffffc0) + 1;
                     unsigned int uVar15 = (unsigned int)FUN_004257e0(
-                        *(int *)(iVar12 + (int)DAT_00487810) >> 0x12,
-                        *(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x12, foundX, foundY);
+                        player->position_x >> 0x12,
+                        player->position_y >> 0x12, foundX, foundY);
                     iVar11 = sincos[uVar15];
                     iVar16 = sincos[0x200 + uVar15];
                     Entity *spawn = &DAT_004892e8[DAT_00489248];
-                    spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
-                    spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    spawn->position_x = player->position_x;
+                    spawn->position_y = player->position_y;
                     /* 0x4031D9-0x403227: angleParam is a byte offset into the
                      * int32 sin/cos table. The destination bias is deliberately
                      * much stronger than the radial component. */
@@ -3888,8 +3886,8 @@ LAB_00401856:
                         (sincos[radialAngle] * (int)uVar6 >> 10) + (iVar11 >> 1);
                     spawn->velocity_y =
                         (sincos[0x200 + radialAngle] * (int)uVar6 >> 10) + (iVar16 >> 1);
-                    spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-                    spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                    spawn->previous_x = player->position_x;
+                    spawn->previous_y = player->position_y;
                     spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                     spawn->type = 0x67;
                     iVar11 = rand(); spawn->variant_24 = (short)(iVar11 % 6);
@@ -3916,15 +3914,15 @@ LAB_00401856:
                     if (0x1fff < (int)angleParam) break;
                 }
                 /* Spawn water edge records if in water */
-                if ((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
-                     (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0)
+                if ((*(unsigned char *)((player->position_x >> 0x16) +
+                     (int)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0)
                 {
                     iVar11 = 0;
                     do {
                         if (0x5db < DAT_0048925c) break;
                         int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
-                        *(int *)(e) = *(int *)(iVar12 + (int)DAT_00487810);
-                        *(int *)(e + 4) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                        *(int *)(e) = player->position_x;
+                        *(int *)(e + 4) = player->position_y;
                         uVar6 = rand(); uVar6 &= 0x800000ff;
                         if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffff00) + 1;
                         *(unsigned int *)(e + 8) = (0x80 - uVar6) * 0x400;
@@ -3941,12 +3939,12 @@ LAB_00401856:
                     } while (iVar11 < 0x20);
                 }
                 /* Teleport entity */
-                *(int *)(iVar12 + (int)DAT_00487810) = foundX * FIXED_SCALE;
-                *(unsigned int *)(iVar12 + 4 + (int)DAT_00487810) = (unsigned int)foundY * FIXED_SCALE;
-                *(int *)(iVar12 + 8 + (int)DAT_00487810) = *(int *)(iVar12 + (int)DAT_00487810);
-                *(int *)(iVar12 + 0xc + (int)DAT_00487810) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                *(unsigned char *)(iVar12 + 0x4a0 + (int)DAT_00487810) = 0xff;
-                iVar13 = (int)DAT_00487810;
+                player->position_x = foundX * FIXED_SCALE;
+                player->position_y = (int32_t)((uint32_t)foundY * (uint32_t)FIXED_SCALE);
+                player->previous_x = player->position_x;
+                player->previous_y = player->position_y;
+                player->visibility_state = 0xff;
+
                 goto LAB_00402bc8;
             }
         }
@@ -3954,13 +3952,13 @@ LAB_00401856:
     }
 
     case 10: case 0xc:
-        *(int *)(iVar12 + 0xa4 + iVar13) = 300;
-        iVar13 = (int)DAT_00487810;
+        player->timer_a4 = 300;
+
         break;
 
     case 0xd:
-        *(int *)(iVar12 + 0xa4 + iVar13) = 500;
-        iVar13 = (int)DAT_00487810;
+        player->timer_a4 = 500;
+
         break;
 
     /* ===== CASE 0x10: Fluid source + particle ===== */
@@ -3968,15 +3966,15 @@ LAB_00401856:
     {
         iVar13 = rand();
         uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
-        if (((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
-             (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0) &&
+        if (((*(unsigned char *)((player->position_x >> 0x16) +
+             (int)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0) &&
             ((float)_DAT_004753e0_d < DAT_0048385c) && (DAT_0048925c < 0x5dc))
         {
             int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
-            *(int *)(e) = (sincos[uVar7] * 600 >> 6) + *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(e + 4) = (sincos[0x200 + uVar7] * 600 >> 6) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(e + 8) = (sincos[uVar8] * 0x32 >> 6) + (*(int *)(iVar12 + 0x10 + (int)DAT_00487810) >> 1);
-            *(int *)(e + 0xc) = (sincos[0x200 + uVar8] * 0x32 >> 6) - 500 + (*(int *)(iVar12 + 0x14 + (int)DAT_00487810) >> 1);
+            *(int *)(e) = (sincos[uVar7] * 600 >> 6) + player->position_x;
+            *(int *)(e + 4) = (sincos[0x200 + uVar7] * 600 >> 6) + player->position_y;
+            *(int *)(e + 8) = (sincos[uVar8] * 0x32 >> 6) + (player->velocity_x >> 1);
+            *(int *)(e + 0xc) = (sincos[0x200 + uVar8] * 0x32 >> 6) - 500 + (player->velocity_y >> 1);
             uVar6 = rand(); uVar6 &= 0x80000001;
             if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffffe) + 1;
             *(char *)(e + 0x10) = (char)uVar6;
@@ -3984,13 +3982,13 @@ LAB_00401856:
             *(unsigned char *)(e + 0x14) = 0xff; *(unsigned char *)(e + 0x15) = 0;
             DAT_0048925c++;
         }
-        iVar13 = (int)DAT_00487810;
-        if (DAT_00489250 < 2000) {
+
+        if (DAT_00489250 < PARTICLE_CAPACITY) {
             int pp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-            *(int *)(pp) = (sincos[uVar7] * 500 >> 6) + *(int *)(iVar12 + (int)DAT_00487810);
-            *(int *)(pp + 4) = (sincos[0x200 + uVar7] * 500 >> 6) + *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(pp + 8) = (sincos[uVar8] * 0x30 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            *(int *)(pp + 0xc) = (sincos[0x200 + uVar8] * 0x30 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *(int *)(pp) = (sincos[uVar7] * 500 >> 6) + player->position_x;
+            *(int *)(pp + 4) = (sincos[0x200 + uVar7] * 500 >> 6) + player->position_y;
+            *(int *)(pp + 8) = (sincos[uVar8] * 0x30 >> 6) + player->velocity_x;
+            *(int *)(pp + 0xc) = (sincos[0x200 + uVar8] * 0x30 >> 6) + player->velocity_y;
             uVar8 = rand(); uVar8 &= 0x80000003;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
             *(char *)(pp + 0x10) = (char)uVar8 + '\x01';
@@ -3998,14 +3996,14 @@ LAB_00401856:
             *(unsigned char *)(pp + 0x13) = 200; *(unsigned char *)(pp + 0x14) = uVar9;
             *(unsigned char *)(pp + 0x15) = 0;
             DAT_00489250++;
-            iVar13 = (int)DAT_00487810;
+
         }
         break;
     }
 
     case 0x12:
-        *(int *)(iVar12 + 0xa4 + iVar13) = 0x1c2;
-        iVar13 = (int)DAT_00487810;
+        player->timer_a4 = 0x1c2;
+
         break;
 
     /* ===== CASE 0x15: FIRESTORM — radial fireball burst ===== */
@@ -4016,17 +4014,17 @@ LAB_00401856:
     {
         local_c = 0;
         do {
-            if (0x9c3 < DAT_00489248) break;
+            if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
             uVar8 = rand(); uVar8 &= 0x800007ff;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffff800) + 1;
             iVar13 = rand(); iVar13 = iVar13 % 0x32 + 0x3c;
             Entity *spawn = &DAT_004892e8[DAT_00489248];
-            spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x10 + (int)DAT_00487810) >> 1);
-            spawn->velocity_y = (sincos[0x200 + uVar8] * iVar13 >> 6) + (*(int *)(iVar12 + 0x14 + (int)DAT_00487810) >> 1);
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
+            spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + (player->velocity_x >> 1);
+            spawn->velocity_y = (sincos[0x200 + uVar8] * iVar13 >> 6) + (player->velocity_y >> 1);
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             spawn->type = 0x11;
             spawn->variant_24 = 0;
@@ -4040,7 +4038,7 @@ LAB_00401856:
             DAT_00489248++;
             DAT_004892e8[DAT_00489248 - 1].counter_3c = 1;
             local_c++;
-            iVar13 = (int)DAT_00487810;
+
         } while (local_c < 0xe);
         break;
     }
@@ -4048,69 +4046,69 @@ LAB_00401856:
     /* ===== CASE 0x19: Multi-directional beam ===== */
     case 0x19:
     {
-        char cVar3_19 = *(char *)(iVar12 + 0x35 + iVar13);
+        char cVar3_19 = (char)player->weapon_mark;
         if (cVar3_19 == '\0') {
-            FUN_0040f9b0(0x10f, *(int *)(iVar12 + iVar13), *(int *)(iVar12 + 4 + iVar13));
+            FUN_0040f9b0(0x10f, player->position_x, player->position_y);
             uVar8 = uVar7 - 0x80;
             local_c = 0;
             do {
-                iVar13 = (int)DAT_00487810;
-                if (0x9c3 < DAT_00489248) break;
+
+                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
                 uVar8 &= 0x7ff;
                 Entity *spawn = &DAT_004892e8[DAT_00489248];
-                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->position_x = player->position_x;
+                spawn->position_y = player->position_y;
                 spawn->velocity_x = sincos[uVar8] >> 1;
                 spawn->velocity_y = sincos[0x200 + uVar8] >> 1;
-                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->previous_x = player->position_x;
+                spawn->previous_y = player->position_y;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 0x19;
                 spawn->variant_24 = 0;
                 spawn->state_20 = 0; spawn->auxiliary_26 = 0;
                 spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
-                spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
+                spawn->gravity_or_motion_38 = typeTable[player->weapon_mark + 0xd38];
                 uVar8 += 0x80;
-                spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
+                spawn->damage_44 = typeTable[player->weapon_mark + 0xd47];
                 spawn->scratch_48 = 0;
-                spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
+                spawn->palette_value = typeTable[player->weapon_mark + 0xd53];
                 spawn->animation_frame = 0;
-                spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+                spawn->subtype = player->weapon_mark;
                 spawn->callback_address = typeTable[0xd16]; spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
                 DAT_00489248++;
                 DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x9c4;
                 DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
                 local_c++;
-                iVar13 = (int)DAT_00487810;
+
             } while (local_c < 3);
         } else {
             int sndId = (cVar3_19 == '\x02') ? 0x111 : 0x110;
-            FUN_0040f9b0(sndId, *(int *)(iVar12 + iVar13), *(int *)(iVar12 + 4 + iVar13));
-            iVar13 = (int)DAT_00487810;
-            if (DAT_00489248 < 0x9c4) {
+            FUN_0040f9b0(sndId, player->position_x, player->position_y);
+
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
                 Entity *spawn = &DAT_004892e8[DAT_00489248];
-                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->position_x = player->position_x;
+                spawn->position_y = player->position_y;
                 spawn->velocity_x = 0; spawn->velocity_y = 0;
-                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+                spawn->previous_x = player->position_x;
+                spawn->previous_y = player->position_y;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 0x19;
                 spawn->variant_24 = 0;
                 spawn->state_20 = 0; spawn->auxiliary_26 = 0x32;
                 spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
-                spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd38];
-                spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd47];
+                spawn->gravity_or_motion_38 = typeTable[player->weapon_mark + 0xd38];
+                spawn->damage_44 = typeTable[player->weapon_mark + 0xd47];
                 spawn->scratch_48 = 0;
-                spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0xd53];
+                spawn->palette_value = typeTable[player->weapon_mark + 0xd53];
                 spawn->animation_frame = 0;
-                spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+                spawn->subtype = player->weapon_mark;
                 spawn->callback_address = typeTable[0xd16]; spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
                 DAT_00489248++;
                 DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 6000;
-                iVar13 = (int)DAT_00487810;
+
             }
         }
         break;
@@ -4124,14 +4122,14 @@ LAB_00401856:
         /* Spawn beam at heading+0x200 and heading-0x200 */
         #define SPAWN_BEAM_0x69(angleExpr) do { \
             uVar8 = (angleExpr) & 0x7ff; \
-            if (DAT_00489248 < 0x9c4) { \
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) { \
                 Entity *spawn = &DAT_004892e8[DAT_00489248]; \
-                spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810); \
-                spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
-                spawn->velocity_x = (sincos[uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810); \
-                spawn->velocity_y = (sincos[0x200 + uVar8] * 0xb4 >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810); \
-                spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810); \
-                spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810); \
+                spawn->position_x = player->position_x; \
+                spawn->position_y = player->position_y; \
+                spawn->velocity_x = (sincos[uVar8] * 0xb4 >> 6) + player->velocity_x; \
+                spawn->velocity_y = (sincos[0x200 + uVar8] * 0xb4 >> 6) + player->velocity_y; \
+                spawn->previous_x = player->position_x; \
+                spawn->previous_y = player->position_y; \
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0; \
                 spawn->type = 0x69; \
                 spawn->variant_24 = 0; \
@@ -4144,40 +4142,39 @@ LAB_00401856:
                 spawn->timer_5c = 0; \
                 DAT_00489248++; \
                 DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x32; \
-                iVar13 = (int)DAT_00487810; \
             } \
         } while(0)
 
-        uVar8 = (*(int *)(iVar12 + 0x18 + iVar13) + 0x200U) & 0x7ff;
-        SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + iVar13) + 0x200U);
-        if (DAT_00489248 < 0x9c4) {
-            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x200U);
+        uVar8 = (player->heading + 0x200U) & 0x7ff;
+        SPAWN_BEAM_0x69(player->heading + 0x200U);
+        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+            SPAWN_BEAM_0x69(player->heading - 0x200U);
         }
-        if (*(char *)(iVar12 + 0x35 + iVar13) != '\0') {
-            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x180U);
-            if (DAT_00489248 < 0x9c4) {
-                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x180U);
+        if ((char)player->weapon_mark != '\0') {
+            SPAWN_BEAM_0x69(player->heading + 0x180U);
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                SPAWN_BEAM_0x69(player->heading - 0x180U);
             }
         }
-        if (1 < *(unsigned char *)(iVar12 + 0x35 + iVar13)) {
-            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x280U);
-            if (DAT_00489248 < 0x9c4) {
-                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x280U);
+        if (1 < player->weapon_mark) {
+            SPAWN_BEAM_0x69(player->heading + 0x280U);
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                SPAWN_BEAM_0x69(player->heading - 0x280U);
             }
         }
-        if (2 < *(unsigned char *)(iVar12 + 0x35 + iVar13)) {
-            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x400U);
-            if (DAT_00489248 < 0x9c4) {
-                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x380U);
-                if (DAT_00489248 < 0x9c4) {
-                    SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x380U);
+        if (2 < player->weapon_mark) {
+            SPAWN_BEAM_0x69(player->heading - 0x400U);
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                SPAWN_BEAM_0x69(player->heading - 0x380U);
+                if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                    SPAWN_BEAM_0x69(player->heading + 0x380U);
                 }
             }
         }
-        if (3 < *(unsigned char *)(iVar12 + 0x35 + iVar13)) {
-            SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) - 0x300U);
-            if (DAT_00489248 < 0x9c4) {
-                SPAWN_BEAM_0x69(*(int *)(iVar12 + 0x18 + (int)DAT_00487810) + 0x300U);
+        if (3 < player->weapon_mark) {
+            SPAWN_BEAM_0x69(player->heading - 0x300U);
+            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                SPAWN_BEAM_0x69(player->heading + 0x300U);
             }
         }
         #undef SPAWN_BEAM_0x69
@@ -4189,8 +4186,8 @@ LAB_00401856:
     {
         if (DAT_0048925c < 0x5dc) {
             int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
-            *(int *)(e) = *(int *)(iVar12 + iVar13);
-            *(int *)(e + 4) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            *(int *)(e) = player->position_x;
+            *(int *)(e + 4) = player->position_y;
             *(int *)(e + 8) = 0; *(int *)(e + 0xc) = 0;
             iVar13 = rand(); *(char *)(e + 0x10) = (char)(iVar13 % 3) + '\f';
             uVar8 = rand(); uVar8 &= 0x80000003;
@@ -4200,7 +4197,7 @@ LAB_00401856:
             *(unsigned char *)(e + 0x14) = uVar9; *(unsigned char *)(e + 0x15) = 0;
             DAT_0048925c++;
             *(unsigned char *)(DAT_0048925c * 0x20 + (int)DAT_00481f2c - 0xb) = 2;
-            iVar13 = (int)DAT_00487810;
+
         }
         break;
     }
@@ -4210,19 +4207,19 @@ LAB_00401856:
     {
         if (DAT_0048926c < 100) {
             int e = DAT_0048926c * 0x20 + (int)DAT_00487a9c;
-            *(int *)(e) = *(int *)(iVar12 + iVar13);
-            *(int *)(e + 4) = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            *(int *)(e + 8) = *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            *(int *)(e + 0xc) = *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            *(int *)(e) = player->position_x;
+            *(int *)(e + 4) = player->position_y;
+            *(int *)(e + 8) = player->velocity_x;
+            *(int *)(e + 0xc) = player->velocity_y;
             *(unsigned char *)(e + 0x18) = uVar9;
-            *(int *)(e + 0x10) = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
+            *(int *)(e + 0x10) = player->heading;
             uVar8 = rand(); uVar8 &= 0x80000001;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
             *(char *)(e + 0x19) = (char)uVar8;
             iVar13 = rand(); *(char *)(e + 0x1a) = (char)(iVar13 % 0x50) + '\x14';
             *(int *)(e + 0x14) = 2000;
             DAT_0048926c++;
-            iVar13 = (int)DAT_00487810;
+
         }
         break;
     }
@@ -4230,14 +4227,14 @@ LAB_00401856:
     /* ===== CASE 0x2b: Self-propelled projectile ===== */
     case 0x2b:
     {
-        if (DAT_00489248 < 0x9c4) {
+        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
             Entity *spawn = &DAT_004892e8[DAT_00489248];
-            spawn->position_x = *(int *)(iVar12 + iVar13);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            spawn->velocity_x = *(int *)(iVar12 + 0x10 + (int)DAT_00487810) / 2;
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
+            spawn->velocity_x = player->velocity_x / 2;
             spawn->velocity_y = 0;
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             spawn->type = 0x2b;
             spawn->variant_24 = 0;
@@ -4250,8 +4247,8 @@ LAB_00401856:
             spawn->timer_5c = 0;
             DAT_00489248++;
             piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].palette_value;
-            *piVar1 += (unsigned int)*(unsigned char *)(iVar12 + 0x2c + (int)DAT_00487810) * 100;
-            iVar13 = (int)DAT_00487810;
+            *piVar1 += (unsigned int)player->team * 100;
+
         }
         break;
     }
@@ -4261,49 +4258,49 @@ LAB_00401856:
      * callback 0x0043f990 derives it from heading field +0x2c. */
     case 0x2c:
     {
-        if (DAT_00489248 < 0x9c4) {
+        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
             Entity *spawn = &DAT_004892e8[DAT_00489248];
-            spawn->position_x = *(int *)(iVar12 + iVar13);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
             spawn->velocity_x = 0;
             spawn->velocity_y = 0;
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             spawn->type = 0x2c;
             spawn->variant_24 = 0;
             spawn->state_20 = 0; spawn->auxiliary_26 = 0xfe;
             spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
-            spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x172a];
-            spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1739];
+            spawn->gravity_or_motion_38 = typeTable[player->weapon_mark + 0x172a];
+            spawn->damage_44 = typeTable[player->weapon_mark + 0x1739];
             spawn->scratch_48 = 0;
-            spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x1745];
+            spawn->palette_value = typeTable[player->weapon_mark + 0x1745];
             spawn->animation_frame = 0;
-            spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            spawn->subtype = player->weapon_mark;
             spawn->callback_address = typeTable[0x1708]; spawn->counter_3c = 0;
             spawn->timer_5c = 0;
             DAT_00489248++;
-            DAT_004892e8[DAT_00489248 - 1].scratch_2c = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
-            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
-            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            iVar13 = (int)DAT_00487810;
+            DAT_004892e8[DAT_00489248 - 1].scratch_2c = player->heading;
+            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
+            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
+
         }
 
-        if (*(char *)(*(unsigned char *)(iVar12 + 0x35 + iVar13) + 0x5cc0 + (int)DAT_00487abc) != '\0') {
-            piVar1 = (int *)(iVar12 + 0x10 + iVar13);
+        if (*(char *)(player->weapon_mark + 0x5cc0 + (int)DAT_00487abc) != '\0') {
+            piVar1 = &player->velocity_x;
             *piVar1 -= sincos[uVar7] >> 7;
-            *(int *)(iVar12 + 0x14 + (int)DAT_00487810) -= sincos[0x200 + uVar7] >> 7;
-            *(unsigned char *)(iVar12 + 0xc4 + (int)DAT_00487810) = 3;
+            player->velocity_y -= sincos[0x200 + uVar7] >> 7;
+            player->timer_c4 = 3;
             uVar7 = rand(); uVar7 &= 0x800007ff;
             if ((int)uVar7 < 0) uVar7 = (uVar7 - 1 | 0xfffff800) + 1;
-            *(int *)(iVar12 + 0x10 + (int)DAT_00487810) -= sincos[uVar7] >> 5;
-            *(int *)(iVar12 + 0x14 + (int)DAT_00487810) -= sincos[0x200 + uVar7] >> 5;
+            player->velocity_x -= sincos[uVar7] >> 5;
+            player->velocity_y -= sincos[0x200 + uVar7] >> 5;
             uVar7 = rand(); uVar7 &= 0x800007ff;
             if ((int)uVar7 < 0) uVar7 = (uVar7 - 1 | 0xfffff800) + 1;
-            *(int *)(iVar12 + (int)DAT_00487810) += sincos[uVar7];
-            piVar1 = (int *)(iVar12 + 4 + (int)DAT_00487810);
+            player->position_x += sincos[uVar7];
+            piVar1 = &player->position_y;
             *piVar1 += sincos[0x200 + uVar7];
-            iVar13 = (int)DAT_00487810;
+
         }
         break;
     }
@@ -4316,52 +4313,52 @@ LAB_00401856:
      * We set velocity at spawn since direction doesn't change for lasers. */
     case 0x2d:
     {
-        if (DAT_00489248 < 0x9c4) {
+        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
             Entity *spawn = &DAT_004892e8[DAT_00489248];
-            spawn->position_x = *(int *)(iVar12 + iVar13);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
             /* Compute velocity from player heading (original callback formula) */
             {
                 unsigned int heading = uVar7 & 0x7FF;
                 spawn->velocity_x = sincos[heading] * 2;
                 spawn->velocity_y = sincos[(heading + 0x200) & 0x7FF] * 2;
             }
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             spawn->type = 0x2d;
             spawn->variant_24 = 0;
             spawn->state_20 = 0; spawn->auxiliary_26 = 0xfe;
             spawn->owner = uVar9; spawn->health_or_damage_28 = 0;
-            spawn->gravity_or_motion_38 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17b0];
-            spawn->damage_44 = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17bf];
+            spawn->gravity_or_motion_38 = typeTable[player->weapon_mark + 0x17b0];
+            spawn->damage_44 = typeTable[player->weapon_mark + 0x17bf];
             spawn->scratch_48 = 0;
-            spawn->palette_value = typeTable[*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) + 0x17cb];
+            spawn->palette_value = typeTable[player->weapon_mark + 0x17cb];
             spawn->animation_frame = 0;
-            spawn->subtype = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
+            spawn->subtype = player->weapon_mark;
             spawn->callback_address = typeTable[0x178e]; spawn->counter_3c = 0;
             spawn->timer_5c = 0;
             DAT_00489248++;
             DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x32;
-            DAT_004892e8[DAT_00489248 - 1].scratch_2c = *(int *)(iVar12 + 0x18 + (int)DAT_00487810);
-            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
-            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            iVar13 = (int)DAT_00487810;
+            DAT_004892e8[DAT_00489248 - 1].scratch_2c = player->heading;
+            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
+            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
+
         }
         break;
     }
 
     /* ===== CASE 0x5a: Delayed fire ===== */
     case 0x5a:
-        *(int *)(iVar12 + 0xa4 + iVar13) = 400;
-        iVar13 = (int)DAT_00487810;
+        player->timer_a4 = 400;
+
         break;
 
     /* ===== DEFAULT + many explicit cases: Generic projectile ===== */
     /* Cases 5,8,9,0xb,0xe,0xf,0x11,0x13,0x14,0x16,0x17,0x18,0x1b-0x1f,0x22-0x2a,0x2e-0x59 */
     default:
     {
-        if (0x9c3 < DAT_00489248) break;
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
         unsigned int param1_byte = 0;
         unsigned int localc_byte = 0x12;
         local_8 = uVar7;
@@ -4376,7 +4373,7 @@ LAB_00401856:
         else {
             if (local_14 == 0xf || local_14 == 0x28) localc_byte = 0xff;
             if (local_14 == 0x22) {
-                if (*(char *)(iVar12 + 0x35 + iVar13) != '\0') { localc_byte = 0xff; param1_byte = 0x6e; }
+                if ((char)player->weapon_mark != '\0') { localc_byte = 0xff; param1_byte = 0x6e; }
             } else if (local_14 == 0x1b) localc_byte = 0x32;
             else if (local_14 == 0x23) localc_byte = 0x78;
             else if (local_14 == 9) localc_byte = 0x1e;
@@ -4385,13 +4382,13 @@ LAB_00401856:
         {
             Entity *spawn = &DAT_004892e8[DAT_00489248];
             int typeOff = local_14 * 0x86;
-            unsigned char wl = *(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810);
-            spawn->position_x = *(int *)(iVar12 + iVar13);
-            spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-            spawn->velocity_x = (typeTable[wl + typeOff + 0x2b] * sincos[local_8] >> 6) + *(int *)(iVar12 + 0x10 + (int)DAT_00487810);
-            spawn->velocity_y = (typeTable[wl + typeOff + 0x2b] * sincos[0x200 + local_8] >> 6) + *(int *)(iVar12 + 0x14 + (int)DAT_00487810);
-            spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
-            spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+            unsigned char wl = player->weapon_mark;
+            spawn->position_x = player->position_x;
+            spawn->position_y = player->position_y;
+            spawn->velocity_x = (typeTable[wl + typeOff + 0x2b] * sincos[local_8] >> 6) + player->velocity_x;
+            spawn->velocity_y = (typeTable[wl + typeOff + 0x2b] * sincos[0x200 + local_8] >> 6) + player->velocity_y;
+            spawn->previous_x = player->position_x;
+            spawn->previous_y = player->position_y;
             spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
             *(char *)((char *)spawn + 0x21) = (char)local_14;
             spawn->variant_24 = 0;
@@ -4413,63 +4410,63 @@ LAB_00401856:
 
         /* Sound assignment for weapon type 0 */
         if (local_14 == 0) {
-            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+            if ((char)player->weapon_mark == '\0') {
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
                 DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xb4 + uVar8 * 2) + 30000;
             }
-            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01') {
+            if ((char)player->weapon_mark == '\x01') {
                 iVar13 = rand();
                 DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xcc + (iVar13 % 5) * 2) + 30000;
             }
-            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x02') {
+            if ((char)player->weapon_mark == '\x02') {
                 iVar13 = rand();
                 DAT_004892e8[DAT_00489248 - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xf2 + (iVar13 % 3) * 2) + 30000;
             }
         }
 
-        DAT_004892e8[DAT_00489248 - 1].motion_x_10 = *(int *)(iVar12 + (int)DAT_00487810);
-        DAT_004892e8[DAT_00489248 - 1].motion_y_14 = *(int *)(iVar12 + 4 + (int)DAT_00487810);
+        DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
+        DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
 
         /* Type-specific post-spawn */
         if (local_14 == 0x16) {
             DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x12;
         } else if (local_14 == 0xb) {
             DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
-            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
-                *(int *)(iVar12 + 0x470 + (int)DAT_00487810) += 1;
+            if ((char)player->weapon_mark == '\x01')
+                player->counter_470 += 1;
         } else if (local_14 == 0x2e) {
             /* Smoking Nalle is placed at the firing position. The reconstructed
              * generic projectile speed made it drift through terrain before its
              * stationary callback got a chance to run. */
             DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
             DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
-            piVar1 = (int *)(iVar12 + 0x46c + (int)DAT_00487810); *piVar1 += 1;
+            piVar1 = &player->counter_46c; *piVar1 += 1;
         } else if (local_14 == 0x11) {
             DAT_004892e8[DAT_00489248 - 1].counter_3c = 1;
-            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
+            if ((char)player->weapon_mark == '\x01')
                 DAT_004892e8[DAT_00489248 - 1].state_20 = 0x1b;
-            if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x02')
+            if ((char)player->weapon_mark == '\x02')
                 DAT_004892e8[DAT_00489248 - 1].gravity_or_motion_38 = (int)0xfffffff0;
         } else if (local_14 == 0x1d) {
             DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0;
             DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0;
         } else if (local_14 == 0x27) {
-            *(int *)(iVar12 + 0x468 + (int)DAT_00487810) += 1;
+            player->counter_468 += 1;
             DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
         } else {
             if (local_14 == 0x29 || local_14 == 0x2a) {
-                piVar1 = (int *)(iVar12 + 0x478 + (int)DAT_00487810); *piVar1 += 1;
+                piVar1 = &player->counter_478; *piVar1 += 1;
             }
             if (local_14 == 0x28) {
-                *(int *)(iVar12 + 0x474 + (int)DAT_00487810) += 1;
+                player->counter_474 += 1;
                 DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
                 DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0x24;
             } else if (local_14 == 0x22) {
-                if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                if ((char)player->weapon_mark == '\0') {
                     DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
                     DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
                     iVar13 = rand();
@@ -4478,7 +4475,7 @@ LAB_00401856:
                     if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
                     DAT_004892e8[DAT_00489248 - 1].state_20 = (char)uVar8;
                 } else {
-                    *(int *)(iVar12 + 0x464 + (int)DAT_00487810) += 1;
+                    player->counter_464 += 1;
                     DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
                     DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0;
                 }
@@ -4496,7 +4493,7 @@ LAB_00401856:
                     DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
                     iVar13 = rand();
                     DAT_004892e8[DAT_00489248 - 1].counter_3c = iVar13 % 0x7fb;
-                    if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                    if ((char)player->weapon_mark == '\0') {
                         DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 3;
                         DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 3;
                     } else {
@@ -4507,7 +4504,7 @@ LAB_00401856:
                 }
                 if (local_14 == 0xe) {
                     DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x1130;
-                    if (*(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\0') {
+                    if ((char)player->weapon_mark == '\0') {
                         DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 3;
                         DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 3;
                     } else {
@@ -4528,7 +4525,7 @@ LAB_00401856:
                     DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x9c4;
 LAB_00406a71:
                     piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].palette_value;
-                    *piVar1 += (unsigned int)*(unsigned char *)(iVar12 + 0x2c + (int)DAT_00487810) * 100;
+                    *piVar1 += (unsigned int)player->team * 100;
                 }
                 else if (local_14 == 0xf || local_14 == 0x18) goto LAB_00406a71;
 
@@ -4538,7 +4535,7 @@ LAB_00406a71:
                     DAT_004892e8[DAT_00489248 - 1].scratch_60 = 4000;
                     DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0;
                 }
-                else if (local_14 == 0x17 && *(char *)(iVar12 + 0x35 + (int)DAT_00487810) == '\x01')
+                else if (local_14 == 0x17 && (char)player->weapon_mark == '\x01')
                     /* Original 0x00406b20-0x00406b36: count was already
                      * incremented, so -0x58 addresses the new entity's +0x28. */
                     EntityCallbacks_InitNucleusMarkII(
@@ -4549,7 +4546,7 @@ LAB_00406a71:
 LAB_0040651d:
         {
             Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
-            iVar13 = (int)DAT_00487810;
+
             if (*(char *)((unsigned int)last_spawn->subtype + local_14 * 0x218 + 0x130 + (int)DAT_00487abc) == '\x01') {
                 unsigned int pIdx2 = 99;
                 if (local_14 == 0xb) pIdx2 = 0;
@@ -4564,7 +4561,7 @@ LAB_0040651d:
                 last_spawn->timer_5c = 6;
                 *(int *)((int)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = DAT_00489248 - 1;
                 DAT_004892e8[DAT_00489248 - 1].scratch_50 = DAT_00487834[pIdx2];
-                iVar13 = (int)DAT_00487810;
+
                 DAT_00487834[pIdx2]++;
             }
         }
@@ -4577,15 +4574,15 @@ LAB_0040651d:
 LAB_00402bc8:
     {
         unsigned char bVar2 = *(unsigned char *)(
-            (unsigned int)*(unsigned char *)(iVar12 + 0x35 + iVar13) +
+            (unsigned int)player->weapon_mark +
             local_14 * 0x218 + 0xa0 + (int)DAT_00487abc);
         if (bVar2 != 0) {
-            piVar1 = (int *)(iVar12 + 0x10 + iVar13);
+            piVar1 = &player->velocity_x;
             *piVar1 -= (int)(((int)(sincos[uVar7] * (unsigned int)bVar2) >> 4) *
                        (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) >> 8;
-            piVar1 = (int *)(iVar12 + 0x14 + (int)DAT_00487810);
+            piVar1 = &player->velocity_y;
             *piVar1 -= (int)(((int)((unsigned int)*(unsigned char *)(
-                (unsigned int)*(unsigned char *)(iVar12 + 0x35 + (int)DAT_00487810) +
+                (unsigned int)player->weapon_mark +
                 local_14 * 0x218 + 0xa0 + (int)DAT_00487abc) *
                 sincos[0x200 + uVar7]) >> 4) *
                 (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) >> 8;
@@ -4669,7 +4666,7 @@ static void FUN_0044d9f0_impl(int *ent)
 /* ===== FUN_0044dbb0 — Spawn Bomb/Mine (0044DBB0) ===== */
 static void FUN_0044dbb0_impl(int *ent, int idx)
 {
-    if (DAT_00489248 >= 0x9c4) return;
+    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
 
     FUN_0040f9b0(0x12, ent[0], ent[1]);
 
@@ -4713,7 +4710,7 @@ static void FUN_0044ea70_impl(int *ent)
     FUN_0040f9b0(0x10b, ent[0], ent[1]);
 
     for (int i = 0; i < particleCount; i++) {
-        if (DAT_00489248 > 0x9c3) return;
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
 
         unsigned int angle = rand() & 0x7ff;
         int speed = rand() % 0x28;
@@ -5062,7 +5059,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                     } else {
                         /* Types 1 & 2: Simple fire particles in DAT_00481f34 (stride 0x20).
                          * Type 1 uses sprite 5 or 6, Type 2 uses sprite 3 or 4. */
-                        if (DAT_00489250 < 2000) {
+                        if (DAT_00489250 < PARTICLE_CAPACITY) {
                             unsigned int rev = (heading - 0x400) & 0x7FF;
                             int r = rand();
                             unsigned int spread = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;

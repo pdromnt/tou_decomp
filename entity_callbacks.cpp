@@ -221,7 +221,7 @@ void collision_troopers(int entity_index)
     const int32_t x = tou_binary::load_i32(projectile, 0x00);
     const int32_t y = tou_binary::load_i32(projectile, 0x08);
     for (int i = 0; i < DAT_0048924c; ++i) {
-        uint8_t *trooper = static_cast<uint8_t *>(DAT_00487884) + i * 0x40;
+        uint8_t *trooper = reinterpret_cast<uint8_t *>(DAT_00487884) + i * 0x40;
         if (tou_binary::load_i32(trooper, 0x20) < 0 ||
             tou_binary::load_u8(trooper, 0x14) == owner) continue;
         const int32_t tx = tou_binary::load_i32(trooper, 0x00);
@@ -470,7 +470,7 @@ void callback_nucleus_00432c80(int entity_index)
         const int32_t cell = tou_binary::sar_i32(x, 0x16) +
                              tou_binary::sar_i32(y, 0x16) * DAT_004879f8;
         if ((static_cast<uint8_t *>(DAT_00487814)[cell] & 8u) != 0u) {
-            uint8_t *particle = static_cast<uint8_t *>(DAT_00481f34) +
+            uint8_t *particle = reinterpret_cast<uint8_t *>(DAT_00481f34) +
                                 DAT_00489250 * kParticleStride;
             tou_binary::store_i32(particle, 0x00, x);
             tou_binary::store_i32(particle, 0x04, y);
@@ -537,7 +537,7 @@ void spawn_flash(int32_t x, int32_t y, uint8_t sprite, uint8_t behavior,
                  uint8_t owner, uint8_t group)
 {
     if (DAT_00489250 >= kParticleCapacity) return;
-    uint8_t *particle = static_cast<uint8_t *>(DAT_00481f34) +
+    uint8_t *particle = reinterpret_cast<uint8_t *>(DAT_00481f34) +
                         DAT_00489250++ * kParticleStride;
     tou_binary::store_i32(particle, 0x00, x);
     tou_binary::store_i32(particle, 0x04, y);
@@ -686,7 +686,7 @@ void callback_morning_star_0043dbd0(int entity_index)
             const int vel_scale = mode == 0u ? 0x19 : 0x30;
             for (int n = 0; n < 4 && DAT_00489250 < kParticleCapacity; ++n) {
                 int dir = (phase + (n + 1) * 0x200) & 0x7ff;
-                uint8_t *p = static_cast<uint8_t *>(DAT_00481f34) + DAT_00489250++ * kParticleStride;
+                uint8_t *p = reinterpret_cast<uint8_t *>(DAT_00481f34) + DAT_00489250++ * kParticleStride;
                 tou_binary::store_i32(p, 0x00, tou_binary::load_i32(entity, 0x00) + (sc[dir] * pos_scale >> 6));
                 tou_binary::store_i32(p, 0x04, tou_binary::load_i32(entity, 0x08) + (sc[dir + 0x200] * pos_scale >> 6));
                 tou_binary::store_i32(p, 0x08, sc[dir] * vel_scale >> 6);
@@ -1400,7 +1400,7 @@ bool bone_crusher_scan_infantry(uint8_t *entity)
         for (int slot = 0; slot < count; ++slot) {
             const int trooper_index = tou_binary::load_i32(grid, base + 0x0c + slot * 4);
             if (trooper_index < 0 || trooper_index >= DAT_0048924c) continue;
-            uint8_t *trooper = static_cast<uint8_t *>(DAT_00487884) + trooper_index * 0x40;
+            uint8_t *trooper = reinterpret_cast<uint8_t *>(DAT_00487884) + trooper_index * 0x40;
             if (tou_binary::load_i32(trooper, 0x28) <= 0) continue;
             const int32_t tx = tou_binary::load_i32(trooper, 0);
             const int32_t ty = tou_binary::load_i32(trooper, 8);
@@ -1523,7 +1523,7 @@ void callback_airstrike_00438010(int entity_index)
     for (int angle_bytes = 0; angle_bytes < 0x2000 && DAT_00489250 < kParticleCapacity;
          angle_bytes += 100) {
         const int angle = angle_bytes >> 2;
-        uint8_t *particle = static_cast<uint8_t *>(DAT_00481f34) +
+        uint8_t *particle = reinterpret_cast<uint8_t *>(DAT_00481f34) +
                             DAT_00489250++ * kParticleStride;
         tou_binary::store_i32(particle, 0x00, px);
         tou_binary::store_i32(particle, 0x04, py);
@@ -1559,7 +1559,7 @@ void fireball_primary_trail(uint8_t *entity, uint8_t subtype)
     else sprite = static_cast<uint8_t>(game_rand() % 3 + 0x11);
     const uint8_t frame = subtype < 3u ? 4u : (subtype < 5u ? 7u : 10u);
     if (DAT_00489250 < kParticleCapacity) {
-        uint8_t *particle = static_cast<uint8_t *>(DAT_00481f34) +
+        uint8_t *particle = reinterpret_cast<uint8_t *>(DAT_00481f34) +
                             DAT_00489250++ * kParticleStride;
         tou_binary::store_i32(particle, 0, tou_binary::load_i32(entity, 0));
         tou_binary::store_i32(particle, 4, tou_binary::load_i32(entity, 8));
@@ -1677,7 +1677,7 @@ void callback_normal_fireball_00441aa0(int entity_index)
         angle = (angle + 0x800 / burst_count) & 0x7ff;
         const int sx = game_rand() & 0x3f;
         const int sy = game_rand() & 0x3f;
-        uint8_t *particle = static_cast<uint8_t *>(DAT_00481f34) + DAT_00489250++ * kParticleStride;
+        uint8_t *particle = reinterpret_cast<uint8_t *>(DAT_00481f34) + DAT_00489250++ * kParticleStride;
         tou_binary::store_i32(particle, 0, tou_binary::load_i32(entity, 4));
         tou_binary::store_i32(particle, 4, tou_binary::load_i32(entity, 0x0c));
         tou_binary::store_i32(particle, 8, tou_binary::sar_i32(

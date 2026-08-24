@@ -29,10 +29,10 @@ extern int                   DAT_00487808;      /* active player viewport count 
 
 /* ===== Entity Rendering Arrays (allocated in memory.cpp) ===== */
 extern void                 *DAT_00489e98;      /* static entity array (16 bytes each) */
-extern void                 *DAT_00487884;      /* trooper array (64 bytes each) */
-extern void                 *DAT_00481f28;      /* projectile array (64 bytes each) */
+extern TrooperRecord        *DAT_00487884;      /* trooper array (64 bytes each) */
+extern ProjectileRecord     *DAT_00481f28;      /* projectile array (64 bytes each) */
 extern void                 *DAT_00487a9c;      /* explosion array (32 bytes each) */
-extern void                 *DAT_00487830;      /* debris/particle array (32 bytes each) */
+extern DebrisItemRecord     *DAT_00487830;      /* debris/item array (32 bytes each) */
 extern void                 *DAT_00481f2c;      /* edge record array (32 bytes each) */
 extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
@@ -54,7 +54,7 @@ extern void                 *DAT_00487abc;      /* Entity type table (0x11030 by
 
 /* ===== Explosion/Particle data buffers (memory.cpp) ===== */
 extern void                 *DAT_00481f20;      /* Explode descriptor table (160 bytes) */
-extern void                 *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
+extern ParticleRecord       *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
 extern void                 *DAT_0048787c;      /* Explode pixel data (430KB) */
 extern void                 *DAT_00487aac;      /* Explosion rotation frames (~6.4MB) */
 extern Entity               *DAT_004892e8;      /* Entity pool: 2600 allocated, 2500 active cap */

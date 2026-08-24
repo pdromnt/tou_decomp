@@ -42,7 +42,7 @@ static void Spawn_Particles(int count, int y_base, int y_range)
         int angle = FUN_004257e0(320, 240, px, py);
         int vel_angle = (angle + 0xAA) & 0x7FF;  /* offset by ~30 degrees */
 
-        if (DAT_00489250 >= 2000) break;
+        if (DAT_00489250 >= PARTICLE_CAPACITY) break;
 
         int idx = DAT_00489250;
         int *part = (int *)((char *)DAT_00481f34 + idx * 0x20);
@@ -79,7 +79,7 @@ static void Spawn_Entities(int max_count, int y_base, int y_range, int vel_max)
     unsigned char *type_base = (unsigned char *)DAT_00487abc;
 
     for (int n = 0; n < max_count; n++) {
-        if (DAT_00489248 > 0x9c3) break;  /* max 2499 entities */
+        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;  /* max 2499 entities */
 
         int mag_rand = rand();
         int px = (rand() % 0xf0) + 200;    /* X: 200-439 */

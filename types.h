@@ -6,6 +6,15 @@
 
 /* ===== Structures ===== */
 
+enum RuntimePoolCapacity {
+    ENTITY_ACTIVE_CAPACITY = 2500,
+    ENTITY_STORAGE_CAPACITY = 2600,
+    TROOPER_CAPACITY = 400,
+    PROJECTILE_CAPACITY = 200,
+    PARTICLE_CAPACITY = 2000,
+    DEBRIS_ITEM_CAPACITY = 100
+};
+
 /*
  * Original 0x80-byte entity record.
  *
@@ -76,6 +85,112 @@ static_assert(offsetof(Entity, scratch_58) == 0x58, "Entity::scratch_58 offset")
 static_assert(offsetof(Entity, timer_5c) == 0x5C, "Entity::timer offset");
 static_assert(offsetof(Entity, scratch_60) == 0x60, "Entity::scratch_60 offset");
 static_assert(offsetof(Entity, scratch_64) == 0x64, "Entity::scratch_64 offset");
+
+/* Original 0x40-byte deployed projectile/building record. Several fields are
+ * deliberately neutral because turrets, bases, and other deployed objects
+ * reuse them with different meanings. */
+typedef struct ProjectileRecord {
+    int32_t position_x;              /* 0x00 */
+    int32_t position_y;              /* 0x04 */
+    int32_t visual_or_heading_08;    /* 0x08 */
+    int32_t aim_angle_0c;            /* 0x0C */
+    int32_t health_or_state_10;      /* 0x10 */
+    int32_t limit_or_reload_14;      /* 0x14 */
+    int32_t target_distance_18;      /* 0x18 */
+    uint8_t type;                    /* 0x1C */
+    uint8_t team;                    /* 0x1D */
+    uint8_t palette_or_flags_1e;     /* 0x1E */
+    uint8_t scratch_1f;
+    uint8_t state_20;                /* 0x20 */
+    uint8_t target_kind_21;          /* 0x21 */
+    uint8_t sweep_counter_22;        /* 0x22 */
+    uint8_t animation_counter_23;    /* 0x23 */
+    uint8_t unknown_24[0x1c];
+} ProjectileRecord;
+
+static_assert(sizeof(ProjectileRecord) == 0x40, "Projectile record must retain its original stride");
+static_assert(offsetof(ProjectileRecord, position_x) == 0x00, "ProjectileRecord::position_x offset");
+static_assert(offsetof(ProjectileRecord, aim_angle_0c) == 0x0c, "ProjectileRecord::aim offset");
+static_assert(offsetof(ProjectileRecord, health_or_state_10) == 0x10, "ProjectileRecord::health offset");
+static_assert(offsetof(ProjectileRecord, type) == 0x1c, "ProjectileRecord::type offset");
+static_assert(offsetof(ProjectileRecord, state_20) == 0x20, "ProjectileRecord::state offset");
+static_assert(offsetof(ProjectileRecord, animation_counter_23) == 0x23, "ProjectileRecord::animation offset");
+
+/* Original 0x40-byte infantry/car record. Movement, animation, and aiming
+ * share this storage; neutral names preserve that reuse until each subtype is
+ * independently documented. */
+typedef struct TrooperRecord {
+    int32_t position_x;              /* 0x00 */
+    int32_t previous_x;              /* 0x04 */
+    int32_t position_y;              /* 0x08 */
+    int32_t previous_y;              /* 0x0C */
+    int32_t velocity_x;              /* 0x10 */
+    int32_t velocity_y;              /* 0x14 */
+    int32_t movement_flags;          /* 0x18 */
+    uint8_t team;                    /* 0x1C */
+    int8_t patrol_direction;         /* 0x1D */
+    uint8_t unknown_1e[2];
+    int32_t movement_speed;          /* 0x20 */
+    uint8_t animation_state_24;      /* 0x24 */
+    uint8_t kind_25;                 /* 0x25 */
+    uint8_t unknown_26[2];
+    int32_t health_28;               /* 0x28 */
+    uint8_t palette_2c;              /* 0x2C */
+    uint8_t movement_mode_2d;        /* 0x2D */
+    uint8_t unknown_2e[2];
+    int32_t aim_angle_30;            /* 0x30 */
+    int32_t aim_rate_34;             /* 0x34 */
+    uint8_t fire_cooldown_38;        /* 0x38 */
+    uint8_t bounce_cooldown_39;      /* 0x39 */
+    uint8_t unknown_3a[6];
+} TrooperRecord;
+
+static_assert(sizeof(TrooperRecord) == 0x40, "Trooper record must retain its original stride");
+static_assert(offsetof(TrooperRecord, position_y) == 0x08, "TrooperRecord::position_y offset");
+static_assert(offsetof(TrooperRecord, team) == 0x1c, "TrooperRecord::team offset");
+static_assert(offsetof(TrooperRecord, health_28) == 0x28, "TrooperRecord::health offset");
+static_assert(offsetof(TrooperRecord, palette_2c) == 0x2c, "TrooperRecord::palette offset");
+static_assert(offsetof(TrooperRecord, aim_angle_30) == 0x30, "TrooperRecord::aim offset");
+static_assert(offsetof(TrooperRecord, fire_cooldown_38) == 0x38, "TrooperRecord::cooldown offset");
+
+/* Animated explosion/fire particle pool at DAT_00481f34. */
+typedef struct ParticleRecord {
+    int32_t position_x;              /* 0x00 */
+    int32_t position_y;              /* 0x04 */
+    int32_t velocity_x;              /* 0x08 */
+    int32_t velocity_y;              /* 0x0C */
+    uint8_t sprite_index;            /* 0x10 */
+    uint8_t frame_number;            /* 0x11 */
+    uint8_t frame_timer;             /* 0x12 */
+    uint8_t flags_13;                /* 0x13 */
+    uint8_t owner_or_flags_14;       /* 0x14 */
+    uint8_t color_index;             /* 0x15 */
+    uint8_t unknown_16[0x0a];
+} ParticleRecord;
+
+static_assert(sizeof(ParticleRecord) == 0x20, "Particle record must retain its original stride");
+static_assert(offsetof(ParticleRecord, velocity_x) == 0x08, "ParticleRecord::velocity offset");
+static_assert(offsetof(ParticleRecord, sprite_index) == 0x10, "ParticleRecord::sprite offset");
+static_assert(offsetof(ParticleRecord, frame_timer) == 0x12, "ParticleRecord::timer offset");
+static_assert(offsetof(ParticleRecord, owner_or_flags_14) == 0x14, "ParticleRecord::owner offset");
+static_assert(offsetof(ParticleRecord, color_index) == 0x15, "ParticleRecord::color offset");
+
+/* Menu/gameplay debris and pickup pool at DAT_00487830. */
+typedef struct DebrisItemRecord {
+    int32_t position_x;              /* 0x00 */
+    int32_t position_y;              /* 0x04 */
+    uint8_t sprite_frame;            /* 0x08 */
+    uint8_t motion_variant;          /* 0x09 */
+    uint8_t type;                    /* 0x0A */
+    uint8_t scratch_0b;
+    int32_t lifetime_0c;             /* 0x0C */
+    uint8_t unknown_10[0x10];
+} DebrisItemRecord;
+
+static_assert(sizeof(DebrisItemRecord) == 0x20, "Debris item record must retain its original stride");
+static_assert(offsetof(DebrisItemRecord, sprite_frame) == 0x08, "DebrisItemRecord::frame offset");
+static_assert(offsetof(DebrisItemRecord, type) == 0x0a, "DebrisItemRecord::type offset");
+static_assert(offsetof(DebrisItemRecord, lifetime_0c) == 0x0c, "DebrisItemRecord::lifetime offset");
 
 /*
  * Original 0x598-byte player/ship runtime record.
