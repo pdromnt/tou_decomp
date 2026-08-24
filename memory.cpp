@@ -40,16 +40,16 @@ void *DAT_00489e84 = NULL;
 void *DAT_00489e7c = NULL;
 void *DAT_0048781c = NULL;
 Entity *DAT_004892e8 = NULL;
-void *DAT_00487884 = NULL;
+TrooperRecord *DAT_00487884 = NULL;
 void *DAT_00487a9c = NULL;
-void *DAT_00481f34 = NULL;
+ParticleRecord *DAT_00481f34 = NULL;
 void *DAT_00481f2c = NULL;
-void *DAT_00481f28 = NULL;
+ProjectileRecord *DAT_00481f28 = NULL;
 void *DAT_00489e98 = NULL;
 void *DAT_00487780 = NULL;
 void *DAT_00487818 = NULL;
 void *DAT_00487ab8 = NULL;
-void *DAT_00487830 = NULL;  /* debris/particle array (32 bytes each) */
+DebrisItemRecord *DAT_00487830 = NULL;
 void *DAT_00487928 = NULL;
 
 /* Pointer arrays */
@@ -112,19 +112,29 @@ void Init_Memory_Pools(void)
     ALLOC_POOL(DAT_00489e84, 80000);
     ALLOC_POOL(DAT_00489e7c, 160000);
     ALLOC_POOL(DAT_0048781c, 0x30000);
-    DAT_004892e8 = static_cast<Entity *>(Mem_Alloc(0x51400));
-    g_MemoryTracker += 0x51400;
+    const unsigned int entity_pool_bytes = sizeof(Entity) * ENTITY_STORAGE_CAPACITY;
+    DAT_004892e8 = static_cast<Entity *>(Mem_Alloc(entity_pool_bytes));
+    g_MemoryTracker += entity_pool_bytes;
 
-    ALLOC_POOL(DAT_00487884, 0x6400);
+    const unsigned int trooper_pool_bytes = sizeof(TrooperRecord) * TROOPER_CAPACITY;
+    DAT_00487884 = static_cast<TrooperRecord *>(Mem_Alloc(trooper_pool_bytes));
+    g_MemoryTracker += trooper_pool_bytes;
     ALLOC_POOL(DAT_00487a9c, 0xc80);
-    ALLOC_POOL(DAT_00481f34, 64000);
+    const unsigned int particle_pool_bytes = sizeof(ParticleRecord) * PARTICLE_CAPACITY;
+    DAT_00481f34 = static_cast<ParticleRecord *>(Mem_Alloc(particle_pool_bytes));
+    g_MemoryTracker += particle_pool_bytes;
     ALLOC_POOL(DAT_00481f2c, 48000);
-    ALLOC_POOL(DAT_00481f28, 0x3200);
+    const unsigned int projectile_pool_bytes = sizeof(ProjectileRecord) * PROJECTILE_CAPACITY;
+    DAT_00481f28 = static_cast<ProjectileRecord *>(Mem_Alloc(projectile_pool_bytes));
+    g_MemoryTracker += projectile_pool_bytes;
     ALLOC_POOL(DAT_00489e98, 0x40);
     ALLOC_POOL(DAT_00487780, 800);
-    ALLOC_POOL(DAT_00487830, 0xc80);   /* Debris/item pickup array (100 x 0x20) */
-    DAT_00487810 = static_cast<unsigned char *>(Mem_Alloc(0x1bf80)); /* 80 x 0x598 */
-    g_MemoryTracker += 0x1bf80;
+    const unsigned int debris_pool_bytes = sizeof(DebrisItemRecord) * DEBRIS_ITEM_CAPACITY;
+    DAT_00487830 = static_cast<DebrisItemRecord *>(Mem_Alloc(debris_pool_bytes));
+    g_MemoryTracker += debris_pool_bytes;
+    const unsigned int player_pool_bytes = sizeof(PlayerData) * PLAYER_STORAGE_CAPACITY;
+    DAT_00487810 = static_cast<unsigned char *>(Mem_Alloc(player_pool_bytes));
+    g_MemoryTracker += player_pool_bytes;
     DAT_0048780c = Mem_Alloc(0x1400);  /* Ship stats table (80 * 0x40) */
     g_MemoryTracker += 0x1400;
     ALLOC_POOL(DAT_00487818, 0x140);

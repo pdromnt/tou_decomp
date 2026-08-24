@@ -526,13 +526,11 @@ void FUN_0040d100(int buffer, int stride)
     if (DAT_00489250 <= 0) return;
 
     int i = 0;
-    int offset = 0;
 
     while (i < DAT_00489250) {
-        unsigned char *part = (unsigned char *)DAT_00481f34 + offset;
-        int *pi = (int *)part;
+        const ParticleRecord *part = &DAT_00481f34[i];
 
-        unsigned char sprite_idx = part[0x10];
+        unsigned char sprite_idx = part->sprite_index;
         unsigned char *desc = (unsigned char *)DAT_00481f20 + (int)sprite_idx * 8;
 
         int spr_w = (int)desc[4];
@@ -541,18 +539,18 @@ void FUN_0040d100(int buffer, int stride)
         int half_h = spr_h >> 1;
 
         /* Get pixel position from fixed-point */
-        int px = pi[0] >> 18;
-        int py = pi[1] >> 18;
+        int px = part->position_x >> 18;
+        int py = part->position_y >> 18;
 
         /* Viewport culling */
         if ((px + half_w) <= DAT_004806dc || (px - half_w) >= DAT_004806d0) {
-            i++; offset += 0x20; continue;
+            i++; continue;
         }
         if ((py + half_h) <= DAT_004806e0 || (py - half_h) >= DAT_004806d4) {
-            i++; offset += 0x20; continue;
+            i++; continue;
         }
         if (sprite_idx == 100) {
-            i++; offset += 0x20; continue;
+            i++; continue;
         }
 
         /* Position relative to viewport */
@@ -561,7 +559,7 @@ void FUN_0040d100(int buffer, int stride)
 
         /* Compute source pixel offset into explode pixel data */
         int spr_pixel_base = *(int *)desc;  /* pixel_offset from descriptor */
-        int frame_num = part[0x11];
+        int frame_num = part->frame_number;
         int src_offset = spr_pixel_base + frame_num * spr_h * spr_w;
 
         /* Destination pointer */
@@ -598,7 +596,7 @@ void FUN_0040d100(int buffer, int stride)
             src_skip = 0;
         }
 
-        unsigned char color_idx = part[0x15];
+        unsigned char color_idx = part->color_index;
 
         /* Render pixels with alpha blending */
         if (draw_h > 0) {
@@ -633,7 +631,6 @@ void FUN_0040d100(int buffer, int stride)
         }
 
         i++;
-        offset += 0x20;
     }
 }
 
@@ -1004,63 +1001,59 @@ void FUN_0040dbd0(int param_1, unsigned int param_2)
  */
 void FUN_0040dce0(int param_1, unsigned int param_2)
 {
-    int offset = 0;
     int vp_left = DAT_004806dc;
-    int base = (int)DAT_00487884;
 
     for (int i = 0; i < DAT_0048924c; i++) {
-        int px = *(int *)(offset + base) >> 0x12;
+        const TrooperRecord *trooper = &DAT_00487884[i];
+        int px = trooper->position_x >> 0x12;
         if (vp_left < px + 6 && px - 6 < DAT_004806d0) {
-            int py = *(int *)(offset + 8 + base) >> 0x12;
+            int py = trooper->position_y >> 0x12;
             if (DAT_004806e0 < py + 6 && py - 6 < DAT_004806d4) {
                 /* Darkness from tilemap */
                 unsigned char tile = ((unsigned char *)DAT_0048782c)[(py << ((unsigned char)DAT_00487a18 & 0x1f)) + px];
                 unsigned char darkness = ((unsigned char *)DAT_00487928)[(unsigned int)tile * 0x20 + 4];
 
                 /* Helmet layer (if flag bit 0 is set) */
-                if ((*(unsigned char *)(offset + 0x18 + base) & 1) == 1) {
+                if ((trooper->movement_flags & 1) == 1) {
                     int hw = (int)((unsigned char *)DAT_00489e8c)[0x11];
                     int hh = (int)((unsigned char *)DAT_00489e88)[0x11];
                     FUN_0040c280(0x11, (px - (hw >> 1)) - DAT_004806dc,
                                  ((py - (hh >> 1)) - DAT_004806e0) - 5,
-                                 *(unsigned char *)(offset + 0x2c + base),
+                                 trooper->palette_2c,
                                  param_1, param_2, darkness);
                     vp_left = DAT_004806dc;
-                    base = (int)DAT_00487884;
                 }
 
                 /* Body sprite */
-                unsigned char variant = *(unsigned char *)(offset + 0x1c + base);
+                unsigned char variant = trooper->team;
                 unsigned int team = (variant < 5) ? (unsigned int)variant : 3;
 
                 int sprite;
-                if (*(char *)(offset + 0x25 + base) == '\x01') {
+                if (trooper->kind_25 == 1) {
                     /* Walking animation */
-                    int angle = *(int *)(offset + 0x30 + base);
+                    int angle = trooper->aim_angle_30;
                     sprite = ((int)(angle + (angle >> 0x1f & 0x3f)) >> 6) + (team + 100) * 100;
-                    if (*(char *)(offset + 0x1d + base) == '\x01')
+                    if (trooper->patrol_direction == 1)
                         sprite += 500;
                     int bw = (int)((unsigned char *)DAT_00489e8c)[sprite];
                     int bh = (int)((unsigned char *)DAT_00489e88)[sprite];
                     int sx = (px - (bw >> 1)) - vp_left;
-                    int sy = ((py - (bh >> 1)) - (*(unsigned char *)(offset + 0x24 + base) & 1)) - DAT_004806e0 - 3;
-                    FUN_0040c280(sprite, sx, sy, *(unsigned char *)(offset + 0x2c + base),
+                    int sy = ((py - (bh >> 1)) - (trooper->animation_state_24 & 1)) - DAT_004806e0 - 3;
+                    FUN_0040c280(sprite, sx, sy, trooper->palette_2c,
                                  param_1, param_2, darkness);
                 } else {
                     /* Standing/shooting animation */
-                    sprite = (unsigned int)(2 < *(unsigned char *)(offset + 0x24 + base)) + (team + 0xb4) * 100;
+                    sprite = (unsigned int)(2 < trooper->animation_state_24) + (team + 0xb4) * 100;
                     int bw = (int)((unsigned char *)DAT_00489e8c)[sprite];
                     int bh = (int)((unsigned char *)DAT_00489e88)[sprite];
                     int sx = (px - (bw >> 1)) - vp_left;
                     int sy = ((py - (bh >> 1)) - DAT_004806e0) - 2;
-                    FUN_0040c280(sprite, sx, sy, *(unsigned char *)(offset + 0x2c + base),
+                    FUN_0040c280(sprite, sx, sy, trooper->palette_2c,
                                  param_1, param_2, darkness);
                 }
                 vp_left = DAT_004806dc;
-                base = (int)DAT_00487884;
             }
         }
-        offset += 0x40;
     }
 }
 
@@ -1250,15 +1243,14 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
  */
 void FUN_0040a870(int param_1, unsigned int param_2)
 {
-    int offset = 0;
-
     for (int i = 0; i < DAT_00489260; i++) {
-        int px = *(int *)(offset + (int)DAT_00481f28) >> 0x12;
+        const ProjectileRecord *projectile = &DAT_00481f28[i];
+        int px = projectile->position_x >> 0x12;
         if (DAT_004806dc < px + 0xc && px - 0xc < DAT_004806d0) {
-            int py = *(int *)(offset + 4 + (int)DAT_00481f28) >> 0x12;
+            int py = projectile->position_y >> 0x12;
             if (DAT_004806e0 < py + 0xc && py - 0xc < DAT_004806d4) {
-                unsigned char proj_type = *(unsigned char *)(offset + 0x1c + (int)DAT_00481f28);
-                int angle_raw = *(int *)(offset + 8 + (int)DAT_00481f28);
+                unsigned char proj_type = projectile->type;
+                int angle_raw = projectile->visual_or_heading_08;
 
                 unsigned int angle_idx;
                 if (proj_type == 7) {
@@ -1268,12 +1260,11 @@ void FUN_0040a870(int param_1, unsigned int param_2)
                 }
 
                 int sprite = *(int *)((unsigned int)proj_type * 0x20 + 0xc + (int)DAT_00487818) +
-                             (unsigned int)*(unsigned char *)(offset + 0x1d + (int)DAT_00481f28) * 100 +
+                             (unsigned int)projectile->team * 100 +
                              ((int)(angle_idx + (angle_idx >> 0x1f & 0x3f)) >> 6);
 
-                if (*(char *)(offset + 0x1c + (int)DAT_00481f28) == '\x05' &&
-                    *(int *)(offset + 0x14 + (int)DAT_00481f28) > 2) {
-                    if (*(char *)(offset + 0x20 + (int)DAT_00481f28) == '\x01')
+                if (projectile->type == 5 && projectile->limit_or_reload_14 > 2) {
+                    if (projectile->state_20 == 1)
                         sprite += 500;
                     else
                         sprite += 1000;
@@ -1287,11 +1278,10 @@ void FUN_0040a870(int param_1, unsigned int param_2)
 
                 FUN_0040c280(sprite, (px - (sw >> 1)) - DAT_004806dc,
                              (py - (sh >> 1)) - DAT_004806e0,
-                             *(unsigned char *)(offset + 0x1e + (int)DAT_00481f28),
+                             projectile->palette_or_flags_1e,
                              param_1, param_2, darkness);
             }
         }
-        offset += 0x40;
     }
 }
 
@@ -1338,16 +1328,14 @@ void FUN_0040d6c0(int param_1, int param_2)
  */
 void FUN_0040d810(int param_1, unsigned int param_2)
 {
-    int offset = 0;
-    int base = (int)DAT_00487830;
-
     for (int i = 0; i < DAT_00489268; i++) {
-        int px = *(int *)(offset + base) >> 0x12;
+        const DebrisItemRecord *debris = &DAT_00487830[i];
+        int px = debris->position_x >> 0x12;
         if (DAT_004806dc < px + 0x14 && px - 0x14 < DAT_004806d0) {
-            int py = *(int *)(offset + 4 + base) >> 0x12;
+            int py = debris->position_y >> 0x12;
             if (DAT_004806e0 < py + 0x14 && py - 0x14 < DAT_004806d4) {
-                int sprite = ((int *)g_EntityConfig)[(unsigned int)*(unsigned char *)(offset + 10 + base) * 2] +
-                             (unsigned int)*(unsigned char *)(offset + 8 + base);
+                int sprite = ((int *)g_EntityConfig)[(unsigned int)debris->type * 2] +
+                             (unsigned int)debris->sprite_frame;
                 int sw = (int)((unsigned char *)DAT_00489e8c)[sprite];
                 int sh = (int)((unsigned char *)DAT_00489e88)[sprite];
 
@@ -1356,10 +1344,8 @@ void FUN_0040d810(int param_1, unsigned int param_2)
 
                 FUN_0040c280(sprite, (px - (sw >> 1)) - DAT_004806dc,
                              (py - (sh >> 1)) - DAT_004806e0, 0, param_1, param_2, darkness);
-                base = (int)DAT_00487830;
             }
         }
-        offset += 0x20;
     }
 }
 

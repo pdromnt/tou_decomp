@@ -2,9 +2,27 @@
 
 Ordered by theme and priority. Each item includes acceptance criteria (AC).
 
-The gameplay-parity pass is complete. These are maintenance and modernization
-tasks, not permission to replace verified binary behavior wholesale. Refactors
-should be small enough to compare and revert independently.
+The gameplay-parity pass is complete and shipped in v0.3. These are maintenance
+and modernization tasks, not permission to replace verified binary behavior
+wholesale. Refactors should remain organized into behavior-neutral boundaries
+that can be compared and reverted independently, even when several boundaries
+are delivered together in one larger pull request.
+
+## Current Foundation Status (v0.3)
+
+- `Entity` and `PlayerData` have verified sizes, offset assertions, and typed
+  accessors. The complete weapon/effect dispatcher now uses `PlayerData`; a
+  smaller set of legacy scanners still retains original byte-offset views.
+- The entity pool is typed. Player storage deliberately remains byte-addressed
+  until every stride-relative raw access has been migrated.
+- Projectile, trooper, animated-particle, and debris/item pools have verified
+  record sizes and key offsets. Their allocation, construction, primary update,
+  collision, and rendering boundaries are typed; subtype-specific AI routines
+  still contain packed views that need later routine-by-routine migration.
+- Binary compatibility helpers, original RNG ordering, x87 conversion, and
+  callback-address dispatch are production code and must survive all refactors.
+- Renderer abstraction is the next architectural milestone after the data and
+  capacity foundation is safe.
 
 ---
 
@@ -13,35 +31,19 @@ should be small enough to compare and revert independently.
 ### T1.1 — Entity struct (128 bytes)  [IN PROGRESS / P0]
 Replace raw entity blob with typed access without changing original behavior.
 
-The verified `Entity` layout and offset assertions now live in `types.h`, and
-the global pool is typed as `Entity *`. The first access migration covers the
-callback lookup helper, pre-tick flag reset, and menu/intro renderer. Most
-runtime code still uses raw accesses. The second batch covers the common
-prologue of `FUN_00434310`: position history, animation bookkeeping, callback
-identity, and the turret-projectile gravity guard. Migrate the remaining paths
-separately in small, assembly-comparable batches. The third batch converts the
-complete main gameplay entity renderer, including its intentional byte/word
-views of `+0x24`, without changing render or RNG call order. The pool physically
-allocates 2600 records (`0x51400 / 0x80`), while gameplay limits active entities
-to 2500. The fourth, larger batch converts four complete entity-array scanners:
-enemy proximity, owned-projectile detonation, Moving Sucker attraction/repulsion,
-and force-field repulsion. The fifth batch converts five construction paths:
-the straight and two side projectiles in primary fire, bomb/mine spawning, and
-energy-explosion particles. Their partial initialization and RNG order remain
-intentional. The sixth batch converts all entity construction inside the main
-tile-damage/explosion routine plus the environmental falling-debris constructor,
-including the post-count lifetime, gravity/damage, and palette writes. The
-expanded seventh-through-twelfth batches cover projectile/structure collision,
-the nine fire-damage entity categories, particle deflection by Moving Suckers,
-enemy/turret projectile construction, trooper and player death fragments, and
-the remaining player-explosion terrain debris constructors. These conversions
-retain strict collision bounds, category ordering, signed state checks, RNG
-ordering, partial initialization, and post-count writes. The next large batch
-types the full legacy update body and its effect constructors, gameplay firing,
-pickup rewards, ship exhaust, ambient and level spawns, trailing post-count
-writes, and the remaining direct entity-pool scanners. A few intentional packed
-views through an already selected record remain raw and must stay width
-preserving during later cleanup.
+The verified `Entity` layout and offset assertions live in `types.h`, and the
+global pool is typed as `Entity *`. Completed migrations cover renderers,
+callback dispatch, the main legacy update body, gameplay firing and pickup
+construction, explosions, projectile and structure collision, player/trooper
+death fragments, ambient and level spawns, ship exhaust, and the major
+entity-pool scanners. The pool physically allocates 2600 records
+(`0x51400 / 0x80`), while gameplay limits active entities to 2500.
+
+Remaining work is concentrated in a smaller set of legacy raw views: intro
+entities, packed-width accesses where one field is intentionally read at
+multiple widths, and raw expressions embedded in player-relative weapon paths.
+Convert these by complete routine or complete effect family, preserving partial
+initialization, post-count writes, signed state checks, and RNG order.
 
 **Known layout:**
 ```
@@ -117,17 +119,25 @@ lifted would silently scale those offsets.
 
 ---
 
-### T1.3 — ProjectileRecord struct (64 bytes)  [P1]
-Array at `DAT_00481f28`. Used in stubs.cpp for collision, explosions, turret targeting.
+### T1.3 — ProjectileRecord struct (64 bytes)  [IN PROGRESS / P1]
+Array at `DAT_00481f28`. Used primarily by `sim.cpp`, `entity.cpp`, and
+`effects.cpp` for collision, explosions, and turret targeting.
+
+The storage global, allocator, constructor, renderer, and particle-damage scan
+are typed. Remaining projectile AI/update routines still use packed views.
 
 **AC:**
 - `ProjectileRecord` defined; `static_assert(sizeof == 64)`
-- All `DAT_00481f28` pointer math replaced in stubs.cpp
+- All `DAT_00481f28` pointer math replaced in runtime modules
 
 ---
 
-### T1.4 — TrooperRecord struct (64 bytes)  [P1]
-Array at `DAT_00487884`. Used in spatial grid binning and AI.
+### T1.4 — TrooperRecord struct (64 bytes)  [IN PROGRESS / P1]
+Array at `DAT_00487884`. Used in spatial grid binning, infantry simulation,
+targeting, and AI.
+
+The storage global, allocator, constructor, renderer, and particle-damage scan
+are typed. The complete infantry/car AI update remains to be migrated.
 
 **AC:**
 - `TrooperRecord` defined; `static_assert(sizeof == 64)`
@@ -135,12 +145,18 @@ Array at `DAT_00487884`. Used in spatial grid binning and AI.
 
 ---
 
-### T1.5 — Particle struct (32 bytes)  [P1]
-Arrays at `DAT_00487830` / `DAT_00481f34`. Used in debris, explosions, fluid effects.
+### T1.5 — Particle structs (32 bytes)  [IN PROGRESS / P1]
+Arrays at `DAT_00487830` / `DAT_00481f34`. Used in debris, explosions, fluid
+effects, trails, and rendering.
+
+The two distinct 32-byte layouts are represented by `ParticleRecord` and
+`DebrisItemRecord`. Allocation, construction, rendering, particle collision and
+expiry, and debris pickup animation/expiry are typed. Effect-specific spawn
+sites remain to be migrated by family so their partial initialization survives.
 
 **AC:**
 - `Particle` defined; `static_assert(sizeof == 32)`
-- All particle array pointer math replaced in stubs.cpp, effects.cpp
+- All particle array pointer math replaced in simulation and rendering modules
 
 ---
 

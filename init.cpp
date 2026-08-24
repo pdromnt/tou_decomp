@@ -3711,7 +3711,10 @@ void FUN_0042a470(void)
                         FUN_004644af(g_MenuStrings[awardBufIdx],
                             (const unsigned char *)"%s (Player %d)",
                             awardName, playerNum);
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 2, 0, 0x31, 0, 0xff);
+                    /* Small font keeps two-digit 64-player labels inside the
+                     * 640-pixel logical canvas. Headers retain the original
+                     * larger presentation. */
+                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x31, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -3728,7 +3731,7 @@ void FUN_0042a470(void)
                         FUN_004644af(g_MenuStrings[awardBufIdx],
                             (const unsigned char *)"%s (Team %d)",
                             awardName, teamNum);
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 2, 0, 0x32, 0, 0xff);
+                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x32, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -5699,7 +5702,11 @@ void FUN_0041d740(void)
         /* ========== PLAYER AWARDS ========== */
 
         /* --- 1. "Most valuable" - highest kills/damage-taken ratio > 1.4 --- */
-        float ratios[16];
+        /* Original FUN_0041D740 reserves one float for every selectable
+         * player. Its 0x14C-byte local frame plus saved registers covers all
+         * 64 entries; the earlier reconstruction incorrectly used 16 and
+         * smashed the stack when a large match ended. */
+        float ratios[GAMEPLAY_PLAYER_CAPACITY];
         if (playerCount > 0) {
             for (int i = 0; i < (int)playerCount; i++) {
                 if (DAT_00486be8[i] == 0) {

@@ -972,7 +972,7 @@ char          DAT_00483738 = 0;        /* game mode */
 short         DAT_0048373a = 3;        /* initial lives (default 3) */
 int           DAT_00483830 = 100;      /* starting health */
 void         *DAT_0048780c = NULL;     /* ship stats table */
-unsigned char DAT_0048236e[80] = {0};  /* ship type per player */
+unsigned char DAT_0048236e[PLAYER_STORAGE_CAPACITY] = {0}; /* ship type per player */
 char          DAT_0048378e[9] = {0};   /* ship-taken flags */
 void         *DAT_00489eac[4] = {0};   /* per-player visibility buffers */
 int           DAT_00487788[4] = {0};   /* per-player stat counters */
@@ -2171,18 +2171,19 @@ void FUN_00407140(int x, int y, unsigned char type)
 {
     int iVar1;
 
-    if (DAT_00489268 < 100) {
-        *(int *)((int)DAT_00487830 + DAT_00489268 * 0x20) = x;
-        *(int *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 4) = y;
-        *(unsigned char *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 10) = type;
-        *(int *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 0xc) = 2000;
+    if (DAT_00489268 < DEBRIS_ITEM_CAPACITY) {
+        DebrisItemRecord *debris = &DAT_00487830[DAT_00489268];
+        debris->position_x = x;
+        debris->position_y = y;
+        debris->type = type;
+        debris->lifetime_0c = 2000;
 
         iVar1 = rand();
-        *(char *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 9) =
+        debris->motion_variant =
             (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 5 + (int)g_EntityConfig) - 1));
 
         iVar1 = rand();
-        *(char *)((int)DAT_00487830 + DAT_00489268 * 0x20 + 8) =
+        debris->sprite_frame =
             (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 4 + (int)g_EntityConfig) - 1));
 
         DAT_00489268 = DAT_00489268 + 1;
@@ -2194,47 +2195,44 @@ void FUN_00407140(int x, int y, unsigned char type)
 /* Adds a trooper entity to DAT_00487884 (stride 0x40, max 400). */
 void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned char type, char subtype)
 {
-    unsigned int *puVar1;
+    if (DAT_0048924c < TROOPER_CAPACITY) {
+        TrooperRecord *trooper = &DAT_00487884[DAT_0048924c];
 
-    if (DAT_0048924c < 400) {
-        int base = (int)DAT_00487884 + DAT_0048924c * 0x40;
+        trooper->position_x = x;
+        trooper->position_y = y;
+        trooper->previous_x = x;
+        trooper->previous_y = y;
+        trooper->velocity_x = vx;
+        trooper->velocity_y = vy;
 
-        *(int *)(base + 0x00) = x;
-        *(int *)(base + 0x08) = y;
-        *(int *)(base + 0x04) = x;
-        *(int *)(base + 0x0c) = y;
-        *(int *)(base + 0x10) = vx;
-        *(int *)(base + 0x14) = vy;
+        trooper->movement_flags &= 0xFFFFFFFE;
 
-        puVar1 = (unsigned int *)(base + 0x18);
-        *puVar1 = *puVar1 & 0xFFFFFFFE;
-
-        *(unsigned char *)(base + 0x1c) = type;
-        *(char *)(base + 0x1d) = dir;
-        *(int *)(base + 0x20) = speed;
-        *(unsigned char *)(base + 0x24) = 0;
-        *(char *)(base + 0x25) = subtype;
+        trooper->team = type;
+        trooper->patrol_direction = dir;
+        trooper->movement_speed = speed;
+        trooper->animation_state_24 = 0;
+        trooper->kind_25 = subtype;
 
         if (subtype == 0) {
-            *(int *)(base + 0x28) = 0xBB800;
+            trooper->health_28 = 0xBB800;
         } else if (subtype == 2) {
-            *(int *)(base + 0x28) = 0xFA000;
+            trooper->health_28 = 0xFA000;
         } else {
-            *(int *)(base + 0x28) = 0x271000;
+            trooper->health_28 = 0x271000;
         }
 
-        *(unsigned char *)(base + 0x2c) = 0;
-        *(unsigned char *)(base + 0x38) = 200;
-        *(unsigned char *)(base + 0x39) = 0;
+        trooper->palette_2c = 0;
+        trooper->fire_cooldown_38 = 200;
+        trooper->bounce_cooldown_39 = 0;
 
         if (dir == 1) {
-            *(int *)(base + 0x30) = 0x200;
+            trooper->aim_angle_30 = 0x200;
         } else {
-            *(int *)(base + 0x30) = 0x600;
+            trooper->aim_angle_30 = 0x600;
         }
 
-        *(unsigned char *)(base + 0x2d) = 0;
-        *(int *)(base + 0x34) = 0;
+        trooper->movement_mode_2d = 0;
+        trooper->aim_rate_34 = 0;
         DAT_0048924c = DAT_0048924c + 1;
     }
 }
@@ -2255,51 +2253,52 @@ void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsig
     int iVar8;
     int iVar9;
 
-    if (DAT_00489260 < 200) {
-        int base = (int)DAT_00481f28 + DAT_00489260 * 0x40;
+    if (DAT_00489260 < PROJECTILE_CAPACITY) {
+        ProjectileRecord *projectile = &DAT_00481f28[DAT_00489260];
 
-        *(int *)(base + 0x00) = x;
-        *(int *)(base + 0x04) = y;
+        projectile->position_x = x;
+        projectile->position_y = y;
 
         if (type == 7) {
-            *(int *)(base + 0x08) = 0;
+            projectile->visual_or_heading_08 = 0;
         } else if (orientation == 0) {
             iVar1 = rand();
-            *(int *)(base + 0x08) = iVar1 % 0x7FF;
+            projectile->visual_or_heading_08 = iVar1 % 0x7FF;
         } else {
             iVar1 = (unsigned int)orientation * 0x800 - 0x800;
-            *(int *)(base + 0x08) = (int)(iVar1 + (iVar1 >> 0x1F & 0x1F)) >> 5;
+            projectile->visual_or_heading_08 = (int)(iVar1 + (iVar1 >> 0x1F & 0x1F)) >> 5;
         }
 
-        *(char *)(base + 0x1c) = type;
-        *(unsigned char *)(base + 0x1d) = team;
-        *(int *)(base + 0x10) = health;
-        *(int *)(base + 0x14) = 0;
-        *(unsigned char *)(base + 0x1e) = 0;
-        *(unsigned char *)(base + 0x20) = 0;
+        projectile->type = type;
+        projectile->team = team;
+        projectile->health_or_state_10 = health;
+        projectile->limit_or_reload_14 = 0;
+        projectile->palette_or_flags_1e = 0;
+        projectile->state_20 = 0;
 
         if (type == 6) {
-            *(unsigned char *)(base + 0x1f) = 0xFF;
+            projectile->scratch_1f = 0xFF;
         } else {
-            *(unsigned char *)(base + 0x1f) = 10;
+            projectile->scratch_1f = 10;
         }
 
-        *(unsigned char *)(base + 0x21) = 0;
-        *(int *)(base + 0x0c) = *(int *)(base + 0x08);
-        *(unsigned char *)(base + 0x22) = 0;
-        *(unsigned char *)(base + 0x23) = 0;
-        *(int *)(base + 0x18) = 0;
+        projectile->target_kind_21 = 0;
+        projectile->aim_angle_0c = projectile->visual_or_heading_08;
+        projectile->sweep_counter_22 = 0;
+        projectile->animation_counter_23 = 0;
+        projectile->target_distance_18 = 0;
 
         if (type == 7) {
-            *(int *)(base + 0x14) = health;
-            piVar2 = (int *)(base);
-            FUN_00440ba0(*piVar2 >> 0x12, (piVar2[1] >> 0x12) - 10, (unsigned int)team, 0);
+            projectile->limit_or_reload_14 = health;
+            FUN_00440ba0(projectile->position_x >> 0x12,
+                         (projectile->position_y >> 0x12) - 10,
+                         (unsigned int)team, 0);
         }
 
         /* Stamp sprite footprint onto tilemap */
         uVar4 = 0;
-        piVar2 = (int *)(base);
-        iVar1 = *(int *)((unsigned int)*(unsigned char *)(base + 0x1c) * 0x20 + (int)DAT_00487818);
+        piVar2 = (int *)projectile;
+        iVar1 = *(int *)((unsigned int)projectile->type * 0x20 + (int)DAT_00487818);
         int frame_off = *(int *)((int)DAT_00489234 + iVar1 * 4);
         bVar6 = *(unsigned char *)((int)DAT_00489e8c + iVar1);
         iVar9 = (*piVar2 >> 0x12) - (unsigned int)(bVar6 >> 1);
@@ -2656,7 +2655,7 @@ void FUN_0041bfe0(void)
 
             case 2:
                 /* Main entity */
-                if (DAT_00489248 < 0x9c4) {
+                if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
                     Entity *entity = &DAT_004892e8[DAT_00489248];
 
                     entity->position_x = *(int *)(iVar3 + iVar11) << 0x12;

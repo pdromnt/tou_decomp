@@ -29,10 +29,10 @@ extern int                   DAT_00487808;      /* active player viewport count 
 
 /* ===== Entity Rendering Arrays (allocated in memory.cpp) ===== */
 extern void                 *DAT_00489e98;      /* static entity array (16 bytes each) */
-extern void                 *DAT_00487884;      /* trooper array (64 bytes each) */
-extern void                 *DAT_00481f28;      /* projectile array (64 bytes each) */
+extern TrooperRecord        *DAT_00487884;      /* trooper array (64 bytes each) */
+extern ProjectileRecord     *DAT_00481f28;      /* projectile array (64 bytes each) */
 extern void                 *DAT_00487a9c;      /* explosion array (32 bytes each) */
-extern void                 *DAT_00487830;      /* debris/particle array (32 bytes each) */
+extern DebrisItemRecord     *DAT_00487830;      /* debris/item array (32 bytes each) */
 extern void                 *DAT_00481f2c;      /* edge record array (32 bytes each) */
 extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
@@ -54,7 +54,7 @@ extern void                 *DAT_00487abc;      /* Entity type table (0x11030 by
 
 /* ===== Explosion/Particle data buffers (memory.cpp) ===== */
 extern void                 *DAT_00481f20;      /* Explode descriptor table (160 bytes) */
-extern void                 *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
+extern ParticleRecord       *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
 extern void                 *DAT_0048787c;      /* Explode pixel data (430KB) */
 extern void                 *DAT_00487aac;      /* Explosion rotation frames (~6.4MB) */
 extern Entity               *DAT_004892e8;      /* Entity pool: 2600 allocated, 2500 active cap */
@@ -113,14 +113,14 @@ extern float                 DAT_0048385c;       /* weather/temperature threshol
 extern int  DAT_00486944[4];       /* per-team stat counters A */
 extern int  DAT_00486954[4];       /* per-team stat counters B */
 extern int  DAT_00486964;          /* team stat counter total */
-extern int  DAT_00486968[80];      /* per-player kills stat array */
-extern int  DAT_00486aa8[80];      /* per-player deaths stat array */
-extern int  DAT_00486be8[80];      /* per-player damage received stats */
-extern int  DAT_00486d28[80];      /* per-player building stats */
-extern int  DAT_00486e68[80];      /* per-player damage dealt stats */
-extern int  DAT_00486fa8[80];      /* per-player distance traveled */
-extern int  DAT_004870e8[80];      /* per-player explosion stats */
-extern int  DAT_00487228[80];      /* per-player pickup counter */
+extern int  DAT_00486968[PLAYER_STORAGE_CAPACITY]; /* per-player kills */
+extern int  DAT_00486aa8[PLAYER_STORAGE_CAPACITY]; /* per-player deaths */
+extern int  DAT_00486be8[PLAYER_STORAGE_CAPACITY]; /* damage received */
+extern int  DAT_00486d28[PLAYER_STORAGE_CAPACITY]; /* building stats */
+extern int  DAT_00486e68[PLAYER_STORAGE_CAPACITY]; /* damage dealt */
+extern int  DAT_00486fa8[PLAYER_STORAGE_CAPACITY]; /* distance traveled */
+extern int  DAT_004870e8[PLAYER_STORAGE_CAPACITY]; /* explosion stats */
+extern int  DAT_00487228[PLAYER_STORAGE_CAPACITY]; /* pickup counter */
 extern char DAT_00483747;           /* weapon auto-release mode flag */
 extern char DAT_00483745;           /* detonation mode flag */
 
