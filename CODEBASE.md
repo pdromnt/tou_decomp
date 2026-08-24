@@ -186,8 +186,9 @@ operations into independent field assignments can change behavior.
 ## Config Ownership
 
 `options.cfg` has one canonical, packed `GameConfig` representation in
-`config.h`. Its typed layout is exactly 6408 bytes; the extra window-mode byte
-remains appended for compatibility with decomp-generated saves. Recovered
+`config.h`. Its typed SDL-era layout is exactly 6405 bytes; the extra window-mode
+byte remains appended. Older 6408-byte records are intentionally rejected after
+removing three obsolete audio-backend settings. Recovered
 `DAT_004837xx` names are aliases into that same record, so menu writes, runtime
 reads, loading, and saving cannot drift into stale copies anymore.
 

@@ -29,8 +29,8 @@ int Menu_Init_And_Loop(void)
     /* Modern presentation is decoupled from the verified 640x480 renderer.
      * The selected resolution resizes the window instead of reallocating game
      * buffers whose dimensions are part of the recovered runtime contract. */
-    if (g_NumDisplayModes > 0 && DAT_00483724[1] >= g_NumDisplayModes)
-        DAT_00483724[1] = 5;
+    if (g_NumDisplayModes > 0 && g_GameConfig.values.resolution_index >= g_NumDisplayModes)
+        g_GameConfig.values.resolution_index = 5;
     DAT_00487640[1] = 5;
     DAT_00487640[2] = 5;
     g_DisplayWidth = 640;
@@ -1267,7 +1267,7 @@ void FUN_0041b5d0(void)
         g_SpectatorCameraX = ((int)DAT_004879f0 / 2) * FIXED_SCALE;
         g_SpectatorCameraY = ((int)DAT_004879f4 / 2) * FIXED_SCALE;
     }
-    if (DAT_00483724[2] == 2) {
+    if (g_GameConfig.values.display_reserved == 2) {
         local_4 = 4;  /* Force 4-player layout */
     }
 
@@ -1339,7 +1339,7 @@ void FUN_0041b5d0(void)
     }
 
     /* Pass 5: aspect ratio correction for mode 1 */
-    if (DAT_00483724[2] == 1 && DAT_00487808 > 0) {
+    if (g_GameConfig.values.display_reserved == 1 && DAT_00487808 > 0) {
         for (i = 0; i < DAT_00487808; i++) {
             PlayerData *player = Player_Get(DAT_004877f8[i]);
             int field_488 = player->viewport_height;

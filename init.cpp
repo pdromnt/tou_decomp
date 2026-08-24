@@ -45,7 +45,7 @@ GameConfig g_GameConfig = {};       /* original config range 00481F58-0048385F *
 
 /* Helper for recovered menu descriptors that still store original absolute
  * config addresses. All named config fields alias this same byte-exact record. */
-#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
+#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
 
 /* Tournament/network mode globals */
 int DAT_0048764b = 0;
@@ -552,7 +552,7 @@ void FUN_0041eae0(void)
 /* Searches for the next valid key binding for player 'index'.
  * Scans from current position to 0x2f, then wraps from 0 to start.
  * Checks per-player availability (g_ConfigBlob+0x4B6, stride 0x3c)
- * and global availability (g_ConfigBlob+0x1804). */
+ * and global availability (`global_weapon_enabled`). */
 void FUN_004265e0(int index)
 {
     unsigned int start = (unsigned int)(unsigned char)DAT_004836ce[index];
@@ -3284,7 +3284,7 @@ void FUN_0042a470(void)
         do {
             FUN_00430200(0, iVar3, iVar7, 2, 2, 2, 6, 4, 0xff);    /* weapon name (render_mode 6) */
             FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);     /* On/Off toggle */
-            FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);               /* config: g_ConfigBlob[0x1804 + weapon] */
+            FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);               /* global weapon flag */
             items = (MenuItem *)g_GameViewData;
             items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;
             items[DAT_004877a8 - 1].height = iVar7;                 /* weapon index for toggle */
@@ -3773,8 +3773,8 @@ void FUN_0042a470(void)
         FUN_00430200(0x78, 0xe1, 0xe5, 1, 2, 0, 0, 1, 0xff);
         FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
         { /* Enforce minimum color values */
-            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
-            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            int *p = g_GameConfig.values.setup_limits;
+            int *end = p + 6;
             while (p < end) {
                 for (int j = 0; j < 3; j++) {
                     if (*p < 4) *p = 4;
@@ -3791,8 +3791,8 @@ void FUN_0042a470(void)
         FUN_00430200(0x78, 0xe1, 0x5b, 1, 2, 0, 0, 1, 0xff);
         FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
         {
-            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
-            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            int *p = g_GameConfig.values.setup_limits;
+            int *end = p + 6;
             while (p < end) {
                 for (int j = 0; j < 3; j++) {
                     if (*p < 8) *p = 8;
@@ -3809,8 +3809,8 @@ void FUN_0042a470(void)
         FUN_00430200(0x78, 200, 0xe8, 1, 2, 0, 0, 1, 0xff);
         FUN_00430200(0x78, 0xdc, 0xe9, 1, 2, 0, 0, 1, 0xff);
         {
-            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
-            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            int *p = g_GameConfig.values.setup_limits;
+            int *end = p + 6;
             while (p < end) {
                 for (int j = 0; j < 3; j++) {
                     if (*p < 0xe) *p = 0xe;
@@ -4235,17 +4235,17 @@ void FUN_00427df0(int param_1, char param_2)
         *data = val;
         if (val == 0xFF) {
             *data = (unsigned char)(g_NumDisplayModes - 1);
-            DAT_00483724[1] = *data;
+            g_GameConfig.values.resolution_index = *data;
             Apply_Display_Settings();
             return;
         }
         if ((int)(unsigned int)val >= g_NumDisplayModes) {
             *data = 0;
-            DAT_00483724[1] = *data;
+            g_GameConfig.values.resolution_index = *data;
             Apply_Display_Settings();
             return;
         }
-        DAT_00483724[1] = *data;
+        g_GameConfig.values.resolution_index = *data;
         Apply_Display_Settings();
         break;
     }
@@ -5413,8 +5413,12 @@ void FUN_0045c300(void)
         /* Clear ship type table (64 bytes at blob offset 0x416) */
         memset(g_GameConfig.values.player_ship, 0, GAME_CONFIG_PLAYER_CAPACITY);
         /* Original preset clears the 50 weapon flags plus the following ten
-         * ship-state bytes as one 60-byte span. Preserve that cross-field write. */
-        memset(&g_ConfigBlob[0x1804], 0, 60);
+         * ship-state bytes as one 60-byte span. Preserve it without old offsets. */
+        memset(g_GameConfig.values.global_weapon_enabled, 0,
+               sizeof(g_GameConfig.values.global_weapon_enabled));
+        memset(g_GameConfig.values.ship_taken, 0,
+               sizeof(g_GameConfig.values.ship_taken));
+        g_GameConfig.values.reserved_183c[0] = 0;
         ((unsigned char *)&DAT_00483758)[2] = 0;
         return;
     }
@@ -5466,13 +5470,13 @@ void FUN_0041a8c0(void)
     /* 1. Set sub-state flags */
     g_SubState2 = 1;
     /* Original sets desired display mode from config:
-     *   DAT_00487640[2] = DAT_00483724[1];
+     *   DAT_00487640[2] = g_GameConfig.values.resolution_index;
      * This triggers a resolution switch in Menu_Init_And_Loop. The original
      * game runs fullscreen and supports runtime resolution changes. Our windowed
      * decomp allocates Software_Buffer for 640x480 at init and can't resize it,
      * so switching to e.g. 800x600 causes a buffer overflow in rendering.
      * Skip the mode change; keep current mode. */
-    /* DAT_00487640[2] = DAT_00483724[1]; */
+    /* DAT_00487640[2] = g_GameConfig.values.resolution_index; */
     *(char *)&DAT_0048693c = 0;   /* clear level index low byte */
     DAT_00487640[0] = 0;
     DAT_004892b8 = timeGetTime();
@@ -5600,7 +5604,7 @@ void FUN_0041a8c0(void)
      * DAT_00487810 is allocated in Init_Memory_Pools, always valid here. */
     {
         /* 12. Copy key bindings from config blob to player data (+0xAC..+0xB2).
-         * Key binding block: 8 bytes per player at blob offset 0x186A.
+         * Key binding block: 8 bytes per player in the typed config.
          * Maps to player offsets +0xAC..+0xB2 in a remapped order. */
         for (i = 0; i < (int)DAT_00489244; i++) {
             PlayerData *player = Player_Get(i);
@@ -5623,7 +5627,7 @@ void FUN_0041a8c0(void)
 
         /* 14. Build per-player ship type availability list.
          * For each player, iterate 47 possible ship types.
-         * If globally enabled (blob[0x1804+type]) AND per-player enabled,
+         * If globally enabled AND per-player enabled,
          * add to available list at player data +0x3C. */
         for (i = 0; i < (int)DAT_00489240; i++) {
             PlayerData *player = Player_Get(i);
@@ -5691,7 +5695,7 @@ static void AddTeamAward(const char *name, int winner_idx)
 void FUN_0041d740(void)
 {
     unsigned char saved_cfg_820 = (unsigned char)DAT_00483820;
-    unsigned char saved_cfg_725 = DAT_00483724[1];
+    unsigned char saved_cfg_725 = g_GameConfig.values.resolution_index;
     unsigned char saved_cfg_732 = DAT_00483732;
     unsigned char saved_cfg_72d = DAT_0048372d;
 
@@ -5701,7 +5705,7 @@ void FUN_0041d740(void)
         /* Not tournament mode - restore pre-load values */
         DAT_00483820 = (unsigned short)saved_cfg_820;
         DAT_00483732 = saved_cfg_732;
-        DAT_00483724[1] = saved_cfg_725;
+        g_GameConfig.values.resolution_index = saved_cfg_725;
         DAT_0048372d = saved_cfg_72d;
 
         /* --- Find highest team score across 3 teams --- */
@@ -6157,9 +6161,6 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.sound_enabled = 1;
     g_GameConfig.values.music_volume = 0x5a;
     g_GameConfig.values.sound_volume = 0x46;
-    g_GameConfig.values.legacy_streaming_enabled = 1;
-    g_GameConfig.values.legacy_output_type = 0;
-    g_GameConfig.values.legacy_sound_channels = 0x40;
     g_GameConfig.values.resolution_index = 5;
     g_GameConfig.values.display_reserved = 0;
     g_GameConfig.values.display_detail = 1;
@@ -6207,28 +6208,21 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.entity_flags[3] = 1;
     g_GameConfig.values.sky_settings = 0x02010303;
 
-    /* === Ship availability flags (50 bytes at offset 0x1804, all enabled) === */
+    /* === Ship availability flags (50 bytes, all enabled) === */
     memset(g_GameConfig.values.global_weapon_enabled, 1,
            sizeof(g_GameConfig.values.global_weapon_enabled));
 
-    /* === Ship stats / per-ship data (zeroed) === */
-    /* _DAT_0048378e (offset 0x1836): 4 bytes */
-    memset(&g_ConfigBlob[0x1836], 0, 4);
-    /* _DAT_00483792 (offset 0x183A): 4 bytes */
-    memset(&g_ConfigBlob[0x183A], 0, 4);
-    /* _DAT_00483796 (offset 0x183E): 4 bytes */
-    memset(&g_ConfigBlob[0x183E], 0, 4);
-    /* _DAT_0048379a (offset 0x1842): 4 bytes */
-    memset(&g_ConfigBlob[0x1842], 0, 4);
-    /* _DAT_0048379e (offset 0x1846): 4 bytes */
-    memset(&g_ConfigBlob[0x1846], 0, 4);
-    /* DAT_004837e4 (offset 0x188C) */
+    /* === Ship stats / per-ship data (20 recovered bytes, zeroed) === */
+    memset(g_GameConfig.values.ship_taken, 0,
+           sizeof(g_GameConfig.values.ship_taken));
+    memset(g_GameConfig.values.reserved_183c, 0, 11);
+
     g_GameConfig.values.setup_toggle = 0;
     g_GameConfig.values.setup_mode = 1;
     g_GameConfig.values.setup_counter = 0;
 
     /* === Two parallel stat tables (6 ints each, zeroed) === */
-    /* Table at offset 0x1898 (DAT_004837f0) and 0x18B0 (DAT_00483808) */
+    /* Recovered parallel setup value/limit tables. */
     memset(g_GameConfig.values.setup_values, 0,
            sizeof(g_GameConfig.values.setup_values));
     memset(g_GameConfig.values.setup_limits, 0,
@@ -6256,7 +6250,7 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.team_colors[2] = 0x6508;
     g_GameConfig.values.team_colors[3] = 0x4a52;
 
-    /* === Physics/render constants (int-sized at offsets 0x18E8+) === */
+    /* === Physics/render constants === */
     g_GameConfig.values.water_red = 0x1f;
     g_GameConfig.values.water_green = 0x40;
     g_GameConfig.values.water_blue = 9;
@@ -6312,22 +6306,33 @@ void Reset_Config_To_Defaults(void)
 }
 
 /* ===== Load_Options_Config (0042F360) ===== */
-/* Reads 6408 bytes from options.cfg into g_ConfigBlob.
- * Original uses CRT _open/_read/_close; we use fopen for portability. */
+/* Reads the current packed record and rejects incompatible older layouts. */
 void Load_Options_Config(void)
 {
     FILE *fp = fopen("options.cfg", "rb");
     if (fp != NULL) {
-        fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp);
-        unsigned char savedWindowMode = 0;
-        if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
-            g_WindowMode = savedWindowMode;
+        fseek(fp, 0, SEEK_END);
+        long fileSize = ftell(fp);
+        rewind(fp);
+
+        const long configSize = (long)sizeof(g_GameConfig);
+        if (fileSize == configSize || fileSize == configSize + 1) {
+            if (fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp) ==
+                sizeof(g_GameConfig)) {
+                unsigned char savedWindowMode = 0;
+                if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
+                    g_WindowMode = savedWindowMode;
+            }
+        } else {
+            LOG("[CFG] Ignoring incompatible options.cfg (%ld bytes, expected %ld or %ld)\n",
+                fileSize, configSize, configSize + 1);
+        }
         fclose(fp);
     }
 }
 
 /* ===== Save_Options_Config (0042F320) ===== */
-/* Writes 6408 bytes from g_ConfigBlob to options.cfg. */
+/* Writes the current packed record plus the decomp window-mode byte. */
 void Save_Options_Config(void)
 {
     FILE *fp = fopen("options.cfg", "wb");

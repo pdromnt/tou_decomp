@@ -1661,7 +1661,7 @@ void FUN_00417460(void)
 /* ===== FUN_00414c90: Background texture sampling and water vertex generation ===== */
 void FUN_00414c90(void)
 {
-    if (DAT_00483724[3] != '\x01') return;
+    if (g_GameConfig.values.display_detail != 1) return;
 
     /* Calculate swap dimensions from map size */
     DAT_00487a0c = (int)((float)DAT_004879f0);

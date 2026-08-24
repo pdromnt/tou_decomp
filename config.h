@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-enum { GAME_CONFIG_SIZE = 6408, GAME_CONFIG_PLAYER_CAPACITY = 64 };
+enum { GAME_CONFIG_SIZE = 6405, GAME_CONFIG_PLAYER_CAPACITY = 64 };
 
 #pragma pack(push, 1)
 typedef struct GameConfigLayout {
@@ -31,84 +31,81 @@ typedef struct GameConfigLayout {
     uint8_t sound_enabled;                   /* 0x17c7 */
     uint8_t music_volume;                    /* 0x17c8 */
     uint8_t sound_volume;                    /* 0x17c9 */
-    uint8_t legacy_streaming_enabled;        /* 0x17ca: retained for old config files */
-    uint8_t legacy_output_type;              /* 0x17cb: retained for old config files */
-    uint8_t legacy_sound_channels;           /* 0x17cc: retained for old config files */
-    uint8_t resolution_index;                /* 0x17cd */
-    uint8_t display_reserved;                /* 0x17ce */
-    uint8_t display_detail;                  /* 0x17cf */
+    uint8_t resolution_index;                /* 0x17ca */
+    uint8_t display_reserved;                /* 0x17cb */
+    uint8_t display_detail;                  /* 0x17cc */
 
-    uint8_t ambient_emitters;                /* 0x17d0 */
-    int8_t game_type;                        /* 0x17d1 */
-    int8_t team_count;                       /* 0x17d2 */
-    int8_t team_mode;                        /* 0x17d3 */
-    int8_t ambient_particles;                /* 0x17d4 */
-    int8_t fog_mode;                         /* 0x17d5 */
-    int8_t fog_ray_resolution;               /* 0x17d6 */
-    int8_t fog_detail;                       /* 0x17d7 */
-    int8_t fog_wobble;                       /* 0x17d8 */
-    int8_t sky_color_mode;                   /* 0x17d9 */
-    int8_t saved_color_option;               /* 0x17da */
-    uint8_t reserved_17db;
-    int8_t critter_spawns;                   /* 0x17dc */
-    int8_t team_base_placement;              /* 0x17dd */
-    int8_t debris_difficulty;                /* 0x17de */
-    int8_t trooper_difficulty;               /* 0x17df */
-    int8_t game_mode;                        /* 0x17e0 */
-    int8_t game_mode_preset;                 /* 0x17e1 */
-    uint8_t initial_lives;                   /* 0x17e2 */
-    int8_t shared_lives;                     /* 0x17e3 */
-    int8_t team_rules;                       /* 0x17e4 */
-    int8_t friendly_fire;                    /* 0x17e5 */
-    int8_t activation_guard;                 /* 0x17e6 */
-    int8_t difficulty_secondary;             /* 0x17e7 */
-    int8_t round_time;                       /* 0x17e8 */
-    int8_t difficulty_detail;                /* 0x17e9 */
-    int8_t shield_bar;                       /* 0x17ea */
-    int8_t radar;                            /* 0x17eb */
-    int8_t respawn_delay;                    /* 0x17ec */
-    int8_t detonation_mode;                  /* 0x17ed */
-    uint8_t tick_rate;                       /* 0x17ee */
-    int8_t weapon_auto_release;              /* 0x17ef */
-    union { int32_t stat_scaling; uint8_t stat_scaling_bytes[4]; }; /* 0x17f0 */
-    union { int32_t speed_scaling; uint8_t speed_scaling_bytes[4]; }; /* 0x17f4 */
-    union { int32_t misc_scaling; uint8_t misc_scaling_bytes[4]; }; /* 0x17f8 */
-    uint8_t entity_flags[4];                 /* 0x17fc */
-    union { int32_t sky_settings; uint8_t sky_settings_bytes[4]; }; /* 0x1800 */
-    uint8_t global_weapon_enabled[50];       /* 0x1804 */
-    uint8_t ship_taken[9];                   /* 0x1836 */
-    uint8_t reserved_183f[0x23];
-    uint8_t pause_key;                       /* 0x1862 */
-    uint8_t camera_key;                      /* 0x1863 */
-    uint8_t menu_keys[6];                    /* 0x1864 */
-    uint8_t player_keys[4][8];               /* 0x186a */
-    uint8_t reserved_188a[2];
-    int32_t setup_toggle;                    /* 0x188c */
-    int32_t setup_mode;                      /* 0x1890 */
-    int32_t setup_counter;                   /* 0x1894 */
-    int32_t setup_values[6];                 /* 0x1898 */
-    int32_t setup_limits[6];                 /* 0x18b0 */
-    uint16_t fade_color;                     /* 0x18c8 */
-    uint8_t reserved_18ca[2];
-    int32_t gravity_scale;                   /* 0x18cc */
-    int32_t particle_gravity;                /* 0x18d0 */
-    int32_t fire_rate_scale;                 /* 0x18d4 */
-    int32_t starting_shield;                 /* 0x18d8 */
-    uint8_t turret_density;                  /* 0x18dc */
-    uint8_t troopers_enabled;                /* 0x18dd */
-    int8_t runtime_team_mode;                /* 0x18de */
-    uint8_t reserved_18df;
-    uint16_t team_colors[4];                 /* 0x18e0 */
-    uint32_t water_red;                      /* 0x18e8 */
-    uint32_t water_green;                    /* 0x18ec */
-    uint32_t water_blue;                     /* 0x18f0 */
-    uint16_t water_color;                    /* 0x18f4 */
-    uint16_t water_light_color;              /* 0x18f6 */
-    uint16_t water_dark_color;               /* 0x18f8 */
-    uint8_t reserved_18fa[2];
-    float entity_density;                    /* 0x18fc */
-    float inverse_entity_density;            /* 0x1900 */
-    float weather_density;                   /* 0x1904 */
+    uint8_t ambient_emitters;                /* 0x17cd */
+    int8_t game_type;                        /* 0x17ce */
+    int8_t team_count;                       /* 0x17cf */
+    int8_t team_mode;                        /* 0x17d0 */
+    int8_t ambient_particles;                /* 0x17d1 */
+    int8_t fog_mode;                         /* 0x17d2 */
+    int8_t fog_ray_resolution;               /* 0x17d3 */
+    int8_t fog_detail;                       /* 0x17d4 */
+    int8_t fog_wobble;                       /* 0x17d5 */
+    int8_t sky_color_mode;                   /* 0x17d6 */
+    int8_t saved_color_option;               /* 0x17d7 */
+    uint8_t reserved_17d8;
+    int8_t critter_spawns;                   /* 0x17d9 */
+    int8_t team_base_placement;              /* 0x17da */
+    int8_t debris_difficulty;                /* 0x17db */
+    int8_t trooper_difficulty;               /* 0x17dc */
+    int8_t game_mode;                        /* 0x17dd */
+    int8_t game_mode_preset;                 /* 0x17de */
+    uint8_t initial_lives;                   /* 0x17df */
+    int8_t shared_lives;                     /* 0x17e0 */
+    int8_t team_rules;                       /* 0x17e1 */
+    int8_t friendly_fire;                    /* 0x17e2 */
+    int8_t activation_guard;                 /* 0x17e3 */
+    int8_t difficulty_secondary;             /* 0x17e4 */
+    int8_t round_time;                       /* 0x17e5 */
+    int8_t difficulty_detail;                /* 0x17e6 */
+    int8_t shield_bar;                       /* 0x17e7 */
+    int8_t radar;                            /* 0x17e8 */
+    int8_t respawn_delay;                    /* 0x17e9 */
+    int8_t detonation_mode;                  /* 0x17ea */
+    uint8_t tick_rate;                       /* 0x17eb */
+    int8_t weapon_auto_release;              /* 0x17ec */
+    union { int32_t stat_scaling; uint8_t stat_scaling_bytes[4]; }; /* 0x17ed */
+    union { int32_t speed_scaling; uint8_t speed_scaling_bytes[4]; }; /* 0x17f1 */
+    union { int32_t misc_scaling; uint8_t misc_scaling_bytes[4]; }; /* 0x17f5 */
+    uint8_t entity_flags[4];                 /* 0x17f9 */
+    union { int32_t sky_settings; uint8_t sky_settings_bytes[4]; }; /* 0x17fd */
+    uint8_t global_weapon_enabled[50];       /* 0x1801 */
+    uint8_t ship_taken[9];                   /* 0x1833 */
+    uint8_t reserved_183c[0x23];
+    uint8_t pause_key;                       /* 0x185f */
+    uint8_t camera_key;                      /* 0x1860 */
+    uint8_t menu_keys[6];                    /* 0x1861 */
+    uint8_t player_keys[4][8];               /* 0x1867 */
+    uint8_t reserved_1887[2];
+    int32_t setup_toggle;                    /* 0x1889 */
+    int32_t setup_mode;                      /* 0x188d */
+    int32_t setup_counter;                   /* 0x1891 */
+    int32_t setup_values[6];                 /* 0x1895 */
+    int32_t setup_limits[6];                 /* 0x18ad */
+    uint16_t fade_color;                     /* 0x18c5 */
+    uint8_t reserved_18c7[2];
+    int32_t gravity_scale;                   /* 0x18c9 */
+    int32_t particle_gravity;                /* 0x18cd */
+    int32_t fire_rate_scale;                 /* 0x18d1 */
+    int32_t starting_shield;                 /* 0x18d5 */
+    uint8_t turret_density;                  /* 0x18d9 */
+    uint8_t troopers_enabled;                /* 0x18da */
+    int8_t runtime_team_mode;                /* 0x18db */
+    uint8_t reserved_18dc;
+    uint16_t team_colors[4];                 /* 0x18dd */
+    uint32_t water_red;                      /* 0x18e5 */
+    uint32_t water_green;                    /* 0x18e9 */
+    uint32_t water_blue;                     /* 0x18ed */
+    uint16_t water_color;                    /* 0x18f1 */
+    uint16_t water_light_color;              /* 0x18f3 */
+    uint16_t water_dark_color;               /* 0x18f5 */
+    uint8_t reserved_18f7[2];
+    float entity_density;                    /* 0x18f9 */
+    float inverse_entity_density;            /* 0x18fd */
+    float weather_density;                   /* 0x1901 */
 } GameConfigLayout;
 #pragma pack(pop)
 
@@ -121,21 +118,29 @@ static_assert(sizeof(GameConfigLayout) == GAME_CONFIG_SIZE, "GameConfig layout s
 static_assert(offsetof(GameConfigLayout, player_count) == 0x324, "player count offset");
 static_assert(offsetof(GameConfigLayout, starting_weapon) == 0x1776, "starting weapon offset");
 static_assert(offsetof(GameConfigLayout, music_enabled) == 0x17c6, "audio config offset");
-static_assert(offsetof(GameConfigLayout, global_weapon_enabled) == 0x1804, "weapon flags offset");
+static_assert(offsetof(GameConfigLayout, resolution_index) == 0x17ca, "display config offset");
+static_assert(offsetof(GameConfigLayout, global_weapon_enabled) == 0x1801, "weapon flags offset");
 static_assert(offsetof(GameConfigLayout, player_color) == 0x466, "player color offset");
-static_assert(offsetof(GameConfigLayout, player_keys) == 0x186a, "player key offset");
-static_assert(offsetof(GameConfigLayout, fade_color) == 0x18c8, "runtime config offset");
-static_assert(offsetof(GameConfigLayout, weather_density) == 0x1904, "weather offset");
+static_assert(offsetof(GameConfigLayout, player_keys) == 0x1867, "player key offset");
+static_assert(offsetof(GameConfigLayout, fade_color) == 0x18c5, "runtime config offset");
+static_assert(offsetof(GameConfigLayout, weather_density) == 0x1901, "weather offset");
 
 extern GameConfig g_GameConfig;
 #define g_ConfigBlob (g_GameConfig.bytes)
+
+/* Recovered menu descriptors still name addresses in the original executable's
+ * packed config record. SDL removed the three bytes immediately before the
+ * original resolution field, so translate later addresses at this boundary. */
+static inline size_t GameConfigOffsetFromOriginalAddress(uintptr_t address)
+{
+    return (size_t)(address - 0x481F58u) - (address >= 0x483725u ? 3u : 0u);
+}
 
 /* Original globals were aliases into one contiguous record. Keeping these
  * compatibility names as aliases removes the old stale-copy synchronization. */
 #define DAT_0048371e (g_GameConfig.values.music_enabled)
 #define DAT_0048371f (g_GameConfig.values.sound_enabled)
 #define DAT_00483720 (&g_GameConfig.values.music_volume)
-#define DAT_00483724 (&g_GameConfig.values.legacy_sound_channels)
 #define DAT_00483729 (g_GameConfig.values.game_type)
 #define DAT_0048372a (g_GameConfig.values.team_count)
 #define DAT_0048372b (g_GameConfig.values.team_mode)

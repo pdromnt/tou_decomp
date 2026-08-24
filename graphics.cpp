@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
+#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
 
 /* ===== Globals defined in this module ===== */
 int                 DAT_00489238    = 640;   /* Screen/viewport width */
@@ -72,7 +72,7 @@ void Apply_Display_Settings(void)
     if (hWnd_Main == NULL)
         return;
 
-    unsigned int mode = DAT_00483724[1];
+    unsigned int mode = g_GameConfig.values.resolution_index;
     if (g_NumDisplayModes <= 0 || mode >= (unsigned int)g_NumDisplayModes)
         mode = 5;
 
@@ -276,7 +276,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
 
     /* Sky pattern fill — tiles a sprite across the entire buffer ONCE as background.
      * MUST be before the viewport loop so it doesn't wipe per-viewport rendering.
-     * Sky type (g_ConfigBlob[0x1803] = byte 3 of DAT_00483758):
+     * Sky type (`sky_settings_bytes[3]`):
      *   0 → sprite 0x40, 1 → sprite 0x45, 2 → sprite 0x46 (default)
      *   3 → solid color 0x446, ≥4 → black */
     {

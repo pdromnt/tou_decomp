@@ -348,7 +348,7 @@ void Sprite_Blit(const SpriteFrame *frame, int x, int y,
 
 ## Theme 5: Config System
 
-### T5.1 — Replace 6408-byte blob with typed `GameConfig` struct  [DONE]
+### T5.1 — Replace binary blob with typed `GameConfig` struct  [DONE]
 `GameConfig` is a packed, size- and offset-asserted union. Named fields and the
 legacy byte view share the same storage, matching the original alias model.
 
@@ -357,7 +357,8 @@ difficulty, team mode, game type, player colors, ship selections, and loadouts.
 
 **AC:**
 - [x] One `GameConfig` record with all currently known fields
-- [x] Existing 6408-byte saves deserialize directly without conversion
+- [x] Obsolete audio bytes removed for the SDL config format
+- [x] Incompatible older saves are rejected instead of misread
 - [x] Saves serialize that same record plus the decomp window-mode byte
 - [x] Runtime compatibility globals alias fields instead of mirroring them
 - [x] Raw offsets remain only as views for recovered descriptors/unknown fields
@@ -371,7 +372,7 @@ Once T5.1 is done, add human-readable config format.
 - `Save_Config_JSON()` writes pretty-printed JSON
 - `Load_Config_JSON()` reads it back
 - Falls back to binary blob if JSON not found
-- All 6408 bytes round-trip correctly
+- All current `GameConfig` bytes round-trip correctly
 
 ---
 
@@ -528,6 +529,8 @@ DirectDraw remains selectable with `--directdraw` for parity comparisons.
 - [x] Windowed mode works without a DirectDraw presentation path
 - [x] DirectInput replaced by SDL input
 - [ ] Win32 entry point and native window bridge removed
+- [ ] After the entry-point migration, delete DirectDraw/DirectInput source,
+      headers, command-line fallback, and link dependencies completely
 - [x] FMOD replaced by a portable audio backend in the primary build
 - [ ] Native Windows, Linux, and macOS builds pass
 
