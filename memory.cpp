@@ -10,7 +10,7 @@
 int g_MemoryTracker = 0;            /* 004892A0 */
 unsigned short *Software_Buffer = NULL; /* 004877C0 */
 unsigned char g_FrameIndex = 0;     /* 004877C8 */
-char g_LoadedBgIndex = (char)0xFF;  /* 0048769C */
+char g_LoadedBgIndex = tou_binary::char_bits(0xFFu);  /* 0048769C */
 int g_IntroSplashIndex = 0;         /* 0048924C */
 int *g_PhysicsParams = NULL;        /* 00487880 */
 int *g_EntityConfig = NULL;         /* 00489EBC */

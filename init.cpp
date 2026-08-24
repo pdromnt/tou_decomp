@@ -2184,17 +2184,17 @@ void FUN_0041e4a0(void)
     DAT_00481c58[5]    = 0x28;
     DAT_00481c58[0xb]  = 0x14;
     DAT_00481c58[0x11] = 0x32;
-    DAT_00481c58[0x12] = (char)0x96;
+    DAT_00481c58[0x12] = tou_binary::char_bits(0x96u);
     DAT_00481c58[0x14] = 0x1e;
-    DAT_00481c58[0x15] = (char)200;
+    DAT_00481c58[0x15] = tou_binary::char_bits(200u);
     DAT_00481c58[0x1d] = 0x46;
-    DAT_00481c58[0x23] = (char)0xa0;
+    DAT_00481c58[0x23] = tou_binary::char_bits(0xA0u);
     DAT_00481c58[0x24] = 0x1e;
     DAT_00481c58[0x25] = 0x23;
     DAT_00481c58[0x26] = 0x19;
     DAT_00481c58[0x27] = 0x23;
     DAT_00481c58[0x28] = 0x28;
-    DAT_00481c58[0x2e] = (char)0x8c;
+    DAT_00481c58[0x2e] = tou_binary::char_bits(0x8Cu);
 }
 
 /* ===== FUN_00425fe0 - Main game/menu render loop (00425FE0) ===== */
@@ -4255,59 +4255,52 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2B: { /* Increment game counter */
-        int *counter = &g_GameConfig.values.setup_counter;
-        (*counter)++;
+        g_GameConfig.values.setup_counter++;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2C: { /* Decrement game counter */
-        int *counter = &g_GameConfig.values.setup_counter;
-        (*counter)--;
+        g_GameConfig.values.setup_counter--;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2D: { /* Cycle game mode (DAT_004837e8: 0-2) */
-        int *mode = &g_GameConfig.values.setup_mode;
-        int *counter = &g_GameConfig.values.setup_counter;
         if (cVar9 == -1) {
-            (*mode)--;
-            *counter = 0;
-            if (*mode < 0) {
-                *mode = 2;
+            g_GameConfig.values.setup_mode--;
+            g_GameConfig.values.setup_counter = 0;
+            if (g_GameConfig.values.setup_mode < 0) {
+                g_GameConfig.values.setup_mode = 2;
                 DAT_004877b1 = 1;
                 return;
             }
         } else {
-            (*mode)++;
-            if (*mode > 2) {
-                *mode = 0;
+            g_GameConfig.values.setup_mode++;
+            if (g_GameConfig.values.setup_mode > 2) {
+                g_GameConfig.values.setup_mode = 0;
             }
         }
-        *counter = 0;
+        g_GameConfig.values.setup_counter = 0;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2E: { /* Modify game config array value */
-        int *mode = &g_GameConfig.values.setup_mode;
-        int *toggle = &g_GameConfig.values.setup_toggle;
-        int *configArr = g_GameConfig.values.setup_values;
-        int *limitArr = g_GameConfig.values.setup_limits;
-        int *counter = &g_GameConfig.values.setup_counter;
-        int idx = *mode + *toggle * 3;
+        int idx = g_GameConfig.values.setup_mode +
+            g_GameConfig.values.setup_toggle * 3;
         if (cVar9 == -1) {
-            if (configArr[idx] > 0) {
-                configArr[idx]--;
-                *counter = 0;
+            if (g_GameConfig.values.setup_values[idx] > 0) {
+                g_GameConfig.values.setup_values[idx]--;
+                g_GameConfig.values.setup_counter = 0;
                 DAT_004877b1 = 1;
                 return;
             }
         } else {
-            if (configArr[idx] < limitArr[idx]) {
-                configArr[idx]++;
-                *counter = 0;
+            if (g_GameConfig.values.setup_values[idx] <
+                g_GameConfig.values.setup_limits[idx]) {
+                g_GameConfig.values.setup_values[idx]++;
+                g_GameConfig.values.setup_counter = 0;
                 DAT_004877b1 = 1;
                 return;
             }
@@ -4316,10 +4309,9 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2F: { /* Toggle team selection (DAT_004837e4) */
-        int *toggle = &g_GameConfig.values.setup_toggle;
-        int *counter = &g_GameConfig.values.setup_counter;
-        *toggle = (*toggle == 0) ? 1 : 0;
-        *counter = 0;
+        g_GameConfig.values.setup_toggle =
+            (g_GameConfig.values.setup_toggle == 0) ? 1 : 0;
+        g_GameConfig.values.setup_counter = 0;
         DAT_004877b1 = 1;
         return;
     }
@@ -6280,7 +6272,7 @@ int System_Init_Check(void)
     Init_Math_Tables((int *)DAT_00487ab0, 0x800);
     Init_Game_Config();
 
-    g_LoadedBgIndex = (char)0xFF;
+    g_LoadedBgIndex = tou_binary::char_bits(0xFFu);
     iVar2 = Init_Sound_Hardware();
     g_SoundEnabled = iVar2 != 0;
 

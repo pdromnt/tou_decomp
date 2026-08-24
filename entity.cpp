@@ -1365,7 +1365,8 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
     /* Seed end position into frontier B */
     if (*DAT_00481eb0 < 1000) {
         DAT_00481e94[*DAT_00481eb0 * 2] = DAT_00487a04 * param_3 + param_2;
-        *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)199;
+        *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) =
+            tou_binary::char_bits(199u);
         *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = 1;
         *DAT_00481eb0 = *DAT_00481eb0 + 1;
     }
@@ -1455,7 +1456,8 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                                         if (*DAT_00481eac < 1000) {
                                             DAT_00481e90[*DAT_00481eac * 2] = iVar7 + *piVar13;
                                             *(char *)((intptr_t)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
-                                            *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = local_86_flag + 1;
+                                            *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) =
+                                                static_cast<char>(local_86_flag + 1);
                                             *DAT_00481eac = *DAT_00481eac + 1;
                                         }
                                     } else if (99 < bVar2) {
@@ -1541,7 +1543,8 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                                         if (*DAT_00481eb0 < 1000) {
                                             DAT_00481e94[*DAT_00481eb0 * 2] = *piVar11b + iVar10b;
                                             *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
-                                            *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = local_86_flag + 1;
+                                            *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) =
+                                                static_cast<char>(local_86_flag + 1);
                                             *DAT_00481eb0 = *DAT_00481eb0 + 1;
                                         }
                                     } else if (bVar2 < 100) {
@@ -1663,7 +1666,7 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
             uVar9 = 0;
             iVar10 = local_78 / DAT_00487a04;
             cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (intptr_t)DAT_00489ea8);
-            while (cVar4 != (char)0xc7) {  /* 199 = 0xC7 */
+            while (cVar4 != tou_binary::char_bits(0xC7u)) {  /* 199 = 0xC7 */
                 unsigned int uVar8b = uVar9 & 0x80000001;
                 if ((int)uVar8b < 0) {
                     uVar8b = ((uVar8b - 1) | 0xfffffffe) + 1;
@@ -1677,7 +1680,8 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                         return iVar10;
                     }
                 }
-                local_80 = (unsigned int)((unsigned char)(cVar4 + (char)0x9f) & 7);
+                local_80 = (unsigned int)((unsigned char)(
+                    cVar4 + tou_binary::char_bits(0x9Fu)) & 7);
                 iVar10 = iVar10 + local_60[local_80 + 0x10];
                 iVar7 = iVar7 + local_60[local_80 + 8];
                 uVar9++;
@@ -3049,7 +3053,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
             DAT_00486be8[param_3] += (int)((unsigned int)(damage + ((int)damage >> 0x1f & 0x1fff)) >> 0xd);
 
             int particleCount = (int)((unsigned int)damage / 0x1400);
-            int freq = (-(unsigned int)((particleCount & 0xfffffff0) != 0) & 0xfffffffd) + 4;
+            int freq = ((particleCount & 0xfffffff0) != 0 ? -3 : 0) + 4;
             particleCount = ((int)((unsigned int)particleCount + ((int)(unsigned int)particleCount >> 0x1f & 7)) >> 3) + 1;
             int rFreq = rand();
             if (rFreq % freq != 0) return;

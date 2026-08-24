@@ -1176,7 +1176,8 @@ void FUN_0040bb60(Framebuffer *framebuffer)
                     unsigned short *dst = (unsigned short *)(param_1 +
                         (((py - DAT_004806e0 + DAT_004806e8) * param_2 - DAT_004806dc + px + DAT_004806ec) * 2));
 
-                    unsigned short color = (unsigned short)((short)entity->palette_value + (short)0x8ad0);
+                    unsigned short color = static_cast<unsigned short>(
+                        static_cast<unsigned int>(entity->palette_value) + 0x8AD0u);
 
                     /* COMPAT: Convert X1R5G5B5 → RGB565. All entity +0x4C values
                      * should be X1R5G5B5 + 30000 (splash water colors are now converted
@@ -1781,7 +1782,8 @@ static void FUN_004075f0(Framebuffer *framebuffer)
          * sprite_idx >= 30000 means they can't use FUN_0040c280; draw inline. */
         if (ent_type == 0x67 || ent_type == 0x65) {
             /* Read X1R5G5B5 color from entity[0x4C] offset trick */
-            unsigned short x1r5 = (unsigned short)((short)entity->palette_value + (short)0x8AD0);
+            unsigned short x1r5 = static_cast<unsigned short>(
+                static_cast<unsigned int>(entity->palette_value) + 0x8AD0u);
             /* Convert X1R5G5B5 → RGB565 */
             unsigned short r5 = (x1r5 >> 10) & 0x1F;
             unsigned short g5 = (x1r5 >> 5) & 0x1F;

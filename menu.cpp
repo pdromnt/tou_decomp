@@ -283,7 +283,7 @@ gg_level_ready:
 void FUN_004102b0(void)
 {
     int iVar1;
-    intptr_t iVar2;
+    int iVar2;
     unsigned int uVar3;
     int iVar4, iVar5;
     int shift = (unsigned char)DAT_00487a18 & 0x1f;
@@ -343,10 +343,11 @@ void FUN_004102b0(void)
             iVar4 = 0;
             if (0 < (int)DAT_004879f0) {
                 do {
-                    iVar2 = (iVar5 << shift) + (intptr_t)DAT_0048782c;
-                    unsigned char tile = *(unsigned char *)(iVar2 + iVar4);
+                    intptr_t tilemap_row =
+                        (iVar5 << shift) + (intptr_t)DAT_0048782c;
+                    unsigned char tile = *(unsigned char *)(tilemap_row + iVar4);
                     if (*(char *)((intptr_t)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
-                        *(unsigned char *)(iVar2 + iVar4) = 0;
+                        *(unsigned char *)(tilemap_row + iVar4) = 0;
                         *(unsigned short *)((intptr_t)DAT_00481f50 + ((iVar5 << shift) + iVar4) * 2) = 0;
                     }
                     iVar4++;
@@ -497,7 +498,7 @@ void FUN_00451500(void)
     }
 
     if (count == 0) {
-        DAT_004892a4 = (char)0xFF;
+        DAT_004892a4 = tou_binary::char_bits(0xFFu);
         DAT_004892a5 = 1;
         return;
     }
@@ -1969,9 +1970,9 @@ void FUN_00457c70(int param_1)
     unsigned int uVar4;
     unsigned int uVar5;
     unsigned int uVar6;
-    intptr_t iVar7;
+    int iVar7;
     int iVar8;
-    intptr_t iVar9;
+    int iVar9;
     int local_c;
     unsigned int local_8;
     unsigned int local_4;
@@ -1992,17 +1993,15 @@ void FUN_00457c70(int param_1)
             iVar8 = ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) - iVar9) + *piVar1;
             iVar9 = *(int *)((intptr_t)DAT_00489234 + uVar4 * 4);
             uVar4 = uVar5;
-            iVar7 = (intptr_t)DAT_0048782c;
             if (0 < (int)local_8) {
                 do {
                     for (; uVar4 != 0; uVar4 = uVar4 - 1) {
                         sVar2 = *(short *)((intptr_t)DAT_00487ab4 + iVar9 * 2);
                         if ((sVar2 != 0) &&
-                           (*(char *)((unsigned int)*(unsigned char *)(iVar7 + iVar8) * 0x20 +
+                           (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar8) * 0x20 +
                             (intptr_t)DAT_00487928) == '\x01')) {
-                            *(char *)(iVar7 + iVar8) = cVar3;
+                            *(char *)((intptr_t)DAT_0048782c + iVar8) = cVar3;
                             *(short *)((intptr_t)DAT_00481f50 + iVar8 * 2) = sVar2;
-                            iVar7 = (intptr_t)DAT_0048782c;
                         }
                         iVar9 = iVar9 + 1;
                         iVar8 = iVar8 + 1;
@@ -2021,7 +2020,6 @@ void FUN_00457c70(int param_1)
             }
             local_c = 0;
             iVar8 = ((piVar1[1] - iVar9) << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
-            iVar9 = (intptr_t)DAT_0048782c;
             if (uVar5 != 0) {
                 do {
                     if (0 < (int)local_8) {
@@ -2030,11 +2028,10 @@ void FUN_00457c70(int param_1)
                         do {
                             sVar2 = *(short *)(iVar7 + (intptr_t)DAT_00487ab4);
                             if ((sVar2 != 0) &&
-                               (*(char *)((unsigned int)*(unsigned char *)(iVar9 + iVar8) * 0x20 +
+                               (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar8) * 0x20 +
                                 (intptr_t)DAT_00487928) == '\x01')) {
-                                *(char *)(iVar9 + iVar8) = cVar3;
+                                *(char *)((intptr_t)DAT_0048782c + iVar8) = cVar3;
                                 *(short *)((intptr_t)DAT_00481f50 + iVar8 * 2) = sVar2;
-                                iVar9 = (intptr_t)DAT_0048782c;
                             }
                             iVar7 = iVar7 + (int)uVar5 * 2;
                             iVar8 = iVar8 + 1;
@@ -2056,17 +2053,15 @@ void FUN_00457c70(int param_1)
             }
             iVar9 = ((iVar7 << ((unsigned char)DAT_00487a18 & 0x1f)) - iVar9) + *piVar1;
             uVar4 = uVar5;
-            iVar7 = (intptr_t)DAT_0048782c;
             if (0 < (int)local_4) {
                 do {
                     for (; uVar4 != 0; uVar4 = uVar4 - 1) {
                         sVar2 = *(short *)((intptr_t)DAT_00487ab4 + iVar8 * 2);
                         if ((sVar2 != 0) &&
-                           (*(char *)((unsigned int)*(unsigned char *)(iVar7 + iVar9) * 0x20 +
+                           (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar9) * 0x20 +
                             (intptr_t)DAT_00487928) == '\x01')) {
-                            *(char *)(iVar7 + iVar9) = cVar3;
+                            *(char *)((intptr_t)DAT_0048782c + iVar9) = cVar3;
                             *(short *)((intptr_t)DAT_00481f50 + iVar9 * 2) = sVar2;
-                            iVar7 = (intptr_t)DAT_0048782c;
                         }
                         iVar8 = iVar8 + 1;
                         iVar9 = iVar9 + 1;
@@ -2085,7 +2080,6 @@ void FUN_00457c70(int param_1)
             }
             local_c = 0;
             iVar8 = ((piVar1[1] - iVar9) << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
-            iVar9 = (intptr_t)DAT_0048782c;
             if (uVar5 != 0) {
                 do {
                     if (0 < (int)uVar6) {
@@ -2094,11 +2088,10 @@ void FUN_00457c70(int param_1)
                         do {
                             sVar2 = *(short *)(iVar7 + (intptr_t)DAT_00487ab4);
                             if ((sVar2 != 0) &&
-                               (*(char *)((unsigned int)*(unsigned char *)(iVar9 + iVar8) * 0x20 +
+                               (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar8) * 0x20 +
                                 (intptr_t)DAT_00487928) == '\x01')) {
-                                *(char *)(iVar9 + iVar8) = cVar3;
+                                *(char *)((intptr_t)DAT_0048782c + iVar8) = cVar3;
                                 *(short *)((intptr_t)DAT_00481f50 + iVar8 * 2) = sVar2;
-                                iVar9 = (intptr_t)DAT_0048782c;
                             }
                             iVar7 = iVar7 + (int)uVar5 * 2;
                             iVar8 = iVar8 + -1;

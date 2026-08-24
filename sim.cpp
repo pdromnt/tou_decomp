@@ -1066,12 +1066,12 @@ void FUN_00460d50(void)
                     }
                 }
             } else {
-                if (mode == (char)0xFE) {
+                if (mode == tou_binary::char_bits(0xFEu)) {
                     DAT_004892a4 = 2;
                     DAT_004892a5 = 1;
                     return;
                 }
-                if (mode == (char)0xFF) {
+                if (mode == tou_binary::char_bits(0xFFu)) {
                     DAT_004892a4 = 1;
                     DAT_004892a5 = 1;
                     return;
@@ -2631,18 +2631,18 @@ void FUN_00434310(void)
                 if (!ms_found_enemy || ms_best_dist > 22500) {
                     /* Original 0x00441090-0x004410AF: x87 multiply by 0.95,
                      * followed by the game's float-to-int helper. */
-                    entity->velocity_x = tou_binary::x87_ftol(
-                        (long double)entity->velocity_x * 0.95L);
-                    entity->velocity_y = tou_binary::x87_ftol(
-                        (long double)entity->velocity_y * 0.95L);
+                    entity->velocity_x = static_cast<int32_t>(tou_binary::x87_ftol(
+                        (long double)entity->velocity_x * 0.95L));
+                    entity->velocity_y = static_cast<int32_t>(tou_binary::x87_ftol(
+                        (long double)entity->velocity_y * 0.95L));
                 } else {
                     /* Original 0x004410B7-0x00441127 leads the target by half
                      * the distance using the miniship's current velocity. The
                      * old rewrite added 0x400 to the resulting angle, steering
                      * directly away from its target. */
                     int ms_heading = entity->counter_3c;
-                    int lead = tou_binary::x87_ftol(
-                        sqrt((long double)ms_best_dist) * 0.5L);
+                    int lead = static_cast<int>(tou_binary::x87_ftol(
+                        sqrtl((long double)ms_best_dist) * 0.5L));
                     int desired = (int)FUN_004257e0(
                         entity->position_x, entity->position_y,
                         tou_binary::sub_wrap_i32(ms_tx,
@@ -2671,11 +2671,11 @@ void FUN_00434310(void)
                         int svy = entity->velocity_y >> 8;
                         int spd_sq = svx * svx + svy * svy;
                         if (spd_sq > 0x225510 && spd_sq > 0) {
-                            long double mag = sqrt((long double)spd_sq);
-                            entity->velocity_x = tou_binary::x87_ftol(
-                                (long double)svx * 1500.0L / mag) << 8;
-                            entity->velocity_y = tou_binary::x87_ftol(
-                                (long double)svy * 1500.0L / mag) << 8;
+                            long double mag = sqrtl((long double)spd_sq);
+                            entity->velocity_x = static_cast<int32_t>(tou_binary::x87_ftol(
+                                (long double)svx * 1500.0L / mag)) << 8;
+                            entity->velocity_y = static_cast<int32_t>(tou_binary::x87_ftol(
+                                (long double)svy * 1500.0L / mag)) << 8;
                         }
                     }
 
@@ -2694,20 +2694,20 @@ void FUN_00434310(void)
                     if (trail_tick > 2 && trail_visible && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                         entity->scratch_30 = 0;
                         int trail_heading = (entity->counter_3c - 0x400) & 0x7FF;
-                        int *sc = (int *)DAT_00487ab0;
+                        int *trail_sc = (int *)DAT_00487ab0;
                         int *tt = (int *)DAT_00487abc;
                         Entity *trail = &g_EntityPool[g_EntityCount];
                         trail->position_x = tou_binary::add_wrap_i32(
-                            entity->position_x, tou_binary::add_wrap_i32(sc[trail_heading], sc[trail_heading]));
+                            entity->position_x, tou_binary::add_wrap_i32(trail_sc[trail_heading], trail_sc[trail_heading]));
                         trail->position_y = tou_binary::add_wrap_i32(
-                            entity->position_y, tou_binary::add_wrap_i32(sc[trail_heading + 0x200], sc[trail_heading + 0x200]));
+                            entity->position_y, tou_binary::add_wrap_i32(trail_sc[trail_heading + 0x200], trail_sc[trail_heading + 0x200]));
                         trail->previous_x = trail->position_x;
                         trail->previous_y = trail->position_y;
                         trail->velocity_x = tou_binary::add_wrap_i32(
-                            (int32_t)((uint32_t)sc[trail_heading] * 50u) >> 6,
+                            (int32_t)((uint32_t)trail_sc[trail_heading] * 50u) >> 6,
                             entity->velocity_x >> 1);
                         trail->velocity_y = tou_binary::add_wrap_i32(
-                            (int32_t)((uint32_t)sc[trail_heading + 0x200] * 50u) >> 6,
+                            (int32_t)((uint32_t)trail_sc[trail_heading + 0x200] * 50u) >> 6,
                             entity->velocity_y >> 1);
                         trail->motion_x_10 = 0;
                         trail->motion_y_14 = 0;
@@ -2926,32 +2926,6 @@ void FUN_00434310(void)
             }
 
             /* REPAIR MAKER (0x2B): no behavior — falls with gravity, deploys on wall hit */
-            if (0) {
-                unsigned char own = entity->owner;
-                int mx = entity->position_x;
-                int my = entity->position_y;
-                int best_dist = 0x7FFFFFFF;
-                int found = 0;
-                int tgt_x = mx, tgt_y = my;
-                for (int p = 0; p < DAT_00489240; p++) {
-                    if ((unsigned char)p == own) continue;
-                    PlayerData *player = Player_Get(p);
-                    if (player->health <= 0) continue;
-                    int px = player->position_x;
-                    int py = player->position_y;
-                    int dx = px - mx; int dy = py - my;
-                    int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
-                    if (dist < best_dist) {
-                        best_dist = dist; tgt_x = px; tgt_y = py; found = 1;
-                    }
-                }
-                if (found) {
-                    entity->velocity_x += (tgt_x - mx) / 96;
-                    entity->velocity_y += (tgt_y - my) / 96;
-                }
-                break;
-            }
-
             break;
 
             case 0x24: { /* ETNA (Batch 9) — deploy+spray weapon, entity type 0x24.
@@ -2969,68 +2943,6 @@ void FUN_00434310(void)
                 *
                 * Startup delay: counter at +0x3C counts from -80 to 0 before
                 * spraying begins. Dies with small flash when +0x60 timer expires. */
-                /* Binary-accurate launchers.  The reconstructed deploy/state-C8
-                 * model below was invented and is intentionally bypassed. */
-                if (0) {
-                    unsigned char rc_sub = entity->subtype;
-                    int rc_cnt = entity->counter_3c + 1;
-                    entity->counter_3c = rc_cnt;
-                    int *sc = (int *)DAT_00487ab0;
-                    int *tt = (int *)DAT_00487abc;
-                    unsigned char own = entity->owner;
-                    if (rc_sub == 0 && rc_cnt > 0x50) {
-                        entity->counter_3c = 0;
-                        /* 14/15 launches succeed in the original. */
-                        if (rand() % 15 < 14 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
-                            int dir = (rand() & 0xFF) + 0x380;
-                            int spd = rand() % 90 + 25;
-                            Entity *ep = &g_EntityPool[g_EntityCount];
-                            int x = entity->previous_x - FIXED_SCALE;
-                            int y = entity->previous_y - 0x340000;
-                            memset((void *)ep, 0, 0x80);
-                            ep->position_x = x; ep->previous_x = x;
-                            ep->position_y = y; ep->previous_y = y;
-                            ep->velocity_x = sc[dir] * spd >> 6;
-                            ep->velocity_y = sc[dir + 0x200] * spd >> 6;
-                            ep->type = 0x6A;
-                            ep->owner = own;
-                            ep->subtype = 1;
-                            ep->gravity_or_motion_38 = tt[0xDE7C / 4];
-                            ep->damage_44 = tt[0xDEB8 / 4];
-                            ep->palette_value = tt[0xDEE8 / 4];
-                            ep->callback_address = tt[0xDDF0 / 4];
-                            g_EntityCount++;
-                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 50 + 90;
-                            unsigned char color_span = *(unsigned char *)((intptr_t)DAT_00487abc + 0xDF14);
-                            if (color_span != 0)
-                                g_EntityPool[g_EntityCount - 1].palette_value += rand() % color_span;
-                        }
-                    } else if (rc_sub == 1 && rc_cnt > 0x19) {
-                        entity->counter_3c = 0;
-                        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
-                            unsigned char stage = entity->state_20;
-                            int xoff = (3 - ((unsigned int)stage >> 2)) << 0x12;
-                            Entity *ep = &g_EntityPool[g_EntityCount];
-                            int x = entity->previous_x + xoff;
-                            int y = entity->previous_y - 0x1C0000;
-                            memset((void *)ep, 0, 0x80);
-                            ep->position_x = x; ep->previous_x = x;
-                            ep->position_y = y; ep->previous_y = y;
-                            ep->type = 0x6B;
-                            ep->owner = own;
-                            ep->gravity_or_motion_38 = tt[0xE090 / 4];
-                            ep->damage_44 = tt[0xE0CC / 4];
-                            ep->palette_value = tt[0xE0FC / 4];
-                            ep->callback_address = tt[0xE008 / 4];
-                            ep->counter_3c = 0x400;
-                            ep->scratch_2c = 1;
-                            g_EntityCount++;
-                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 200 + 200;
-                            entity->state_20 = (unsigned char)(stage + 1);
-                        }
-                    }
-                    break;
-                }
                 if (entity->state_20 == 0xC8) {
                     int et_life = entity->scratch_60;
                     if (et_life > 0) {
@@ -3180,170 +3092,6 @@ void FUN_00434310(void)
                         }
                     }
                     break;
-                }
-                if (entity->state_20 == 0xC8) {
-                    /* Deployed: lifetime check */
-                    int rc_life = entity->scratch_60;
-                    if (rc_life > 0) {
-                        entity->scratch_60 = rc_life - 1;
-                    } else {
-                        /* Timer expired: small explosion + die */
-                        int ex = entity->position_x;
-                        int ey = entity->position_y;
-                        if (g_ParticleCount < PARTICLE_CAPACITY) {
-                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
-                            fp->position_x = ex; fp->position_y = ey;
-                            fp->velocity_x = 0; fp->velocity_y = 0;
-                            fp->sprite_index = (unsigned char)(rand() & 3) + 3;
-                            fp->frame_number = 0; fp->frame_timer = 0;
-                            fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
-                            fp->color_index = 0;
-                            g_ParticleCount++;
-                        }
-                        FUN_0040f9b0(0x65 + (rand() % 7), ex, ey);
-                        should_remove = 1;
-                        break;
-                    }
-                    /* Constant shrapnel spray (every 2 ticks) while deployed */
-                    unsigned char rc_sub = entity->subtype;
-                    if (rc_sub == 0 && (rc_life & 1) == 0 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
-                        int *sc = (int *)DAT_00487ab0;
-                        int sh = (rand() & 0xFF) + 0x380;
-                        if (!(sh >= 0x3F8 && sh <= 0x408)) {
-                            sh &= 0x7FF;
-                            int ss = (rand() % 40) + 10;
-                            int sx = entity->position_x - FIXED_SCALE;
-                            int sy = entity->position_y - 0x340000;
-                            Entity *sp = &g_EntityPool[g_EntityCount];
-                            sp->position_x = sx; sp->position_y = sy;
-                            sp->previous_x = sx; sp->previous_y = sy;
-                            sp->velocity_x = (sc[sh] * ss) >> 6;
-                            sp->velocity_y = (sc[(sh + 0x200) & 0x7FF] * ss) >> 6;
-                            sp->motion_x_10 = 0; sp->motion_y_14 = 0;
-                            sp->type = 0x67;
-                            sp->variant_24 = 0; sp->state_20 = 0;
-                            sp->auxiliary_26 = 0;
-                            sp->owner = entity->owner;
-                            sp->health_or_damage_28 = 0; sp->gravity_or_motion_38 = 0;
-                            sp->damage_44 = 0; sp->scratch_48 = 0;
-                            sp->animation_frame = 0; sp->subtype = 0;
-                            sp->callback_address = 0; sp->counter_3c = 0;
-                            sp->timer_5c = 0;
-                            g_EntityCount++;
-                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 25;
-                            /* Fixed yellow: RGB565 yellow = (31<<11)|(63<<5)|0 = 0xFFE0 */
-                            g_EntityPool[g_EntityCount - 1].palette_value =
-                                (unsigned int)0xFFE0 + 30000;
-                        }
-                    }
-                    /* Counter at +0x3C: increment, spawn ball/firework every 80 ticks */
-                    int rc_cnt = entity->counter_3c;
-                    rc_cnt++;
-                    entity->counter_3c = rc_cnt;
-                    int rc_threshold = (rc_sub >= 2) ? 0xC8 : 0x50; /* mode 3 waits longer */
-                    if (rc_cnt > rc_threshold && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
-                        entity->counter_3c = 0;
-                        unsigned char rc_sub = entity->subtype;
-                        int rc_h = (rand() & 0xFF) + 0x380;
-                        if (rc_h >= 0x3F8 && rc_h <= 0x408) break;
-                        rc_h &= 0x7FF;
-                        int *sc = (int *)DAT_00487ab0;
-                        int rc_x = entity->position_x - FIXED_SCALE;
-                        int rc_y = entity->position_y - 0x340000;
-                        if (rc_sub == 0) {
-                            /* Mode 1: colored ball (type 0x6A) + flash particle spray */
-                            int rc_spd = (rand() % 90) + 25;
-                            Entity *ep = &g_EntityPool[g_EntityCount];
-                            ep->position_x = rc_x; ep->position_y = rc_y;
-                            ep->previous_x = rc_x; ep->previous_y = rc_y;
-                            ep->velocity_x = (sc[rc_h] * rc_spd) >> 6;
-                            ep->velocity_y = (sc[(rc_h + 0x200) & 0x7FF] * rc_spd) >> 6;
-                            ep->motion_x_10 = 0; ep->motion_y_14 = 0;
-                            ep->type = 0x6A;
-                            ep->variant_24 = 0;
-                            ep->state_20 = 0;
-                            ep->auxiliary_26 = 0;
-                            ep->owner = entity->owner;
-                            ep->health_or_damage_28 = 0;
-                            ep->gravity_or_motion_38 = ((int *)DAT_00487abc)[0x24];
-                            ep->damage_44 = ((int *)DAT_00487abc)[0x33];
-                            ep->scratch_48 = 0;
-                            ep->animation_frame = 0;
-                            ep->subtype = 1; /* sub_type 1 = bigger visual */
-                            ep->callback_address = ((int *)DAT_00487abc)[0];
-                            ep->counter_3c = 0;
-                            ep->timer_5c = 0;
-                            g_EntityCount++;
-                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 1200; /* long lifespan */
-                            /* Random bright color from full palette range */
-                            if (DAT_00487aa8 != NULL) {
-                                int ci = rand() % 128;
-                                unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
-                                g_EntityPool[g_EntityCount - 1].palette_value =
-                                    (unsigned int)pal + 0x7530;
-                            }
-                            /* Shrapnel spray is now constant (above), not per-ball */
-                        } else if (rc_sub == 1) {
-                            /* Mode 2: spawn wavy firework (type 0x22, +0x40=0). */
-                            int rc_spd = (rand() % 60) + 30;
-                            Entity *ep = &g_EntityPool[g_EntityCount];
-                            memset((void *)ep, 0, 0x80);
-                            ep->position_x = rc_x; ep->position_y = rc_y;
-                            ep->previous_x = rc_x; ep->previous_y = rc_y;
-                            ep->velocity_x = (sc[rc_h] * rc_spd) >> 6;
-                            ep->velocity_y = (sc[(rc_h + 0x200) & 0x7FF] * rc_spd) >> 6;
-                            ep->type = 0x22;
-                            ep->state_20 = (unsigned char)(rand() & 1);
-                            ep->owner = entity->owner;
-                            ep->subtype = 0;
-                            ep->counter_3c = rc_h;
-                            ep->scratch_30 = rand() % 10 + 1;
-                            ep->gravity_or_motion_38 = ((int *)DAT_00487abc)[0x24];
-                            ep->callback_address = ((int *)DAT_00487abc)[0];
-                            ep->damage_44 = ((int *)DAT_00487abc)[0x33];
-                            g_EntityCount++;
-                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 600;
-                            if (DAT_00487aa8 != NULL) {
-                                int ci = rand() % 32 + 20;
-                                unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
-                                g_EntityPool[g_EntityCount - 1].palette_value =
-                                    (unsigned int)pal + 0x7530;
-                            }
-                        } else {
-                            /* Mode 3 (sub_type 2): "magic fireworks" — from Ghidra 0x447102.
-                             * Type 0x22, state 0xC8, +0x40=2, heading 0x400, lifespan ~115. */
-                            Entity *ep = &g_EntityPool[g_EntityCount];
-                            memset((void *)ep, 0, 0x80);
-                            ep->position_x = rc_x; ep->position_y = rc_y;
-                            ep->previous_x = rc_x; ep->previous_y = rc_y;
-                            /* Match Fire_Secondary for type 0x22 level 2 exactly */
-                            int rc_spd2 = (rand() % 50) + 20;
-                            ep->velocity_x = (sc[rc_h] * rc_spd2) >> 6;
-                            ep->velocity_y = (sc[(rc_h + 0x200) & 0x7FF] * rc_spd2) >> 6;
-                            ep->type = 0x22;
-                            ep->state_20 = 0x6E; /* state: same as Fire_Secondary level 2 */
-                            ep->owner = entity->owner;
-                            ep->auxiliary_26 = 0xFF; /* guard: same as Fire_Secondary level 2 */
-                            ep->subtype = 2; /* +0x40=2 for magic fireworks sprite */
-                            ep->counter_3c = rc_h;
-                            /* Read palette from weapon config: type 0x22, level 2 */
-                            {
-                                int *tt = (int *)DAT_00487abc;
-                                int typeOff = 0x22 * 0x86; /* type 0x22 config offset */
-                                ep->gravity_or_motion_38 = tt[2 + typeOff + 0x22]; /* gravity */
-                                ep->damage_44 = tt[2 + typeOff + 0x31]; /* damage */
-                                ep->palette_value = tt[2 + typeOff + 0x3d]; /* palette */
-                                ep->callback_address = tt[typeOff]; /* callback */
-                                /* Add team color offset (from LAB_00406a71) */
-                                unsigned char own = entity->owner;
-                                unsigned char team = Player_Get(own)->team;
-                                ep->palette_value += (int)team * 100;
-                            }
-                            ep->scratch_60 = 50; /* short fuse — explode soon after launch */
-                            g_EntityCount++;
-                        }
-                        FUN_0040f9b0(0x11C, entity->position_x, entity->position_y);
-                    }
                 }
                 break;
             }
@@ -5417,41 +5165,6 @@ void FUN_00434310(void)
                             break;
                         }
                         /* DEAD CODE — old burst, replaced by deploy+spray */
-                        if (0) {
-                            int parent_x = entity->previous_x;
-                            int parent_y = entity->previous_y;
-                            unsigned char own = entity->owner;
-                            int pvx = entity->velocity_x;
-                            int pvy = entity->velocity_y;
-                            for (int s = 0; s < 10 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; s++) {
-                                Entity *tp = &g_EntityPool[g_EntityCount];
-                                memset((void *)tp, 0, 0x80);
-                                tp->position_x = parent_x;
-                                tp->previous_x = parent_x;
-                                tp->position_y = parent_y;
-                                tp->previous_y = parent_y;
-                                int jx = ((rand() & 0x1FFFF) - 0x10000);
-                                int jy = ((rand() & 0x1FFFF) - 0x10000);
-                                tp->velocity_x = pvx / 3 + jx;
-                                tp->velocity_y = pvy / 3 + jy;
-                                tp->type = 0x67;
-                                tp->owner = own;
-                                tp->auxiliary_26 = 0xFE;
-                                *(unsigned char *)((char *)tp + 0x28) = 0x40; /* short lifespan */
-                                tp->subtype = 2;
-                                tp->timer_5c = 2;
-                                unsigned char pidx = (unsigned char)(rand() % 12 + 20);
-                                tp->scratch_65 = pidx;
-                                tp->scratch_64 = 0x12;
-                                if (DAT_00487aa8 != NULL)
-                                    tp->palette_value = (int)((unsigned short *)DAT_00487aa8)[pidx] + 30000;
-                                tp->variant_24 = (unsigned short)(rand() % 5);
-                                tp->gravity_or_motion_38 = 4;
-                                tp->damage_44 = entity->damage_44 / 5; /* split damage */
-                                g_EntityCount++;
-                            }
-                            break;
-                        }
 
                         break;
 
@@ -6200,8 +5913,10 @@ void FUN_004527e0(void)
                     if ((int)rval < 0) rval = ((rval - 1) | 0xFFFFFFFC) + 1;
                     if (rval == 0) {
                         char beh = (char)part->flags_13;
-                        if (beh == (char)0xC6 || beh == (char)0xC8 ||
-                            beh == (char)0xCD || beh == (char)0xC9) {
+                        if (beh == tou_binary::char_bits(0xC6u) ||
+                            beh == tou_binary::char_bits(0xC8u) ||
+                            beh == tou_binary::char_bits(0xCDu) ||
+                            beh == tou_binary::char_bits(0xC9u)) {
                             if (tile != 0x0A && tile != 0x10) {
                                 /* Calculate explosion level from particle type and frame */
                                 char ptype_c = (char)part->sprite_index;
@@ -6219,7 +5934,7 @@ void FUN_004527e0(void)
                                 }
                                 if (explevel < 0) explevel = 0;
                                 else if (explevel > 7) explevel = 7;
-                                if (beh == (char)0xCD) explevel = 6;
+                                if (beh == tou_binary::char_bits(0xCDu)) explevel = 6;
                                 /* param5: -1 for non-water tiles, 1 for water(tile==0xC) */
                                 char p5 = (tile != 0x0C) ? (char)-1 : (char)1;
                                 FUN_004357b0(new_x >> 0x12, new_y >> 0x12, explevel, 0, p5,
@@ -7021,7 +6736,7 @@ void FUN_00454b00(void)
                 if (found_target) {
                     /* Compute firing angle */
                     int fire_angle;
-                    float speed_sqrt = (float)__builtin_sqrt(0.7142857142857143);
+                    float speed_sqrt = static_cast<float>(sqrt(0.7142857142857143));
 
                     if ((char)trooper->team == (char)-2) {
                         /* Random angle */
@@ -9039,7 +8754,8 @@ void FUN_004573e0(void)
                     *(char *)((intptr_t)DAT_00481f2c + pidx + 0x10) = (char)(rand() % 5) + 0x16;
                     *(char *)((intptr_t)DAT_00481f2c + pidx + 0x11) = 0;
                     *(short *)((intptr_t)DAT_00481f2c + pidx + 0x12) = 0;
-                    *(char *)((intptr_t)DAT_00481f2c + pidx + 0x14) = (char)0xFF;
+                    *(char *)((intptr_t)DAT_00481f2c + pidx + 0x14) =
+                        tou_binary::char_bits(0xFFu);
                     *(char *)((intptr_t)DAT_00481f2c + pidx + 0x15) = 0;
                     DAT_0048925c++;
                 }

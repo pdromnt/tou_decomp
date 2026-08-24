@@ -2340,7 +2340,8 @@ void FUN_00418d50(int param_1, int param_2, int sprite_idx, char solid_code, cha
                     /* Air/open tile */
                     if (type[4] != '\0') {
                         /* Water tile: apply brightness remap */
-                        *tmap = (unsigned char)(water_code + (char)0x80);
+                        *tmap = static_cast<unsigned char>(
+                            static_cast<unsigned char>(water_code) + 0x80u);
                         if (DAT_00489230 != NULL && DAT_004876a4[29] != NULL) {
                             unsigned short src = *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
                             unsigned short remapped = *(unsigned short *)((intptr_t)DAT_00489230 + (unsigned int)src * 2);
@@ -2353,7 +2354,8 @@ void FUN_00418d50(int param_1, int param_2, int sprite_idx, char solid_code, cha
                     }
                 } else {
                     /* Solid tile: place directly */
-                    *tmap = (unsigned char)(solid_code + (char)0x80);
+                    *tmap = static_cast<unsigned char>(
+                        static_cast<unsigned char>(solid_code) + 0x80u);
                     *(unsigned short *)((intptr_t)DAT_00481f50 + offset * 2) =
                         *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
                 }
@@ -2573,7 +2575,8 @@ static void Blit_Text_To_Signs(int start_pos)
     for (int row = 0; row < 16; row++) {
         for (int col = 0; col < 64; col++) {
             char tile = *(char *)((intptr_t)DAT_0048782c + pos);
-            if ((tile == (char)0xD3 || tile == (char)0xD8)) {
+            if (tile == tou_binary::char_bits(0xD3u) ||
+                tile == tou_binary::char_bits(0xD8u)) {
                 short pixel = *(short *)((intptr_t)DAT_004818e4 + text_idx * 2);
                 if (pixel != 0) {
                     *(short *)((intptr_t)DAT_00481f50 + pos * 2) = pixel;

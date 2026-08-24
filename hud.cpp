@@ -160,7 +160,6 @@ void FUN_004090e0(Framebuffer *framebuffer, unsigned int param_3)
 {
     uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
-    if (0x0C >= 100) return;  /* Sanity */
     unsigned short *blend_lut = (unsigned short *)DAT_004876a4[0x0C];
     unsigned short *remap = (unsigned short *)DAT_00489230;
     if (!blend_lut || !remap) return;
@@ -1026,7 +1025,7 @@ apply_rendering:
                     } else if (!sky_disabled) {
                         color = ((unsigned short *)DAT_00489ea0)[sky_off];
                     } else {
-                        color = *(unsigned short *)&DAT_00483820;
+                        color = DAT_00483820;
                         goto store_mode1;
                     }
                     /* Apply remap then darkness LUT[40] */
@@ -1092,7 +1091,7 @@ apply_rendering:
                         unsigned short remapped = ((unsigned short *)DAT_00489230)[sky_px];
                         color = ((unsigned short *)DAT_004876a4[39])[remapped];
                     } else {
-                        color = *(unsigned short *)&DAT_00483820;
+                        color = DAT_00483820;
                     }
                     *dst = color;
                 }
@@ -1116,7 +1115,7 @@ apply_rendering:
                 unsigned char vis = vis_buf[vis_idx];
                 if (vis != 0) {
                     if (vis >= 0x11) {
-                        *dst = *(unsigned short *)&DAT_00483820;
+                        *dst = DAT_00483820;
                     } else {
                         unsigned short remapped = ((unsigned short *)DAT_00489230)[*dst];
                         *dst = ((unsigned short *)DAT_004876a4[31 + vis])[remapped];
