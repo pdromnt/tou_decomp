@@ -16,6 +16,10 @@ FetchContent_Declare(
     URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.14/SDL3-3.4.14.tar.gz
     URL_HASH SHA256=30d4aa2b3037718142b32dffd4e72f917ebb6cc5227150e7bb9c45efb2153aeb
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    PATCH_COMMAND
+        ${CMAKE_COMMAND}
+        -DSDL_SOURCE_DIR=<SOURCE_DIR>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch-sdl-no-winmm.cmake
 )
 FetchContent_MakeAvailable(SDL3)
 
