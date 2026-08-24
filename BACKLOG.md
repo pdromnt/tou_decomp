@@ -1,967 +1,351 @@
-# TOU Decompilation — Refactor Backlog
+# Tunnels of Underworld Roadmap & Backlog
 
-Ordered by theme and priority. Each item includes acceptance criteria (AC).
+This is the single living plan for the project. Completed archaeology is kept
+brief; actionable work is ordered by dependency and product value.
 
-The gameplay-parity pass is complete and shipped in v0.3. These are maintenance
-and modernization tasks, not permission to replace verified binary behavior
-wholesale. Refactors should remain organized into behavior-neutral boundaries
-that can be compared and reverted independently, even when several boundaries
-are delivered together in one larger pull request.
+## Project Contract
 
-## Final Portability Goal
-
-The final project-wide milestone is a warning-free, behavior-preserving native
-codebase for modern desktop operating systems and architectures. Browser work
-remains explicitly out of scope until this milestone is complete.
+Preserve the accepted behavior of the original game while turning the SDL
+decomp into a maintainable, multilingual, cross-platform game with creation
+tools and simple LAN multiplayer.
 
 The required order is:
 
-1. Replace WinMM clocks/delays and Win32 file discovery with portable SDL
-   platform services, then remove the remaining Windows runtime includes and
-   libraries from game code.
-2. Normalize asset paths and file discovery for Unix separators and
-   case-sensitive filesystems without changing the release directory layout.
-3. Make CMake, executable resources, packaging, and CI select the correct
-   behavior per operating system.
-4. Eliminate compile warnings in maintained source and enforce the clean build
-   in CI. A suspicious recovered write must be proven and represented safely,
-   not merely silenced.
-5. Separate 32-bit guest values/addresses from native pointers and audit every
-   truncating cast, packed layout, overflow dependency, callback key, and x87
-   conversion needed for x64 and ARM64 hosts.
-6. Produce and validate native Windows and Linux builds for x64 and ARM64, plus
-   current macOS builds (including Apple Silicon).
+1. faithful gameplay;
+2. portable desktop runtime;
+3. maintainable settings and text;
+4. native level-authoring pipeline;
+5. serializable simulation boundary;
+6. constrained LAN multiplayer.
 
-Preserving the original game's observable behavior remains mandatory across
-all targets. A successful cross-compile alone is not runtime acceptance.
+A successful build is not runtime acceptance. Refactors must not change update
+order, RNG order, integer/float behavior, callbacks, collision, terrain,
+physics, effects, scoring, or original single-machine gameplay.
 
-The native portability implementation compiles across the full matrix. Windows
-x64 and macOS Apple Silicon now have hands-on gameplay acceptance, including
-configuration, menus, audio, input, Events, AI, and match completion. Runtime
-acceptance remains open for Windows ARM64, Linux x64/ARM64, and macOS Intel.
+## Current Baseline — v0.5
 
-## Current Foundation Status (v0.4)
+- Weapons and Marks, effects, particles, turrets, enemy ships, cars, infantry,
+  civilians, menus, controls, Events, levels, audio, match results, and awards
+  have had hands-on parity testing.
+- SDL3 owns the entry point, window, display, input, focus, dialogs, rendering
+  presentation, and audio. DirectDraw, DirectInput, WinMain, and FMOD are gone.
+- The recovered software renderer still produces the RGB565 game framebuffer.
+- Entity/player/projectile/trooper/particle/item pools are typed and capacity
+  guarded. Compatibility views remain only where original access width matters.
+- Original MSVC RNG, wrapping arithmetic, x87 conversion, fixed-point constants,
+  and guest callback-address dispatch are isolated production code.
+- `GameConfig` is one packed, offset-asserted compatibility record.
+- CI builds warning-clean Windows x86/x64/ARM64, Linux x64/ARM64, and macOS
+  Intel/Apple Silicon packages.
+- `.lev`, `.gfx`, and `.SHP` format notes live under `docs/`; architecture and
+  safe-refactoring guidance live in `CODEBASE.md`.
 
-- `Entity` and `PlayerData` have verified sizes, offset assertions, and typed
-  accessors. Player storage and the complete weapon/effect dispatcher are typed.
-- The entity and player pools are typed. A smaller set of entity callbacks
-  retains packed-width views where the original crosses nominal fields.
-- Projectile, trooper, animated-particle, and debris/item pools have verified
-  record sizes and key offsets. Allocation, construction, effect spawning,
-  targeting/AI, collision, rendering, death, and compaction are now typed.
-  Packed-width accesses remain only where original code crosses nominal fields.
-- Binary compatibility helpers, original RNG ordering, x87 conversion, and
-  callback-address dispatch are production code and must survive all refactors.
-- The software renderer uses typed framebuffer and viewport boundaries. SDL3
-  presents the unchanged RGB565 framebuffer and owns the portable entry point,
-  window, display modes, event queue, keyboard, mouse, focus, and dialogs.
-  DirectDraw, DirectInput, and FMOD have been removed completely.
-- `GameConfig` is the canonical byte-exact config record, and the main and
-  gameplay state machines use named enum values.
+### Remaining portability acceptance
 
----
+| Target | Status |
+| --- | --- |
+| Windows x64 | Accepted through hands-on gameplay |
+| macOS Apple Silicon | Accepted through hands-on gameplay |
+| Windows x86 legacy parity | Build maintained; final release smoke test pending |
+| Windows ARM64 | Runtime acceptance pending |
+| Linux x64 | Runtime acceptance pending |
+| Linux ARM64 | Runtime acceptance pending |
+| macOS Intel | Runtime acceptance pending |
 
-## Theme 1: Types & Data Structures
+Browser/WebAssembly remains last-of-last and is not part of the current plan.
 
-### T1.1 — Entity struct (128 bytes)  [DONE]
-Replace raw entity blob with typed access without changing original behavior.
+## Milestone Order
 
-The verified `Entity` layout and offset assertions live in `types.h`, and the
-global pool is typed as `Entity *`. Completed migrations cover renderers,
-callback dispatch, the main legacy update body, gameplay firing and pickup
-construction, explosions, projectile and structure collision, player/trooper
-death fragments, ambient and level spawns, ship exhaust, and the major
-entity-pool scanners. The pool physically allocates 2600 records
-(`0x51400 / 0x80`), while gameplay limits active entities to 2500.
-
-The final raw pool-index arithmetic in tracked-entity collision, turret
-projectile construction, teleport effects, and moving-level debris has been
-replaced with typed `Entity` access. Packed-width views remain only inside
-already selected records where the original deliberately crosses nominal field
-boundaries; those are compatibility operations rather than an untyped pool.
-
-**Known layout:**
-```
-+0x00  int  pos_x        (fixed-point)
-+0x04  int  prev_x
-+0x08  int  pos_y
-+0x0C  int  prev_y
-+0x10  int  motion_x      (type-specific)
-+0x14  int  motion_y      (type-specific)
-+0x18  int  vel_x
-+0x1C  int  vel_y
-+0x20  byte state         (type-specific)
-+0x21  byte type
-+0x22  byte owner         (player/team, 0xFF when absent)
-+0x24  short variant
-+0x26  byte auxiliary     (cooldown/color/lifetime/guard by type)
-+0x28  int  health_or_damage
-+0x2C  int  scratch
-+0x30  int  scratch
-+0x34  uint behavior_cb   (original 32-bit virtual address, not a host pointer)
-+0x38  int  gravity_or_motion
-+0x3C  int  counter       (type-specific)
-+0x40  byte subtype
-+0x44  int  damage
-+0x48  int  scratch
-+0x4C  int  palette
-+0x50  int  scratch
-+0x54  byte anim_frame
-+0x5C  byte timer         (type-specific)
-+0x60  int  scratch       (type-specific fuse/state)
-+0x64  byte scratch       (type-specific cadence/state)
-+0x65  byte scratch
-```
-
-**Files to touch:** sim.cpp, entity.cpp, entity_callbacks.cpp, effects.cpp,
-hud.cpp, menu.cpp
-
-**AC:**
-- `Entity` defined in `types.h`; `static_assert(sizeof(Entity) == 128)`
-- `g_EntityPool` becomes an `Entity *`; rename it separately under T13.1
-- All `*(type *)((int)ent + offset)` replaced with `ent->field`
-- Build compiles with zero warnings; no behavior change
+| Order | Milestone | Result |
+| ---: | --- | --- |
+| 1 | Human-readable settings | Versioned `settings.json` replaces binary saves |
+| 2 | Internationalization | English, Spanish, Brazilian Portuguese, Finnish |
+| 3 | Level tools | Native compiler/library, then visual editor |
+| 4 | Network foundation | Command frames, snapshots, checksums, replay |
+| 5 | LAN multiplayer | Direct-IP, host-authoritative, two-to-four players |
+| Later | Responsiveness/expansion | Prediction, reconnect, discovery, internet play |
 
 ---
 
-### T1.2 — PlayerData struct (0x598 / 1432 bytes)  [DONE]
-The earlier proposed layout was contradicted by the original machine code and
-has been discarded. Verified fields now include:
+## M1 — Human-Readable Settings  [P0]
 
-- `+0x00..+0x18`: current/previous position, velocity, and heading
-- `+0x1C`: exhaust interval counter; `+0x20`: health; `+0x24`: life state
-- `+0x2C`: team; `+0x34/+0x35`: weapon family and Mark
-- `+0x90..+0xA8`: weapon/effect timers; `+0xAC..+0xB2`: seven key scan codes
-- `+0xB8/+0xBC`: current and previous input bitmasks
-- `+0xC4..+0xDC`: byte/dword gameplay timers; `+0xDD`: AI level
-- `+0x464..+0x4A3`: late state/stat counters and timers
-- `+0x4A8/+0x4AC/+0x4B0`: positional-sound timer, channel, and sound ID
+Replace `options.cfg` with a versioned `settings.json` containing user-facing
+settings rather than a JSON dump of recovered memory.
 
-`PlayerData` has exact size/offset assertions. Previous-position capture,
-keyboard input, timer ticking, steering, thrust/exhaust, core player-loop state,
-and positional sound now use typed access. Unknown ranges remain opaque.
+### M1.1 — Typed user-settings model
 
-The final raw byte-offset call sites have been lifted. The storage global is a
-`PlayerData *`, and `Player_Get(index)` is the typed boundary.
+- Add a normal `UserSettings` model independent of packed `GameConfig` storage.
+- Map verified user settings into legacy runtime fields at one boundary.
+- Cover visible options, key bindings, display/audio, player profiles, colors,
+  ships, weapon availability/loadouts, and level selection.
+- Exclude reserved bytes and level-derived/runtime-only values.
+- Include `schemaVersion` and `language` from schema version 1.
 
-Neutral names remain where semantics are not independently established; this
-is intentional and does not require a raw storage view.
+### M1.2 — JSON load/save and migration
 
----
+- Read/write pretty-printed UTF-8 JSON.
+- Load defaults, overlay valid JSON fields, validate/clamp, then map to runtime.
+- Ignore unknown keys; recover malformed known fields individually.
+- Save atomically through a temporary file and replacement.
+- If JSON is absent and a valid `options.cfg` exists, migrate known values once,
+  write JSON, and retain the binary file as a backup.
+- Preserve the current app-local macOS settings location.
 
-### T1.3 — ProjectileRecord struct (64 bytes)  [DONE]
-Array at `g_ProjectilePool`. Used primarily by `sim.cpp`, `entity.cpp`, and
-`effects.cpp` for collision, explosions, and turret targeting.
+### M1 acceptance
 
-The allocator, constructor, renderer, damage scan, spatial binning, targeting,
-predictive aim, death handling, and compaction are typed.
-
-**AC:**
-- `ProjectileRecord` defined; `static_assert(sizeof == 64)`
-- All `g_ProjectilePool` pointer math replaced in runtime modules
+- Every visible setting survives save/restart on Windows, Linux, and macOS.
+- A settings round trip yields identical runtime choices.
+- Missing, corrupt, truncated, old-schema, and future-key files fail safely.
+- Reset Defaults rewrites a valid current-schema file.
 
 ---
 
-### T1.4 — TrooperRecord struct (64 bytes)  [DONE]
-Array at `g_TrooperPool`. Used in spatial grid binning, infantry simulation,
-targeting, and AI.
+## M2 — Internationalization  [P0]
 
-The allocator, constructor, renderer, damage scan, spatial binning, complete
-infantry/car AI update, death handling, and compaction are typed.
+Initial locales:
 
-**AC:**
-- `TrooperRecord` defined; `static_assert(sizeof == 64)`
-- All pointer math replaced
+- English (`en`), authoritative fallback
+- Spanish (`es`)
+- Brazilian Portuguese (`pt-BR`)
+- Finnish (`fi`)
 
----
+### M2.1 — Catalog runtime
 
-### T1.5 — Particle structs (32 bytes)  [DONE]
-Arrays at `g_DebrisItemPool` / `g_ParticlePool`. Used in debris, explosions, fluid
-effects, trails, and rendering.
+- Store UTF-8 catalogs under `lang/<locale>.json` with semantic keys.
+- Add `Text_Get(key)` with per-key English fallback and debug diagnostics.
+- Store language in `settings.json`; allow immediate switching from Options.
+- Keep protocol values, logs, paths, player text, and level author metadata
+  outside localization.
+- Validate JSON/UTF-8 and identical required key sets in CI.
 
-The two distinct 32-byte layouts are represented by `ParticleRecord` and
-`DebrisItemRecord`. Allocation, construction, effect spawning, rendering,
-collision, expiry, pickup animation, and compaction are typed.
+### M2.2 — Font and layout coverage
 
-**AC:**
-- `Particle` defined; `static_assert(sizeof == 32)`
-- All particle array pointer math replaced in simulation and rendering modules
+- Extend the bitmap-font path for required Latin glyphs, including Finnish
+  `ä/ö/å`, Spanish accents/punctuation, and Portuguese diacritics.
+- Measure localized strings instead of assuming English widths.
+- Define wrapping, alignment, truncation, and fallback-glyph behavior.
+- Check every menu at supported resolutions in windowed and fullscreen modes.
 
----
+### M2.3 — String extraction and translations
 
-### T1.6 — Recover TileType semantics + accessors  [INVESTIGATION / P1]
-Tilemap stores one byte per cell. Magic constants scattered everywhere.
+- Extract menus, HUD, results, awards, errors, controls, weapon/pickup names,
+  prompts, and gameplay messages.
+- Create and review complete `en`, `es`, `pt-BR`, and `fi` catalogs.
 
-The earlier guessed value list was contradicted by recovered runtime code (for
-example, water checks use `0x0C`, while `0x02` is used by GG placement logic).
-Do not encode names from that list. Recover values and property-table meanings
-from the original executable before introducing the enum.
+### M2 acceptance
 
-**AC:**
-- `enum TileType` defined with all known values
-- Helper inlines: `IsSolid()`, `IsWalkable()`, `IsFluid()`
-- All raw tile byte comparisons replaced
+- All four languages complete menu -> match -> results without missing glyphs,
+  clipping, or accidental English except approved proper names.
+- Missing keys/locales visibly fall back to English rather than blank text.
 
 ---
 
-### T1.7 — Fixed-point constant 0x40000  [DONE]
-Fixed-point scale with 18 fractional bits, hardcoded in 50+ locations. One whole
-unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
-
-**AC:**
-- [x] `#define FIXED_SCALE 0x40000` and `#define FIXED_SHIFT 18`
-- Optional `FIXED_TO_INT()` / `INT_TO_FIXED()` helpers
-- [x] All confirmed fixed-point-scale uses of raw `0x40000` replaced
-- [x] Rebuilt `.text`, `.data`, and `.rdata` match the pre-refactor executable
-  byte-for-byte
-
----
-
-## Theme 2: Headers & Modules
-
-### T2.1 — Split `tou.h` into subsystem headers  [DONE]
-`tou.h` was 791 lines of intermixed externs. It is now a 24-line aggregate over:
-- `types.h` — structs, enums, constants
-- `gfx.h` — renderer globals and prototypes
-- `input.h` — saved scan-code state and keyboard/mouse declarations
-- `sound.h` — sound table and game-facing audio lifecycle
-- `level.h` — map data, tilemap, .lev format
-- `entity.h` — entity arrays, behavior callbacks, AI globals
-- `gamestate.h` — state machine, timers, config
-- `platform.h` — portable window, events, timing, dialogs, and display services
-
-Keep `tou.h` as an aggregate include during transition.
-
-`fixed_point.h` separately owns the verified world-coordinate constants.
-
-**AC:**
-- [x] Each header contains only relevant declarations; no circular includes
-- [x] All `.cpp` files still compile with `#include "tou.h"`
-- [x] Every subsystem header passes a standalone syntax check
-- [x] Rebuilt `.text`, `.data`, and `.rdata` match the pre-split executable
-  byte-for-byte
-
----
-
-### T2.2 — Centralize math tables in `game_math.h` / `math.cpp`  [P2]
-Trig tables, ballistic LUT (`DAT_00489e90`), and vector helpers currently live in init.cpp and entity.cpp.
-
-**AC:**
-- `game_math.h` declares all pure math functions without shadowing the system
-  `<math.h>` header
-- `math.cpp` contains all table init and helpers
-- No math tables duplicated across files
-
----
-
-## Theme 3: Memory Safety
-
-### T3.1 — Bounds checks on all spawn/alloc sites  [DONE]
-Hard limits: 2500 entities, 2000 particles, 5000 fluid sources, 300 level names.
-
-The typed runtime pools use named capacities at their spawn boundaries. Level,
-GG-theme, and music discovery stop safely at their 300-entry catalogs. Fluid
-sources, map edges, and fire/edge records now use named capacities shared by
-their allocations and every recovered spawn boundary.
-
-**Key functions:** `FUN_00413720`, `FUN_00434310`, `FUN_00454b00`, `FUN_0045fc00`, `FUN_00407210`, `FUN_00406d20`
-
-**AC:**
-- Every spawn function checks `count < capacity` before writing
-- Overflow returns error/skips spawn (not assert in release)
-- Capacity constants defined as `enum`/`constexpr` next to array declarations
-
----
-
-### T3.2 — Replace `void *` pool pointers with typed arrays  [DONE]
-The entity, player, projectile, trooper, particle, and debris/item globals are
-typed. Unknown auxiliary level buffers remain `void *` because they are not
-runtime record pools covered by this task.
-
-**AC:**
-- All `void *` pool pointers replaced with typed pointers
-- All casts at call sites removed
-
----
-
-### T3.3 — Audit `memcpy`/`memset` on typed structs  [DONE]
-Original binary uses raw memory ops on entity/player blobs.
-
-**AC:**
-- [x] Typed pool compaction uses record assignment instead of raw byte counts
-- [x] Recovered runtime records are asserted trivially copyable
-
----
-
-## Theme 4: Renderer Abstraction
-
-### T4.1 — `Framebuffer` struct  [DONE]
-Current: every render function takes `(int buffer, int stride)` and casts to `unsigned short *`.
-
-```c
-typedef struct {
-    unsigned short *pixels;
-    int width, height, stride;  // stride in pixels
-} Framebuffer;
-```
-
-**AC:**
-- [x] `Framebuffer` defined at the renderer boundary
-- [x] World, effects, HUD, menu, and presentation entry points take
-  `Framebuffer *` instead of raw `(buffer, stride)` pairs
-- [x] Raw pixel/stride compatibility views are contained inside lifted
-  renderer bodies rather than their call sites
-
----
-
-### T4.2 — `Viewport` struct  [DONE]
-Viewport culling math duplicated in effects.cpp, hud.cpp, graphics.cpp.
-
-```c
-typedef struct {
-    int left, top, right, bottom;
-    int width, height;
-    int scroll_x, scroll_y;
-} Viewport;
-```
-
-**AC:**
-- [x] `Viewport` defined and used as the single active viewport record
-- [x] World bounds, dimensions, and destination offsets share that record
-- [x] Address-named aliases remain only as compatibility names for lifted
-  clipping arithmetic
-
----
-
-### T4.3 — `RenderBackend` interface  [DONE]
-The presentation interface isolated the recovered software renderer and enabled
-the completed SDL migration. The temporary DirectDraw backend is now deleted.
-
-```c
-typedef struct {
-    int  (*init)(int w, int h);
-    void (*begin_frame)(Framebuffer *fb);
-    void (*present)(void);
-    void (*shutdown)(void);
-} RenderBackend;
-```
-
-**AC:**
-- [x] `RenderBackend` interface defined
-- [x] DirectDraw implementation isolated during migration, then removed
-- [x] Startup, mode configuration, surface lifecycle, restoration, and frame
-  presentation call the backend rather than DirectDraw directly
-- [x] No DirectDraw API, source file, header, fallback flag, or link dependency remains
-- [x] Clean 32-bit build works with the SDL backend
-
----
-
-### T4.4 — Sprite atlas abstraction  [P2]
-`all3.gfx` is a custom packed format loaded by `FUN_00423150`. Abstract into:
-
-```c
-typedef struct {
-    int pixel_offset, width, height;
-} SpriteFrame;
-
-void Sprite_Blit(const SpriteFrame *frame, int x, int y,
-                 unsigned char palette, Framebuffer *fb);
-```
-
-**AC:**
-- Sprite loader returns a `SpriteAtlas` struct with frame table
-- All blit sites use `Sprite_Blit()` instead of raw pointer math into `DAT_00487ab4`
-
----
-
-## Theme 5: Config System
-
-### T5.1 — Replace binary blob with typed `GameConfig` struct  [DONE]
-`GameConfig` is a packed, size- and offset-asserted union. Named fields and the
-legacy byte view share the same storage, matching the original alias model.
-
-**Known fields:** display mode, sound config, key bindings, fog settings,
-difficulty, team mode, game type, player colors, ship selections, and loadouts.
-
-**AC:**
-- [x] One `GameConfig` record with all currently known fields
-- [x] Obsolete audio bytes removed for the SDL config format
-- [x] Incompatible older saves are rejected instead of misread
-- [x] Saves serialize that same record plus the decomp window-mode byte
-- [x] Runtime compatibility globals alias fields instead of mirroring them
-- [x] Raw offsets remain only as views for recovered descriptors/unknown fields
-
----
-
-### T5.2 — Versioned JSON user settings  [P0]
-Replace the packed binary save file with a human-readable user-settings model.
-The packed `GameConfig` remains an internal compatibility target, not the file
-format.
-
-**AC:**
-- `settings.json` contains `schemaVersion`, `language`, and named user-facing
-  settings only; reserved and derived runtime bytes are excluded
-- A typed `UserSettings` maps to/from verified `GameConfig` fields at one boundary
-- Pretty-printed UTF-8 JSON is validated and saved atomically
-- Unknown keys are ignored as harmless forward-compatible input; malformed known
-  fields fall back individually and are clamped
-- If JSON is absent, a valid `options.cfg` is migrated once and retained as a backup
-- All visible options, key bindings, player profiles, ships, colors, loadouts,
-  display, and audio choices round-trip through restart
-- Config-path behavior is verified on Windows, Linux, and macOS app bundles
-
----
-
-## Theme 6: State Machine
-
-### T6.1 — Replace magic byte states with enum + transitions  [DONE]
-Current: `g_GameState` is a byte with values 0x01, 0x02, 0x96, 0x97, 0x98, 0xFE.
-
-**AC:**
-- `enum GameState { STATE_GAMEPLAY=1, STATE_MENU=2, STATE_INIT_GAME=3, STATE_QUICK_RESTART=4, STATE_GAME_OVER=5, STATE_ERROR_RESTART=6, STATE_INTRO_INIT=0x96, STATE_INTRO_RUN=0x97, STATE_NEW_GAME=0x98, STATE_SHUTDOWN=0xFE }`
-- All `switch(g_GameState)` blocks updated
-- `GameState_Transition(GameState from, GameState to)` helper for debug logging
-
----
-
-### T6.2 — Introduce sub-state enums  [DONE]
-`g_SubState`, `g_SubState2`, and `DAT_00489299` interact non-obviously.
-
-**AC:**
-- Document what each sub-state means
-- Replace magic values with named constants
-- Add state transition logging (behind `#ifdef DEBUG`)
-
----
-
-## Theme 7: Sound Abstraction
-
-### T7.1 — Portable audio backend  [DONE]
-The primary CMake build uses statically linked SDL_mixer for WAV effects and
-Ogg Vorbis/MP3 music. Recovered gameplay code passes its already-calculated volume
-and pan through `audio_backend.h`; it no longer calls FMOD directly.
-
-```c
-typedef struct {
-    int  (*init)(void);
-    int  (*load_sample)(const char *path);
-    void (*play_sample)(int handle, int x, int y, int volume);
-    void (*play_music)(const char *path);
-    void (*stop_all)(void);
-    void (*shutdown)(void);
-} AudioEngine;
-```
-
-**AC:**
-- [x] Neutral sample/channel/music interface defined
-- [x] Primary SDL_mixer implementation in `audio_sdl.cpp`
-- [x] No FMOD symbols or DLL requirement in the primary executable/package
-- [x] Existing attenuation and direction calculations remain upstream and unchanged
-- [x] Runtime A/B pass covers one-shot, looping, positional, music, pause, and focus behavior
-- [x] Remove the temporary FMOD comparison backend after acceptance
-
----
-
-## Theme 8: Input Abstraction
-
-### T8.1 — SDL input adapter  [DONE]
-SDL now supplies keyboard and mouse state to the recovered game code while
-preserving the 256-entry legacy scan-code namespace used by saved configs.
-
-```c
-typedef struct {
-    void (*poll)(void);
-    int  (*key_down)(int scan_code);
-    void (*get_mouse)(int *dx, int *dy, int *buttons);
-} InputDevice;
-```
-
-**AC:**
-- [x] CMake build has no DirectInput runtime import
-- [x] Existing `options.cfg` key bindings keep their physical-key meanings
-- [x] Menu mouse position, buttons, slider dragging, and key capture use SDL
-- [x] DirectInput source, headers, globals, and comparison path removed
-
----
-
-### T8.2 — Input mapping layer  [P2]
-Map physical keys to logical actions instead of storing raw scan codes.
-
-**AC:**
-- `enum GameAction { ACTION_MOVE_UP, ACTION_FIRE, ... }`
-- `Input_Bind(GameAction action, int scan_code)`
-- Gameplay code queries `Input_IsActionDown(ACTION_FIRE)` instead of raw key state
-
-### T8.3 — Expose Special/Explode binding in the controls menu  [DONE]
-Completed during the menu parity pass. The existing menu action is presented as
-`Menu Button/Detonate`; the gameplay's special weapon remains the secondary
-weapon rather than this remote-detonation input.
-
-**AC:**
-- [x] Both players can inspect and rebind it
-- [x] Saved bindings round-trip through `options.cfg`
-- [x] Pipebomb and Smoking Nalle can be triggered using the rebound key
-
-### T8.4 — Restore missing weapon-level selector dots  [DONE]
-Completed and runtime-tested for the full weapon set, including Roman Candle
-level 3 (`Fireworks Launcher`). Changing weapons also resets selection to Mark I
-like the original.
-
-**AC:**
-- [x] Selector dot count comes from the weapon's actual available-level data
-- [x] Roman Candle visibly exposes all three levels
-- [x] Every weapon was audited for hidden or extra levels
-- [x] Each displayed dot maps to the correct subtype
-
----
-
-## Theme 9: AI & Pathfinding
-
-### T9.1 — AI behavior extraction  [IN PROGRESS / P1]
-Current ship AI remains concentrated in `entity.cpp`, but its recovered entry
-points are now named `AI_UpdateShip` and `AI_ScanNearbyThreats`. Turret LOS and
-firing has the public `TurretSystem_UpdateTargeting` boundary. Physical source
-splitting remains after a deterministic simulation boundary exists; moving the
-code alone would not make it network-safe.
-
-**AC:**
-- Extract `FUN_0044ad30` into `ai_decide(Entity *e, PlayerData *player)`
-- Extract `FUN_0044be20` into `ai_scan_threats()`
-- Extract `FUN_00458010` into `ai_turret_target(Turret *t)`
-- BFS pathfinding wrapped in `Pathfinder_FindPath(start, goal)`
-
----
-
-## Theme 10: Particle & Effect Systems
-
-### T10.1 — Particle system abstraction  [IN PROGRESS / P1]
-The 2000-entry animated-particle pool is typed and capacity guarded.
-`ParticleSystem_Update` and `FireParticleSystem_Update` now expose the two
-distinct recovered update paths instead of misleading address names. Spawn
-helpers remain effect-specific because their initialization and RNG ordering
-differ in the original.
-
-**AC:**
-- `ParticleSystem_Spawn(type, x, y, vx, vy, lifetime, palette)`
-- `ParticleSystem_Update()` replaces inline tick code
-- `ParticleSystem_Render(Framebuffer *fb)`
-
----
-
-### T10.2 — Fluid simulation abstraction  [DONE]
-Water/lava propagation in `FUN_0045fc00`.
-
-`FluidSystem_Update` is the named simulation boundary for original routine
-`0x0045FC00`. Its 5,000-entry source pool has a named capacity shared by
-allocation and all eight propagation directions. Fluid remains separate from
-both animated particles and fire/edge particles.
-
----
-
-## Theme 11: Platform Migration
-
-### T11.1 — SDL3 platform and renderer backend  [IN PROGRESS / P0]
-SDL3 is pinned and statically linked by the primary CMake build. It owns the
-portable entry point, window, display-mode transitions, event queue, input,
-dialogs, and software-frame presentation.
-
-**AC:**
-- [x] `gfx_sdl.cpp` implements `RenderBackend`
-- [x] Software framebuffer uploaded through an SDL streaming texture
-- [x] SDL owns windowed/fullscreen transitions and event pumping
-- [x] Windowed mode works without a DirectDraw presentation path
-- [x] DirectInput replaced by SDL input
-- [x] Win32 entry point and native window bridge removed
-- [x] DirectDraw/DirectInput source, headers, fallback, and links removed
-- [x] FMOD replaced by a portable audio backend in the primary build
-- [x] Native Windows, Linux, and macOS builds pass in CI
-- [ ] Native runtime acceptance passes on every supported desktop target
-  (Windows x64 and macOS Apple Silicon currently accepted)
-
----
-
-### T11.2 — Modern GPU renderer (optional)  [P3]
-OpenGL 3.3 or D3D11 backend for the software renderer.
-
-**AC:**
-- Upload RGB565 software buffer as texture
-- Sprite blitting via instanced quads or texture atlas
-- Post-processing for color LUTs (fog, brightness, water tint)
-
----
-
-## Theme 12: Build & Tooling
-
-### T12.0 — Build-only GitHub Actions validation  [DONE]
-The `Build` workflow runs separately from release automation on every push and
-pull request, with optional manual dispatch. It validates the original-like x86
-host plus every supported native desktop operating system and architecture.
-
-**AC:**
-- [x] Clean 32-bit MinGW build on `windows-latest`
-- [x] Result verified as `pei-i386`
-- [x] Windows x64 and ARM64 PE architectures verified
-- [x] Linux x64 and ARM64 ELF architectures verified
-- [x] macOS Intel and Apple Silicon Mach-O architectures verified
-- [x] Complete runtime staged and uploaded for every target
-- [x] Read-only repository permissions
-- [x] No packaging, release creation, or tag mutation
-
----
-
-### T12.1 — CMake build system  [DONE]
-The primary native build uses CMake and pinned static SDL3/SDL_mixer.
-
-**AC:**
-- [x] `CMakeLists.txt` builds the SDL-enabled native target
-- [x] SDL3 dependency is pinned and fetched reproducibly
-- [x] CI and release workflows use CMake
-- [x] Platform source/link dependencies are selected per operating system
-- [x] 64-bit and ARM64 host-safe build
-- [x] Native Windows, Linux, and macOS CI
-
----
-
-### T12.3 — Warning-free native builds  [DONE]
-Maintained game source treats compiler warnings as errors. Recovered 32-bit
-semantics are represented explicitly rather than hidden behind warning
-suppression, including host pointers, guest addresses, integer byte patterns,
-unaligned config fields, x87 conversions, and signed plain-char behavior on ARM.
-
-**AC:**
-- [x] MSVC builds with `/W4 /WX`
-- [x] GCC and Clang build with `-Wall -Wextra -Wpedantic -Werror`
-- [x] ARM hosts preserve the original MSVC signed plain-char semantics
-- [x] Asset reads and generated paths fail safely instead of using partial data
-- [x] The complete native CI matrix enforces the warning policy
-
----
-
-### T12.2 — Targeted parity harnesses  [ON DEMAND]
-The exploratory standalone accuracy-test executable was retired when the parity
-runtime became production code. Do not maintain a second executable by default.
-Add focused harnesses only for concrete regressions where a runtime comparison
-alone cannot expose the first state divergence.
-
-**AC:**
-- Fixtures come from original-binary evidence or a recorded runtime scenario
-- Harness does not alter RNG or update ordering in the normal game build
-- Valuable deterministic fixtures may be promoted into CI later
-
----
-
-## Theme 13: Code Quality
-
-### T13.1 — Rename all `DAT_00xxxxxx` globals  [IN PROGRESS / P1]
-Rename globals to semantic names as subsystems are understood.
-
-**AC:**
-- `g_EntityArray`, `g_PlayerArray`, `g_TileMap`, `g_SpritePixels`, etc.
-- Preserve original addresses in comments: `/* was DAT_004892e8 */`
-- No functional change
-
-The primary typed pools and their active counts now use `g_Entity*`,
-`g_Projectile*`, `g_Trooper*`, `g_Particle*`, and `g_DebrisItem*` names. Other
-subsystem globals remain intentionally address-named until ownership is clear.
-
----
-
-### T13.2 — Replace Ghidra function names  [IN PROGRESS / P1]
-Rename `FUN_004xxxxx` to semantic names after understanding each function.
-
-**Priority order:**
-1. Entity behavior loop (`FUN_0044b0b0` -> `Entity_Behavior_Loop`)
-2. Main render loop (`FUN_00425fe0` -> `Game_Render`)
-3. Physics integration (`FUN_0044e1c0` -> `Physics_Integrate`)
-4. Wall collision (`FUN_00450630` -> `Collision_Wall`)
-5. Bullet collide (`FUN_00455d50` -> `Projectile_Collide`)
-6. Explosion/damage (`FUN_004571f0` -> `Explosion_Damage`)
-7. Turret update (`FUN_00454b00` -> `Turret_Update`)
-8. AI targeting (`FUN_00458010` -> `AI_Turret_Target`)
-9. Fluid spread (`FUN_0045fc00` -> `Fluid_Spread`)
-10. Process deaths (`FUN_0045e2c0` -> `Entity_Process_Deaths`)
-
-**AC:**
-- Each renamed function has a comment explaining its original binary address
-- All call sites updated (use `sed` or IDE rename)
-- Build compiles
-
----
-
-## Theme 14: Bug Fixes & Cleanup
-
-### T14.1 — Remove config synchronization bridge  [DONE]
-The original globals and the persisted record now share storage, as they did in
-the original executable. Both synchronization functions were deleted.
-
-**AC:**
-- [x] Load and save operate on the canonical `GameConfig`
-- [x] Menu byte views and runtime named fields cannot become stale copies
-- [ ] Runtime round-trip acceptance with an existing `options.cfg`
-
----
-
-### T14.2 — Remove unused globals  [P2]
-Some `extern` declarations in the subsystem headers may reference dead code.
-
-**AC:**
-- Run linker with `--gc-sections` or grep for unused symbols
-- Remove declarations with no definition
-- Remove definitions with no references
-
----
-
-### T14.3 — Intro splash index reversal  [P2]
-Documented quirk: splash frame indices are reversed (starts at 2, then 1, then 0) despite `g_IntroSplashIndex` counting upward.
-
-**AC:**
-- Determine if this is intentional (artist preference) or a bug
-- If bug: fix the frame lookup in `intro.cpp`
-- If intentional: add explicit comment explaining the reversal
-
----
-
-## Theme 15: Documentation
-
-### T15.0 — Document the current source architecture  [DONE]
-`CODEBASE.md` documents module ownership, runtime assets, callback dispatch,
-binary-compatibility constraints, config ownership, tracing, builds, packaging,
-and safe refactoring rules.
-
----
-
-### T15.1 — Document `.lev` v1.4 format spec  [DONE]
-Write a standalone `docs/LEVEL_FORMAT.md`.
-
-**AC:**
-- Byte-level format description
-- C struct layout for each section
-- Example hex dump of a small level
-- Entity record format (20 bytes)
-- RLE tilemap encoding
-
----
-
-### T15.2 — Document `.gfx` sprite format  [DONE]
-Write `docs/SPRITE_FORMAT.md`.
-
-**AC:**
-- Header layout (frame offset table, width/height tables)
-- Pixel data layout (RGB555)
-- Mask data layout (grayscale)
-- Code example for loading a single frame
-
----
-
-### T15.3 — Document `.SHP` ship format  [DONE]
-Write `docs/SHIP_FORMAT.md`.
-
-**AC:**
-- 64-byte record layout
-- Field descriptions (speed, health, weapons, sprites)
-- Example for one ship type
-
----
-
-## Theme 16: Direct-IP LAN Multiplayer
-
-LAN v1 is deliberately small: one player per computer, one listen-server host,
-four humans total, two teams, direct `IP:port` join, host-owned rules and level
-list, and no AI. It does not include discovery, public lobbies, accounts,
-dedicated servers, NAT traversal, relays, spectators, reconnect, or mid-match
-join. See `PLAN.md` for the complete product contract.
-
-### T16.1 — Define authoritative match state  [P0]
-
-- Inventory every mutable value that can affect gameplay, including RNG state,
-  pool counts/order, players, tiles, fluids, timers, Events, and AI state.
-- Exclude renderer, audio channels, menu state, SDL objects, and local cameras.
-- Give guest callback addresses stable serialized identities.
-- Document host-owned rules and level progression separately from each client's
-  local profile/ship selection.
-
-### T16.2 — Command-frame input boundary  [P0]
-
-- Convert local key state into one compact command per player per simulation
-  tick.
-- Make human, AI, replay, and network commands enter through the same boundary.
-- Preserve the original update and RNG order after command collection.
-
-### T16.3 — Snapshot and checksum format  [P0]
-
-- Serialize authoritative state without native pointers or compiler padding.
-- Add a versioned snapshot header and per-tick deterministic checksum.
-- Prove save/restore continuity by comparing uninterrupted and restored runs.
-
-### T16.4 — Local deterministic replay harness  [P0]
-
-- Record initial snapshot plus command frames.
-- Replay headlessly and compare checksums at every tick.
-- Treat the first mismatch as a simulation bug before adding networking.
-- Run replay/restore comparison across x86, x64, and ARM64.
-
-### T16.5 — Protocol and compatibility handshake  [P0]
-
-- Version every message and enforce packet-size/bounds validation.
-- Exchange build/protocol version plus selected level, ship, and
-  gameplay-critical asset hashes.
-- Reject mismatches, full sessions, AI-enabled sessions, invalid profiles,
-  invalid ships, and invalid team values with an explicit reason.
-- LAN v1 requires matching installed content and never transfers files.
-
-### T16.6 — Host/join session UI and roster  [P1]
-
-- Add `LAN Multiplayer -> Host / Join`.
-- Host chooses rules/levels and opens a configurable port.
-- Client enters `IP:port`, sends its Player 1/local profile and ship, then chooses
-  team 1 or team 2.
-- Roster shows connection, team, ship, and ready state.
-- Only the host can start, and only when all two-to-four players are ready.
-
-### T16.7 — Authoritative LAN transport  [P0]
-
-- Host simulates gameplay and level progression; clients send command frames,
-  never trusted gameplay outcomes.
-- Host sends the canonical roster/rules, initial snapshot, authoritative state
-  updates, terrain changes, results, and periodic checksums.
-- Start with LAN-appropriate input delay and correction rather than requiring
-  cross-architecture peer lockstep.
-- Handle clean quit, timeout, refusal, host shutdown, client shutdown, and
-  return-to-session after each level.
-
-### T16.8 — Mixed-platform LAN acceptance  [P0]
-
-- Windows, Linux, and macOS clients interoperate by direct IP.
-- Two, three, and four player sessions complete multiple host-selected levels.
-- All peers agree on terrain, deaths, frags, winners, and next-level state.
-- A 30-minute mixed-architecture soak test has no drift, leak, hang, or stale roster.
-
-### T16.9 — Prediction and rollback  [P2 / LATER]
-
-- Add only after deterministic replay is stable.
-- Predict local commands, retain bounded snapshots, and resimulate on late
-  authoritative input.
-- Never make audio or rendering part of the rollback state.
-
----
-
-## Theme 17: Internationalization
-
-Initial locales are English (`en`), Spanish (`es`), Brazilian Portuguese
-(`pt-BR`), and Finnish (`fi`). English is the authoritative fallback.
-
-### T17.1 — Localization catalog and runtime  [P0]
-
-- UTF-8 JSON catalogs under `lang/<locale>.json` with stable semantic keys
-- `Text_Get(key)` lookup with per-key English fallback and debug diagnostics
-- Language stored in `settings.json` and applied immediately from Options
-- CI verifies valid JSON/UTF-8 and identical required key sets
-
-### T17.2 — Font and text-layout coverage  [P0]
-
-- Add required Finnish, Spanish, and Portuguese glyphs to the bitmap-font path
-- Measure localized strings instead of assuming English widths
-- Define wrapping, truncation, alignment, and fallback-glyph behavior
-- Visually inspect menus at every supported resolution and display mode
-
-### T17.3 — Extract the full user-facing string surface  [P1]
-
-- Menus, HUD, results, awards, errors, controls, weapons, pickups, and prompts
-- Do not translate paths, log diagnostics, protocol values, user text, or level
-  author metadata
-- All four languages complete menu -> match -> results without clipping,
-  missing glyphs, or accidental English
-
----
-
-## Theme 18: Level Compiler and Editor
+## M3 — Level Compiler and Editor  [P0/P1]
 
 The repository contains original sample sources, documentation,
 `level converter.exe`, and `COLPICK.EXE`, but not maintainable source for those
-tools. Build a native replacement rather than embedding either legacy binary.
+legacy tools. Build a native replacement instead of embedding them.
 
-### T18.1 — Complete `.lev` writer specification  [P0]
+### M3.1 — Complete writer specification  [P0]
 
-- Recover every header/extra/config/placement/RLE section and marker color
-- Use original MakeLev output and shipped levels as the oracle
-- Add golden fixtures from `makelev/Jungle.*` and `Normal.txt`
-- Document unsupported or still-unknown bytes explicitly
+- Recover every `.lev` header, extra/config section, placement record, marker
+  color, RLE rule, JPEG/parallax block, and GG field.
+- Treat original converter output and shipped levels as authoritative.
+- Add golden fixtures from `makelev/Jungle.*` and `Normal.txt`.
+- Document every unsupported or still-unknown value explicitly.
 
-### T18.2 — Shared `tou_level` library and CLI compiler  [P0]
+### M3.2 — Shared `tou_level` library and CLI  [P0]
 
-- Parse, validate, and write normal/GG projects independently of game globals
-- Import visual JPEG, attribute TGA, optional parallax, and level config text
-- Replace COLPICK marker lookup with a named palette/schema
-- Structurally compare output with original compiler fixtures and load it in
-  the original game plus decomp
+- Parse, validate, and write normal/GG level projects without game globals.
+- Import visual JPEG, attribute TGA, optional parallax, and documented config.
+- Replace COLPICK marker lookup with a named palette/schema.
+- Produce structural comparison reports against original converter fixtures.
+- Load generated levels in both the original game and decomp.
 
-### T18.3 — Visual editor MVP  [P1]
+### M3.3 — Visual editor MVP  [P1]
 
-- Project new/open/save and `.lev` export
-- Visual and attribute layers with overlay controls
-- Terrain/placement palette plus selection, movement, property editing, deletion
-- Metadata, physics, water, Event, ambience, parallax, and GG properties
-- Pre-export validation for dimensions, formats, values, and overlapping markers
+- New/open/save project and export `.lev`.
+- Visual and attribute layers with overlay/opacity controls.
+- Terrain/placement palette replacing COLPICK.
+- Select, move, configure, and delete spawn points, turrets, gates, repairs,
+  mines, signs, water, and every understood record.
+- Edit metadata, physics, water, civilians, bombing, ambience, parallax, and GG.
+- Validate dimensions, image formats, values, missing assets, and overlapping
+  single-pixel placements before export.
+- Reuse game decoding/rendering rules for preview where practical.
 
-### T18.4 — Editor runtime acceptance  [P1]
+### M3 acceptance
 
-- Author and play a new normal level on Windows, Linux, and macOS
-- Rebuild sample projects into behaviorally equivalent levels
-- Preserve every understood value through project save/reopen/export
-- Never silently export a malformed or partially understood level
-
----
-
-## Dependency Graph
-
-```
-T1.1 (Entity) ─┬─> T3.2 (typed pools)
-               ├─> T9.1 (AI extraction)
-               └─> T13.2 (rename)
-
-T1.2 (Player) ─┬─> T3.2 (typed pools)
-               └─> T5.1 (config)
-
-T1.3 (Projectile) ──> T3.2
-T1.4 (Trooper) ─────> T3.2
-T1.5 (Particle) ────> T3.2
-
-T2.1 (Header split) ──> all subsequent themes (cleaner includes)
-
-T4.1 (Framebuffer) ─┬─> T4.2 (Viewport)
-                    └─> T4.3 (RenderBackend)
-
-T4.3 (RenderBackend) ──> T11.1 (SDL3)
-
-T5.1 (Config struct) ─┬─> T5.2 (JSON)
-                      └─> T14.1 (Sync fix)
-
-T8.1 (InputDevice) ──> T8.2 (Input mapping)
-T7.1 (AudioEngine) ──> T11.1 (SDL3)
-
-T5.2 (JSON) ──> T17.1 (catalog/language setting) ──> T17.2/T17.3
-
-T15.1 (LEV docs) ──> T18.1 (writer spec) ──> T18.2 (compiler) ──> T18.3 (editor)
-
-T16.1/T16.2 ──> T16.3/T16.4 ──> T16.5/T16.6 ──> T16.7 ──> T16.8
-```
-
-## Next Milestone Order
-
-| Milestone | Items |
-|--------|-------|
-| v0.5 acceptance | Cross-platform runtime testing, warnings clean, remaining safe subsystem names |
-| Settings | T5.2 typed JSON settings and one-time binary migration |
-| Localization | T17.1 catalogs, T17.2 glyph/layout work, T17.3 full extraction |
-| Level tools A | T18.1 complete writer spec, T18.2 shared compiler/library |
-| Level tools B | T18.3 editor MVP, T18.4 authored-level acceptance |
-| Netplay foundation A | T16.1 authoritative state, T16.2 command-frame input |
-| Netplay foundation B | T16.3 snapshots/checksums, T16.4 deterministic replay |
-| LAN session shell | T16.5 handshake, T16.6 host/join/ready/team UI |
-| First playable netcode | T16.7 authoritative LAN transport, T16.8 mixed-platform acceptance |
-| Later responsiveness | T16.9 prediction and rollback |
-| Opportunistic cleanup | T2.2, T11.2, T14.2, T14.3 only when behavior remains covered |
+- Author and play a new normal level on Windows, Linux, and macOS.
+- Rebuild sample source projects into behaviorally equivalent levels.
+- Project save/reopen/export preserves every understood value.
+- The compiler/editor never silently emits a malformed or partially understood
+  `.lev`.
 
 ---
 
-*Backlog generated from source inspection of decompiled TOU v1.0 codebase.*
+## M4 — Network Simulation Foundation  [P0]
+
+This milestone changes no visible multiplayer behavior. It proves a match can
+be driven and observed through stable, portable boundaries.
+
+### M4.1 — Authoritative match-state inventory
+
+- Inventory players, pools/order, RNG, terrain, fluids, timers, Events, rules,
+  level progression, callbacks, scoring, and every gameplay-affecting global.
+- Exclude renderer, audio channels, menus, SDL objects, local cameras, and text.
+- Give guest callback addresses stable serialized identities.
+
+### M4.2 — Command-frame input
+
+- Convert one player's physical input into a compact versioned command per tick.
+- Feed human, AI, replay, and future network commands through the same boundary.
+- Preserve original command application, update, and RNG order.
+
+### M4.3 — Snapshots and checksums
+
+- Serialize authoritative state without pointers or compiler padding.
+- Add versioned snapshot headers and deterministic per-tick checksums.
+- Prove uninterrupted and save/restore runs remain identical.
+
+### M4.4 — Deterministic replay harness
+
+- Record initial snapshot plus command frames.
+- Replay without live input and compare checksums at every tick.
+- Find the first divergence before adding transport.
+- Compare restore/replay behavior across x86, x64, and ARM64.
+
+Determinism is a diagnostic and recovery tool. LAN v1 uses an authoritative
+host, so cross-architecture peer lockstep is not required.
+
+---
+
+## M5 — Direct-IP LAN Multiplayer  [P0/P1]
+
+### Fixed v1 product scope
+
+- One player per computer; no split screen in network matches.
+- Listen-server host plus up to three clients: four humans total.
+- Direct `IP:port` join only.
+- Two available teams; every player chooses one before readying.
+- Host owns the level list and all gameplay/Event rules.
+- Each machine contributes its Player 1/local profile and ship. Team choice is
+  session-specific. The host validates the ship but does not replace it.
+- Host can start only when all connected players are ready.
+- No AI, discovery, public lobbies, accounts, matchmaking, dedicated server,
+  NAT traversal, relay, spectators, reconnect, mid-match join, or asset transfer.
+
+### M5.1 — Protocol and compatibility handshake  [P0]
+
+- Select and document the transport/reliability library before implementation.
+- Version every message; enforce sizes, bounds, sequences, ticks, and timeouts.
+- Exchange protocol/build version plus selected level, ship, and
+  gameplay-critical asset hashes.
+- Require matching local content; do not download mods or levels.
+- Reject mismatches, invalid profiles/ships/teams, AI-enabled sessions, full
+  sessions, and malformed packets with explicit reasons.
+
+### M5.2 — Host/join session UI  [P1]
+
+```text
+Main menu -> LAN Multiplayer -> Host / Join
+
+Host: choose rules/levels -> open session -> choose team -> ready -> Start
+Client: enter IP:port -> compatibility check -> send profile/ship
+        -> choose team -> ready
+```
+
+- Roster shows connection, team, ship, and ready state.
+- Only the host changes rules/levels or starts the match.
+- Port and recent direct address may be persisted locally; no server browser.
+
+### M5.3 — Authoritative match transport  [P0]
+
+- Clients send command frames, never trusted gameplay outcomes.
+- Host sends canonical roster/rules, initial state, authoritative updates,
+  terrain changes, results, next-level state, and periodic checksums.
+- Begin with conservative LAN input delay and snapshot correction.
+- Handle clean quit, refusal, timeout, host loss, client loss, and return to the
+  session screen between host-selected levels.
+
+### M5 acceptance
+
+- Windows, Linux, and macOS clients interoperate by direct IP.
+- Two-, three-, and four-player sessions complete multiple levels.
+- Every peer agrees on terrain, deaths, frags, winners, and level progression.
+- Invalid clients cannot change rules, start, enable AI, or choose a third team.
+- A 30-minute mixed-architecture LAN soak has no drift, leak, hang, or stale roster.
+
+---
+
+## Ongoing Technical Debt
+
+These items are real but must not delay the ordered product milestones unless
+they block one directly.
+
+### High-value investigations  [P1]
+
+- Recover tile/property-table semantics before introducing `TileType`,
+  `IsSolid`, `IsWalkable`, or `IsFluid` helpers. Existing guessed values are not
+  authoritative.
+- Complete AI source extraction only after replay/checksums can prove that code
+  movement preserved behavior.
+- Finish particle-system boundaries without creating one generic spawn helper
+  that destroys subtype-specific initialization or RNG ordering.
+- Continue semantic `DAT_`/`FUN_` renaming by understood subsystem, retaining
+  original addresses in comments.
+
+### Safe cleanup  [P2]
+
+- Introduce logical `GameAction` bindings above saved physical scan codes.
+- Centralize math tables and pure vector helpers in a non-conflicting game-math
+  module.
+- Abstract the `all3.gfx` sprite atlas after all access widths are verified.
+- Audit/remove truly unused globals and declarations with linker evidence.
+- Determine whether reversed intro splash order is intentional; fix or document.
+- Add focused parity harnesses only when a concrete regression needs internal
+  traces. Do not restore a permanent second executable.
+
+### Optional presentation work  [P3]
+
+- A GPU presentation/post-processing backend may improve scaling and effects,
+  but the verified RGB565 software renderer remains authoritative.
+
+---
+
+## Later Possibilities
+
+- LAN discovery and saved recent servers
+- Reconnect and mid-match join
+- Local prediction and bounded rollback
+- Internet play, relay/NAT traversal, or hosted lobbies
+- AI in network matches
+- Dedicated/headless server
+- More than one local player per network client
+- Additional translations and community translation tooling
+- Browser/WebAssembly port
+
+## Binary-Parity Workflow
+
+Authority order:
+
+1. original executable/runtime behavior;
+2. original assembly, debugger, and memory traces;
+3. Ghidra control flow and decompilation;
+4. reconstructed source and comments.
+
+For a discrepancy:
+
+1. reproduce the same controlled scenario in both versions;
+2. locate the first observable or state divergence;
+3. inspect the original routine's assembly;
+4. trace inputs, outputs, globals, offsets, RNG, timing, and update order;
+5. change the decomp from that evidence;
+6. rebuild and compare again;
+7. obtain hands-on runtime acceptance before calling it fixed.
+
+Optional entity tracing is available with `TOU_ENTITY_TRACE=1`; its untracked
+`entity-trace.csv` output is diagnostic only and never belongs in releases.
+
+Modern settings, localization, editor, display, and network UI may intentionally
+differ. Original gameplay behavior may not.

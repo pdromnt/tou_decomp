@@ -25,9 +25,9 @@ The code is still recognizably a decompilation: original addresses, raw memory
 offsets, and Ghidra-style names remain where changing them without stronger
 types would risk behavior. Cleanup should be incremental and parity-preserving.
 
-See [PLAN.md](PLAN.md) for the completed parity record,
-[CODEBASE.md](CODEBASE.md) for the source map, and [BACKLOG.md](BACKLOG.md) for
-future refactoring and platform work.
+See [CODEBASE.md](CODEBASE.md) for the source map and safe-refactoring guidance,
+and [BACKLOG.md](BACKLOG.md) for the parity contract, current roadmap, and
+remaining work.
 
 ## Running a Release
 
@@ -43,7 +43,7 @@ remap them after the first launch; Right Option and Right Command are practical
 choices for the primary action keys.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
-`Tunnels of Underworld - RE/Decompiled - v0.4` so it cannot be confused with
+`Tunnels of Underworld - RE/Decompiled - v0.5` so it cannot be confused with
 the original executable.
 
 ## Building

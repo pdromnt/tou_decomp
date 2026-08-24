@@ -114,7 +114,7 @@ Network play must begin below SDL and above the recovered simulation. The next
 foundation is a versioned authoritative-state model, per-tick player commands,
 portable snapshots/checksums, and a deterministic local replay harness. Only
 after replay continuity passes should a transport be connected. `BACKLOG.md`
-Theme 16 tracks that sequence.
+milestones M4 and M5 track that sequence.
 
 ## Runtime Data
 
