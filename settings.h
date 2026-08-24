@@ -119,5 +119,6 @@ void Settings_Apply(const UserSettings &settings);
 SettingsLoadResult Settings_LoadJson(void);
 bool Settings_SaveJson(void);
 const char *Settings_GetLanguage(void);
+bool Settings_SetLanguage(const char *language);
 
 #endif

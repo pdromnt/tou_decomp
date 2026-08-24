@@ -131,6 +131,7 @@ The executable expects these paths relative to its working directory:
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
 | `help/` | Original HTML help, restyled for the decomp release |
+| `lang/` | UTF-8 language catalogs; English is the per-key fallback |
 | `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
@@ -240,6 +241,19 @@ functions have been removed.
 The ten bytes at original addresses `0x483963..0x48396c` are per-level physics
 tuning, not part of the saved record. They now live in `LevelPhysicsTuning`;
 the old reconstruction wrote them past the end of the config allocation.
+
+## Localization and Fonts
+
+`localization.cpp` loads UTF-8 catalogs from `lang/`, overlays the selected
+language on authoritative English, and temporarily binds recovered numeric menu
+slots to readable catalog keys. New code should use `Text_Get()` directly.
+
+The renderer decodes UTF-8 into TOU's original byte-sized bitmap glyph table.
+The original four atlases are never rewritten: `tools/generate_latin_fonts.py`
+builds separate Latin supplements for Spanish and Brazilian Portuguese from
+the original letter shapes. Regenerate catalogs with
+`tools/generate_localization.py` and validate them with
+`tools/validate_localization.py`.
 
 ## Building and Cleaning
 

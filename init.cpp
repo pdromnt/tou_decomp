@@ -1235,6 +1235,13 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x14D] = (char *)"Mode";
     g_MenuStrings[0x14E] = (char *)"Windowed";
     g_MenuStrings[0x14F] = (char *)"Fullscreen";
+    g_MenuStrings[0x150] = (char *)"Language";
+    g_MenuStrings[0x151] = (char *)"English";
+    g_MenuStrings[0x152] = (char *)"Espa\xC3\xB1ol";
+    g_MenuStrings[0x153] = (char *)"Portugu\xC3\xAAs (Brasil)";
+    g_MenuStrings[0x154] = (char *)"Suomi";
+
+    Localization_BindLegacyMenuStrings(g_MenuStrings, 350);
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -2544,7 +2551,8 @@ int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
     if (str) {
         const char *sp = str;
         while (*sp) {
-            unsigned char c = (unsigned char)*sp++;
+            unsigned char c = '?';
+            sp = Text_NextGlyph(sp, &c);
             if (c == ' ') {
                 text_width += Font_Char_Table[font_idx * 256 + 32].width;
             } else {
@@ -2703,6 +2711,7 @@ int FUN_0042fdf0(int param_y)
  * persists for the immediate aftermath of the reset click, not across
  * unrelated navigations back to Options. */
 static char s_ResetDefaultsNotice = 0;
+static unsigned char s_LanguageIndex = 0;
 
 /* Strip trailing \r / \n / whitespace from a string in place. Helper
  * for the .lev / info.txt readers in Update_Level_Hover_Metadata. */
@@ -2881,15 +2890,12 @@ static void Build_Options_Menu_Page(void)
     FUN_00430200(0, 0x11c, 0xfe, 2, 0, 1, 0, 1, 0x1b);     /* "Network" → page 0x1B */
     FUN_00430200(0, 0x13e, 0xe, 2, 0, 1, 0, 1, 8);         /* "Keys" → page 8 */
     FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);      /* "Name" → page 0xC */
-    FUN_00430200(0, 0x182, 0x147, 2, 0, 1, 0, 1, 0xFD);    /* "Reset defaults" → case 0xFD action */
-    FUN_00430200(0, 0x1B6, 0xf, 2, 0, 1, 0, 1, 0);         /* "Back" → main menu (extra y-gap is the navigation separator) */
-
-    /* Transient reset-defaults notice (small yellow text, centered, not
-     * clickable). Style mirrors the copyright-line pattern at the bottom
-     * of the main menu page (font_idx 3 = tiny, alignment 2 = center). */
-    if (s_ResetDefaultsNotice) {
-        FUN_00430200(0, 0x1D0, 0x148, 1, 3, 0, 0, 2, 0xff);
-    }
+    FUN_00430200(0, 0x182, 0x150, 2, 2, 2, 0, 4, 0xff);    /* "Language" label */
+    FUN_00430200(0, 0x182, 0x151, 2, 2, 1, 0x36, 5, 0xff); /* current language */
+    FUN_0042fc90((intptr_t)&s_LanguageIndex);
+    FUN_00430200(0, 0x1A4, s_ResetDefaultsNotice ? 0x148 : 0x147,
+                 2, 0, 1, 0, 1, 0xFD);                     /* reset/confirmation */
+    FUN_00430200(0, 0x1C2, 0xf, 2, 0, 1, 0, 1, 0);         /* "Back" → main menu */
 
     g_FrameIndex = 1;
     DAT_004877c9 = 0;  /* ESC → main menu */
@@ -4358,6 +4364,21 @@ void FUN_00427df0(int param_1, char param_2)
         *data = val;
         if (val == 0xFF) { *data = 6; return; }
         if (val > 6) { *data = 0; return; }
+        break;
+    }
+
+    case 0x36: { /* Runtime language */
+        int index = (int)*data + (int)cVar9;
+        const int count = Localization_GetLanguageCount();
+        if (index < 0) index = count - 1;
+        if (index >= count) index = 0;
+        const char *code = Localization_GetLanguageCode(index);
+        if (Localization_SetLanguage(code)) {
+            *data = (unsigned char)index;
+            Settings_SetLanguage(code);
+            Settings_SaveJson();
+        }
+        DAT_004877b1 = 1;
         break;
     }
 
@@ -6411,6 +6432,8 @@ int System_Init_Check(void)
      * it so downstream init (FUN_0042d8b0, FUN_00422740) sees populated font
      * tables. Do not move Load_Fonts into later functions — menu page builds
      * call back into the font metrics during FUN_0042d8b0. */
+    Localization_Init(Settings_GetLanguage());
+    s_LanguageIndex = (unsigned char)Localization_GetLanguageIndex();
     Load_Fonts();
     FUN_0042d8b0();
 

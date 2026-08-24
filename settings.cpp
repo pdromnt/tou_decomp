@@ -556,3 +556,14 @@ const char *Settings_GetLanguage(void)
 {
     return g_Language.c_str();
 }
+
+bool Settings_SetLanguage(const char *language)
+{
+    if (!language) return false;
+    const std::string candidate(language);
+    if (candidate != "en" && candidate != "es" &&
+        candidate != "pt-BR" && candidate != "fi")
+        return false;
+    g_Language = candidate;
+    return true;
+}

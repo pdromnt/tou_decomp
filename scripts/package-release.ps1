@@ -40,6 +40,7 @@ $requiredDirectories = @(
     "data",
     "ggstuff",
     "help",
+    "lang",
     "levels",
     "music",
     "sfx",

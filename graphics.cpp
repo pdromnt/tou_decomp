@@ -748,8 +748,11 @@ static int Menu_Text_Width(const char *str, int font_idx)
     if (!str)
         return 0;
     int font_base = (font_idx & 0xFF) * 256;
-    while (*str)
-        width += Font_Char_Table[font_base + (unsigned char)*str++].width;
+    while (*str) {
+        unsigned char glyph = '?';
+        str = Text_NextGlyph(str, &glyph);
+        width += Font_Char_Table[font_base + glyph].width;
+    }
     return width;
 }
 
@@ -1064,6 +1067,13 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 break;
             }
 
+            case 0x36: {
+                str = Localization_GetLanguageName(Localization_GetLanguageIndex());
+                item->width = Menu_Text_Width(str, item->font_idx);
+                item->x = 540 - item->width;
+                break;
+            }
+
             /* Key binding: show key name from scan code */
             case 0x07: {
                 int scanCode = cfgPtr ? (int)*cfgPtr : 0;
@@ -1097,10 +1107,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 }
                 /* Center text at x=320 by calculating pixel width */
                 if (str) {
-                    int fontBase = (item->font_idx & 0xFF) * 256;
-                    int textW = 0;
-                    for (const char *p = str; *p; p++)
-                        textW += Font_Char_Table[fontBase + (unsigned char)*p].width;
+                    int textW = Menu_Text_Width(str, item->font_idx);
                     item->x = 320 - textW / 2;
                     if (item->x < 0) item->x = 0;
                 }
@@ -1741,8 +1748,10 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
     }
 
     int cur_x = 0;
-    for (int si = 0; si < slen; si++) {
-        unsigned char c = (unsigned char)str[si];
+    const char *cursor = str;
+    for (int si = 0; si < slen && *cursor; si++) {
+        unsigned char c = '?';
+        cursor = Text_NextGlyph(cursor, &c);
 
         if (c == ' ') {
             cur_x += Font_Char_Table[font_idx * 256 + 32].width;

@@ -92,6 +92,7 @@ set(TOU_SOURCES
     binary_compat.cpp
     entity_callbacks.cpp
     settings.cpp
+    localization.cpp
     stb_image.c
 )
 
@@ -147,8 +148,8 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_NAME "Tunnels of Underworld"
         MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou"
         MACOSX_BUNDLE_ICON_FILE "icon.icns"
-        MACOSX_BUNDLE_BUNDLE_VERSION "0.4"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.4"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.5"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.5"
     )
 endif()
 
@@ -157,7 +158,7 @@ install(TARGETS TOU
     BUNDLE DESTINATION .
 )
 set(TOU_RUNTIME_DIRECTORIES
-    data ggstuff help levels music sfx ships swap
+    data ggstuff help lang levels music sfx ships swap
 )
 if(APPLE)
     install(DIRECTORY ${TOU_RUNTIME_DIRECTORIES}

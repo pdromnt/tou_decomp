@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "locale": "pt-BR",
+  "name": "Português (Brasil)",
+  "strings": {
+    "menu.001.team_deathmatch": "Mata-mata em equipe",
+    "menu.002.levels": "Fases",
+    "menu.003.players": "Jogadores",
+    "menu.004.options": "Opções",
+    "menu.005.credits": "Créditos",
+    "menu.006.exit_game": "Sair do jogo",
+    "menu.008.options_menu": "Menu de opções",
+    "menu.009.audio": "Áudio",
+    "menu.010.details_visuals": "Detalhes e gráficos",
+    "menu.011.event": "Eventos",
+    "menu.012.main_rules": "Regras principais",
+    "menu.013.misc": "Diversos",
+    "menu.014.ban_weapons": "Banir armas",
+    "menu.015.back": "Voltar",
+    "menu.327.reset_defaults": "Restaurar padrões",
+    "menu.328.defaults_restored": "Padrões restaurados.",
+    "menu.333.mode": "Modo",
+    "menu.334.windowed": "Janela",
+    "menu.335.fullscreen": "Tela cheia",
+    "menu.336.language": "Idioma"
+  }
+}

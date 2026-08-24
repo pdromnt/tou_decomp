@@ -13,6 +13,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  localization:
+    name: Validate localization catalogs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Validate UTF-8 catalogs and English extraction
+        run: python3 tools/validate_localization.py
+
   windows-x86-parity:
     name: Windows x86 (legacy parity)
     runs-on: windows-latest
@@ -133,7 +142,7 @@ jobs:
         run: |
           test -f stage/TOU.app/Contents/Info.plist
           test -f stage/TOU.app/Contents/Resources/icon.icns
-          for directory in data ggstuff help levels music sfx ships swap; do
+          for directory in data ggstuff help lang levels music sfx ships swap; do
             test -d "stage/TOU.app/Contents/Resources/$directory"
           done
 

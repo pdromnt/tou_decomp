@@ -49,7 +49,7 @@ physics, effects, scoring, or original single-machine gameplay.
 | Windows x86 legacy parity | Build maintained; final release smoke test pending |
 | Windows ARM64 | Runtime acceptance pending |
 | Linux x64 | Runtime acceptance pending |
-| Linux ARM64 | Runtime acceptance pending |
+| Linux ARM64 | Accepted through hands-on Raspberry Pi CM4 gameplay |
 | macOS Intel | Runtime acceptance pending |
 
 Browser/WebAssembly remains last-of-last and is not part of the current plan.
@@ -67,7 +67,7 @@ Browser/WebAssembly remains last-of-last and is not part of the current plan.
 
 ---
 
-## M1 — Human-Readable Settings  [IMPLEMENTED / TESTING]
+## M1 — Human-Readable Settings  [ACCEPTED]
 
 Replace `options.cfg` with a versioned `settings.json` containing user-facing
 settings rather than a JSON dump of recovered memory.
@@ -100,7 +100,7 @@ settings rather than a JSON dump of recovered memory.
 
 ---
 
-## M2 — Internationalization  [P0]
+## M2 — Internationalization  [FOUNDATION IMPLEMENTED / TRANSLATION IN PROGRESS]
 
 Initial locales:
 
@@ -111,24 +111,24 @@ Initial locales:
 
 ### M2.1 — Catalog runtime
 
-- Store UTF-8 catalogs under `lang/<locale>.json` with semantic keys.
-- Add `Text_Get(key)` with per-key English fallback and debug diagnostics.
-- Store language in `settings.json`; allow immediate switching from Options.
+- [x] Store UTF-8 catalogs under `lang/<locale>.json` with semantic keys.
+- [x] Add `Text_Get(key)` with per-key English fallback and debug diagnostics.
+- [x] Store language in `settings.json`; allow immediate switching from Options.
 - Keep protocol values, logs, paths, player text, and level author metadata
   outside localization.
-- Validate JSON/UTF-8 and identical required key sets in CI.
+- [x] Validate JSON/UTF-8, English extraction, and overlay keys in CI.
 
 ### M2.2 — Font and layout coverage
 
-- Extend the bitmap-font path for required Latin glyphs, including Finnish
+- [x] Extend the bitmap-font path for required Latin glyphs, including Finnish
   `ä/ö/å`, Spanish accents/punctuation, and Portuguese diacritics.
-- Measure localized strings instead of assuming English widths.
+- [x] Measure localized strings instead of assuming English widths.
 - Define wrapping, alignment, truncation, and fallback-glyph behavior.
 - Check every menu at supported resolutions in windowed and fullscreen modes.
 
 ### M2.3 — String extraction and translations
 
-- Extract menus, HUD, results, awards, errors, controls, weapon/pickup names,
+- [ ] Extract menus, HUD, results, awards, errors, controls, weapon/pickup names,
   prompts, and gameplay messages.
 - Create and review complete `en`, `es`, `pt-BR`, and `fi` catalogs.
 

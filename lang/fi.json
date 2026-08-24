@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "locale": "fi",
+  "name": "Suomi",
+  "strings": {
+    "menu.001.team_deathmatch": "Joukkuekuolonottelu",
+    "menu.002.levels": "Kentät",
+    "menu.003.players": "Pelaajat",
+    "menu.004.options": "Asetukset",
+    "menu.005.credits": "Tekijät",
+    "menu.006.exit_game": "Lopeta peli",
+    "menu.008.options_menu": "Asetusvalikko",
+    "menu.009.audio": "Ääni",
+    "menu.010.details_visuals": "Yksityiskohdat ja grafiikka",
+    "menu.011.event": "Tapahtumat",
+    "menu.012.main_rules": "Pääsäännöt",
+    "menu.013.misc": "Muut",
+    "menu.014.ban_weapons": "Kiellä aseita",
+    "menu.015.back": "Takaisin",
+    "menu.327.reset_defaults": "Palauta oletukset",
+    "menu.328.defaults_restored": "Oletukset palautettu.",
+    "menu.333.mode": "Tila",
+    "menu.334.windowed": "Ikkuna",
+    "menu.335.fullscreen": "Koko näyttö",
+    "menu.336.language": "Kieli"
+  }
+}

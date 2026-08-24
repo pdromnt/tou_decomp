@@ -17,6 +17,7 @@
 #include "sound.h"
 #include "level.h"
 #include "gamestate.h"
+#include "localization.h"
 
 /* Use the original executable's embedded MSVC6 RNG instead of host CRT state. */
 #define rand  TOU_Rand
