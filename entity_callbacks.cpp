@@ -213,26 +213,37 @@ void collision_troopers(int entity_index)
     if (g_TrooperPool == NULL) return;
     uint8_t *projectile = entity_at(entity_index);
     const uint8_t owner = tou_binary::load_u8(projectile, 0x22);
-    const uint8_t team = owner >= 0x50u && owner <= 0x63u ? owner - 0x50u : 0xfbu;
+    const uint8_t projectile_team = owner >= 0x50u && owner < 0x64u
+        ? static_cast<uint8_t>(owner - 0x50u) : 0xfbu;
     const int32_t x = tou_binary::load_i32(projectile, 0x00);
     const int32_t y = tou_binary::load_i32(projectile, 0x08);
+    const int32_t damage = tou_binary::load_i32(projectile, 0x44);
     for (int i = 0; i < g_TrooperCount; ++i) {
         TrooperRecord *trooper = &g_TrooperPool[i];
-        const uint8_t velocity_y_low =
-            reinterpret_cast<const uint8_t *>(&trooper->velocity_y)[0];
-        if (trooper->movement_speed < 0 || velocity_y_low == owner) continue;
+        if (trooper->health_28 < 0 || trooper->team == projectile_team) continue;
         const int32_t tx = trooper->position_x;
         const int32_t ty = trooper->position_y;
         if (!(tx - 0x140000 < x && x < tx + 0x140000 &&
               ty - 0x1c0000 < y && y < ty + FIXED_SCALE)) continue;
         DAT_00481e8f = 3;
-        trooper->health_28 -= tou_binary::load_i32(projectile, 0x44);
-        /* The original intentionally writes a dword at +0x2c, spanning the
-         * byte flags and the first byte of aim_angle_30. Keep this packed view. */
-        tou_binary::store_i32(trooper, 0x2c, 1);
-        if (trooper->kind_25 == 1u && team != trooper->team &&
-            tou_binary::load_i32(projectile, 0x44) > 0x7d000) {
-            trooper->aim_angle_30 = tou_binary::load_i32(projectile, 0x18) < 0 ? -1 : 1;
+        trooper->health_28 = tou_binary::sub_wrap_i32(trooper->health_28, damage);
+        trooper->palette_2c = 1;
+        if (trooper->kind_25 == 1u && DAT_0048782c != NULL && DAT_00487928 != NULL &&
+            damage > 0x7d000) {
+            const int tx_tile = tou_binary::sar_i32(tx, 0x12);
+            const int ty_tile = tou_binary::sar_i32(ty, 0x12);
+            const uint8_t below = static_cast<uint8_t *>(DAT_0048782c)[
+                tx_tile + (ty_tile + 1) * DAT_00487a00];
+            if (tile_property(below, 1) == 0u) {
+                if (x < tx) {
+                    trooper->movement_mode_2d = 2;
+                    trooper->velocity_x = 0x1b800;
+                } else {
+                    trooper->movement_mode_2d = 1;
+                    trooper->velocity_x = -0x1b800;
+                }
+                trooper->velocity_y = -0x7d000;
+            }
         }
         return;
     }
