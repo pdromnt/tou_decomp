@@ -1619,17 +1619,17 @@ void FUN_0040d930(Framebuffer *framebuffer)
 /* ===== FUN_0040d360 - Edge tile/detail renderer (0040D360) ===== */
 /*
  * Renders edge/detail tiles with custom inline grayscale blitter.
- * Array: DAT_00481f2c, stride 0x20, count DAT_0048925c.
+ * Array: DAT_00481f2c, stride 0x20, count g_FireParticleCount.
  * Three blend modes based on entry[0x15].
  */
 void FUN_0040d360(Framebuffer *framebuffer)
 {
     uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
-    if (DAT_0048925c <= 0) return;
+    if (g_FireParticleCount <= 0) return;
 
     unsigned int entry_off = 0;
-    for (int i = 0; i < DAT_0048925c; i++) {
+    for (int i = 0; i < g_FireParticleCount; i++) {
         unsigned int saved_off = entry_off;
         int px = *(int *)(entry_off + (intptr_t)DAT_00481f2c) >> 0x12;
         if (DAT_004806dc < px + 0x14 && px - 0x14 < DAT_004806d0) {

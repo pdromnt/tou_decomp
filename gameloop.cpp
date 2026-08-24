@@ -269,7 +269,7 @@ static void Gameplay_Tick(void)
         FUN_00454340();                          /* 6-Emitters */
         FUN_0044b0b0();                          /* 7-EntityBehavior */
         FUN_00434310();                          /* 8-DebrisAnim */
-        FUN_004527e0();                          /* 9-Projectiles */
+        ParticleSystem_Update();                 /* 9-Animated particles */
 
         /* Inline: effect/particle rotation and timer decrement */
         {
@@ -285,13 +285,13 @@ static void Gameplay_Tick(void)
             }
         }
 
-        FUN_00454b00();                          /* 11-Turrets */
-        FUN_00458010();                          /* 12-TurretLOS */
-        FUN_00453cd0();                          /* 13-ParticlePhys */
-        FUN_00455d50();                          /* 14-BulletCollide */
-        FUN_004571f0();                          /* 15-Explosion */
+        TrooperSystem_Update();                  /* 11-Troopers/cars */
+        TurretSystem_UpdateTargeting();          /* 12-Turret LOS and firing */
+        FireParticleSystem_Update();             /* 13-Fire/smoke particles */
+        PickupSystem_Update();                   /* 14-Pickups */
+        ExplosionSystem_UpdateLegacy();          /* 15-Legacy explosions */
         FUN_00453a80();                          /* 16-ItemAI */
-        FUN_004573e0();                          /* 17-TrapDoor */
+        TrapDoorSystem_Update();                 /* 17-Trap doors */
 
         /* Conditional: turret sound */
         if (DAT_00483834 != 0) {
@@ -309,7 +309,7 @@ static void Gameplay_Tick(void)
                 return;
             }
         }
-        FUN_0045fc00();                          /* 21-FluidSpread */
+        FluidSystem_Update();                    /* 21-Fluid spread */
         FUN_0045e2c0();                          /* 22-Deaths */
 
         /* Inline: health clamping for specific game modes */
@@ -663,13 +663,13 @@ void Free_Game_Resources(void)
      * to the next level or persist in the menu (e.g. fluid bubbles). */
     g_EntityCount = 0;   /* emitter/complex particle count */
     g_ParticleCount = 0;   /* fire particle count */
-    DAT_00489258 = 0;   /* fluid source count */
+    g_FluidSourceCount = 0;   /* fluid source count */
     g_DebrisItemCount = 0;   /* bullet count */
     DAT_0048926c = 0;   /* item/pickup count */
     DAT_00489270 = 0;   /* trap/door count */
     DAT_00489274 = 0;   /* turret/static entity count */
     DAT_004892d8 = 0;   /* spawner/emitter def count */
     g_TrooperCount = 0;   /* trooper count */
-    DAT_00489254 = 0;   /* edge entity count */
+    g_MapEdgeCount = 0;   /* edge entity count */
     DAT_004892a8 = 0;   /* round timer */
 }

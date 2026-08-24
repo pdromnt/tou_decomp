@@ -17,7 +17,7 @@ int *g_EntityConfig = NULL;         /* 00489EBC */
 uint8_t *DAT_00481f48 = NULL;
 int g_EntityCount = 0;       /* was DAT_00489248 */
 int g_ParticleCount = 0;     /* was DAT_00489250 */
-int DAT_0048925c = 0;     /* Misc counter (intro) */
+int g_FireParticleCount = 0;     /* was DAT_0048925c; active fire/edge particles */
 uint32_t DAT_004877f0 = 0;   /* Frame delta time */
 
 /* Memory pool pointers */
@@ -109,8 +109,8 @@ void Init_Memory_Pools(void)
     ALLOC_POOL(DAT_00487ab0, 0x2800);
 
     ALLOC_POOL(DAT_00489e90, 70000);
-    ALLOC_POOL(DAT_00489e84, 80000);
-    ALLOC_POOL(DAT_00489e7c, 160000);
+    ALLOC_POOL(DAT_00489e84, MAP_EDGE_CAPACITY * 0x10);
+    ALLOC_POOL(DAT_00489e7c, FLUID_SOURCE_CAPACITY * 0x20);
     ALLOC_POOL(DAT_0048781c, 0x30000);
     const unsigned int entity_pool_bytes = sizeof(Entity) * ENTITY_STORAGE_CAPACITY;
     g_EntityPool = static_cast<Entity *>(Mem_Alloc(entity_pool_bytes));
@@ -123,7 +123,7 @@ void Init_Memory_Pools(void)
     const unsigned int particle_pool_bytes = sizeof(ParticleRecord) * PARTICLE_CAPACITY;
     g_ParticlePool = static_cast<ParticleRecord *>(Mem_Alloc(particle_pool_bytes));
     g_MemoryTracker += particle_pool_bytes;
-    ALLOC_POOL(DAT_00481f2c, 48000);
+    ALLOC_POOL(DAT_00481f2c, EDGE_RECORD_CAPACITY * 0x20);
     const unsigned int projectile_pool_bytes = sizeof(ProjectileRecord) * PROJECTILE_CAPACITY;
     g_ProjectilePool = static_cast<ProjectileRecord *>(Mem_Alloc(projectile_pool_bytes));
     g_MemoryTracker += projectile_pool_bytes;

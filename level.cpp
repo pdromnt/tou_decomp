@@ -52,7 +52,7 @@ char          DAT_004892e4 = 0;       /* random mirror flag */
 char          DAT_004892e5 = 0;       /* difficulty flag */
 char          DAT_00489d7c[256];      /* error string buffer */
 void         *DAT_00487aa4 = NULL;    /* large game state buffer */
-int           DAT_00489254 = 0;       /* edge count */
+int           g_MapEdgeCount = 0;       /* was DAT_00489254 */
 PlayerData    *DAT_00487810 = NULL;   /* player/ship runtime record storage */
 int           DAT_00489240 = 0;       /* player count */
 int           DAT_00489244 = 0;       /* active player count */

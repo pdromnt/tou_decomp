@@ -630,7 +630,7 @@ static unsigned int FUN_0044aa50(int *param_1)
     int iVar5 = 0;
     int iVar4 = 999999999;
     int local_4 = -1;
-    if (0 < DAT_00489254) {
+    if (0 < g_MapEdgeCount) {
         char *pcVar3 = (char *)((intptr_t)DAT_00489e84 + 8);
         do {
             if ((*pcVar3 == (char)param_1[0xb]) || (*pcVar3 == (char)-1)) {
@@ -646,7 +646,7 @@ static unsigned int FUN_0044aa50(int *param_1)
             }
             iVar5++;
             pcVar3 += 0x10;
-        } while (iVar5 < DAT_00489254);
+        } while (iVar5 < g_MapEdgeCount);
         if (iVar1 != -1) {
             iVar1 *= 0x10;
             param_1[0x114] = *(int *)(iVar1 + (intptr_t)DAT_00489e84);
@@ -656,7 +656,7 @@ static unsigned int FUN_0044aa50(int *param_1)
             return (((unsigned int)iVar1) & 0xffffff00) | 1;
         }
     }
-    return (unsigned int)DAT_00489254 & 0xffffff00;
+    return (unsigned int)g_MapEdgeCount & 0xffffff00;
 }
 
 /* ===== FUN_0044abb0 — Find Nearest Enemy and Set Target (0044ABB0) ===== */
@@ -1692,10 +1692,10 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
     return iVar10;
 }
 
-/* ===== FUN_0044ad30 — Main AI Behavior Orchestrator (0044AD30) ===== */
+/* ===== AI_UpdateShip — original FUN_0044ad30 (0044AD30) ===== */
 /* Top-level AI function called for each bot entity. Orchestrates:
  * target acquisition, pathfinding, movement, and weapon firing. */
-static void FUN_0044ad30(int *param_1, int param_2)
+static void AI_UpdateShip(int *param_1, int param_2)
 {
     int *piVar2 = param_1;
 
@@ -1852,8 +1852,8 @@ static void FUN_0044bd50(int *ent)
     }
 }
 
-/* ===== FUN_0044be20 — Enemy Proximity Scanner (0044BE20) ===== */
-static void FUN_0044be20(int *ent)
+/* ===== AI_ScanNearbyThreats — original FUN_0044be20 (0044BE20) ===== */
+static void AI_ScanNearbyThreats(int *ent)
 {
     int bVar2 = 0, bVar3 = 0;
     unsigned int i = 0;
@@ -2267,13 +2267,13 @@ static void FUN_0044e5a0_impl(int *ent)
     int r = rand();
     int divisor = 3;  /* original reads from FPU; approximate */
 
-    if ((r % divisor != 0) || (DAT_0048925c >= 0x5dc)) return;
+    if ((r % divisor != 0) || (g_FireParticleCount >= EDGE_RECORD_CAPACITY)) return;
 
     unsigned int angle = rand() & 0x1ff;
 
-    if (DAT_0048925c >= 0x5dc) return;
+    if (g_FireParticleCount >= EDGE_RECORD_CAPACITY) return;
 
-    intptr_t base = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
+    intptr_t base = g_FireParticleCount * 0x20 + (intptr_t)DAT_00481f2c;
 
     *(int *)(base + 0x00) = (rand() % 10 - 5) * FIXED_SCALE + ent[0];
     *(int *)(base + 0x04) = (rand() % 10 - 5) * FIXED_SCALE + ent[1];
@@ -2289,11 +2289,11 @@ static void FUN_0044e5a0_impl(int *ent)
     *(unsigned char *)(base + 0x14) = 0xff;
     *(unsigned char *)(base + 0x15) = 0;
 
-    DAT_0048925c++;
+    g_FireParticleCount++;
 
     unsigned int flag = rand() & 3;
     if (flag == 0) {
-        *(unsigned char *)(DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c - 0xb) = 1;
+        *(unsigned char *)(g_FireParticleCount * 0x20 + (intptr_t)DAT_00481f2c - 0xb) = 1;
     }
 }
 
@@ -3926,10 +3926,11 @@ LAB_00401856:
                     g_EntityPool[g_EntityCount - 1].timer_5c = (char)uVar6 + '\x04';
                     g_EntityPool[g_EntityCount - 1].scratch_65 = 0x27;
                     g_EntityPool[g_EntityCount - 1].scratch_64 = 0x21;
-                    {
-                        intptr_t pp2 = g_EntityCount * 0x80 + (intptr_t)g_EntityPool;
-                        *(unsigned int *)(pp2 - 0x34) = *(unsigned short *)((intptr_t)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp2 - 0x1b) * 2) + 30000;
-                    }
+                    Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
+                    last_spawn->palette_value =
+                        static_cast<unsigned int>(
+                            static_cast<unsigned short *>(DAT_00487aa8)[last_spawn->scratch_65]) +
+                        30000;
                     if (0x1fff < (int)angleParam) break;
                 }
                 /* Spawn water edge records if in water */
@@ -3938,8 +3939,8 @@ LAB_00401856:
                 {
                     iVar11 = 0;
                     do {
-                        if (0x5db < DAT_0048925c) break;
-                        intptr_t e = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
+                        if (g_FireParticleCount >= EDGE_RECORD_CAPACITY) break;
+                        intptr_t e = g_FireParticleCount * 0x20 + (intptr_t)DAT_00481f2c;
                         *(int *)(e) = player->position_x;
                         *(int *)(e + 4) = player->position_y;
                         uVar6 = rand(); uVar6 &= 0x800000ff;
@@ -3953,7 +3954,7 @@ LAB_00401856:
                         *(unsigned short *)(e + 0x12) = 0;
                         *(unsigned char *)(e + 0x14) = 0xff;
                         *(unsigned char *)(e + 0x15) = 0;
-                        DAT_0048925c++;
+                        g_FireParticleCount++;
                         iVar11++;
                     } while (iVar11 < 0x20);
                 }
@@ -3987,9 +3988,10 @@ LAB_00401856:
         uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
         if (((*(unsigned char *)((player->position_x >> 0x16) +
              (intptr_t)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0) &&
-            ((float)_DAT_004753e0_d < DAT_0048385c) && (DAT_0048925c < 0x5dc))
+            ((float)_DAT_004753e0_d < DAT_0048385c) &&
+            (g_FireParticleCount < EDGE_RECORD_CAPACITY))
         {
-            intptr_t e = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
+            intptr_t e = g_FireParticleCount * 0x20 + (intptr_t)DAT_00481f2c;
             *(int *)(e) = (sincos[uVar7] * 600 >> 6) + player->position_x;
             *(int *)(e + 4) = (sincos[0x200 + uVar7] * 600 >> 6) + player->position_y;
             *(int *)(e + 8) = (sincos[uVar8] * 0x32 >> 6) + (player->velocity_x >> 1);
@@ -3999,7 +4001,7 @@ LAB_00401856:
             *(char *)(e + 0x10) = (char)uVar6;
             *(unsigned char *)(e + 0x11) = 0; *(unsigned short *)(e + 0x12) = 0;
             *(unsigned char *)(e + 0x14) = 0xff; *(unsigned char *)(e + 0x15) = 0;
-            DAT_0048925c++;
+            g_FireParticleCount++;
         }
 
         if (g_ParticleCount < PARTICLE_CAPACITY) {
@@ -4205,8 +4207,8 @@ LAB_00401856:
     /* ===== CASE 0x20: Edge record spawn ===== */
     case 0x20:
     {
-        if (DAT_0048925c < 0x5dc) {
-            intptr_t e = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
+        if (g_FireParticleCount < EDGE_RECORD_CAPACITY) {
+            intptr_t e = g_FireParticleCount * 0x20 + (intptr_t)DAT_00481f2c;
             *(int *)(e) = player->position_x;
             *(int *)(e + 4) = player->position_y;
             *(int *)(e + 8) = 0; *(int *)(e + 0xc) = 0;
@@ -4216,8 +4218,8 @@ LAB_00401856:
             *(char *)(e + 0x11) = (char)uVar8;
             *(unsigned short *)(e + 0x12) = 0;
             *(unsigned char *)(e + 0x14) = uVar9; *(unsigned char *)(e + 0x15) = 0;
-            DAT_0048925c++;
-            *(unsigned char *)(DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c - 0xb) = 2;
+            g_FireParticleCount++;
+            *(unsigned char *)(g_FireParticleCount * 0x20 + (intptr_t)DAT_00481f2c - 0xb) = 2;
 
         }
         break;
@@ -5673,7 +5675,7 @@ void FUN_0044b0b0(void)
             player->ai_level = (cfg_diff > 0) ? (unsigned char)(cfg_diff + 1) : 1;
         }
         if (player->ai_level != 0) {
-            FUN_0044ad30((int *)ent, i);
+            AI_UpdateShip((int *)ent, i);
         }
 
         /* ---- DEAD entity handling ---- */
@@ -5701,7 +5703,7 @@ void FUN_0044b0b0(void)
 
             /* Detect nearby threats */
             if (ent[0x36] == 0 && ent[0x35] == 0) {
-                FUN_0044be20((int *)ent);
+                AI_ScanNearbyThreats((int *)ent);
             }
 
             /* Random heading jitter during lock-on (ent[0x34] > 0) */

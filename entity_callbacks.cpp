@@ -604,8 +604,8 @@ uint8_t *spawn_config_entity(uint8_t type, uint8_t subtype, int32_t x, int32_t y
 void spawn_edge_particle(int32_t x, int32_t y, int32_t vx, int32_t vy,
                          uint8_t sprite, uint8_t owner)
 {
-    if (DAT_0048925c >= 0x5dc || DAT_00481f2c == NULL) return;
-    uint8_t *particle = static_cast<uint8_t *>(DAT_00481f2c) + DAT_0048925c++ * 0x20;
+    if (g_FireParticleCount >= EDGE_RECORD_CAPACITY || DAT_00481f2c == NULL) return;
+    uint8_t *particle = static_cast<uint8_t *>(DAT_00481f2c) + g_FireParticleCount++ * 0x20;
     tou_binary::store_i32(particle, 0x00, x);
     tou_binary::store_i32(particle, 0x04, y);
     tou_binary::store_i32(particle, 0x08, vx);
@@ -1043,10 +1043,10 @@ void callback_roman_candle_00446130(int entity_index)
                 int dir = (game_rand() & 0x1ff) + 0x300;
                 int vx = (game_rand() % 30 + 15) * sc[dir] >> 6;
                 int vy = (game_rand() % 30 + 15) * sc[dir + 0x200] >> 6;
-                int before = DAT_0048925c;
+                int before = g_FireParticleCount;
                 spawn_edge_particle(x, smoke_y, vx, vy,
                     static_cast<uint8_t>(game_rand() & 1), 0xff);
-                if (DAT_0048925c > before)
+                if (g_FireParticleCount > before)
                     tou_binary::store_u8(static_cast<uint8_t *>(DAT_00481f2c) + before * 0x20, 0x11, 4);
             }
         }
@@ -1147,11 +1147,11 @@ void callback_etna_00447a70(int entity_index)
             int32_t *sc = static_cast<int32_t *>(DAT_00487ab0);
             int vx = (game_rand() % 30 + 15) * sc[dir] >> 6;
             int vy = (game_rand() % 30 + 15) * sc[dir + 0x200] >> 6;
-            int before = DAT_0048925c;
+            int before = g_FireParticleCount;
             spawn_edge_particle(tou_binary::load_i32(entity, 0),
                                 tou_binary::load_i32(entity, 8) - 0x1c0000,
                                 vx, vy, static_cast<uint8_t>(game_rand() & 1), 0xff);
-            if (DAT_0048925c > before)
+            if (g_FireParticleCount > before)
                 tou_binary::store_u8(static_cast<uint8_t *>(DAT_00481f2c) + before * 0x20, 0x11, 2);
         }
         tou_binary::store_i32(entity, 0x3c, tou_binary::load_i32(entity, 0x3c) + 1);

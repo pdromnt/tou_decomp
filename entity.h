@@ -15,7 +15,7 @@ extern unsigned char         DAT_00487ac0[6000]; /* 60 records × 100 bytes */
 /* ===== Intro particle system (memory.cpp) ===== */
 extern int                   g_EntityCount;      /* was DAT_00489248; active entities */
 extern int                   g_ParticleCount;    /* was DAT_00489250; active particles */
-extern int                   DAT_0048925c;      /* Misc counter / edge record count */
+extern int                   g_FireParticleCount;     /* was DAT_0048925c */
 extern uint32_t              DAT_004877f0;      /* Frame delta time */
 
 /* ===== Entity Rendering Counts (effects.cpp) ===== */
@@ -84,7 +84,7 @@ extern int                   DAT_004892dc;       /* visibility cursor X */
 extern int                   DAT_004892e0;       /* visibility cursor Y */
 extern int                   DAT_0048929c;       /* misc counter */
 extern int                   DAT_004892c0;       /* misc counter */
-extern int                   DAT_00489258;       /* misc counter */
+extern int                   g_FluidSourceCount;      /* was DAT_00489258 */
 extern char                  DAT_004892a4;       /* team victory flag */
 extern char                  DAT_004892a5;       /* activation flag */
 extern int                   DAT_00487834[12];   /* entity tracking counters */
@@ -165,19 +165,19 @@ void FUN_004355d0(unsigned int param_1);         /* building collision for proje
 void FUN_00451e70(int particle_idx, int damage); /* building damage */
 void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner); /* explosion knockback */
 void FUN_00434310(void);        /* weapon/terrain */
-void FUN_004527e0(void);        /* sound update */
-void FUN_00454b00(void);        /* animation */
-void FUN_00458010(void);        /* AI targeting */
-void FUN_00453cd0(void);        /* map logic */
-void FUN_00455d50(void);        /* bullet update */
-void FUN_004571f0(void);        /* explosion/damage */
+void ParticleSystem_Update(void);                /* original FUN_004527e0 */
+void TrooperSystem_Update(void);                 /* original FUN_00454b00 */
+void TurretSystem_UpdateTargeting(void);         /* original FUN_00458010 */
+void FireParticleSystem_Update(void);            /* original FUN_00453cd0 */
+void PickupSystem_Update(void);                  /* original FUN_00455d50 */
+void ExplosionSystem_UpdateLegacy(void);         /* original FUN_004571f0 */
 void FUN_00453a80(void);        /* item/pickup */
-void FUN_004573e0(void);        /* particle system */
+void TrapDoorSystem_Update(void);                /* original FUN_004573e0 */
 void FUN_004133d0(char param);  /* turret sound */
 void FUN_004533d0(void);        /* conditional half-rate */
 void FUN_00453230(void);        /* round-end check */
 void FUN_0045ddb2(void);        /* round-end cleanup */
-void FUN_0045fc00(void);        /* score/stat update */
+void FluidSystem_Update(void);                   /* original FUN_0045fc00 */
 void FUN_0045e2c0(void);        /* network sync */
 void FUN_004104c0(int index);   /* turret init per-entry */
 void FUN_00460cf0(char a, unsigned char b); /* tile replacement helper */

@@ -696,7 +696,7 @@ void FUN_0041d2e0(void)
 
     int row = 7;
     int count = 0;
-    DAT_00489254 = 0;
+    g_MapEdgeCount = 0;
     int idx = (7 << shift) + 7;
 
     if (7 < (int)DAT_004879f4 - 7) {
@@ -718,13 +718,13 @@ void FUN_0041d2e0(void)
                                      || (*(char *)(etable + (unsigned int)t_right * 0x20) == 1)
                                      || (*(char *)(etable + (unsigned int)t_below * 0x20) == 1);
 
-                        if (has_solid && count < 5000) {
+                        if (has_solid && count < MAP_EDGE_CAPACITY) {
                             *(int *)((intptr_t)DAT_00489e84 + count * 0x10) = col << 18;
-                            *(int *)((intptr_t)DAT_00489e84 + DAT_00489254 * 0x10 + 4) = row << 18;
-                            *(char *)((intptr_t)DAT_00489e84 + DAT_00489254 * 0x10 + 8) =
+                            *(int *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 4) = row << 18;
+                            *(char *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 8) =
                                 *(char *)(etable + (unsigned int)*(unsigned char *)(tilemap + idx) * 0x20 + 0x19);
-                            count = DAT_00489254 + 1;
-                            DAT_00489254 = count;
+                            count = g_MapEdgeCount + 1;
+                            g_MapEdgeCount = count;
                         }
                     }
                     idx++;
@@ -974,7 +974,7 @@ int           DAT_004892dc = 0;       /* misc counter */
 int           DAT_004892e0 = 0;       /* misc counter */
 int           DAT_0048929c = 0;       /* misc counter */
 int           DAT_004892c0 = 0;       /* misc counter */
-int           DAT_00489258 = 0;       /* misc counter */
+int           g_FluidSourceCount = 0;       /* was DAT_00489258 */
 char          DAT_004892a4 = 0;       /* team victory flag */
 char          DAT_004892a5 = 0;       /* activation flag */
 void         *DAT_00489e80 = NULL;    /* wall segment array */
@@ -1950,11 +1950,11 @@ void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
             }
 
             /* Record paint location in array */
-            if (DAT_00489254 < 5000) {
-                *(int *)((intptr_t)DAT_00489e84 + DAT_00489254 * 0x10) = param_1;
-                *(int *)((intptr_t)DAT_00489e84 + DAT_00489254 * 0x10 + 4) = param_2;
-                *(unsigned char *)((intptr_t)DAT_00489e84 + DAT_00489254 * 0x10 + 8) = (unsigned char)param_3;
-                DAT_00489254 = DAT_00489254 + 1;
+            if (g_MapEdgeCount < MAP_EDGE_CAPACITY) {
+                *(int *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10) = param_1;
+                *(int *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 4) = param_2;
+                *(unsigned char *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 8) = (unsigned char)param_3;
+                g_MapEdgeCount = g_MapEdgeCount + 1;
             }
         }
     }
@@ -2411,8 +2411,8 @@ void FUN_0041bfe0(void)
     DAT_00489270 = 0;
     g_TrooperCount = 0;
     g_EntityCount = 0;
-    DAT_00489258 = 0;
-    DAT_0048925c = 0;
+    g_FluidSourceCount = 0;
+    g_FireParticleCount = 0;
     DAT_0048926c = 0;
     g_ParticleCount = 0;
     DAT_0048929c = 0;
