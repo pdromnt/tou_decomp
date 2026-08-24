@@ -254,14 +254,6 @@ static int DDraw_CreateGameSurface(void)
     return s_DirectDraw->CreateSurface(&desc, &s_GameSurface, NULL) == DD_OK;
 }
 
-static int DDraw_ApplyDisplaySettings(int width, int height, int fullscreen)
-{
-    (void)width;
-    (void)height;
-    (void)fullscreen;
-    return 0; /* Keep the verified Win32 display-settings path. */
-}
-
 static void DDraw_ReleaseGameSurface(void)
 {
     if (s_GameSurface != NULL) {
@@ -277,7 +269,6 @@ const RenderBackend g_DirectDrawRenderBackend = {
     DDraw_Shutdown,
     DDraw_Restore,
     DDraw_Present,
-    DDraw_ApplyDisplaySettings,
     DDraw_CreateGameSurface,
     DDraw_ReleaseGameSurface
 };

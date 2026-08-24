@@ -12,7 +12,9 @@ changing its representation**. A build passing does not prove gameplay parity.
 ## Runtime Shape
 
 `WinMain` initializes platform services and game data, then enters the main game
-loop. The broad flow is:
+loop. SDL3 owns the primary window and event queue; a native `HWND` bridge
+remains temporarily for DirectInput, DirectDraw fallback, and legacy dialogs.
+The broad flow is:
 
 ```text
 winmain.cpp
@@ -35,18 +37,17 @@ that typed buffer and a single active `Viewport` record. Lifted renderer bodies
 may still create local integer views where preserving original 32-bit pointer
 arithmetic matters; those views no longer leak through subsystem call sites.
 
-`RenderBackend` owns platform presentation. The current DirectDraw backend is
-fully contained in `gfx_ddraw.cpp`: device initialization, surface lifecycle,
-surface restoration, RGB565-to-ARGB conversion, aspect-ratio scaling, and the
-final window blit. Simulation and software rendering code do not access
-DirectDraw objects. A future SDL backend can consume the same `Framebuffer`
-without changing gameplay rendering.
+`RenderBackend` owns platform presentation. `gfx_sdl.cpp` uploads the unchanged
+framebuffer to a streaming SDL texture and is the default. `gfx_ddraw.cpp`
+retains the legacy implementation as an A/B fallback. Simulation and software
+rendering code do not access either backend's objects.
 
 ## Source Map
 
 | Module | Responsibility |
 | --- | --- |
-| `winmain.cpp` | Windows entry point, focus handling, window/input ownership |
+| `winmain.cpp` | Transitional Windows entry point and application lifecycle |
+| `platform_sdl.cpp` | SDL window, display modes, event queue, native-handle bridge |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
 | `config.h` | Byte-exact typed `options.cfg` layout and recovered field aliases |
@@ -59,6 +60,7 @@ without changing gameplay rendering.
 | `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
 | `render_backend.cpp` | Active presentation-backend interface and dispatch |
 | `gfx_ddraw.cpp` | DirectDraw device, surfaces, RGB conversion, scaling, presentation |
+| `gfx_sdl.cpp` | SDL streaming texture and framebuffer presentation |
 | `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
 | `assets.cpp` | Font and image asset loading |
 | `level.cpp` | `.lev` loading and swap/height-map data |

@@ -23,8 +23,9 @@ are delivered together in one larger pull request.
 - The software renderer now uses typed framebuffer and viewport boundaries,
   and DirectDraw is isolated behind `RenderBackend`. The first SDL3 backend is
   active: it presents the unchanged RGB565 framebuffer through an SDL texture,
-  with DirectDraw retained as a command-line A/B fallback. SDL-owned windowing,
-  events, input, and audio are the next platform milestones.
+  with DirectDraw retained as a command-line A/B fallback. SDL now also owns
+  the window, display modes, and event queue. DirectInput, the Win32 entry point,
+  native dialogs/focus bridges, and FMOD remain transitional dependencies.
 - `GameConfig` is the canonical byte-exact config record, and the main and
   gameplay state machines use named enum values.
 
@@ -506,14 +507,20 @@ Water/lava propagation in `FUN_0045fc00`.
 
 ## Theme 11: Platform Migration
 
-### T11.1 — SDL2 renderer backend  [P2]
-Once T4.3 (RenderBackend) is done, implement SDL2 backend.
+### T11.1 — SDL3 platform and renderer backend  [IN PROGRESS / P0]
+SDL3 is pinned and statically linked by the primary CMake build. It owns the
+window, display-mode transitions, event queue, and software-frame presentation.
+DirectDraw remains selectable with `--directdraw` for parity comparisons.
 
 **AC:**
-- `gfx_sdl2.cpp` implements `RenderBackend`
-- Compiles on Windows + Linux
-- Software buffer blit replaced with SDL_Texture upload
-- Windowed mode works without ddraw proxy DLL
+- [x] `gfx_sdl.cpp` implements `RenderBackend`
+- [x] Software framebuffer uploaded through an SDL streaming texture
+- [x] SDL owns windowed/fullscreen transitions and event pumping
+- [x] Windowed mode works without a DirectDraw presentation path
+- [ ] DirectInput replaced by SDL input
+- [ ] Win32 entry point and native window bridge removed
+- [ ] FMOD replaced by a portable audio backend
+- [ ] Native Windows, Linux, and macOS builds pass
 
 ---
 
@@ -541,14 +548,17 @@ pull request, with optional manual dispatch.
 
 ---
 
-### T12.1 — CMake build system  [P2]
-Replace Makefile with cross-platform CMake.
+### T12.1 — CMake build system  [IN PROGRESS / P0]
+The primary Windows build uses CMake and pinned static SDL3. The legacy Makefile
+is retained temporarily for a DirectDraw-only comparison build.
 
 **AC:**
-- `CMakeLists.txt` builds all targets
-- Finds SDL2 / FMOD / DirectX as appropriate
-- Configures for 32-bit and 64-bit
-- CI-friendly (no hardcoded paths)
+- [x] `CMakeLists.txt` builds the SDL-enabled Windows target
+- [x] SDL3 dependency is pinned and fetched reproducibly
+- [x] CI and release workflows use CMake
+- [ ] Platform source/link dependencies are selected per operating system
+- [ ] 64-bit host-safe build
+- [ ] Native Linux and macOS CI
 
 ---
 

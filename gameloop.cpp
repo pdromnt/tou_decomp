@@ -134,7 +134,7 @@ void Game_State_Manager(void)
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
                 MessageBoxA(hWnd_Main, STR_ERR_RENDER_MODE, STR_TITLE, MB_ICONERROR);
-                DestroyWindow(hWnd_Main);
+                Request_App_Quit();
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
             }
@@ -221,7 +221,7 @@ void Game_State_Manager(void)
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
                 MessageBoxA(hWnd_Main, STR_ERR_RENDER_MODE, STR_TITLE, MB_ICONERROR);
-                DestroyWindow(hWnd_Main);
+                Request_App_Quit();
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
             }
@@ -257,8 +257,7 @@ void Game_State_Manager(void)
         return;
 
     case GAME_STATE_SHUTDOWN:
-        Cleanup_Sound();
-        PostMessageA(hWnd_Main, WM_DESTROY, 0, 0);
+        Request_App_Quit();
         GameState_Transition(GAME_STATE_STOPPED);
         return;
 

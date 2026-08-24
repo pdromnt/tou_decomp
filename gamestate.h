@@ -50,6 +50,7 @@ typedef enum GameplaySubState : unsigned char {
 
 extern GameState             g_GameState;       /* 004877A0 - main state machine */
 void GameState_Transition(GameState next_state);
+void Request_App_Quit(void);
 
 /* ===== Sub-State Globals (gameloop.cpp) ===== */
 extern char                  g_MouseButtons;    /* 004877BE */

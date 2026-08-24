@@ -3,6 +3,9 @@
  * Address: Render_Frame=0045D800
  */
 #include "tou.h"
+#ifdef TOU_HAS_SDL
+#include "platform.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,11 +78,13 @@ void Apply_Display_Settings(void)
 
     int requested_width = g_ModeWidths[mode];
     int requested_height = g_ModeHeights[mode];
-    if (RenderBackend_ApplyDisplaySettings(requested_width, requested_height,
-                                           g_WindowMode != 0)) {
+#ifdef TOU_HAS_SDL
+    if (Platform_ApplyDisplaySettings(requested_width, requested_height,
+                                      g_WindowMode != 0)) {
         InvalidateRect(hWnd_Main, NULL, TRUE);
         return;
     }
+#endif
 
     MONITORINFO monitor = {};
     monitor.cbSize = sizeof(monitor);

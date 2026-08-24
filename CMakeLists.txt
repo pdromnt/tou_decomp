@@ -27,6 +27,7 @@ set(TOU_SOURCES
     memory.cpp
     init.cpp
     graphics.cpp
+    platform_sdl.cpp
     render_backend.cpp
     gfx_ddraw.cpp
     gfx_sdl.cpp
