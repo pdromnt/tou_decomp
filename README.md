@@ -32,12 +32,12 @@ future refactoring and platform work.
 ## Running a Release
 
 Extract the complete release archive and run `TOU.exe` from that directory. Do
-not move the executable away from `fmod.dll`, `options.cfg`, or the asset
-directories.
+not move the executable away from `fmod.dll` or the asset directories. The game
+creates `options.cfg` beside the executable after first run.
 
-The decomp intentionally runs windowed and identifies itself as
-`Tunnels of Underworld - RE/Decompiled` so it cannot be confused with the original
-fullscreen executable.
+The decomp supports windowed and fullscreen modes and identifies itself as
+`Tunnels of Underworld - RE/Decompiled - v0.3` so it cannot be confused with
+the original executable.
 
 ## Building on Windows
 

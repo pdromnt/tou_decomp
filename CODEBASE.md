@@ -114,9 +114,14 @@ identity keys, not host function pointers.
 ### Entity record layout
 
 `types.h` documents the verified `Entity` record and asserts its 0x80-byte size
-and stable offsets. `Init_Memory_Pools` allocates `0x51400` bytes at original
-address `0x004203b5`, which is 2600 physical records; the gameplay loop's 2500
-limit is an active-entity cap, not the allocation size.
+and stable offsets. `Init_Memory_Pools` allocates 2600 physical records; the
+gameplay loop's 2500 limit is an active-entity cap, not the allocation size.
+
+The same file defines the independently recovered 0x40-byte projectile and
+trooper records plus the two distinct 0x20-byte animated-particle and
+debris/item records. Their storage globals and allocation sizes are typed, and
+named capacity constants replace scattered pool-limit literals. Neutral field
+names are intentional where different subtypes reuse the same offset.
 
 ### Player record layout
 
@@ -128,9 +133,10 @@ global a `PlayerData *` would change the meaning of those expressions while
 still compiling successfully.
 
 Typed player code currently covers position snapshots, keyboard input, timer
-updates, steering, thrust/exhaust, core AI/life-state dispatch, and positional
-sound. Opaque fields and raw call sites must be migrated only after their access
-width and meaning are verified from the original binary.
+updates, steering, thrust/exhaust, core AI/life-state dispatch, positional
+sound, and the complete gameplay weapon/effect dispatcher. Opaque fields and
+raw call sites must be migrated only after their access width and meaning are
+verified from the original binary.
 
 Several record fields are deliberately named `auxiliary` or `scratch`. Original
 callbacks reuse the same byte or integer as cooldown, color, lifetime, fuse,
@@ -139,27 +145,18 @@ fields a universal semantic name until every relevant callback has been traced.
 In particular, offsets `+0x54` and `+0x5C` are byte-sized fields, while `+0x34`
 stores a 32-bit guest callback address rather than a native C++ function pointer.
 
-The runtime pool is now typed as `Entity *DAT_004892e8`. Raw accesses are being
-replaced in small batches so each changed routine can be compared independently
-against its previous generated x86 and, where relevant, the original executable.
-The first batch covers callback record lookup, pre-tick flag reset, and the
-menu/intro entity renderer. The second batch covers the common dispatcher
-prologue in `FUN_00434310`: previous-position capture, animation bookkeeping,
-callback identity, and the turret-projectile gravity guard. Its large legacy
-behavior fallback and weapon-heavy paths remain raw. The third batch converts
-the complete main gameplay entity renderer in `FUN_0040bb60`. Offset `+0x24`
-still intentionally has both byte and 16-bit views there: the byte selects a
-sprite palette, while the full word selects a pixel-dot shape. The fourth batch
-converts the enemy-proximity, owned-projectile detonation, Moving Sucker, and
-force-field entity-array scanners in `entity.cpp`. The fifth batch converts all
-three primary-fire projectile paths plus bomb/mine and energy-explosion entity
-construction. Constructors still write only the fields written by the recovered
-code; do not zero the whole record as a cleanup. Later batches now cover the
-complete legacy body of `FUN_00434310`, its weapon-effect constructors and
-post-count writes, `FUN_00401000` gameplay firing, pickup rewards, ship exhaust,
-ambient and level spawns, and the remaining direct pool scanners. Deliberate
-packed-width views inside an already selected record remain raw where a typed
-field would change the original access width.
+The entity pool is typed as `Entity *DAT_004892e8`. Completed migrations cover
+the main renderer and update body, callback dispatch, gameplay firing, pickup
+rewards, ship exhaust, ambient/level spawns, and the major scanners and
+constructors. Constructors still write only fields written by recovered code;
+do not zero a whole record as cleanup. Deliberate packed-width views inside an
+already selected record remain raw where a typed field would change the
+original access width.
+
+The projectile, trooper, particle, and debris/item foundation currently covers
+allocation, construction, rendering, primary particle collision/expiry, and
+pickup animation/expiry. Their subtype-specific AI and effect spawn sites are
+the next routine-by-routine migration boundary.
 
 ## Config Ownership
 
