@@ -594,7 +594,7 @@ void FUN_0040a9e0(Framebuffer *framebuffer, int param_3)
  * param_3 = player index (0-3) */
 void FUN_004095e0(Framebuffer *framebuffer, int param_3)
 {
-    uintptr_t param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     unsigned int step = (unsigned int)(unsigned char)DAT_0048372e;
     PlayerData *player = Player_Get(DAT_004877f8[param_3]);

@@ -19,6 +19,8 @@ $packageName = "Tunnels-of-Underworld-$safeVersion-$safePlatform"
 $packageRoot = [System.IO.Path]::GetFullPath((Join-Path $distRoot $packageName))
 $isWindowsPackage = $safePlatform.StartsWith(
     "windows-", [System.StringComparison]::OrdinalIgnoreCase)
+$isMacPackage = $safePlatform.StartsWith(
+    "macos-", [System.StringComparison]::OrdinalIgnoreCase)
 $archiveExtension = if ($isWindowsPackage) { ".zip" } else { ".tar.gz" }
 $archivePath = [System.IO.Path]::GetFullPath(
     (Join-Path $distRoot "$packageName$archiveExtension"))
@@ -65,9 +67,18 @@ if (Test-Path -LiteralPath $archivePath) {
 }
 New-Item -ItemType Directory -Path $packageRoot | Out-Null
 
-Copy-Item -LiteralPath $resolvedExecutable -Destination (Join-Path $packageRoot $executableName)
-foreach ($relativePath in $requiredDirectories) {
-    Copy-Item -LiteralPath (Join-Path $repositoryRoot $relativePath) -Destination $packageRoot -Recurse
+if ($isMacPackage) {
+    $bundleRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $resolvedExecutable))
+    if (-not $bundleRoot.EndsWith(".app", [System.StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $bundleRoot -PathType Container)) {
+        throw "macOS executable is not inside an app bundle: $resolvedExecutable"
+    }
+    Copy-Item -LiteralPath $bundleRoot -Destination $packageRoot -Recurse
+} else {
+    Copy-Item -LiteralPath $resolvedExecutable -Destination (Join-Path $packageRoot $executableName)
+    foreach ($relativePath in $requiredDirectories) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot $relativePath) -Destination $packageRoot -Recurse
+    }
 }
 
 if ($isWindowsPackage) {

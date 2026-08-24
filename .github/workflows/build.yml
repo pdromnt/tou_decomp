@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   windows-x86-parity:
-    name: Windows x86 parity
+    name: Windows x86 (legacy parity)
     runs-on: windows-latest
 
     steps:
@@ -115,12 +115,16 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          file stage/TOU
+          executable=stage/TOU
           case "${{ matrix.platform }}" in
-            linux-x64) file stage/TOU | grep -q 'x86-64' ;;
-            linux-arm64) file stage/TOU | grep -Eq 'ARM aarch64|ARM64' ;;
-            macos-x64) file stage/TOU | grep -q 'x86_64' ;;
-            macos-arm64) file stage/TOU | grep -q 'arm64' ;;
+            macos-*) executable=stage/TOU.app/Contents/MacOS/TOU ;;
+          esac
+          file "$executable"
+          case "${{ matrix.platform }}" in
+            linux-x64) file "$executable" | grep -q 'x86-64' ;;
+            linux-arm64) file "$executable" | grep -Eq 'ARM aarch64|ARM64' ;;
+            macos-x64) file "$executable" | grep -q 'x86_64' ;;
+            macos-arm64) file "$executable" | grep -q 'arm64' ;;
           esac
 
       - name: Verify Windows executable architecture

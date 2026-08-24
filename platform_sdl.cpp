@@ -2,8 +2,37 @@
 #include "tou.h"
 #include "platform.h"
 #include <SDL3/SDL.h>
+#include <string>
+
+#if defined(_WIN32)
+#include <direct.h>
+#define TOU_CHDIR _chdir
+#else
+#include <unistd.h>
+#define TOU_CHDIR chdir
+#endif
 
 static SDL_Window *s_PlatformWindow = NULL;
+
+int Platform_SetRuntimeDirectory(void)
+{
+    const char *base_path = SDL_GetBasePath();
+    if (base_path == NULL)
+        return 0;
+
+    std::string runtime_path(base_path);
+#if defined(__APPLE__)
+    /* SDL returns Contents/MacOS for an app bundle. Assets and the deliberately
+     * app-local options.cfg live together in Contents/Resources. */
+    runtime_path += "../Resources";
+#endif
+    if (TOU_CHDIR(runtime_path.c_str()) != 0) {
+        LOG("[PLATFORM] Unable to use runtime directory: %s\n",
+            runtime_path.c_str());
+        return 0;
+    }
+    return 1;
+}
 
 int Platform_CreateWindow(const char *title, int width, int height)
 {

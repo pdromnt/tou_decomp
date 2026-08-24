@@ -364,7 +364,9 @@ typedef struct {
     int linked_item;    /* 0x28 */
     unsigned char render_mode; /* 0x2C */
     unsigned char _pad3[3];
-    int extra_data;     /* 0x30 */
-} MenuItem; /* 0x34 = 52 bytes, max 350 items in g_GameViewData */
+    /* Original x86 field was a 32-bit pointer/value at 0x30. This runtime
+     * descriptor is host-owned, so it must retain full pointers on x64/ARM64. */
+    intptr_t extra_data;
+} MenuItem; /* host-sized descriptor, max 350 items in g_GameViewData */
 
 #endif /* TOU_TYPES_H */

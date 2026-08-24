@@ -35,10 +35,10 @@ The required order is:
 Preserving the original game's observable behavior remains mandatory across
 all targets. A successful cross-compile alone is not runtime acceptance.
 
-Implementation of the native portability foundation is complete. The automated
-matrix builds, stages, architecture-checks, and uploads Windows x86/x64/ARM64, Linux
-x64/ARM64, and macOS Intel/Apple Silicon artifacts. Windows x64 has local build
-acceptance; gameplay acceptance on the native hosts remains the final gate.
+The native portability implementation compiles across the full matrix, but
+runtime acceptance remains open. Initial testing exposed host-pointer
+truncation on Windows x64 and Apple Silicon plus missing macOS app-bundle
+packaging; these must pass on real hosts before the milestone is complete.
 
 ## Current Foundation Status (v0.4)
 

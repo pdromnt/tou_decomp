@@ -203,7 +203,7 @@ int  FUN_00430200(int x, int y, int string_idx, int color_style, int font_idx,
 void FUN_0042ff80(int x, int y, int sprite_idx, unsigned char clickable,
                   unsigned char render_mode, unsigned char alignment,
                   unsigned char nav_target);
-void FUN_0042fc90(int value);
+void FUN_0042fc90(intptr_t value);
 void FUN_0042fcf0(void);
 int  FUN_0042fdf0(int y);
 void FUN_0042fcb0(void);

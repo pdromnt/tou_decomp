@@ -89,6 +89,8 @@ if(WIN32)
     enable_language(RC)
     list(APPEND TOU_SOURCES tou.rc)
     add_executable(TOU WIN32 ${TOU_SOURCES})
+elseif(APPLE)
+    add_executable(TOU MACOSX_BUNDLE ${TOU_SOURCES})
 else()
     add_executable(TOU ${TOU_SOURCES})
 endif()
@@ -117,18 +119,28 @@ set_target_properties(TOU PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+if(APPLE)
+    set_target_properties(TOU PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME "Tunnels of Underworld"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.4"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.4"
+    )
+endif()
+
 install(TARGETS TOU
     RUNTIME DESTINATION .
     BUNDLE DESTINATION .
 )
-install(DIRECTORY
-    data
-    ggstuff
-    help
-    levels
-    music
-    sfx
-    ships
-    swap
-    DESTINATION .
+set(TOU_RUNTIME_DIRECTORIES
+    data ggstuff help levels music sfx ships swap
 )
+if(APPLE)
+    install(DIRECTORY ${TOU_RUNTIME_DIRECTORIES}
+        DESTINATION "TOU.app/Contents/Resources"
+    )
+else()
+    install(DIRECTORY ${TOU_RUNTIME_DIRECTORIES}
+        DESTINATION .
+    )
+endif()

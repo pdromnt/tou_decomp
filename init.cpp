@@ -38,7 +38,7 @@ GameConfig g_GameConfig = {};       /* original config range 00481F58-0048385F *
 
 /* Helper for recovered menu descriptors that still store original absolute
  * config addresses. All named config fields alias this same byte-exact record. */
-#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
+#define CFG_ADDR(a) ((intptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
 
 /* Tournament/network mode globals */
 int DAT_0048764b = 0;
@@ -728,8 +728,9 @@ void FUN_0042d8b0(void)
     g_FrameTimer    = Platform_GetTicks(); /* _DAT_004877f4 */
     DAT_004877ec    = 0;
 
-    /* --- Allocate game view data (0x4718 = 18200 bytes) --- */
-    g_GameViewData = Mem_Alloc(0x4718);
+    /* The original used 350 x86 descriptors of 52 bytes. extra_data now has
+     * host pointer width, so allocate using the native descriptor size. */
+    g_GameViewData = Mem_Alloc(350u * sizeof(MenuItem));
 
     /* --- Key sort/priority table (DAT_00481d48..00481d76) --- */
     /* Maps an ordering index to saved scan codes. */
@@ -745,7 +746,7 @@ void FUN_0042d8b0(void)
     DAT_00481d84 = 0x2F;  /* DIK_V */
 
     /* --- Key name table (256 entries, one per saved scan code) --- */
-    g_KeyNameTable = (char **)Mem_Alloc(0x400);  /* 256 * 4 = 1024 bytes */
+    g_KeyNameTable = (char **)Mem_Alloc(256u * sizeof(*g_KeyNameTable));
 
     /* Default: all keys show "???" */
     for (i = 0; i < 256; i++)
@@ -867,14 +868,14 @@ void FUN_0042d8b0(void)
     g_KeyNameTable[0xDD] = (char *)"Application key";
 
     /* --- Menu string table (350 entries) --- */
-    g_MenuStrings = (char **)Mem_Alloc(0x578);  /* 350 * 4 = 1400 bytes */
+    g_MenuStrings = (char **)Mem_Alloc(350u * sizeof(*g_MenuStrings));
 
     /* Allocate 50-byte dynamic buffers for player/stats entries */
     pvVar = Mem_Alloc(0x32);
     g_MenuStrings[0x65] = (char *)pvVar;  /* entry 101 - dynamic text */
-    for (i = 0x1C4; i < 0x230; i += 4) {
+    for (i = 0x71; i <= 0x8B; ++i) {
         pvVar = Mem_Alloc(0x32);
-        *(void **)((char *)g_MenuStrings + i) = pvVar;  /* entries [113]-[139] */
+        g_MenuStrings[i] = (char *)pvVar;
     }
 
     /* Main menu */
@@ -2625,7 +2626,7 @@ void FUN_0042ff80(int param_x, int param_y, int sprite_idx,
 }
 
 /* ===== FUN_0042fc90 - Set extra data on last item (0042FC90) ===== */
-void FUN_0042fc90(int value)
+void FUN_0042fc90(intptr_t value)
 {
     if (DAT_004877a8 > 0) {
         MenuItem *items = (MenuItem *)g_GameViewData;
@@ -2990,7 +2991,7 @@ void FUN_0042a470(void)
         FUN_0042fcf0();
         FUN_00430200(0, iVar7, 0x14D, 2, 2, 2, 0, 4, 0xff);        /* "Mode" label */
         iVar3 = FUN_00430200(0, iVar7, 0x14E, 2, 2, 1, 0x35, 5, 0xff);
-        FUN_0042fc90((int)(uintptr_t)&g_WindowMode);
+        FUN_0042fc90((intptr_t)&g_WindowMode);
         FUN_0042fcf0();
         iVar7 = iVar7 + iVar3;
         FUN_00430200(0, iVar7, 0x40, 2, 2, 2, 0, 4, 0xff);        /* "Detail" label */
@@ -4597,7 +4598,7 @@ void FUN_00426650(void)
                 /* Type 8 = level cycling item, font 1, color 2, clickable, render mode 1 */
                 FUN_00430200(0, yPos, 0, 2, 1, 1, 8, 1, 0xff);
                 /* Link to indirection table entry (address of the int slot) */
-                FUN_0042fc90((int)(uintptr_t)&levelOrder[scrollOff + i]);
+                FUN_0042fc90((intptr_t)&levelOrder[scrollOff + i]);
 
                 /* Set x-position and width on the just-created item */
                 if (g_GameViewData && DAT_004877a8 > 0) {
@@ -4669,7 +4670,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].height = 0x23;    /* label height */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 + 0xA0)); /* color: 0x466+i */
+            FUN_0042fc90((intptr_t)(puVar22 + 0xA0)); /* color: 0x466+i */
 
             /* Column 3: Team number (render_mode 0x1C, cycle 0-2) */
             FUN_00430200(0xBC, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);      /* label */
@@ -4680,7 +4681,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].width = 0x35;     /* label width */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)puVar22);          /* team: 0x3C6+i */
+            FUN_0042fc90((intptr_t)puVar22);          /* team: 0x3C6+i */
 
             /* Column 4: Ship type (render_mode 0x1D, cycle 0-8) */
             FUN_00430200(0x100, yPos - 6, 0xE6, 2, 0, 2, 0, 0, 0xff); /* label (font 0) */
@@ -4692,7 +4693,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].height = 0x23;    /* label height */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 + 0x50)); /* ship: 0x416+i */
+            FUN_0042fc90((intptr_t)(puVar22 + 0x50)); /* ship: 0x416+i */
 
             /* Column 5: Visible (render_mode 0x1E, toggle 0/1) */
             FUN_00430200(0x140, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);     /* label */
@@ -4703,7 +4704,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].width = 0x35;     /* label width */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 - 0x50)); /* visible: 0x376+i */
+            FUN_0042fc90((intptr_t)(puVar22 - 0x50)); /* visible: 0x376+i */
 
             /* Column 6: Computer (render_mode 0x1F, cycle 0-4) */
             FUN_00430200(0x1A2, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);    /* label */
@@ -4715,7 +4716,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
                 ditems[DAT_004877a8 - 1].flag1 = (unsigned char)pidx; /* player index */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 - 0xA0)); /* CPU: 0x326+i */
+            FUN_0042fc90((intptr_t)(puVar22 - 0xA0)); /* CPU: 0x326+i */
 
             puVar22++;
             yPos += 0x1E;  /* 30px row height */
@@ -4856,7 +4857,7 @@ void FUN_00426650(void)
                             ditems[DAT_004877a8 - 1].color_style = k;
                         }
                     }
-                    FUN_0042fc90((int)(uintptr_t)actionMapBase);
+                    FUN_0042fc90((intptr_t)actionMapBase);
 
                     col++;
                     if (col > 0x10) { /* 17 columns per row */

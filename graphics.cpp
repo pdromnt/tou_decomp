@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
+#define CFG_ADDR(a) ((intptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
 
 /* ===== Globals defined in this module ===== */
 int                 DAT_00489238    = 640;   /* Screen/viewport width */

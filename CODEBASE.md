@@ -98,7 +98,7 @@ The executable expects these paths relative to its working directory:
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
 | `help/` | Original HTML help, restyled for the decomp release |
-| `options.cfg` | User configuration generated beside the executable on first run |
+| `options.cfg` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local
@@ -228,7 +228,8 @@ publishing remains exclusive to the manually dispatched release workflow,
 which creates one archive per platform and architecture.
 
 Windows release packages are ZIP files. Linux and macOS packages are `.tar.gz`
-archives so the executable permission survives extraction.
+archives so executable permissions survive extraction. macOS is packaged as a
+native `TOU.app` bundle with all runtime assets under `Contents/Resources`.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it

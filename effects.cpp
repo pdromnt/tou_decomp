@@ -1065,7 +1065,7 @@ void FUN_0040dce0(Framebuffer *framebuffer)
  */
 void FUN_0040bb60(Framebuffer *framebuffer)
 {
-    uintptr_t param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     if (g_EntityCount <= 0) return;
 

@@ -31,10 +31,11 @@ future refactoring and platform work.
 
 ## Running a Release
 
-Download the archive matching your operating system and architecture, extract
-it completely, and run `TOU.exe` on Windows or `TOU` on Linux/macOS. Do not move
-the executable away from its asset directories. The game creates `options.cfg`
-beside the executable after first run.
+Download the archive matching your operating system and architecture and
+extract it completely. Run `TOU.exe` on Windows, `TOU` on Linux, or
+`TOU.app` on macOS. Do not move the executable or app away from its packaged
+assets. The game creates `options.cfg` beside the assets; on macOS it lives in
+`TOU.app/Contents/Resources`.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
 `Tunnels of Underworld - RE/Decompiled - v0.4` so it cannot be confused with
@@ -56,10 +57,11 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 8
 ```
 
-The output is `TOU.exe` on Windows or `TOU` elsewhere. Both SDL libraries are
-fetched at pinned releases and statically linked. A 32-bit MinGW build remains
-the closest host to the original executable; x64 and ARM64 are also supported.
-Windows packages do not require SDL DLLs or the Visual C++ redistributable.
+The output is `TOU.exe` on Windows, `TOU` on Linux, or `TOU.app` on macOS.
+Both SDL libraries are fetched at pinned releases and statically linked. A
+32-bit MinGW build remains the closest host to the original executable; x64
+and ARM64 are also supported. Windows packages do not require SDL DLLs or the
+Visual C++ redistributable.
 
 The separate `Build` GitHub Actions workflow builds Windows x86, Windows and
 Linux x64/ARM64, and macOS Intel/Apple Silicon for every push and pull request.

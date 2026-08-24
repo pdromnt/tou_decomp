@@ -118,11 +118,11 @@ jobs:
           - name: macOS Intel
             runner: macos-15-intel
             platform: macos-x64
-            executable: stage/TOU
+            executable: stage/TOU.app/Contents/MacOS/TOU
           - name: macOS Apple Silicon
             runner: macos-15
             platform: macos-arm64
-            executable: stage/TOU
+            executable: stage/TOU.app/Contents/MacOS/TOU
 
     runs-on: ${{ matrix.runner }}
 
@@ -184,12 +184,13 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          file stage/TOU
+          executable="${{ matrix.executable }}"
+          file "$executable"
           case "${{ matrix.platform }}" in
-            linux-x64) file stage/TOU | grep -q 'x86-64' ;;
-            linux-arm64) file stage/TOU | grep -Eq 'ARM aarch64|ARM64' ;;
-            macos-x64) file stage/TOU | grep -q 'x86_64' ;;
-            macos-arm64) file stage/TOU | grep -q 'arm64' ;;
+            linux-x64) file "$executable" | grep -q 'x86-64' ;;
+            linux-arm64) file "$executable" | grep -Eq 'ARM aarch64|ARM64' ;;
+            macos-x64) file "$executable" | grep -q 'x86_64' ;;
+            macos-arm64) file "$executable" | grep -q 'arm64' ;;
           esac
 
       - name: Package runtime

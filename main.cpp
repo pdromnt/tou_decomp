@@ -84,6 +84,11 @@ int main(int argc, char **argv)
         g_LogEnabled = 1;
 
     SDL_SetAppMetadata("Tunnels of Underworld", "0.4", "fi.iobox.tou");
+    if (!Platform_SetRuntimeDirectory()) {
+        Platform_ShowError("Unable to locate the game data directory.");
+        SDL_Quit();
+        return 1;
+    }
     Early_Init_Vars();
 
     if (!Platform_CreateWindow(STR_TITLE, 640, 480)) {
