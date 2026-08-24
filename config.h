@@ -55,7 +55,7 @@ typedef struct GameConfigLayout {
     int8_t trooper_difficulty;               /* 0x17df */
     int8_t game_mode;                        /* 0x17e0 */
     int8_t game_mode_preset;                 /* 0x17e1 */
-    uint8_t initial_lives;                   /* 0x17e2; short view overlaps next byte */
+    uint8_t initial_lives;                   /* 0x17e2 */
     int8_t shared_lives;                     /* 0x17e3 */
     int8_t team_rules;                       /* 0x17e4 */
     int8_t friendly_fire;                    /* 0x17e5 */
@@ -67,7 +67,7 @@ typedef struct GameConfigLayout {
     int8_t radar;                            /* 0x17eb */
     int8_t respawn_delay;                    /* 0x17ec */
     int8_t detonation_mode;                  /* 0x17ed */
-    uint8_t tick_rate;                       /* 0x17ee; short view overlaps next byte */
+    uint8_t tick_rate;                       /* 0x17ee */
     int8_t weapon_auto_release;              /* 0x17ef */
     union { int32_t stat_scaling; uint8_t stat_scaling_bytes[4]; }; /* 0x17f0 */
     union { int32_t speed_scaling; uint8_t speed_scaling_bytes[4]; }; /* 0x17f4 */
@@ -151,7 +151,7 @@ extern GameConfig g_GameConfig;
 #define DAT_00483737 (g_GameConfig.values.trooper_difficulty)
 #define DAT_00483738 (g_GameConfig.values.game_mode)
 #define DAT_00483739 (g_GameConfig.values.game_mode_preset)
-#define DAT_0048373a (*reinterpret_cast<int16_t *>(&g_GameConfig.values.initial_lives))
+#define DAT_0048373a (g_GameConfig.values.initial_lives)
 #define DAT_0048373b (g_GameConfig.values.shared_lives)
 #define DAT_0048373c (g_GameConfig.values.team_rules)
 #define DAT_0048373d (g_GameConfig.values.friendly_fire)
@@ -163,7 +163,7 @@ extern GameConfig g_GameConfig;
 #define DAT_00483743 (g_GameConfig.values.radar)
 #define DAT_00483744 (g_GameConfig.values.respawn_delay)
 #define DAT_00483745 (g_GameConfig.values.detonation_mode)
-#define DAT_00483746 (*reinterpret_cast<int16_t *>(&g_GameConfig.values.tick_rate))
+#define DAT_00483746 (g_GameConfig.values.tick_rate)
 #define DAT_00483747 (g_GameConfig.values.weapon_auto_release)
 #define DAT_00483748 (g_GameConfig.values.stat_scaling)
 #define DAT_0048374c (g_GameConfig.values.speed_scaling)
