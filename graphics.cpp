@@ -344,7 +344,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
      * Zero pixels (0x0000) in the level background represent empty/sky areas.
      *
      * Two modes (matching original FUN_00407720 viewport blit):
-     *   DAT_00483960 != 0 → FUN_0040c0a0 path: per-level sky from .SWP file
+     *   DAT_00483960 != 0 → FUN_0040c0a0 path: per-level sky from .swp file
      *     composites sky image behind transparent tile pixels
      *   DAT_00483960 == 0 → direct blit, sky comes from tiled sprite fill above */
     if (DAT_00483960 != 0 && DAT_00489ea0 != NULL) {

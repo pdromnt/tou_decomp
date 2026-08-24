@@ -1664,9 +1664,9 @@ int FUN_004252d0(void)
     unsigned char buf[0x300];  /* 768 bytes = 256 RGB triplets */
 
     /* --- Load pal.col → DAT_00487aa8 (particle/effect palette) --- */
-    FILE *f = fopen("data/Pal.col", "rb");
+    FILE *f = fopen("data/pal.col", "rb");
     if (!f) {
-        LOG("[LOAD] ERROR: Could not open data/Pal.col\n");
+        LOG("[LOAD] ERROR: Could not open data/pal.col\n");
         return 0;
     }
     if (fread(buf, 1, 0x300, f) != 0x300) {
@@ -1690,9 +1690,9 @@ int FUN_004252d0(void)
         }
     }
     /* --- Load shipal.col → DAT_00481f4c (ship palette) --- */
-    f = fopen("data/SHIPAL.COL", "rb");
+    f = fopen("data/shipal.col", "rb");
     if (!f) {
-        LOG("[LOAD] ERROR: Could not open data/SHIPAL.COL\n");
+        LOG("[LOAD] ERROR: Could not open data/shipal.col\n");
         return 0;
     }
     if (fread(buf, 1, 0x300, f) != 0x300) {
@@ -1757,7 +1757,7 @@ int FUN_00422740(void)
     /* File contains big-endian 16-bit values: 26 starting letter CDF entries,
      * then 26x26 transition matrix CDF entries. */
     {
-        FILE *f = fopen("data/NAMES.DAT", "rb");
+        FILE *f = fopen("data/names.dat", "rb");
         if (f) {
             unsigned char buf[2];
             for (int i = 0; i < 26; i++) {

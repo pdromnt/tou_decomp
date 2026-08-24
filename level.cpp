@@ -66,7 +66,7 @@ static const char LEV_MAGIC[] = "TOU level file v1.4";
 #define LEV_MAGIC_LEN 19
 
 /* ===== Load_SWP_Sky (based on FUN_004213f0 partial) ===== */
-/* Loads a pre-computed sky image from swap/<name>.SWP.
+/* Loads a pre-computed sky image from swap/<name>.swp.
  * Format: 4-byte width, 4-byte height, then width*height*2 RGB565 pixels.
  * The original generates these on first load and caches them. */
 int Load_SWP_Sky(const char *level_name)
@@ -75,7 +75,7 @@ int Load_SWP_Sky(const char *level_name)
     FILE *f;
     int w, h;
 
-    snprintf(path, sizeof(path), "swap/%s.SWP", level_name);
+    snprintf(path, sizeof(path), "swap/%s.swp", level_name);
     f = fopen(path, "rb");
     if (!f) {
         return 0;

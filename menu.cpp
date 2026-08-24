@@ -170,7 +170,7 @@ int Load_Level_Resources(void)
         return 0;
     }
 
-    /* Load per-level sky image (.SWP) if sky rendering is enabled.
+    /* Load per-level sky image (.swp) if sky rendering is enabled.
      * The level config blob sets DAT_00483960=1 for levels with sky. */
     if (DAT_00483960 == '\x01') {
         Load_SWP_Sky(levelName);

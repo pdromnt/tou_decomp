@@ -81,7 +81,7 @@ run_length  = (byte0 & 3) + byte1 * 4
 33 or greater terminates the stream. Runs fill rows left-to-right inside the
 seven-pixel border. Runtime border cells are then forced to solid tile `5`.
 
-## Related `.SWP` cache
+## Related `.swp` cache
 
-`swap/<level>.SWP` stores a little-endian 32-bit width and height followed by
+`swap/<level>.swp` stores a little-endian 32-bit width and height followed by
 `width * height` 16-bit X1R5G5B5 pixels. The loader converts them to RGB565.

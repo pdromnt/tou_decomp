@@ -56,6 +56,17 @@ foreach ($relativePath in $requiredDirectories) {
     if (-not (Test-Path -LiteralPath $sourcePath)) {
         throw "Required release input is missing: $relativePath"
     }
+
+    # Linux filesystems are case-sensitive. Runtime code uses normalized
+    # lowercase asset paths, so reject packages that would work only on Windows.
+    $nonPortablePaths = @(Get-ChildItem -LiteralPath $sourcePath -Recurse -Force |
+        Where-Object { $_.Name -cne $_.Name.ToLowerInvariant() })
+    if ($nonPortablePaths.Count -ne 0) {
+        $badPaths = ($nonPortablePaths | ForEach-Object {
+            $_.FullName.Substring($repositoryRoot.Length + 1)
+        }) -join ", "
+        throw "Runtime asset paths must be lowercase: $badPaths"
+    }
 }
 
 New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
