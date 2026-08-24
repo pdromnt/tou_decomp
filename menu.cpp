@@ -218,9 +218,9 @@ gg_level_ready:
     }
 
     /* Clear extended entity state (matches original loop) */
-    if (DAT_004892e8) {
-        for (int i = 0; i < 2600; i++) {
-            DAT_004892e8[i].callback_address = 0;
+    if (g_EntityPool) {
+        for (int i = 0; i < ENTITY_STORAGE_CAPACITY; i++) {
+            g_EntityPool[i].callback_address = 0;
         }
     }
 
@@ -2166,13 +2166,13 @@ void FUN_00407080(int x, int y, unsigned char index, unsigned char type)
 
 
 /* ===== FUN_00407140 - Add Debris (00407140) ===== */
-/* Adds a debris entity to DAT_00487830 (stride 0x20, max 100). */
+/* Adds a debris entity to g_DebrisItemPool (stride 0x20, max 100). */
 void FUN_00407140(int x, int y, unsigned char type)
 {
     int iVar1;
 
-    if (DAT_00489268 < DEBRIS_ITEM_CAPACITY) {
-        DebrisItemRecord *debris = &DAT_00487830[DAT_00489268];
+    if (g_DebrisItemCount < DEBRIS_ITEM_CAPACITY) {
+        DebrisItemRecord *debris = &g_DebrisItemPool[g_DebrisItemCount];
         debris->position_x = x;
         debris->position_y = y;
         debris->type = type;
@@ -2186,17 +2186,17 @@ void FUN_00407140(int x, int y, unsigned char type)
         debris->sprite_frame =
             (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 4 + (int)g_EntityConfig) - 1));
 
-        DAT_00489268 = DAT_00489268 + 1;
+        g_DebrisItemCount = g_DebrisItemCount + 1;
     }
 }
 
 
 /* ===== FUN_00407210 - Add Trooper (00407210) ===== */
-/* Adds a trooper entity to DAT_00487884 (stride 0x40, max 400). */
+/* Adds a trooper entity to g_TrooperPool (stride 0x40, max 400). */
 void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned char type, char subtype)
 {
-    if (DAT_0048924c < TROOPER_CAPACITY) {
-        TrooperRecord *trooper = &DAT_00487884[DAT_0048924c];
+    if (g_TrooperCount < TROOPER_CAPACITY) {
+        TrooperRecord *trooper = &g_TrooperPool[g_TrooperCount];
 
         trooper->position_x = x;
         trooper->position_y = y;
@@ -2233,13 +2233,13 @@ void FUN_00407210(int x, int y, int vx, int vy, char dir, int speed, unsigned ch
 
         trooper->movement_mode_2d = 0;
         trooper->aim_rate_34 = 0;
-        DAT_0048924c = DAT_0048924c + 1;
+        g_TrooperCount = g_TrooperCount + 1;
     }
 }
 
 
 /* ===== FUN_00406d20 - Add Projectile (00406D20) ===== */
-/* Adds a projectile/object to DAT_00481f28 (stride 0x40, max 200).
+/* Adds a projectile/object to g_ProjectilePool (stride 0x40, max 200).
  * Also stamps the sprite footprint onto the tilemap. */
 void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsigned char orientation)
 {
@@ -2253,8 +2253,8 @@ void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsig
     int iVar8;
     int iVar9;
 
-    if (DAT_00489260 < PROJECTILE_CAPACITY) {
-        ProjectileRecord *projectile = &DAT_00481f28[DAT_00489260];
+    if (g_ProjectileCount < PROJECTILE_CAPACITY) {
+        ProjectileRecord *projectile = &g_ProjectilePool[g_ProjectileCount];
 
         projectile->position_x = x;
         projectile->position_y = y;
@@ -2332,7 +2332,7 @@ void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsig
                 uVar4 = uVar4 + 1;
             } while (uVar4 < *(unsigned char *)((int)DAT_00489e88 + iVar1));
         }
-        DAT_00489260 = DAT_00489260 + 1;
+        g_ProjectileCount = g_ProjectileCount + 1;
     }
 }
 
@@ -2430,17 +2430,17 @@ void FUN_0041bfe0(void)
 
     /* ===== Phase 1: Zero all entity counts ===== */
     local_90 = 0;
-    DAT_00489260 = 0;
+    g_ProjectileCount = 0;
     DAT_00489264 = 0;
     DAT_00489274 = 0;
-    DAT_00489268 = 0;
+    g_DebrisItemCount = 0;
     DAT_00489270 = 0;
-    DAT_0048924c = 0;
-    DAT_00489248 = 0;
+    g_TrooperCount = 0;
+    g_EntityCount = 0;
     DAT_00489258 = 0;
     DAT_0048925c = 0;
     DAT_0048926c = 0;
-    DAT_00489250 = 0;
+    g_ParticleCount = 0;
     DAT_0048929c = 0;
     DAT_004892a4 = 0;
     DAT_004892a5 = 0;
@@ -2655,8 +2655,8 @@ void FUN_0041bfe0(void)
 
             case 2:
                 /* Main entity */
-                if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                    Entity *entity = &DAT_004892e8[DAT_00489248];
+                if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                    Entity *entity = &g_EntityPool[g_EntityCount];
 
                     entity->position_x = *(int *)(iVar3 + iVar11) << 0x12;
                     entity->position_y = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
@@ -2689,7 +2689,7 @@ void FUN_0041bfe0(void)
                     entity->counter_3c = 0;
                     entity->timer_5c = 0;
 
-                    DAT_00489248 = DAT_00489248 + 1;
+                    g_EntityCount = g_EntityCount + 1;
                     iVar11 = (int)DAT_00487828;
 
                     if (etype == 0) {
@@ -2784,11 +2784,13 @@ void FUN_0041bfe0(void)
 
     /* ===== Phase 7: Team base spawning (if bases exist and in network mode) ===== */
     if (local_90 != 0 && DAT_0048764a != 0) {
+        int projectile_count_before = g_ProjectileCount;
         FUN_00406d20(local_690[0] << 0x12, local_490[0] << 0x12, 7, 0xea6000,
                      (char)local_290[0], 0);
-        if (local_290[0] == 1) {
-            *(int *)((int)DAT_00481f28 + DAT_00489260 * 0x40 - 0x2c) = 0x465000;
-            *(int *)((int)DAT_00481f28 + DAT_00489260 * 0x40 - 0x30) = 0x465000;
+        if (local_290[0] == 1 && g_ProjectileCount > projectile_count_before) {
+            ProjectileRecord *team_base = &g_ProjectilePool[g_ProjectileCount - 1];
+            team_base->health_or_state_10 = 0x465000;
+            team_base->limit_or_reload_14 = 0x465000;
         }
     }
 

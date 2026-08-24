@@ -21,11 +21,11 @@ int DAT_004806ec = 0;  /* camera/scroll X offset */
 
 /* ===== Entity rendering counts (all zero until entity spawning is implemented) ===== */
 int DAT_00489274 = 0;     /* static entity count (turrets) */
-int DAT_0048924c = 0;     /* dynamic entity/trooper count */
-int DAT_00489260 = 0;     /* projectile count */
+int g_TrooperCount = 0;     /* was DAT_0048924c */
+int g_ProjectileCount = 0;  /* was DAT_00489260 */
 int DAT_0048926c = 0;     /* explosion count */
 int DAT_00489264 = 0;     /* misc effect count */
-int DAT_00489268 = 0;     /* debris/particle count */
+int g_DebrisItemCount = 0;  /* was DAT_00489268 */
 int DAT_00487808 = 0;     /* active player viewport count */
 unsigned short DAT_0048384e = 0;  /* laser pixel color A */
 unsigned short DAT_00483850 = 0;  /* laser pixel color B */
@@ -506,10 +506,10 @@ int FUN_00422fc0(void)
 /* ===== FUN_0040d100 - Particle renderer (0040D100) ===== */
 /*
  * Renders explosion particles onto the given RGB565 buffer.
- * Iterates all active particles (DAT_00489250 count, DAT_00481f34 array).
+ * Iterates all active particles (g_ParticleCount count, g_ParticlePool array).
  * Uses table-based alpha blending via DAT_0048792c and DAT_00489230.
  *
- * Particle structure (32 bytes at DAT_00481f34 + i*0x20):
+ * Particle structure (32 bytes at g_ParticlePool + i*0x20):
  *   +0x00: int x         (18-bit fixed point, >> 18 for pixels)
  *   +0x04: int y         (18-bit fixed point)
  *   +0x08: int dx        (velocity x)
@@ -523,12 +523,12 @@ int FUN_00422fc0(void)
  */
 void FUN_0040d100(int buffer, int stride)
 {
-    if (DAT_00489250 <= 0) return;
+    if (g_ParticleCount <= 0) return;
 
     int i = 0;
 
-    while (i < DAT_00489250) {
-        const ParticleRecord *part = &DAT_00481f34[i];
+    while (i < g_ParticleCount) {
+        const ParticleRecord *part = &g_ParticlePool[i];
 
         unsigned char sprite_idx = part->sprite_index;
         unsigned char *desc = (unsigned char *)DAT_00481f20 + (int)sprite_idx * 8;
@@ -997,14 +997,14 @@ void FUN_0040dbd0(int param_1, unsigned int param_2)
 /* ===== FUN_0040dce0 - Dynamic entity/trooper renderer (0040DCE0) ===== */
 /*
  * Renders troopers (foot soldiers). Two layers: optional helmet + body.
- * Array: DAT_00487884, stride 0x40, count DAT_0048924c.
+ * Array: g_TrooperPool, stride 0x40, count g_TrooperCount.
  */
 void FUN_0040dce0(int param_1, unsigned int param_2)
 {
     int vp_left = DAT_004806dc;
 
-    for (int i = 0; i < DAT_0048924c; i++) {
-        const TrooperRecord *trooper = &DAT_00487884[i];
+    for (int i = 0; i < g_TrooperCount; i++) {
+        const TrooperRecord *trooper = &g_TrooperPool[i];
         int px = trooper->position_x >> 0x12;
         if (vp_left < px + 6 && px - 6 < DAT_004806d0) {
             int py = trooper->position_y >> 0x12;
@@ -1060,15 +1060,15 @@ void FUN_0040dce0(int param_1, unsigned int param_2)
 /* ===== FUN_0040bb60 - Main entity renderer (0040BB60) ===== */
 /*
  * Renders main gameplay entities (items, weapons, ships, effects).
- * Array: DAT_004892e8, stride 0x80, count DAT_00489248.
+ * Array: g_EntityPool, stride 0x80, count g_EntityCount.
  * Most complex renderer - handles pixel dots, sprites, shields, angle animations.
  */
 void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 {
-    if (DAT_00489248 <= 0) return;
+    if (g_EntityCount <= 0) return;
 
-    for (int i = 0; i < DAT_00489248; i++) {
-        const Entity *entity = &DAT_004892e8[i];
+    for (int i = 0; i < g_EntityCount; i++) {
+        const Entity *entity = &g_EntityPool[i];
         unsigned int sprite_idx = entity->palette_value;
 
         if (sprite_idx < 30000) {
@@ -1239,12 +1239,12 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
 /* ===== FUN_0040a870 - Projectile renderer (0040A870) ===== */
 /*
  * Renders projectiles (bullets, missiles, etc).
- * Array: DAT_00481f28, stride 0x40, count DAT_00489260.
+ * Array: g_ProjectilePool, stride 0x40, count g_ProjectileCount.
  */
 void FUN_0040a870(int param_1, unsigned int param_2)
 {
-    for (int i = 0; i < DAT_00489260; i++) {
-        const ProjectileRecord *projectile = &DAT_00481f28[i];
+    for (int i = 0; i < g_ProjectileCount; i++) {
+        const ProjectileRecord *projectile = &g_ProjectilePool[i];
         int px = projectile->position_x >> 0x12;
         if (DAT_004806dc < px + 0xc && px - 0xc < DAT_004806d0) {
             int py = projectile->position_y >> 0x12;
@@ -1324,12 +1324,12 @@ void FUN_0040d6c0(int param_1, int param_2)
 /* ===== FUN_0040d810 - Debris/particle renderer (0040D810) ===== */
 /*
  * Renders debris particles (small sprites).
- * Array: DAT_00487830, stride 0x20, count DAT_00489268.
+ * Array: g_DebrisItemPool, stride 0x20, count g_DebrisItemCount.
  */
 void FUN_0040d810(int param_1, unsigned int param_2)
 {
-    for (int i = 0; i < DAT_00489268; i++) {
-        const DebrisItemRecord *debris = &DAT_00487830[i];
+    for (int i = 0; i < g_DebrisItemCount; i++) {
+        const DebrisItemRecord *debris = &g_DebrisItemPool[i];
         int px = debris->position_x >> 0x12;
         if (DAT_004806dc < px + 0x14 && px - 0x14 < DAT_004806d0) {
             int py = debris->position_y >> 0x12;
@@ -1736,7 +1736,7 @@ void FUN_0040d360(int param_1, int param_2)
 
 /* ===== FUN_004075f0 - Entity renderer (004075F0) ===== */
 /*
- * Renders entities from DAT_004892e8 array (stride 0x80, count DAT_00489248).
+ * Renders entities from g_EntityPool array (stride 0x80, count g_EntityCount).
  * NOTE: This function is only called from FUN_004076d0 which is menu/intro only.
  * During gameplay, entity rendering happens through FUN_0040bb60 in
  * Render_Game_World (graphics.cpp). Types 0x65/0x67 (exhaust) are rendered
@@ -1744,12 +1744,12 @@ void FUN_0040d360(int param_1, int param_2)
  */
 void FUN_004075f0(int buffer, int stride)
 {
-    if (DAT_00489248 <= 0) return;
+    if (g_EntityCount <= 0) return;
 
-    int count = DAT_00489248;
+    int count = g_EntityCount;
 
     for (int i = 0; i < count; i++) {
-        const Entity *entity = &DAT_004892e8[i];
+        const Entity *entity = &g_EntityPool[i];
         unsigned char ent_type = entity->type;
 
         /* Get pixel position from 18-bit fixed point */

@@ -42,28 +42,25 @@ static void Spawn_Particles(int count, int y_base, int y_range)
         int angle = FUN_004257e0(320, 240, px, py);
         int vel_angle = (angle + 0xAA) & 0x7FF;  /* offset by ~30 degrees */
 
-        if (DAT_00489250 >= PARTICLE_CAPACITY) break;
+        if (g_ParticleCount >= PARTICLE_CAPACITY) break;
 
-        int idx = DAT_00489250;
-        int *part = (int *)((char *)DAT_00481f34 + idx * 0x20);
+        ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
 
-        part[0] = px * FIXED_SCALE;     /* x (fixed point) */
-        part[1] = py * FIXED_SCALE;     /* y (fixed point) */
+        particle->position_x = px * FIXED_SCALE;
+        particle->position_y = py * FIXED_SCALE;
 
         /* Velocity: random magnitude * sin/cos of angle */
         int mag = rand() % 100;
-        part[2] = (mag * sin_table[vel_angle]) >> 10;        /* dx */
-        part[3] = (mag * sin_table[vel_angle + 0x200]) >> 10; /* dy (cos = sin + 512) */
+        particle->velocity_x = (mag * sin_table[vel_angle]) >> 10;
+        particle->velocity_y = (mag * sin_table[vel_angle + 0x200]) >> 10;
+        particle->sprite_index = (unsigned char)sprite;
+        particle->frame_number = (unsigned char)((rand() % 6) + 1);
+        particle->frame_timer = 0x80;
+        particle->flags_13 = 0;
+        particle->owner_or_flags_14 = 0;
+        particle->color_index = 0;
 
-        unsigned char *pb = (unsigned char *)part;
-        pb[0x10] = (unsigned char)sprite;   /* sprite_index */
-        pb[0x11] = (unsigned char)((rand() % 6) + 1); /* frame_number (start 1-6) */
-        pb[0x12] = 0x80;                    /* frame_timer */
-        pb[0x13] = 0;
-        pb[0x14] = 0;
-        pb[0x15] = 0;                       /* color_index (group 0 = fire) */
-
-        DAT_00489250++;
+        g_ParticleCount++;
     }
 }
 
@@ -79,7 +76,7 @@ static void Spawn_Entities(int max_count, int y_base, int y_range, int vel_max)
     unsigned char *type_base = (unsigned char *)DAT_00487abc;
 
     for (int n = 0; n < max_count; n++) {
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;  /* max 2499 entities */
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;  /* max 2499 entities */
 
         int mag_rand = rand();
         int px = (rand() % 0xf0) + 200;    /* X: 200-439 */
@@ -89,62 +86,60 @@ static void Spawn_Entities(int max_count, int y_base, int y_range, int vel_max)
 
         int entity_type = (rand() & 1) + 0x6c;  /* 0x6c or 0x6d */
 
-        int idx = DAT_00489248;
-        int *ent = (int *)((unsigned char *)DAT_004892e8 + idx * 0x80);
-        unsigned char *eb = (unsigned char *)ent;
+        Entity *entity = &g_EntityPool[g_EntityCount];
 
         int fx = px * FIXED_SCALE;
         int fy = py * FIXED_SCALE;
 
-        ent[0] = fx;              /* +0x00: x (fixed point) */
-        ent[2] = fy;              /* +0x08: y (fixed point) */
-        ent[6] = (sin_table[angle] * (mag_rand % vel_max)) >> 9;       /* +0x18: velocity_x */
-        ent[7] = (sin_table[angle + 0x200] * (mag_rand % vel_max)) >> 9; /* +0x1C: velocity_y */
-        ent[1] = fx;              /* +0x04: x_prev */
-        ent[3] = fy;              /* +0x0C: y_prev */
-        ent[4] = 0;               /* +0x10 */
-        ent[5] = 0;               /* +0x14 */
-        eb[0x21] = (unsigned char)entity_type;
-        *(short *)(eb + 0x24) = 0;
-        eb[0x20] = 0;
-        eb[0x26] = 0xFF;
-        eb[0x22] = 0xFF;
-        ent[10] = 0;              /* +0x28: TTL (set below after increment) */
+        entity->position_x = fx;
+        entity->position_y = fy;
+        entity->velocity_x = (sin_table[angle] * (mag_rand % vel_max)) >> 9;
+        entity->velocity_y = (sin_table[angle + 0x200] * (mag_rand % vel_max)) >> 9;
+        entity->previous_x = fx;
+        entity->previous_y = fy;
+        entity->motion_x_10 = 0;
+        entity->motion_y_14 = 0;
+        entity->type = (unsigned char)entity_type;
+        entity->variant_24 = 0;
+        entity->state_20 = 0;
+        entity->auxiliary_26 = 0xFF;
+        entity->owner = 0xFF;
+        entity->health_or_damage_28 = 0;
 
         int type_ints = entity_type * 0x86;  /* == entity_type * (0x218/4) */
 
         int ar = rand() % 3;
-        ent[14] = *(int *)(type_base + 0x88 + (ar + type_ints) * 4);   /* +0x38: sprite_anim_base */
+        entity->gravity_or_motion_38 = *(int *)(type_base + 0x88 + (ar + type_ints) * 4);
 
         ar = rand() % 3;
-        ent[17] = *(int *)(type_base + 0xC4 + (ar + type_ints) * 4);   /* +0x44 */
+        entity->damage_44 = *(int *)(type_base + 0xC4 + (ar + type_ints) * 4);
 
-        ent[18] = 0;              /* +0x48: current_frame */
-
-        ar = rand() % 3;
-        ent[19] = *(int *)(type_base + 0xF4 + (ar + type_ints) * 4);   /* +0x4C: sprite_base_index */
-
-        eb[0x54] = 0;             /* animation timer */
+        entity->scratch_48 = 0;
 
         ar = rand() % 3;
-        eb[0x40] = (unsigned char)ar;   /* animation_index */
+        entity->palette_value = *(int *)(type_base + 0xF4 + (ar + type_ints) * 4);
 
-        ent[13] = *(int *)(type_base + entity_type * 0x218); /* +0x34 */
-        ent[15] = 0;              /* +0x3C */
-        eb[0x5C] = 0;
+        entity->animation_frame = 0;
 
-        DAT_00489248++;
+        ar = rand() % 3;
+        entity->subtype = (unsigned char)ar;
+
+        entity->callback_address = *(int *)(type_base + entity_type * 0x218);
+        entity->counter_3c = 0;
+        entity->timer_5c = 0;
+
+        g_EntityCount++;
 
         /* Post-increment adjustments (offsets relative to new count) */
-        ent[19] += 300;           /* sprite base offset +300 */
+        entity->palette_value += 300;
 
         int ttl_rand = rand();
         DWORD ttl_time = timeGetTime();
-        ent[10] = ttl_rand % 1000 + 1000 + (int)ttl_time;  /* TTL */
+        entity->health_or_damage_28 = ttl_rand % 1000 + 1000 + (int)ttl_time;
 
         int num_frames = (int)type_base[entity_type * 0x218 + 0x126];
         if (num_frames > 1) {
-            ent[18] = rand() % (num_frames - 1);  /* starting animation frame */
+            entity->scratch_48 = rand() % (num_frames - 1);
         }
 
     }
@@ -158,52 +153,47 @@ static void Update_Entities(void)
     unsigned char *type_base = (unsigned char *)DAT_00487abc;
 
     int i = 0;
-    int byte_offset = 0;
-
-    while (i < DAT_00489248) {
-        int *ent = (int *)((unsigned char *)DAT_004892e8 + byte_offset);
-        unsigned char *eb = (unsigned char *)ent;
+    while (i < g_EntityCount) {
+        Entity *entity = &g_EntityPool[i];
 
         /* Gravity: velocity_y += 0x800 */
-        int new_vy = ent[7] + 0x800;
-        ent[7] = new_vy;
+        int new_vy = entity->velocity_y + 0x800;
+        entity->velocity_y = new_vy;
 
         /* Move: x += velocity_x * delta_time */
-        ent[0] += ent[6] * (int)DAT_004877f0;
+        entity->position_x += entity->velocity_x * (int)DAT_004877f0;
 
         /* Move: y += velocity_y * delta_time (using updated velocity) */
-        ent[2] += new_vy * (int)DAT_004877f0;
+        entity->position_y += new_vy * (int)DAT_004877f0;
 
         /* Animation timer advance */
-        unsigned char timer = eb[0x54] + 1;
-        eb[0x54] = timer;
+        unsigned char timer = entity->animation_frame + 1;
+        entity->animation_frame = timer;
 
         /* Check animation threshold from entity type definition */
-        int anim_idx = (int)eb[0x40];   /* animation_index */
-        int etype = (int)eb[0x21];      /* entity_type */
+        int anim_idx = (int)entity->subtype;
+        int etype = (int)entity->type;
         int type_offset = anim_idx + etype * 0x218;
 
         if (timer > type_base[type_offset + 0x12A]) {
-            int frame = ent[18];    /* +0x48: current_frame */
-            eb[0x54] = 0;           /* reset timer */
-            ent[18] = frame + 1;
+            int frame = entity->scratch_48;
+            entity->animation_frame = 0;
+            entity->scratch_48 = frame + 1;
             if ((unsigned int)(frame + 1) >= (unsigned int)type_base[type_offset + 0x124]) {
-                ent[18] = 0;        /* loop animation */
+                entity->scratch_48 = 0;
             }
         }
 
         /* TTL: remove expired entities (swap with last) */
-        if (ent[10] < (int)currentTime) {
-            DAT_00489248--;
-            if (i < DAT_00489248) {
-                unsigned char *last = (unsigned char *)DAT_004892e8 + DAT_00489248 * 0x80;
-                memcpy(ent, last, 0x80);
+        if (entity->health_or_damage_28 < (int)currentTime) {
+            g_EntityCount--;
+            if (i < g_EntityCount) {
+                *entity = g_EntityPool[g_EntityCount];
                 continue;  /* re-process swapped entity */
             }
         }
 
         i++;
-        byte_offset += 0x80;
     }
 }
 
@@ -212,43 +202,38 @@ static void Update_Entities(void)
 static void Update_Particles(void)
 {
     int i = 0;
-    int byte_offset = 0;
-
-    while (i < DAT_00489250) {
-        int *part = (int *)((char *)DAT_00481f34 + byte_offset);
-        unsigned char *pb = (unsigned char *)part;
+    while (i < g_ParticleCount) {
+        ParticleRecord *particle = &g_ParticlePool[i];
 
         /* Move: position += velocity * delta_time */
-        part[0] += part[2] * (int)DAT_004877f0;
-        part[1] += part[3] * (int)DAT_004877f0;
+        particle->position_x += particle->velocity_x * (int)DAT_004877f0;
+        particle->position_y += particle->velocity_y * (int)DAT_004877f0;
 
         /* Advance frame timer */
-        unsigned char timer = pb[0x12] + 1;
-        pb[0x12] = timer;
+        unsigned char timer = particle->frame_timer + 1;
+        particle->frame_timer = timer;
 
         if (timer > 0x81) {
-            pb[0x12] = 0x80;
-            pb[0x11] += 1;  /* advance animation frame */
+            particle->frame_timer = 0x80;
+            particle->frame_number += 1;
         }
 
         /* Check if animation is complete */
-        unsigned char sprite_idx = pb[0x10];
+        unsigned char sprite_idx = particle->sprite_index;
         unsigned char *desc = (unsigned char *)DAT_00481f20 + (int)sprite_idx * 8;
         unsigned char num_frames = desc[6];
 
-        if (pb[0x11] >= num_frames) {
+        if (particle->frame_number >= num_frames) {
             /* Remove particle: swap with last */
-            DAT_00489250--;
-            if (i < DAT_00489250) {
-                unsigned char *last = (unsigned char *)DAT_00481f34 + DAT_00489250 * 0x20;
-                memcpy(part, last, 0x20);
+            g_ParticleCount--;
+            if (i < g_ParticleCount) {
+                *particle = g_ParticlePool[g_ParticleCount];
                 /* Don't advance i - re-process swapped particle */
                 continue;
             }
         }
 
         i++;
-        byte_offset += 0x20;
     }
 }
 
@@ -267,8 +252,8 @@ void Intro_Sequence(void)
         (GetAsyncKeyState(VK_SPACE) & 0x8000) ||
         (GetAsyncKeyState(VK_RETURN) & 0x8000)) {
         /* Clear intro particles/entities so they don't bleed into menu */
-        DAT_00489250 = 0;  /* particle count */
-        DAT_00489248 = 0;  /* entity count */
+        g_ParticleCount = 0;  /* particle count */
+        g_EntityCount = 0;  /* entity count */
         g_GameState = 0x98;
         Pause_Audio_Streams();
         return;
@@ -284,11 +269,11 @@ void Intro_Sequence(void)
             g_FrameIndex = 1;
 
             /* Spawn 0x96 (150) explosion particles */
-            DAT_00489250 = 0;
+            g_ParticleCount = 0;
             Spawn_Particles(0x96, 200, 0x50);
 
             /* Reset and spawn intro entities (shrapnel debris) */
-            DAT_00489248 = 0;
+            g_EntityCount = 0;
             Spawn_Entities(800, 200, 0x50, 100);
         }
         else if (g_IntroSplashIndex == 1) {
@@ -304,8 +289,8 @@ void Intro_Sequence(void)
         }
         else if (g_IntroSplashIndex == 2) {
             /* Splash 2 done: Move to new game state */
-            DAT_00489250 = 0;  /* clear particles */
-            DAT_00489248 = 0;  /* clear entities */
+            g_ParticleCount = 0;  /* clear particles */
+            g_EntityCount = 0;  /* clear entities */
             g_GameState = 0x98;
         }
         g_IntroSplashIndex++;

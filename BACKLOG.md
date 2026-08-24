@@ -16,9 +16,9 @@ are delivered together in one larger pull request.
 - The entity pool is typed. Player storage deliberately remains byte-addressed
   until every stride-relative raw access has been migrated.
 - Projectile, trooper, animated-particle, and debris/item pools have verified
-  record sizes and key offsets. Their allocation, construction, primary update,
-  collision, and rendering boundaries are typed; subtype-specific AI routines
-  still contain packed views that need later routine-by-routine migration.
+  record sizes and key offsets. Allocation, construction, effect spawning,
+  targeting/AI, collision, rendering, death, and compaction are now typed.
+  Packed-width accesses remain only where original code crosses nominal fields.
 - Binary compatibility helpers, original RNG ordering, x87 conversion, and
   callback-address dispatch are production code and must survive all refactors.
 - Renderer abstraction is the next architectural milestone after the data and
@@ -83,7 +83,7 @@ hud.cpp, menu.cpp
 
 **AC:**
 - `Entity` defined in `types.h`; `static_assert(sizeof(Entity) == 128)`
-- `DAT_004892e8` becomes an `Entity *`; rename it separately under T13.1
+- `g_EntityPool` becomes an `Entity *`; rename it separately under T13.1
 - All `*(type *)((int)ent + offset)` replaced with `ent->field`
 - Build compiles with zero warnings; no behavior change
 
@@ -119,25 +119,25 @@ lifted would silently scale those offsets.
 
 ---
 
-### T1.3 — ProjectileRecord struct (64 bytes)  [IN PROGRESS / P1]
-Array at `DAT_00481f28`. Used primarily by `sim.cpp`, `entity.cpp`, and
+### T1.3 — ProjectileRecord struct (64 bytes)  [DONE]
+Array at `g_ProjectilePool`. Used primarily by `sim.cpp`, `entity.cpp`, and
 `effects.cpp` for collision, explosions, and turret targeting.
 
-The storage global, allocator, constructor, renderer, and particle-damage scan
-are typed. Remaining projectile AI/update routines still use packed views.
+The allocator, constructor, renderer, damage scan, spatial binning, targeting,
+predictive aim, death handling, and compaction are typed.
 
 **AC:**
 - `ProjectileRecord` defined; `static_assert(sizeof == 64)`
-- All `DAT_00481f28` pointer math replaced in runtime modules
+- All `g_ProjectilePool` pointer math replaced in runtime modules
 
 ---
 
-### T1.4 — TrooperRecord struct (64 bytes)  [IN PROGRESS / P1]
-Array at `DAT_00487884`. Used in spatial grid binning, infantry simulation,
+### T1.4 — TrooperRecord struct (64 bytes)  [DONE]
+Array at `g_TrooperPool`. Used in spatial grid binning, infantry simulation,
 targeting, and AI.
 
-The storage global, allocator, constructor, renderer, and particle-damage scan
-are typed. The complete infantry/car AI update remains to be migrated.
+The allocator, constructor, renderer, damage scan, spatial binning, complete
+infantry/car AI update, death handling, and compaction are typed.
 
 **AC:**
 - `TrooperRecord` defined; `static_assert(sizeof == 64)`
@@ -145,14 +145,13 @@ are typed. The complete infantry/car AI update remains to be migrated.
 
 ---
 
-### T1.5 — Particle structs (32 bytes)  [IN PROGRESS / P1]
-Arrays at `DAT_00487830` / `DAT_00481f34`. Used in debris, explosions, fluid
+### T1.5 — Particle structs (32 bytes)  [DONE]
+Arrays at `g_DebrisItemPool` / `g_ParticlePool`. Used in debris, explosions, fluid
 effects, trails, and rendering.
 
 The two distinct 32-byte layouts are represented by `ParticleRecord` and
-`DebrisItemRecord`. Allocation, construction, rendering, particle collision and
-expiry, and debris pickup animation/expiry are typed. Effect-specific spawn
-sites remain to be migrated by family so their partial initialization survives.
+`DebrisItemRecord`. Allocation, construction, effect spawning, rendering,
+collision, expiry, pickup animation, and compaction are typed.
 
 **AC:**
 - `Particle` defined; `static_assert(sizeof == 32)`
@@ -224,8 +223,12 @@ Trig tables, ballistic LUT (`DAT_00489e90`), and vector helpers currently live i
 
 ## Theme 3: Memory Safety
 
-### T3.1 — Bounds checks on all spawn/alloc sites  [P0]
+### T3.1 — Bounds checks on all spawn/alloc sites  [IN PROGRESS / P0]
 Hard limits: 2500 entities, 2000 particles, 5000 fluid sources, 300 level names.
+
+The five typed runtime pools use named capacities at their spawn boundaries.
+Legacy fluid, edge-particle, decoration, and level-name arrays still need the
+same audit when their record layouts are recovered.
 
 **Key functions:** `FUN_00413720`, `FUN_00434310`, `FUN_00454b00`, `FUN_0045fc00`, `FUN_00407210`, `FUN_00406d20`
 
@@ -236,12 +239,10 @@ Hard limits: 2500 entities, 2000 particles, 5000 fluid sources, 300 level names.
 
 ---
 
-### T3.2 — Replace `void *` pool pointers with typed arrays  [P1]
-After T1.1–T1.5 are done, change declarations:
-- `Entity *g_EntityArray` ← `DAT_004892e8`
-- `PlayerData *g_PlayerArray` ← `DAT_00487810` (after all legacy byte offsets are lifted)
-- `ProjectileRecord *g_ProjectileArray` ← `DAT_00481f28`
-- `Particle *g_ParticleArray` ← `DAT_00487830`
+### T3.2 — Replace `void *` pool pointers with typed arrays  [IN PROGRESS / P1]
+The entity, projectile, trooper, particle, and debris/item globals are typed.
+`DAT_00487810` must remain byte-addressed until the remaining legacy player
+offsets are lifted; changing it early would silently scale those expressions.
 
 **AC:**
 - All `void *` pool pointers replaced with typed pointers
@@ -249,12 +250,12 @@ After T1.1–T1.5 are done, change declarations:
 
 ---
 
-### T3.3 — Audit `memcpy`/`memset` on typed structs  [P1]
+### T3.3 — Audit `memcpy`/`memset` on typed structs  [DONE]
 Original binary uses raw memory ops on entity/player blobs.
 
 **AC:**
-- All `memset`/`memcpy` calls use `sizeof(Entity)` / `sizeof(PlayerData)`
-- `static_assert` that structs are trivially copyable
+- [x] Typed pool compaction uses record assignment instead of raw byte counts
+- [x] Recovered runtime records are asserted trivially copyable
 
 ---
 
@@ -555,13 +556,17 @@ alone cannot expose the first state divergence.
 
 ## Theme 13: Code Quality
 
-### T13.1 — Rename all `DAT_00xxxxxx` globals  [P1]
+### T13.1 — Rename all `DAT_00xxxxxx` globals  [IN PROGRESS / P1]
 Rename globals to semantic names as subsystems are understood.
 
 **AC:**
 - `g_EntityArray`, `g_PlayerArray`, `g_TileMap`, `g_SpritePixels`, etc.
 - Preserve original addresses in comments: `/* was DAT_004892e8 */`
 - No functional change
+
+The primary typed pools and their active counts now use `g_Entity*`,
+`g_Projectile*`, `g_Trooper*`, `g_Particle*`, and `g_DebrisItem*` names. Other
+subsystem globals remain intentionally address-named until ownership is clear.
 
 ---
 
