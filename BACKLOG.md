@@ -393,14 +393,22 @@ difficulty, team mode, game type, player colors, ship selections, and loadouts.
 
 ---
 
-### T5.2 — JSON/INI serializer for config  [P2]
-Once T5.1 is done, add human-readable config format.
+### T5.2 — Versioned JSON user settings  [P0]
+Replace the packed binary save file with a human-readable user-settings model.
+The packed `GameConfig` remains an internal compatibility target, not the file
+format.
 
 **AC:**
-- `Save_Config_JSON()` writes pretty-printed JSON
-- `Load_Config_JSON()` reads it back
-- Falls back to binary blob if JSON not found
-- All current `GameConfig` bytes round-trip correctly
+- `settings.json` contains `schemaVersion`, `language`, and named user-facing
+  settings only; reserved and derived runtime bytes are excluded
+- A typed `UserSettings` maps to/from verified `GameConfig` fields at one boundary
+- Pretty-printed UTF-8 JSON is validated and saved atomically
+- Unknown keys are ignored as harmless forward-compatible input; malformed known
+  fields fall back individually and are clamped
+- If JSON is absent, a valid `options.cfg` is migrated once and retained as a backup
+- All visible options, key bindings, player profiles, ships, colors, loadouts,
+  display, and audio choices round-trip through restart
+- Config-path behavior is verified on Windows, Linux, and macOS app bundles
 
 ---
 
@@ -755,12 +763,13 @@ Write `docs/SHIP_FORMAT.md`.
 
 ---
 
-## Theme 16: Networked Multiplayer Foundation
+## Theme 16: Direct-IP LAN Multiplayer
 
-The v0.5 cleanup makes network work approachable, but netplay must not transmit
-or mirror raw process memory. The next milestone is a deterministic,
-serializable match simulation with presentation and local input outside the
-authoritative state boundary.
+LAN v1 is deliberately small: one player per computer, one listen-server host,
+four humans total, two teams, direct `IP:port` join, host-owned rules and level
+list, and no AI. It does not include discovery, public lobbies, accounts,
+dedicated servers, NAT traversal, relays, spectators, reconnect, or mid-match
+join. See `PLAN.md` for the complete product contract.
 
 ### T16.1 — Define authoritative match state  [P0]
 
@@ -768,6 +777,8 @@ authoritative state boundary.
   pool counts/order, players, tiles, fluids, timers, Events, and AI state.
 - Exclude renderer, audio channels, menu state, SDL objects, and local cameras.
 - Give guest callback addresses stable serialized identities.
+- Document host-owned rules and level progression separately from each client's
+  local profile/ship selection.
 
 ### T16.2 — Command-frame input boundary  [P0]
 
@@ -787,21 +798,117 @@ authoritative state boundary.
 - Record initial snapshot plus command frames.
 - Replay headlessly and compare checksums at every tick.
 - Treat the first mismatch as a simulation bug before adding networking.
+- Run replay/restore comparison across x86, x64, and ARM64.
 
-### T16.5 — Client/server transport  [P1]
+### T16.5 — Protocol and compatibility handshake  [P0]
 
-- Start with an authoritative server and delayed command frames rather than
-  peer-to-peer lockstep.
-- Add join/leave, lobby configuration, snapshot transfer, resync, latency, and
-  disconnect handling.
-- Keep split-screen/local multiplayer working through the same command path.
+- Version every message and enforce packet-size/bounds validation.
+- Exchange build/protocol version plus selected level, ship, and
+  gameplay-critical asset hashes.
+- Reject mismatches, full sessions, AI-enabled sessions, invalid profiles,
+  invalid ships, and invalid team values with an explicit reason.
+- LAN v1 requires matching installed content and never transfers files.
 
-### T16.6 — Prediction and rollback  [P2]
+### T16.6 — Host/join session UI and roster  [P1]
+
+- Add `LAN Multiplayer -> Host / Join`.
+- Host chooses rules/levels and opens a configurable port.
+- Client enters `IP:port`, sends its Player 1/local profile and ship, then chooses
+  team 1 or team 2.
+- Roster shows connection, team, ship, and ready state.
+- Only the host can start, and only when all two-to-four players are ready.
+
+### T16.7 — Authoritative LAN transport  [P0]
+
+- Host simulates gameplay and level progression; clients send command frames,
+  never trusted gameplay outcomes.
+- Host sends the canonical roster/rules, initial snapshot, authoritative state
+  updates, terrain changes, results, and periodic checksums.
+- Start with LAN-appropriate input delay and correction rather than requiring
+  cross-architecture peer lockstep.
+- Handle clean quit, timeout, refusal, host shutdown, client shutdown, and
+  return-to-session after each level.
+
+### T16.8 — Mixed-platform LAN acceptance  [P0]
+
+- Windows, Linux, and macOS clients interoperate by direct IP.
+- Two, three, and four player sessions complete multiple host-selected levels.
+- All peers agree on terrain, deaths, frags, winners, and next-level state.
+- A 30-minute mixed-architecture soak test has no drift, leak, hang, or stale roster.
+
+### T16.9 — Prediction and rollback  [P2 / LATER]
 
 - Add only after deterministic replay is stable.
 - Predict local commands, retain bounded snapshots, and resimulate on late
   authoritative input.
 - Never make audio or rendering part of the rollback state.
+
+---
+
+## Theme 17: Internationalization
+
+Initial locales are English (`en`), Spanish (`es`), Brazilian Portuguese
+(`pt-BR`), and Finnish (`fi`). English is the authoritative fallback.
+
+### T17.1 — Localization catalog and runtime  [P0]
+
+- UTF-8 JSON catalogs under `lang/<locale>.json` with stable semantic keys
+- `Text_Get(key)` lookup with per-key English fallback and debug diagnostics
+- Language stored in `settings.json` and applied immediately from Options
+- CI verifies valid JSON/UTF-8 and identical required key sets
+
+### T17.2 — Font and text-layout coverage  [P0]
+
+- Add required Finnish, Spanish, and Portuguese glyphs to the bitmap-font path
+- Measure localized strings instead of assuming English widths
+- Define wrapping, truncation, alignment, and fallback-glyph behavior
+- Visually inspect menus at every supported resolution and display mode
+
+### T17.3 — Extract the full user-facing string surface  [P1]
+
+- Menus, HUD, results, awards, errors, controls, weapons, pickups, and prompts
+- Do not translate paths, log diagnostics, protocol values, user text, or level
+  author metadata
+- All four languages complete menu -> match -> results without clipping,
+  missing glyphs, or accidental English
+
+---
+
+## Theme 18: Level Compiler and Editor
+
+The repository contains original sample sources, documentation,
+`level converter.exe`, and `COLPICK.EXE`, but not maintainable source for those
+tools. Build a native replacement rather than embedding either legacy binary.
+
+### T18.1 — Complete `.lev` writer specification  [P0]
+
+- Recover every header/extra/config/placement/RLE section and marker color
+- Use original MakeLev output and shipped levels as the oracle
+- Add golden fixtures from `makelev/Jungle.*` and `Normal.txt`
+- Document unsupported or still-unknown bytes explicitly
+
+### T18.2 — Shared `tou_level` library and CLI compiler  [P0]
+
+- Parse, validate, and write normal/GG projects independently of game globals
+- Import visual JPEG, attribute TGA, optional parallax, and level config text
+- Replace COLPICK marker lookup with a named palette/schema
+- Structurally compare output with original compiler fixtures and load it in
+  the original game plus decomp
+
+### T18.3 — Visual editor MVP  [P1]
+
+- Project new/open/save and `.lev` export
+- Visual and attribute layers with overlay controls
+- Terrain/placement palette plus selection, movement, property editing, deletion
+- Metadata, physics, water, Event, ambience, parallax, and GG properties
+- Pre-export validation for dimensions, formats, values, and overlapping markers
+
+### T18.4 — Editor runtime acceptance  [P1]
+
+- Author and play a new normal level on Windows, Linux, and macOS
+- Rebuild sample projects into behaviorally equivalent levels
+- Preserve every understood value through project save/reopen/export
+- Never silently export a malformed or partially understood level
 
 ---
 
@@ -831,6 +938,12 @@ T5.1 (Config struct) ─┬─> T5.2 (JSON)
 
 T8.1 (InputDevice) ──> T8.2 (Input mapping)
 T7.1 (AudioEngine) ──> T11.1 (SDL3)
+
+T5.2 (JSON) ──> T17.1 (catalog/language setting) ──> T17.2/T17.3
+
+T15.1 (LEV docs) ──> T18.1 (writer spec) ──> T18.2 (compiler) ──> T18.3 (editor)
+
+T16.1/T16.2 ──> T16.3/T16.4 ──> T16.5/T16.6 ──> T16.7 ──> T16.8
 ```
 
 ## Next Milestone Order
@@ -838,10 +951,15 @@ T7.1 (AudioEngine) ──> T11.1 (SDL3)
 | Milestone | Items |
 |--------|-------|
 | v0.5 acceptance | Cross-platform runtime testing, warnings clean, remaining safe subsystem names |
+| Settings | T5.2 typed JSON settings and one-time binary migration |
+| Localization | T17.1 catalogs, T17.2 glyph/layout work, T17.3 full extraction |
+| Level tools A | T18.1 complete writer spec, T18.2 shared compiler/library |
+| Level tools B | T18.3 editor MVP, T18.4 authored-level acceptance |
 | Netplay foundation A | T16.1 authoritative state, T16.2 command-frame input |
 | Netplay foundation B | T16.3 snapshots/checksums, T16.4 deterministic replay |
-| First playable netcode | T16.5 authoritative client/server transport |
-| Later responsiveness | T16.6 prediction and rollback |
+| LAN session shell | T16.5 handshake, T16.6 host/join/ready/team UI |
+| First playable netcode | T16.7 authoritative LAN transport, T16.8 mixed-platform acceptance |
+| Later responsiveness | T16.9 prediction and rollback |
 | Opportunistic cleanup | T2.2, T11.2, T14.2, T14.3 only when behavior remains covered |
 
 ---
