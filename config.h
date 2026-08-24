@@ -47,10 +47,10 @@ typedef struct GameConfigLayout {
     int8_t sky_color_mode;                   /* 0x17d6 */
     int8_t saved_color_option;               /* 0x17d7 */
     uint8_t reserved_17d8;
-    int8_t critter_spawns;                   /* 0x17d9 */
-    int8_t team_base_placement;              /* 0x17da */
-    int8_t debris_difficulty;                /* 0x17db */
-    int8_t trooper_difficulty;               /* 0x17dc */
+    int8_t civilians;                        /* 0x17d9 */
+    int8_t bombing;                          /* 0x17da */
+    int8_t random_turrets_at_start;           /* 0x17db */
+    int8_t random_troopers_at_start;          /* 0x17dc */
     int8_t game_mode;                        /* 0x17dd */
     int8_t game_mode_preset;                 /* 0x17de */
     uint8_t initial_lives;                   /* 0x17df */
@@ -151,10 +151,10 @@ static inline size_t GameConfigOffsetFromOriginalAddress(uintptr_t address)
 #define DAT_00483730 (g_GameConfig.values.fog_wobble)
 #define DAT_00483731 (g_GameConfig.values.sky_color_mode)
 #define DAT_00483732 (g_GameConfig.values.saved_color_option)
-#define DAT_00483734 (g_GameConfig.values.critter_spawns)
-#define DAT_00483735 (g_GameConfig.values.team_base_placement)
-#define DAT_00483736 (g_GameConfig.values.debris_difficulty)
-#define DAT_00483737 (g_GameConfig.values.trooper_difficulty)
+#define DAT_00483734 (g_GameConfig.values.civilians)
+#define DAT_00483735 (g_GameConfig.values.bombing)
+#define DAT_00483736 (g_GameConfig.values.random_turrets_at_start)
+#define DAT_00483737 (g_GameConfig.values.random_troopers_at_start)
 #define DAT_00483738 (g_GameConfig.values.game_mode)
 #define DAT_00483739 (g_GameConfig.values.game_mode_preset)
 #define DAT_0048373a (g_GameConfig.values.initial_lives)

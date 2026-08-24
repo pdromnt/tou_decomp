@@ -981,9 +981,6 @@ int DAT_00481d2c = 0xA0;
 int DAT_00481d30 = 0xA0;
 int DAT_00481d34 = 0xA0;
 
-/* ===== Entity spawning globals ===== */
-unsigned char DAT_00483962 = 0;       /* team base probability % */
-
 int           DAT_00489270 = 0;       /* wall segment count */
 int           DAT_004892d4 = 0;       /* spawn point count */
 int           DAT_004892d8 = 0;       /* decoration count */
@@ -1010,15 +1007,15 @@ int           DAT_00489284 = 0;       /* turret init counter */
 int           DAT_004892c8 = 0;       /* trooper spawn point count */
 int           DAT_004892cc = 1;       /* trooper spawn flag */
 int           DAT_00487834[12] = {0}; /* entity tracking counters */
-float         DAT_004892d0 = 0.0f;    /* water level / weather */
+float         DAT_004892d0 = 0.0f;    /* per-tick level bombing rate */
 
-/* Float constants from .rdata (0x475620-0x47562B) for water level calculation */
-static const union { unsigned int u; float f; } _water_scale_0 = { 0x3651b717u };
-static const union { unsigned int u; float f; } _water_scale_1 = { 0x370bcf65u };
-static const union { unsigned int u; float f; } _water_scale_2 = { 0x37d1b717u };
-#define WATER_SCALE_0 (_water_scale_0.f)
-#define WATER_SCALE_1 (_water_scale_1.f)
-#define WATER_SCALE_2 (_water_scale_2.f)
+/* Original level-bombing rates selected for the current map. */
+static const union { unsigned int u; float f; } _bombing_rate_low = { 0x3651b717u };
+static const union { unsigned int u; float f; } _bombing_rate_medium = { 0x370bcf65u };
+static const union { unsigned int u; float f; } _bombing_rate_high = { 0x37d1b717u };
+#define BOMBING_RATE_LOW (_bombing_rate_low.f)
+#define BOMBING_RATE_MEDIUM (_bombing_rate_medium.f)
+#define BOMBING_RATE_HIGH (_bombing_rate_high.f)
 
 /* Ship filenames (from binary at 0x0047BE90..0x0047BEFC) */
 static const char *ship_dir = "ships/";
@@ -2756,18 +2753,18 @@ void FUN_0041bfe0(void)
         iVar15++;
     }
 
-    /* ===== Phase 6: Post-placement water level ===== */
+    /* ===== Phase 6: Select this level's bombing rate ===== */
     DAT_004892d0 = 0.0f;
     if (DAT_00483735 == 2 ||
         (DAT_00483735 == 1 && (rand() % 100 < (int)(unsigned int)DAT_00483962))) {
         iVar11 = rand() % 6;
         DAT_004892d0 = (float)DAT_004879f0;
         if (iVar11 == 0) {
-            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_2;
+            DAT_004892d0 = DAT_004892d0 * BOMBING_RATE_HIGH;
         } else if (iVar11 == 1) {
-            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_1;
+            DAT_004892d0 = DAT_004892d0 * BOMBING_RATE_MEDIUM;
         } else if (iVar11 == 2) {
-            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_0;
+            DAT_004892d0 = DAT_004892d0 * BOMBING_RATE_LOW;
         } else {
             DAT_004892d0 = 0.0f;
         }

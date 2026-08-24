@@ -76,9 +76,6 @@ extern char                  DAT_00487635[6];    /* team award winner indices */
 extern unsigned char         DAT_00487648;       /* highest team score */
 extern char                  DAT_00487644[4];    /* winning team indices */
 
-/* ===== Entity Spawning Config ===== */
-extern unsigned char         DAT_00483962;       /* team base probability % */
-
 /* ===== Entity Spawning Counts ===== */
 extern int                   DAT_00489270;       /* wall segment count */
 extern int                   DAT_004892d4;       /* spawn point count */
@@ -91,7 +88,7 @@ extern int                   DAT_00489258;       /* misc counter */
 extern char                  DAT_004892a4;       /* team victory flag */
 extern char                  DAT_004892a5;       /* activation flag */
 extern int                   DAT_00487834[12];   /* entity tracking counters */
-extern float                 DAT_004892d0;       /* water level / weather effect */
+extern float                 DAT_004892d0;       /* per-tick level bombing rate */
 
 /* ===== Entity Behavior (entity.cpp) ===== */
 extern int  DAT_00486944[4];       /* per-team stat counters A */

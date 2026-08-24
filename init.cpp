@@ -3059,42 +3059,42 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x05: /* Controls */
-        FUN_00430200(0, 0x28, 0xb, 1, 0, 0, 0, 1, 0xff);           /* "Controls" heading */
-        FUN_00430200(0, 0x50, 0x26, 2, 2, 2, 0, 4, 0xff);          /* "Mouse sens" label */
+    case 0x05: /* Event */
+        FUN_00430200(0, 0x28, 0xb, 1, 0, 0, 0, 1, 0xff);           /* "Event" heading */
+        FUN_00430200(0, 0x50, 0x26, 2, 2, 2, 0, 4, 0xff);          /* "Civilians" label */
         iVar3 = FUN_00430200(0, 0x50, 0x113, 2, 2, 1, 0x27, 5, 0xff);
         iVar3 = iVar3 + 0x50;
         FUN_0042fc90(CFG_ADDR(0x483734));
         FUN_0042fcf0();
-        FUN_00430200(0, iVar3, 0x30, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar3, 0x30, 2, 2, 2, 0, 4, 0xff);         /* "Bombing" label */
         iVar4 = FUN_00430200(0, iVar3, 0x110, 2, 2, 1, 4, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483735));
         FUN_0042fcf0();
         iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
         iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
-        FUN_00430200(0, iVar7, 0x96, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar7, 0x96, 2, 2, 2, 0, 4, 0xff);         /* random turrets */
         iVar3 = FUN_00430200(0, iVar7, 0xcb, 2, 2, 1, 0x27, 5, 0xff);
         iVar7 = iVar7 + iVar3;
         FUN_0042fc90(CFG_ADDR(0x483736));
         FUN_0042fcf0();
-        FUN_00430200(0, iVar7, 0x97, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar7, 0x97, 2, 2, 2, 0, 4, 0xff);         /* random troopers */
         iVar4 = FUN_00430200(0, iVar7, 0xcb, 2, 2, 1, 0x27, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483737));
         FUN_0042fcf0();
         iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 8);
         iVar3 = iVar7 + iVar4 + 0x10 + iVar3;
-        FUN_00430200(0, iVar3, 0xb9, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar3, 0xb9, 2, 2, 2, 0, 4, 0xff);         /* gates */
         iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
         iVar3 = iVar3 + iVar7;
         FUN_0042fc90(CFG_ADDR(0x483756));
         FUN_0042fcf0();
-        FUN_00430200(0, iVar3, 0xba, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar3, 0xba, 2, 2, 2, 0, 4, 0xff);         /* level turrets */
         iVar4 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483757));
         FUN_0042fcf0();
         iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
         iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
-        FUN_00430200(0, iVar7, 0xca, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7, 0xca, 2, 2, 2, 0, 4, 0xff);         /* bonus amount */
         FUN_00430200(0, iVar7, 0xcf, 2, 2, 1, 0x27, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x48375a));
         FUN_0042fcf0();
@@ -4897,6 +4897,34 @@ void FUN_00426650(void)
         int cursor_x = g_MouseDeltaX >> 18;
         int cursor_y = g_MouseDeltaY >> 18;
         int levelMetadataHovered = 0;
+
+        /* A completed key capture belongs to the row that started it, not to
+         * whichever row happens to be under the cursor now.  The old
+         * reconstruction committed this inside the hover loop, so moving the
+         * mouse (or simply sitting on a padded row edge) silently discarded
+         * the new binding and left capture mode stuck. */
+        if (DAT_004877e5 == 1 && g_InputMode == 2) {
+            int capture_index = (int)(unsigned int)DAT_004877e6;
+            if (DAT_004877e8 < 0x100 &&
+                capture_index >= 0 && capture_index < DAT_004877a8) {
+                MenuItem *capture_item = &items[capture_index];
+                MenuItem *binding_item = capture_item;
+                if (binding_item->render_mode != 7 &&
+                    capture_item->linked_item != 20000 &&
+                    capture_item->linked_item >= 0 &&
+                    capture_item->linked_item < DAT_004877a8) {
+                    binding_item = &items[capture_item->linked_item];
+                }
+                if (binding_item->render_mode == 7 && binding_item->extra_data != 0) {
+                    *(unsigned char *)(uintptr_t)binding_item->extra_data =
+                        (unsigned char)DAT_004877e8;
+                }
+            }
+            DAT_004877e8 = 0;
+            g_InputMode = 0;
+            DAT_004877e5 = 0;
+        }
+
         for (int i = 0; i < DAT_004877a8; i++) {
             MenuItem *item = &items[i];
 
@@ -6120,10 +6148,10 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.fog_wobble = 1;
     g_GameConfig.values.sky_color_mode = 1;
     g_GameConfig.values.saved_color_option = -1;
-    g_GameConfig.values.critter_spawns = 0;
-    g_GameConfig.values.team_base_placement = 0;
-    g_GameConfig.values.debris_difficulty = 0;
-    g_GameConfig.values.trooper_difficulty = 0;
+    g_GameConfig.values.civilians = 0;
+    g_GameConfig.values.bombing = 0;
+    g_GameConfig.values.random_turrets_at_start = 0;
+    g_GameConfig.values.random_troopers_at_start = 0;
     g_GameConfig.values.game_mode = 0;
     g_GameConfig.values.game_mode_preset = 0;
     g_GameConfig.values.initial_lives = 3;

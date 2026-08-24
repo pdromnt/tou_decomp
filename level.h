@@ -100,6 +100,8 @@ extern void                 *DAT_00481f50;      /* background RGB565 pixel data 
 extern void                 *DAT_00487828;      /* entity placement data (20 bytes each) */
 extern int                   DAT_00489278;      /* entity placement count */
 extern unsigned char         DAT_00483860[];     /* tile type table from .lev (0x39c bytes) */
+#define DAT_00483961 (DAT_00483860[0x101])       /* level civilian density % */
+#define DAT_00483962 (DAT_00483860[0x102])       /* level bombing probability % */
 extern void                 *DAT_00487814;      /* coarse grid buffer */
 extern void                 *DAT_00489ea4;      /* shadow grid buffer 1 */
 extern void                 *DAT_00489ea8;      /* shadow grid buffer 2 */

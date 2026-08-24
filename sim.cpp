@@ -1379,19 +1379,26 @@ void FUN_00460ac0(void)
     }
 }
 /* ===== FUN_00413720 — Multi_Entity_Spawner (00413720) ===== */
-/* Spawns critters (part 1), troopers (part 2), and ambient water particles (part 3).
- * Each part is gated by config flags and entity count limits.
- * Part 3 (water particles) requires float comparison with .rdata constant;
- * simplified to skip that section for now. */
+/* Spawns civilians, random infantry, ambient water particles, and bombing debris.
+ * This follows FUN_00413720, including the level percentages stored in the .lev
+ * config blob and the death-timer override for heavy bombing. */
 void FUN_00413720(void)
 {
     int shift = (unsigned char)DAT_00487a18 & 0x1F;
 
-    /* Part 1: Critter spawning (DAT_00483734 enables) */
+    /* Part 1: Civilians. The map contributes a 0-100 density, while the menu
+     * chooses level default, 2x (Normal), or 6x (Lots). */
     if (DAT_00483734 != '\0') {
+        int area_blocks = ((int)DAT_004879f4 / 64) * ((int)DAT_004879f0 / 64);
+        float civilian_chance =
+            (float)area_blocks * (float)DAT_00483961 * 0.01f;
+        if (DAT_00483734 == 2) {
+            civilian_chance *= 2.0f;
+        } else if (DAT_00483734 == 3) {
+            civilian_chance *= 6.0f;
+        }
         int rnd = rand() & 0x7FF;
-        /* Threshold from float-to-int conversion — simplified to a reasonable constant */
-        if (rnd < 2 && g_TrooperCount < TROOPER_CAPACITY) {
+        if (rnd < (int)civilian_chance && g_TrooperCount < TROOPER_CAPACITY) {
             int cx = rand() % ((int)DAT_004879f0 - 4) + 2;
             int cy = rand() % ((int)DAT_004879f4 - 4) + 2;
             unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + (cy << shift) + cx);
@@ -1482,9 +1489,37 @@ void FUN_00413720(void)
         }
     }
 
-    /* Part 4: Conditional entity spawning from DAT_004892d0 threshold.
-     * This involves float comparison with .rdata constant at 0x0047540C
-     * and calls FUN_00410030. Simplified: skip for now (cosmetic only). */
+    /* Part 4: Level bombing. When the death timer's outcome is Heavy
+     * bombing (3) or Low energies + bombing (4), the original ignores the
+     * map-selected rate and switches to width * 0.0002 immediately. */
+    bool death_timer_bombing =
+        DAT_004892a8 == 1 &&
+        (*((unsigned char *)&DAT_00483740 + 1) == 3 ||
+         *((unsigned char *)&DAT_00483740 + 1) == 4);
+
+    double bombing_rate = (double)DAT_004892d0;
+    if (death_timer_bombing) {
+        bombing_rate = (double)(int)DAT_004879f0 * (double)0.0002f;
+    }
+
+    if (bombing_rate > 0.0) {
+        int guaranteed_spawns = (int)bombing_rate;
+        float fractional_spawn = (float)(bombing_rate - (double)guaranteed_spawns);
+
+        for (int i = 0;
+             i < guaranteed_spawns && g_EntityCount < ENTITY_ACTIVE_CAPACITY;
+             ++i) {
+            FUN_00410030();
+        }
+
+        if (fractional_spawn != 0.0f) {
+            int random_divisor = (int)(1.0 / (double)fractional_spawn);
+            if (random_divisor != 0 && rand() % random_divisor == 0 &&
+                g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                FUN_00410030();
+            }
+        }
+    }
 }
 /* ===== FUN_00454340 — Update_Spawner_Emitters (00454340) ===== */
 /* Updates spawner/emitter objects (DAT_00487aa0, stride 0x10, DAT_004892d8 count).
