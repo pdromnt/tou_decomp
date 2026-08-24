@@ -45,25 +45,40 @@ def segments(image: Image.Image) -> list[Image.Image]:
     return found
 
 
-def accent(draw: ImageDraw.ImageDraw, width: int, top: int, kind: str, scale: int) -> None:
+def soft_line(draw: ImageDraw.ImageDraw, points: tuple[int, ...], scale: int,
+              core: int) -> None:
+    """Match the original atlas' subdued antialiased strokes."""
+    if scale > 1:
+        edge = max(1, core // 4)
+        draw.line(points, fill=(edge, edge, edge), width=scale + 2)
+        draw.line(points, fill=(core, core, core), width=max(1, scale - 1))
+    else:
+        draw.line(points, fill=(core, core, core), width=1)
+
+
+def accent(draw: ImageDraw.ImageDraw, width: int, top: int, kind: str,
+           scale: int, core: int) -> None:
     center = width // 2
     y = max(0, top - (4 if scale > 1 else 3))
-    ink = (255, 255, 255)
     if kind == "acute":
-        draw.line((center - scale, y + 2 * scale, center + scale, y), fill=ink, width=scale)
+        soft_line(draw, (center - scale, y + 2 * scale, center + scale, y), scale, core)
     elif kind == "grave":
-        draw.line((center - scale, y, center + scale, y + 2 * scale), fill=ink, width=scale)
+        soft_line(draw, (center - scale, y, center + scale, y + 2 * scale), scale, core)
     elif kind == "circumflex":
-        draw.line((center - 2 * scale, y + scale, center, y), fill=ink, width=scale)
-        draw.line((center, y, center + 2 * scale, y + scale), fill=ink, width=scale)
+        soft_line(draw, (center - 2 * scale, y + scale, center, y), scale, core)
+        soft_line(draw, (center, y, center + 2 * scale, y + scale), scale, core)
     elif kind == "tilde":
-        draw.line((center - 2 * scale, y + scale, center - scale, y), fill=ink, width=scale)
-        draw.line((center - scale, y, center + scale, y + scale), fill=ink, width=scale)
-        draw.line((center + scale, y + scale, center + 2 * scale, y), fill=ink, width=scale)
+        soft_line(draw, (center - 2 * scale, y + scale, center - scale, y), scale, core)
+        soft_line(draw, (center - scale, y, center + scale, y + scale), scale, core)
+        soft_line(draw, (center + scale, y + scale, center + 2 * scale, y), scale, core)
     elif kind == "diaeresis":
         radius = max(1, scale)
         for x in (center - 2 * scale, center + 2 * scale):
-            draw.rectangle((x - radius // 2, y, x + radius // 2, y + radius - 1), fill=ink)
+            edge = max(1, core // 4)
+            draw.rectangle((x - radius // 2 - 1, y - 1,
+                            x + radius // 2 + 1, y + radius), fill=(edge, edge, edge))
+            draw.rectangle((x - radius // 2, y,
+                            x + radius // 2, y + radius - 1), fill=(core, core, core))
 
 
 def composed(base: Image.Image, kind: str) -> Image.Image:
@@ -72,14 +87,16 @@ def composed(base: Image.Image, kind: str) -> Image.Image:
     if not bbox:
         return glyph
     scale = 2 if glyph.height >= 24 else 1
+    source_values = [value for value in glyph.convert("L").getdata() if value]
+    core = max(96, int(max(source_values) * 0.70))
     draw = ImageDraw.Draw(glyph)
     if kind == "cedilla":
         center = glyph.width // 2
         y = min(glyph.height - 2, bbox[3])
-        draw.line((center, y, center - scale, min(glyph.height - 1, y + 2 * scale)),
-                  fill=(255, 255, 255), width=scale)
+        soft_line(draw, (center, y, center - scale,
+                         min(glyph.height - 1, y + 2 * scale)), scale, core)
     else:
-        accent(draw, glyph.width, bbox[1], kind, scale)
+        accent(draw, glyph.width, bbox[1], kind, scale, core)
     return glyph
 
 
