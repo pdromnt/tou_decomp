@@ -15,6 +15,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <SDL3/SDL_stdinc.h>
 
 extern "C" void stbi_image_free(void *retval_from_stbi_load);
 

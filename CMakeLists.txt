@@ -98,3 +98,19 @@ target_link_libraries(TOU PRIVATE
 set_target_properties(TOU PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+
+install(TARGETS TOU
+    RUNTIME DESTINATION .
+    BUNDLE DESTINATION .
+)
+install(DIRECTORY
+    data
+    ggstuff
+    help
+    levels
+    music
+    sfx
+    ships
+    swap
+    DESTINATION .
+)

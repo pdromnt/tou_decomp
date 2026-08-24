@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  windows:
+  windows-x86-parity:
+    name: Windows x86 parity
     runs-on: windows-latest
 
     steps:
@@ -31,12 +32,106 @@ jobs:
             mingw-w64-i686-gcc
             mingw-w64-i686-ninja
 
-      - name: Build game
+      - name: Build and stage game
         shell: msys2 {0}
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel 2
+          cmake --install build --prefix stage
 
       - name: Verify 32-bit executable
         shell: msys2 {0}
-        run: objdump -f TOU.exe | grep -q "file format pei-i386"
+        run: objdump -f stage/TOU.exe | grep -q "file format pei-i386"
+
+      - name: Upload staged build
+        uses: actions/upload-artifact@v6
+        with:
+          name: tou-windows-x86
+          path: stage
+          if-no-files-found: error
+
+  native:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            platform: windows-x64
+            cmake_arch: x64
+          - name: Windows ARM64
+            runner: windows-11-arm
+            platform: windows-arm64
+            cmake_arch: ARM64
+          - name: Linux x64
+            runner: ubuntu-24.04
+            platform: linux-x64
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - name: macOS Intel
+            runner: macos-15-intel
+            platform: macos-x64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            platform: macos-arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config build-essential \
+            libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev libudev-dev
+
+      - name: Configure Windows build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure Unix build
+        if: runner.os != 'Windows'
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build game
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Stage runtime
+        run: cmake --install build --config Release --prefix stage
+
+      - name: Verify native architecture
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          file stage/TOU
+          case "${{ matrix.platform }}" in
+            linux-x64) file stage/TOU | grep -q 'x86-64' ;;
+            linux-arm64) file stage/TOU | grep -Eq 'ARM aarch64|ARM64' ;;
+            macos-x64) file stage/TOU | grep -q 'x86_64' ;;
+            macos-arm64) file stage/TOU | grep -q 'arm64' ;;
+          esac
+
+      - name: Verify Windows executable exists
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath stage/TOU.exe)) {
+            throw "Missing staged TOU.exe"
+          }
+
+      - name: Upload staged build
+        uses: actions/upload-artifact@v6
+        with:
+          name: tou-${{ matrix.platform }}
+          path: stage
+          if-no-files-found: error
