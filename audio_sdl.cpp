@@ -67,8 +67,8 @@ int Audio_Init(void)
     }
 
     s_Samples.clear();
-    s_Samples.push_back((SdlSample){ NULL, false }); /* handle zero is invalid */
-    s_Channels.assign(AUDIO_CHANNEL_COUNT, (SdlChannel){ NULL, 255, 128 });
+    s_Samples.push_back(SdlSample{ NULL, false }); /* handle zero is invalid */
+    s_Channels.assign(AUDIO_CHANNEL_COUNT, SdlChannel{ NULL, 255, 128 });
     for (size_t i = 0; i < s_Channels.size(); i++) {
         s_Channels[i].track = MIX_CreateTrack(s_Mixer);
         if (s_Channels[i].track == NULL) {
@@ -124,7 +124,7 @@ AudioSampleHandle Audio_LoadSample(const char *path, int loop)
         SDL_Log("Could not load sample %s: %s", path, SDL_GetError());
         return 0;
     }
-    s_Samples.push_back((SdlSample){ audio, loop != 0 });
+    s_Samples.push_back(SdlSample{ audio, loop != 0 });
     return (AudioSampleHandle)(s_Samples.size() - 1);
 }
 

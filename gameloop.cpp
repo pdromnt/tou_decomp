@@ -137,7 +137,7 @@ void Game_State_Manager(void)
         Load_Background_To_Buffer(1);
         FUN_0040e130();
         FUN_0045d7d0();
-        /* Fall through to case 0x97 */
+        /* fall through */
 
     case GAME_STATE_INTRO_RUN:
         Intro_Sequence();

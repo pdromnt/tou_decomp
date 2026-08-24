@@ -77,7 +77,7 @@ extern unsigned char         DAT_00481d84;      /* extra key order byte */
 extern unsigned char         g_KeyboardState[256]; /* 00481D8C - legacy scan-code state */
 
 /* ===== Additional State Globals ===== */
-extern unsigned char         DAT_004877a8;      /* game sub-flag */
+extern int                   DAT_004877a8;      /* active menu item count */
 extern unsigned char         DAT_004877bc;      /* input flag */
 extern unsigned char         DAT_004877bd;      /* input flag */
 extern unsigned char         DAT_004877c4;      /* render flag */

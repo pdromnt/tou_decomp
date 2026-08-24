@@ -149,10 +149,10 @@ void Assign_Water_Tile_Colors(void)
         int row_off = y * row_stride;
         for (int x = 0; x < width; x++) {
             int tile_off = row_off + x;
-            unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + tile_off);
-            char water_prop = *(char *)((unsigned int)tile_type * 0x20 + 4 + (int)DAT_00487928);
+            unsigned char tile_type = *(unsigned char *)((intptr_t)DAT_0048782c + tile_off);
+            char water_prop = *(char *)((unsigned int)tile_type * 0x20 + 4 + (intptr_t)DAT_00487928);
             if (water_prop != 0) {
-                *(unsigned short *)((int)DAT_00481f50 + tile_off * 2) = DAT_0048384c;
+                *(unsigned short *)((intptr_t)DAT_00481f50 + tile_off * 2) = DAT_0048384c;
             }
         }
     }
@@ -168,7 +168,7 @@ void Assign_Water_Tile_Colors(void)
  * toward the water base color (DAT_00483840/44/48). */
 void FUN_0045af70(void)
 {
-    int tbl, r4, g4, b4;
+    int tbl, g4, b4;
 
     /* First set: strong blend (step 0x1e = 30) at DAT_004876a4[28..31] */
     for (tbl = 0; tbl < 4; tbl++) {
@@ -424,6 +424,7 @@ int Load_Level_File(const char *level_name)
 int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                     unsigned char *file_buf)
 {
+    (void)extra_offset;
     unsigned char *jpeg_data;
     int jpeg_len;
     int img_w, img_h;
@@ -534,7 +535,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
             unsigned char *rle_data = ent_data + ent_count * 20;
             int tile_row = 7;
             int tile_col = 7;
-            int tiles_filled = 0;
 
             while (1) {
                 unsigned char b0 = *rle_data++;
@@ -555,7 +555,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                 for (int r = 0; r < run_len; r++) {
                     /* Write tile to tilemap at stride-aligned position */
                     tilemap[(tile_row << shift) + tile_col] = tile_val;
-                    tiles_filled++;
 
                     tile_col++;
                     if (tile_col >= (int)(map_w - 7)) {

@@ -62,7 +62,7 @@ void         *g_GameViewData = NULL;  /* 00481D40 */
 char        **g_KeyNameTable = NULL;  /* 00481D88 */
 unsigned char g_KeyOrderTable[47] = {0}; /* 00481D48 */
 unsigned char DAT_00481d84   = 0;
-unsigned char DAT_004877a8   = 0;
+int           DAT_004877a8   = 0;
 unsigned char DAT_004877bc   = 0;
 unsigned char DAT_004877bd   = 0;
 unsigned char DAT_004877c4   = 0;
@@ -1481,7 +1481,6 @@ int FUN_00423150(void)
     if (!f) return 0;
 
     int max_spr_idx = 0;
-    int spr_count = 0;
     unsigned char type_byte;
     while (fread(&type_byte, 1, 1, f) == 1) {
         unsigned short sprite_index;
@@ -1505,7 +1504,6 @@ int FUN_00423150(void)
         ((unsigned char *)DAT_00489e8c)[sprite_index] = (unsigned char)spr_w;
         ((unsigned char *)DAT_00489e88)[sprite_index] = (unsigned char)spr_h;
         if ((int)sprite_index > max_spr_idx) max_spr_idx = (int)sprite_index;
-        spr_count++;
 
         switch (type_byte) {
         case 0: case 1: {
@@ -2731,11 +2729,9 @@ static void Read_GG_Theme_Info(const char *theme_name,
         Trim_Trailing_Whitespace(line);
 
         if (want == 1) {
-            strncpy(maker_out, line, maker_sz - 1);
-            maker_out[maker_sz - 1] = '\0';
+            snprintf(maker_out, maker_sz, "%s", line);
         } else {
-            strncpy(email_out, line, email_sz - 1);
-            email_out[email_sz - 1] = '\0';
+            snprintf(email_out, email_sz, "%s", line);
         }
 
         /* Early exit once both are filled. */
@@ -2804,8 +2800,7 @@ static void Update_Level_Hover_Metadata(int level_idx)
     } else {
         const char *cached_author = (const char *)DAT_00485540[level_idx];
         if (cached_author) {
-            strncpy(author_tmp, cached_author, sizeof(author_tmp) - 1);
-            author_tmp[sizeof(author_tmp) - 1] = '\0';
+            snprintf(author_tmp, sizeof(author_tmp), "%s", cached_author);
         }
         if (name && name[0]) {
             char path[300];

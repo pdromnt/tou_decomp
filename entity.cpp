@@ -40,13 +40,13 @@ static int Play_Spectator_Spatial_Sound(int snd, int x, int y, int vol_override)
 
     int volume_source = ((vol_override & 0xff) != 0xff)
         ? (vol_override & 0xff)
-        : (int)*(unsigned char *)((int)g_SoundTable + snd * 8 + 4);
+        : (int)*(unsigned char *)((intptr_t)g_SoundTable + snd * 8 + 4);
     int volume = (int)((float)volume_source / distance) * 8;
     if (volume >= 0x100) volume = 0xff;
     if (volume < 5) return -1;
 
     int angle = FUN_004257e0(g_SpectatorCameraX, g_SpectatorCameraY, x, y);
-    int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
+    int pan = (*(int *)((intptr_t)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
     if (distance < (float)_DAT_004753e0_d) pan = 0x80;
 
     return Audio_PlaySample(g_SoundTable[snd].handle, volume, pan);
@@ -119,7 +119,7 @@ void FUN_0044f630(int x, int y, int velX, int velY, float scale,
     /* Phase 1: Find nearest wall segment (skip segment 0) */
     if (DAT_004892c8 <= 1) return;
 
-    int *seg = (int *)((int)DAT_00487820 + 0x1c);  /* start at segment[1] */
+    int *seg = (int *)((intptr_t)DAT_00487820 + 0x1c);  /* start at segment[1] */
     for (int i = 1; i < DAT_004892c8; i++) {
         int dy = tileY - seg[1];
         int dx = tileX - seg[0];
@@ -157,8 +157,8 @@ void FUN_0044f630(int x, int y, int velX, int velY, float scale,
     while (relOff < spread) {
         if (segIdx >= 0 && segIdx < DAT_004892c8) {
             /* Check segment is close enough to the nearest on the main axis */
-            int nearX = *(int *)((int)DAT_00487820 + nearest * 0x1c);
-            int segX = *(int *)((int)DAT_00487820 + segByteOff);
+            int nearX = *(int *)((intptr_t)DAT_00487820 + nearest * 0x1c);
+            int segX = *(int *)((intptr_t)DAT_00487820 + segByteOff);
             int xDiff = segX - nearX;
             int absXDiff = xDiff < 0 ? -xDiff : xDiff;
             int absRel = relOff < 0 ? -relOff : relOff;
@@ -169,14 +169,14 @@ void FUN_0044f630(int x, int y, int velX, int velY, float scale,
 
                 if (DAT_004892cc == -1) {
                     /* Vertical wall: displace field2 (offset +8) */
-                    int *target = (int *)((int)DAT_00487820 + segByteOff + 8);
+                    int *target = (int *)((intptr_t)DAT_00487820 + segByteOff + 8);
                     if (direction != 0)
                         *target = (int)((float)*target - disp);
                     else
                         *target = (int)(disp + (float)*target);
                 } else {
                     /* Horizontal wall: displace field3 (offset +0xC) */
-                    int *target = (int *)((int)DAT_00487820 + segByteOff + 0xc);
+                    int *target = (int *)((intptr_t)DAT_00487820 + segByteOff + 0xc);
                     if (direction != 0)
                         *target = (int)((float)*target - disp);
                     else
@@ -199,6 +199,8 @@ void FUN_0044f630(int x, int y, int velX, int velY, float scale,
  * param_3: world x, param_4: world y */
 void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol_override, int param6)
 {
+    (void)vol_override;
+    (void)param6;
     PlayerData *player = Player_Get(entity_idx);
 
     /* If same sound already assigned to this entity, just refresh timer */
@@ -218,7 +220,7 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
 
     /* Check sound enabled and sample exists */
     if (DAT_0048371f == '\0' || g_SoundEnabled == 0) return;
-    if (*(int *)((int)g_SoundTable + param_2 * 8) == 0) return;
+    if (*(int *)((intptr_t)g_SoundTable + param_2 * 8) == 0) return;
 
     /* Set timer and record which sound */
     player->sound_timer = 6;
@@ -248,7 +250,7 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
         if (iVar8 != 0xff) {
             /* Volume: table volume scaled by inverse distance
              * Boosted ×4 for modern Windows audio stack */
-            int vol_byte = (int)*(unsigned char *)((int)g_SoundTable + param_2 * 8 + 4);
+            int vol_byte = (int)*(unsigned char *)((intptr_t)g_SoundTable + param_2 * 8 + 4);
             int vol = (int)((float)vol_byte / minDist) * 8;
 
             /* Pan from angle to nearest listener */
@@ -256,7 +258,7 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
                 Player_Get(iVar8)->position_x,
                 Player_Get(iVar8)->position_y,
                 param_3, param_4);
-            int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
+            int pan = (*(int *)((intptr_t)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
             if (minDist < (float)_DAT_004753e0_d) pan = 0x80;
 
             /* Clamp volume */
@@ -280,17 +282,17 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
  * Returns 1 if collision detected, 0 if clear. */
 int FUN_00450dd0(int x, int y)
 {
-    unsigned int spr_w = *(unsigned char *)((int)DAT_00489e8c + 0x19b);
-    int frame_off = *(int *)((int)DAT_00489234 + 0x66c);
-    unsigned int spr_h = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b);
+    unsigned int spr_w = *(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
+    int frame_off = *(int *)((intptr_t)DAT_00489234 + 0x66c);
+    unsigned int spr_h = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b);
     int sx = (x >> 0x12) - (int)(spr_w >> 1);
     int sy = (y >> 0x12) - (int)(spr_h >> 1);
     unsigned int idx = (sy << ((unsigned char)DAT_00487a18 & 0x1f)) + sx;
 
     /* Bounds check: sprite must be well within map margins */
     if (sx <= 6 || sy <= 6 ||
-        (int)(spr_w + sx) >= DAT_004879f0 - 7 ||
-        (int)(spr_h + sy) >= DAT_004879f4 - 7)
+        (int)(spr_w + sx) >= (int)DAT_004879f0 - 7 ||
+        (int)(spr_h + sy) >= (int)DAT_004879f4 - 7)
     {
         return 1;  /* out of bounds = collision */
     }
@@ -303,11 +305,11 @@ int FUN_00450dd0(int x, int y)
             int tx = sx;
             if (spr_w != 0) {
                 do {
-                    if ((*(char *)((int)DAT_00489e94 + frame_off) != '\0') &&
-                        (0 < tx) && (tx < DAT_004879f0) &&
-                        (0 < tsy) && (tsy < DAT_004879f4) &&
-                        (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + idx) *
-                            0x20 + 1 + (int)DAT_00487928) == '\0'))
+                    if ((*(char *)((intptr_t)DAT_00489e94 + frame_off) != '\0') &&
+                        (0 < tx) && (tx < (int)DAT_004879f0) &&
+                        (0 < tsy) && (tsy < (int)DAT_004879f4) &&
+                        (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + idx) *
+                            0x20 + 1 + (intptr_t)DAT_00487928) == '\0'))
                     {
                         return 1;  /* impassable tile hit */
                     }
@@ -331,7 +333,7 @@ int FUN_00450dd0(int x, int y)
 static void FUN_004483c0(int *param_1, int *param_2)
 {
     int iVar1 = *param_2;
-    if (*(char *)((int)DAT_00489ea4 + DAT_00487a04 * iVar1 + *param_1) != '\0')
+    if (*(char *)((intptr_t)DAT_00489ea4 + DAT_00487a04 * iVar1 + *param_1) != '\0')
         return;
     int iVar5 = iVar1 - 1;
     int local_c = -1;
@@ -342,7 +344,7 @@ static void FUN_004483c0(int *param_1, int *param_2)
             int iVar2 = *param_1 - 1;
             do {
                 if (((0 < iVar2) && (iVar2 < DAT_00487a04)) &&
-                   (*(char *)((int)DAT_00489ea4 + iVar3 + iVar2) != '\0')) {
+                   (*(char *)((intptr_t)DAT_00489ea4 + iVar3 + iVar2) != '\0')) {
                     *param_2 = iVar1 + local_c;
                     *param_1 = *param_1 + iVar4;
                     return;
@@ -378,17 +380,17 @@ static int FUN_004495e0(int param_1, int param_2, int param_3, int param_4,
             (iVar1 < (int)DAT_004879f0 * FIXED_SCALE) &&
             (param_2 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar1 >> 0x12) +
-                       (int)DAT_0048782c +
+                       (intptr_t)DAT_0048782c +
                        ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
-                       0x20 + 1 + (int)DAT_00487928) == '\0'))
+                       0x20 + 1 + (intptr_t)DAT_00487928) == '\0'))
             return 1;
         if ((0 < iVar2) && (0 < iVar3) &&
             (iVar2 < (int)DAT_004879f0 * FIXED_SCALE) &&
             (iVar3 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar2 >> 0x12) +
-                       (int)DAT_0048782c +
+                       (intptr_t)DAT_0048782c +
                        ((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
-                       0x20 + 1 + (int)DAT_00487928) == '\0'))
+                       0x20 + 1 + (intptr_t)DAT_00487928) == '\0'))
             return 2;
         count++;
         if (4 < count)
@@ -404,21 +406,21 @@ static int FUN_004494e0(int param_1, int param_2, int param_3, int param_4, int 
     int iVar3 = param_5;
     int count = 0;
     PlayerData *player = Player_Get(iVar3);
-    unsigned int uVar4 = (unsigned int)*(unsigned char *)(iVar3 * 0x40 + 0x23 + (int)DAT_0048780c);
+    unsigned int uVar4 = (unsigned int)*(unsigned char *)(iVar3 * 0x40 + 0x23 + (intptr_t)DAT_0048780c);
     iVar3 = player->heading;
     signed char sVar1 = (signed char)((0 < player->boost_timer) + 0xb);
     while (1) {
-        param_3 += ((int)(*(int *)((int)DAT_00487ab0 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
-        param_4 += ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
+        param_3 += ((int)(*(int *)((intptr_t)DAT_00487ab0 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
+        param_4 += ((int)(*(int *)((intptr_t)DAT_00487ab0 + 0x800 + iVar3 * 4) * (int)uVar4) >> sVar1) * 0x40;
         param_1 += param_3;
         param_2 += param_4;
         if ((0 < param_1) && (0 < param_2) &&
             (param_1 < (int)DAT_004879f0 * FIXED_SCALE) &&
             (param_2 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((param_1 >> 0x12) +
-                       (int)DAT_0048782c +
+                       (intptr_t)DAT_0048782c +
                        ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
-                       0x20 + 1 + (int)DAT_00487928) == '\0'))
+                       0x20 + 1 + (intptr_t)DAT_00487928) == '\0'))
             return 1;
         count++;
         if (6 < count)
@@ -429,7 +431,7 @@ static int FUN_004494e0(int param_1, int param_2, int param_3, int param_4, int 
 /* ===== FUN_004497c0 — Dodge/Strafe Decision (004497C0) ===== */
 /* Decides whether the AI should strafe left/right or move forward/backward
  * based on the angle difference between facing and velocity direction. */
-static void FUN_004497c0(int param_1, char param_2)
+static void FUN_004497c0(intptr_t param_1, char param_2)
 {
     unsigned long long uVar6 = (unsigned long long)(unsigned int)FUN_004257e0(
         0, 0, *(int *)(param_1 + 0x10), *(int *)(param_1 + 0x14));
@@ -488,9 +490,9 @@ static long long FUN_004496e0(int param_1, int param_2, int param_3, int param_4
                 param_2 += step_dy;
                 param_1 += step_dx;
                 unsigned int tileOff = (unsigned int)*(unsigned char *)((param_1 >> 0x12) +
-                    (int)DAT_0048782c +
+                    (intptr_t)DAT_0048782c +
                     ((param_2 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20;
-                if (*(char *)(tileOff + 1 + (int)DAT_00487928) == '\0')
+                if (*(char *)(tileOff + 1 + (intptr_t)DAT_00487928) == '\0')
                     return 0LL;
                 steps++;
             } while (steps < uVar1);
@@ -512,8 +514,8 @@ static unsigned int FUN_0044de10(int param_1, unsigned int param_2)
         int iVar2 = 0;
         do {
             unsigned int uVar1 = idx++;
-            if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + uVar1) *
-                0x20 + 1 + (int)DAT_00487928) == '\0')
+            if (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + uVar1) *
+                0x20 + 1 + (intptr_t)DAT_00487928) == '\0')
                 return 0;
             iVar2++;
         } while (iVar2 < 0x10);
@@ -564,11 +566,11 @@ static unsigned int FUN_0044ac80(int *param_1)
     int iVar5 = *param_1 >> 0x12;
 
     /* Check tile below (+1 row) */
-    if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c +
-        ((uVar2 + 1) << (bVar4 & 0x1f)) + iVar5) * 0x20 + 0x18 + (int)DAT_00487928) != '\0') {
+    if (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c +
+        ((uVar2 + 1) << (bVar4 & 0x1f)) + iVar5) * 0x20 + 0x18 + (intptr_t)DAT_00487928) != '\0') {
         int idx = (uVar2 << (bVar4 & 0x1f)) + iVar5;
-        char cVar1 = *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + idx) *
-            0x20 + 4 + (int)DAT_00487928);
+        char cVar1 = *(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + idx) *
+            0x20 + 4 + (intptr_t)DAT_00487928);
         if (cVar1 != '\0') {
             param_1[0x2e] |= 4;
         }
@@ -576,10 +578,10 @@ static unsigned int FUN_0044ac80(int *param_1)
     }
     /* Check tile above (-1 row) */
     if (*(char *)((unsigned int)*(unsigned char *)(((uVar2 - 1) << (bVar4 & 0x1f)) +
-        iVar5 + (int)DAT_0048782c) * 0x20 + 0x18 + (int)DAT_00487928) != '\0') {
+        iVar5 + (intptr_t)DAT_0048782c) * 0x20 + 0x18 + (intptr_t)DAT_00487928) != '\0') {
         int idx = (uVar2 << (bVar4 & 0x1f)) + iVar5;
-        char cVar1 = *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + idx) *
-            0x20 + 4 + (int)DAT_00487928);
+        char cVar1 = *(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + idx) *
+            0x20 + 4 + (intptr_t)DAT_00487928);
         if (cVar1 == '\0') {
             param_1[0x2e] |= 4;
         }
@@ -606,11 +608,11 @@ static int FUN_00449420(int *param_1)
             (iVar2 < (int)DAT_004879f0 * FIXED_SCALE) &&
             (iVar3 < (int)DAT_004879f4 * FIXED_SCALE)) {
             unsigned int tileOff = (unsigned int)*(unsigned char *)((iVar2 >> 0x12) +
-                (int)DAT_0048782c +
+                (intptr_t)DAT_0048782c +
                 ((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20;
-            if (*(char *)(tileOff + 0x18 + (int)DAT_00487928) != '\0')
+            if (*(char *)(tileOff + 0x18 + (intptr_t)DAT_00487928) != '\0')
                 return 1;
-            if (*(char *)(tileOff + (int)DAT_00487928 + 1) == '\0')
+            if (*(char *)(tileOff + (intptr_t)DAT_00487928 + 1) == '\0')
                 return 0;
         }
         count++;
@@ -629,7 +631,7 @@ static unsigned int FUN_0044aa50(int *param_1)
     int iVar4 = 999999999;
     int local_4 = -1;
     if (0 < DAT_00489254) {
-        char *pcVar3 = (char *)((int)DAT_00489e84 + 8);
+        char *pcVar3 = (char *)((intptr_t)DAT_00489e84 + 8);
         do {
             if ((*pcVar3 == (char)param_1[0xb]) || (*pcVar3 == (char)-1)) {
                 iVar1 = (*(int *)(pcVar3 - 4) - param_1[1]) >> 0x12;
@@ -647,8 +649,8 @@ static unsigned int FUN_0044aa50(int *param_1)
         } while (iVar5 < DAT_00489254);
         if (iVar1 != -1) {
             iVar1 *= 0x10;
-            param_1[0x114] = *(int *)(iVar1 + (int)DAT_00489e84);
-            int iVar4_2 = *(int *)(iVar1 + 4 + (int)DAT_00489e84);
+            param_1[0x114] = *(int *)(iVar1 + (intptr_t)DAT_00489e84);
+            int iVar4_2 = *(int *)(iVar1 + 4 + (intptr_t)DAT_00489e84);
             param_1[0x116] = 0;
             param_1[0x115] = iVar4_2;
             return (((unsigned int)iVar1) & 0xffffff00) | 1;
@@ -705,10 +707,10 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
     uVar2 = (param_1[6] + 0x199U) & 0x7ff;
     uVar3 = (param_1[6] - 0x199U) & 0x7ff;
     iVar4 = FUN_004495e0(iVar1, iVar5,
-        *(int *)((int)DAT_00487ab0 + uVar2 * 4) * 3,
-        *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4) * 3,
-        *(int *)((int)DAT_00487ab0 + uVar3 * 4) * 3,
-        *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4) * 3);
+        *(int *)((intptr_t)DAT_00487ab0 + uVar2 * 4) * 3,
+        *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar2 * 4) * 3,
+        *(int *)((intptr_t)DAT_00487ab0 + uVar3 * 4) * 3,
+        *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar3 * 4) * 3);
     if (iVar4 == 1) {
         unsigned int b = param_1[0x2e];
         unsigned int s = b | 2;
@@ -727,10 +729,10 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
     uVar3 = (param_1[6] - 0x100U) & 0x7ff;
     uVar2 = (param_1[6] + 0x100U) & 0x7ff;
     iVar4 = FUN_004495e0(iVar1, iVar5,
-        *(int *)((int)DAT_00487ab0 + uVar2 * 4),
-        *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4),
-        *(int *)((int)DAT_00487ab0 + uVar3 * 4),
-        *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4));
+        *(int *)((intptr_t)DAT_00487ab0 + uVar2 * 4),
+        *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar2 * 4),
+        *(int *)((intptr_t)DAT_00487ab0 + uVar3 * 4),
+        *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar3 * 4));
     if (iVar4 == 1) {
         unsigned int b = param_1[0x2e];
         unsigned int s = b | 2;
@@ -749,10 +751,10 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
     uVar3 = (param_1[6] - 0x300U) & 0x7ff;
     uVar2 = (param_1[6] + 0x300U) & 0x7ff;
     iVar4 = FUN_004495e0(iVar1, iVar5,
-        *(int *)((int)DAT_00487ab0 + uVar2 * 4),
-        *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4),
-        *(int *)((int)DAT_00487ab0 + uVar3 * 4),
-        *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4));
+        *(int *)((intptr_t)DAT_00487ab0 + uVar2 * 4),
+        *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar2 * 4),
+        *(int *)((intptr_t)DAT_00487ab0 + uVar3 * 4),
+        *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar3 * 4));
     if (iVar4 == 1) {
         unsigned int b = param_1[0x2e];
         unsigned int s = b | 2;
@@ -774,15 +776,15 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
     int iVar4b = iVar5;
     int iVar6 = iVar1;
     do {
-        iVar6 = iVar6 + *(int *)((int)DAT_00487ab0 + uVar3 * 4);
-        iVar4b = iVar4b + *(int *)((int)DAT_00487ab0 + 0x800 + uVar3 * 4);
+        iVar6 = iVar6 + *(int *)((intptr_t)DAT_00487ab0 + uVar3 * 4);
+        iVar4b = iVar4b + *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar3 * 4);
         if ((0 < iVar6) && (0 < iVar4b) &&
             (iVar6 < (int)DAT_004879f0 * FIXED_SCALE) &&
             (iVar4b < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar6 >> 0x12) +
-                (int)DAT_0048782c +
+                (intptr_t)DAT_0048782c +
                 ((iVar4b >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
-                0x20 + 1 + (int)DAT_00487928) == '\0'))
+                0x20 + 1 + (intptr_t)DAT_00487928) == '\0'))
             goto LAB_00449f58;
         local_14++;
     } while (local_14 < 5);
@@ -792,28 +794,28 @@ static void FUN_00449c50(int *param_1, int param_2, int param_3)
     iVar4b = iVar1;
     iVar6 = iVar5;
     while (1) {
-        iVar4b = iVar4b + *(int *)((int)DAT_00487ab0 + uVar2 * 4);
-        iVar6 = iVar6 + *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4);
+        iVar4b = iVar4b + *(int *)((intptr_t)DAT_00487ab0 + uVar2 * 4);
+        iVar6 = iVar6 + *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar2 * 4);
         if ((0 < iVar4b) && (0 < iVar6) &&
             (iVar4b < (int)DAT_004879f0 * FIXED_SCALE) &&
             (iVar6 < (int)DAT_004879f4 * FIXED_SCALE) &&
             (*(char *)((unsigned int)*(unsigned char *)((iVar4b >> 0x12) +
-                (int)DAT_0048782c +
+                (intptr_t)DAT_0048782c +
                 ((iVar6 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) *
-                0x20 + 1 + (int)DAT_00487928) == '\0'))
+                0x20 + 1 + (intptr_t)DAT_00487928) == '\0'))
             break;
         local_14++;
         if (4 < local_14) {
 LAB_00449f58:
             if (20000 < param_2) {
                 if ((90000 < param_2) && ((char)param_1[0x39] == '\0')) {
-                    FUN_004497c0((int)param_1, '\0');
+                    FUN_004497c0((intptr_t)param_1, '\0');
                 }
                 if ((120000 < param_2) && ((char)param_1[0x39] == '\0')) {
                     int res = FUN_004494e0(iVar1, iVar5, param_1[4] << 3,
                                            param_1[5] << 3, param_3);
                     if (res != 0) {
-                        FUN_004497c0((int)param_1, '\0');
+                        FUN_004497c0((intptr_t)param_1, '\0');
                     }
                 }
             }
@@ -916,7 +918,7 @@ static void FUN_004498a0(int *param_1, int param_2)
 
     /* Check terrain tile type for conveyors/speed modifiers */
     unsigned char bVar1 = *(unsigned char *)(((iVar3 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
-        (iVar2b >> 0x12) + (int)DAT_0048782c);
+        (iVar2b >> 0x12) + (intptr_t)DAT_0048782c);
 
     /* Conveyor tile types 0x40-0x47, 0x64-0x73, 0x16-0x19 modify velocity */
     if (bVar1 == 0x40 || (99 < bVar1 && bVar1 < 0x68)) {
@@ -976,10 +978,10 @@ LAB_00449c28:
  * prediction with gravity. Sets fire button if projectile will intersect. */
 static void FUN_00449fd0(int *param_1)
 {
-    int iVar19 = (int)DAT_00487abc;
-    unsigned int uVar13 = (unsigned int)*(unsigned char *)((char)param_1[0xd] + 0x3c + (int)param_1);
-    unsigned int uVar16 = (unsigned int)*(unsigned char *)((int)param_1 + 0x35);
-    int iVar10 = iVar19 + uVar13 * 0x218;
+    intptr_t iVar19 = (intptr_t)DAT_00487abc;
+    unsigned int uVar13 = (unsigned int)*(unsigned char *)((char)param_1[0xd] + 0x3c + (intptr_t)param_1);
+    unsigned int uVar16 = (unsigned int)*(unsigned char *)((intptr_t)param_1 + 0x35);
+    intptr_t iVar10 = iVar19 + uVar13 * 0x218;
     char cVar2 = *(char *)(iVar10 + 0x7c);
 
     if (cVar2 == '\0') return;
@@ -1005,7 +1007,7 @@ static void FUN_00449fd0(int *param_1)
     int iVar15 = iVar4 - DAT_00481ec8;
 
     /* Weapon parameters from level/type tables */
-    unsigned int weap_level = (unsigned int)*(unsigned char *)((int)param_1 + 0xdd);
+    unsigned int weap_level = (unsigned int)*(unsigned char *)((intptr_t)param_1 + 0xdd);
     int local_5c = DAT_0047ee1c[weap_level];
     int iVar20 = (int)weap_level - 1;
     int local_64 = DAT_0047ee0c[iVar20];
@@ -1016,13 +1018,13 @@ static void FUN_00449fd0(int *param_1)
 
     /* Compute fire rate from weapon stats */
     float fVar6 = (float)((unsigned int)*(unsigned char *)(iVar10 + 0xa0 + uVar16) *
-                  (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) * _DAT_004757a4 +
+                  (unsigned int)*((unsigned char *)&DAT_00483750 + 2)) * _DAT_004757a4 +
                   (float)(*(int *)(iVar19 + 0xdc + iVar1b * 4) *
                   (unsigned int)*(unsigned char *)(param_1 + 0x27) *
                   DAT_0048382c >> 0xc);
     if (DAT_00483830 == 0) {
         fVar6 = fVar6 + _DAT_004757a0;
-    } else if (*(unsigned char *)((int)&DAT_0048374c + 3) < 0xf1) {
+    } else if (*((unsigned char *)&DAT_0048374c + 3) < 0xf1) {
         fVar6 = ((float)(unsigned int)(*(int *)(iVar19 + 0x10c + iVar1b * 4) * 7) /
                 (float)DAT_00483830) * _DAT_0047579c + fVar6;
     }
@@ -1057,8 +1059,8 @@ static void FUN_00449fd0(int *param_1)
     }
     {
         /* Compute X velocity: cos(facing) * speed / 64 + inherited entity velocity */
-        int cos_val = *(int *)((int)DAT_00487ab0 + facing * 4);
-        int sin_val = *(int *)((int)DAT_00487ab0 + 0x800 + facing * 4);
+        int cos_val = *(int *)((intptr_t)DAT_00487ab0 + facing * 4);
+        int sin_val = *(int *)((intptr_t)DAT_00487ab0 + 0x800 + facing * 4);
         local_60 = (int)((float)(cos_val * proj_speed >> 6) + (float)param_1[4] * fVarAcc);
         local_68 = (int)((float)(sin_val * proj_speed >> 6) + (float)param_1[5] * fVarAcc);
     }
@@ -1069,7 +1071,7 @@ skip_proj:
     if (0 < DAT_00489240) {
         do {
             PlayerData *player = Player_Get(local_2c);
-            unsigned char ship_speed = *(unsigned char *)((int)DAT_0048780c +
+            unsigned char ship_speed = *(unsigned char *)((intptr_t)DAT_0048780c +
                 local_2c * 0x40 + 0x23);
             if (((char)param_1[0xb] != (char)player->team) &&
                 (iVar14 < player->position_x) && (player->position_x < iVar7) &&
@@ -1086,9 +1088,9 @@ skip_proj:
                     iVar9 = 0;
                 } else {
                     signed char sVar12 = (signed char)((0 < player->boost_timer) + 0xb);
-                    iVar23 = ((int)(*(int *)((int)DAT_00487ab0 + player->heading * 4) *
+                    iVar23 = ((int)(*(int *)((intptr_t)DAT_00487ab0 + player->heading * 4) *
                               (unsigned int)ship_speed) >> sVar12) / 2;
-                    iVar9 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + player->heading * 4) *
+                    iVar9 = ((int)(*(int *)((intptr_t)DAT_00487ab0 + 0x800 + player->heading * 4) *
                              (unsigned int)ship_speed) >> sVar12) / 2;
                 }
 
@@ -1126,7 +1128,7 @@ skip_proj:
                         /* Check passability at projectile position */
                         if (*(char *)((unsigned int)*(unsigned char *)(
                             ((local_54 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
-                            (local_44 >> 0x12) + (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\0')
+                            (local_44 >> 0x12) + (intptr_t)DAT_0048782c) * 0x20 + (intptr_t)DAT_00487928) == '\0')
                             break;
 
                         local_3c += local_5c;
@@ -1161,13 +1163,13 @@ static void FUN_0044a6b0(int *param_1)
     int iVar2 = iVar4 + DAT_00481ec4;
     int iVar7 = iVar5 - DAT_00481ec8;
     int iVar11 = DAT_00481ec8 + iVar5;
-    unsigned char bVar3 = *(unsigned char *)((int)param_1 + 0xdd);
+    unsigned char bVar3 = *(unsigned char *)((intptr_t)param_1 + 0xdd);
     int facing = param_1[6];
 
     /* Compute melee velocity from weapon type 1 speed (0x2c4 offset) */
-    int melee_speed = *(int *)((int)DAT_00487abc + 0x2c4);
-    int cos_val = *(int *)((int)DAT_00487ab0 + facing * 4);
-    int sin_val = *(int *)((int)DAT_00487ab0 + 0x800 + facing * 4);
+    int melee_speed = *(int *)((intptr_t)DAT_00487abc + 0x2c4);
+    int cos_val = *(int *)((intptr_t)DAT_00487ab0 + facing * 4);
+    int sin_val = *(int *)((intptr_t)DAT_00487ab0 + 0x800 + facing * 4);
 
     /* __ftol: initial X velocity = cos*speed/64 + entity_vx * 0.5 */
     int lVar18 = (int)((float)(cos_val * melee_speed >> 6) + (float)param_1[4] * _DAT_004757a8);
@@ -1178,7 +1180,7 @@ static void FUN_0044a6b0(int *param_1)
     if (0 < DAT_00489240) {
         do {
             PlayerData *player = Player_Get(local_34);
-            unsigned char ship_speed = *(unsigned char *)((int)DAT_0048780c +
+            unsigned char ship_speed = *(unsigned char *)((intptr_t)DAT_0048780c +
                 local_34 * 0x40 + 0x23);
             if (((char)param_1[0xb] != (char)player->team) &&
                 (iVar6 < player->position_x) && (player->position_x < iVar2) &&
@@ -1195,9 +1197,9 @@ static void FUN_0044a6b0(int *param_1)
                     iVar8 = 0;
                 } else {
                     signed char sVar1 = (signed char)((0 < player->boost_timer) + 0xb);
-                    iVar16 = ((int)(*(int *)((int)DAT_00487ab0 + player->heading * 4) *
+                    iVar16 = ((int)(*(int *)((intptr_t)DAT_00487ab0 + player->heading * 4) *
                               (unsigned int)ship_speed) >> sVar1) / 2;
-                    iVar8 = ((int)(*(int *)((int)DAT_00487ab0 + 0x800 + player->heading * 4) *
+                    iVar8 = ((int)(*(int *)((intptr_t)DAT_00487ab0 + 0x800 + player->heading * 4) *
                              (unsigned int)ship_speed) >> sVar1) / 2;
                 }
 
@@ -1207,7 +1209,7 @@ static void FUN_0044a6b0(int *param_1)
                 iVar16 = (iVar16 << 4) / 2;
                 int local_38 = 0;
                 int iVar13 = player->velocity_x << 2;
-                int iVar17 = (*(int *)((int)DAT_00487abc + 0x2a0) * DAT_00483828 * 0x10) / 2;
+                int iVar17 = (*(int *)((intptr_t)DAT_00487abc + 0x2a0) * DAT_00483828 * 0x10) / 2;
                 iVar8 = ((DAT_00483824 + iVar8) * 0x10) / 2;
                 int local_54 = iVar5;
                 int local_40 = iVar4;
@@ -1234,7 +1236,7 @@ static void FUN_0044a6b0(int *param_1)
                     /* Check passability */
                     if (*(char *)((unsigned int)*(unsigned char *)(
                         ((local_54 >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)) +
-                        (local_40 >> 0x12) + (int)DAT_0048782c) * 0x20 + (int)DAT_00487928) == '\0')
+                        (local_40 >> 0x12) + (intptr_t)DAT_0048782c) * 0x20 + (intptr_t)DAT_00487928) == '\0')
                         break;
 
                     local_4c += 4;
@@ -1355,7 +1357,7 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
     /* Seed start position into frontier A */
     if (*DAT_00481eac < 1000) {
         DAT_00481e90[*DAT_00481eac * 2] = local_64 * DAT_00487a04 + local_68;
-        *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = 99;
+        *(char *)((intptr_t)DAT_00481e90 + *DAT_00481eac * 8 + 5) = 99;
         *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = 1;
         *DAT_00481eac = *DAT_00481eac + 1;
     }
@@ -1363,7 +1365,7 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
     /* Seed end position into frontier B */
     if (*DAT_00481eb0 < 1000) {
         DAT_00481e94[*DAT_00481eb0 * 2] = DAT_00487a04 * param_3 + param_2;
-        *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)199;
+        *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)199;
         *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = 1;
         *DAT_00481eb0 = *DAT_00481eb0 + 1;
     }
@@ -1411,20 +1413,20 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                 char cVar4 = (char)(*(char *)(piVar11 + 1)) - 1;
                 *(char *)(piVar11 + 1) = cVar4;
                 if (cVar4 == '\0') {
-                    if (*(char *)(iVar7 + (int)DAT_00489ea8) == '\0') {
-                        *(char *)(iVar7 + (int)DAT_00489ea8) = *(char *)((int)piVar11 + 5);
-                        unsigned char bVar1 = *(unsigned char *)(iVar7 + (int)DAT_00489ea4);
+                    if (*(char *)(iVar7 + (intptr_t)DAT_00489ea8) == '\0') {
+                        *(char *)(iVar7 + (intptr_t)DAT_00489ea8) = *((char *)piVar11 + 5);
+                        unsigned char bVar1 = *(unsigned char *)(iVar7 + (intptr_t)DAT_00489ea4);
                         /* Even directions first */
                         int iVar6 = 0;
                         int *piVar13 = local_60;
                         int found_meeting = 0;
                         do {
                             if ((local_70[iVar6] & bVar1) != 0) {
-                                unsigned char bVar2 = *(unsigned char *)(*piVar13 + iVar7 + (int)DAT_00489ea8);
+                                unsigned char bVar2 = *(unsigned char *)(*piVar13 + iVar7 + (intptr_t)DAT_00489ea8);
                                 if (bVar2 == 0) {
                                     if (*DAT_00481eac < 1000) {
                                         DAT_00481e90[*DAT_00481eac * 2] = *piVar13 + iVar7;
-                                        *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
+                                        *(char *)((intptr_t)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
                                         *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = 1;
                                         *DAT_00481eac = *DAT_00481eac + 1;
                                     }
@@ -1448,11 +1450,11 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                             do {
                                 local_86_flag = !local_86_flag;
                                 if ((local_70[iVar6] & bVar1) != 0) {
-                                    unsigned char bVar2 = *(unsigned char *)(iVar7 + *piVar13 + (int)DAT_00489ea8);
+                                    unsigned char bVar2 = *(unsigned char *)(iVar7 + *piVar13 + (intptr_t)DAT_00489ea8);
                                     if (bVar2 == 0) {
                                         if (*DAT_00481eac < 1000) {
                                             DAT_00481e90[*DAT_00481eac * 2] = iVar7 + *piVar13;
-                                            *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
+                                            *(char *)((intptr_t)DAT_00481e90 + *DAT_00481eac * 8 + 5) = (char)(iVar6 + 1);
                                             *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = local_86_flag + 1;
                                             *DAT_00481eac = *DAT_00481eac + 1;
                                         }
@@ -1469,11 +1471,11 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                             } while (iVar6 < 8);
                         }
                     }
-                } else if (*(char *)(iVar7 + (int)DAT_00489ea8) == '\0') {
+                } else if (*(char *)(iVar7 + (intptr_t)DAT_00489ea8) == '\0') {
                     /* Re-queue with decremented timer */
                     if (*DAT_00481eac < 1000) {
                         DAT_00481e90[*DAT_00481eac * 2] = *piVar11;
-                        *(char *)((int)DAT_00481e90 + *DAT_00481eac * 8 + 5) = *(char *)((int)piVar11 + 5);
+                        *(char *)((intptr_t)DAT_00481e90 + *DAT_00481eac * 8 + 5) = *((char *)piVar11 + 5);
                         *(char *)(DAT_00481e90 + *DAT_00481eac * 2 + 1) = (char)piVar11[1];
                         *DAT_00481eac = *DAT_00481eac + 1;
                     }
@@ -1497,20 +1499,20 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                 char cVar4 = (char)(*(char *)(local_84 + 1)) - 1;
                 *(char *)(local_84 + 1) = cVar4;
                 if (cVar4 == '\0') {
-                    if (*(char *)(iVar10b + (int)DAT_00489ea8) == '\0') {
-                        *(char *)(iVar10b + (int)DAT_00489ea8) = *(char *)((int)local_84 + 5);
-                        unsigned char bVar1 = *(unsigned char *)(iVar10b + (int)DAT_00489ea4);
+                    if (*(char *)(iVar10b + (intptr_t)DAT_00489ea8) == '\0') {
+                        *(char *)(iVar10b + (intptr_t)DAT_00489ea8) = *((char *)local_84 + 5);
+                        unsigned char bVar1 = *(unsigned char *)(iVar10b + (intptr_t)DAT_00489ea4);
                         /* Even directions */
                         int iVar7 = 0;
                         int *piVar11b = local_60;
                         int found_meeting = 0;
                         do {
                             if ((bVar1 & local_70[iVar7]) != 0) {
-                                unsigned char bVar2 = *(unsigned char *)(*piVar11b + iVar10b + (int)DAT_00489ea8);
+                                unsigned char bVar2 = *(unsigned char *)(*piVar11b + iVar10b + (intptr_t)DAT_00489ea8);
                                 if (bVar2 == 0) {
                                     if (*DAT_00481eb0 < 1000) {
                                         DAT_00481e94[*DAT_00481eb0 * 2] = *piVar11b + iVar10b;
-                                        *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
+                                        *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
                                         *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = 1;
                                         *DAT_00481eb0 = *DAT_00481eb0 + 1;
                                     }
@@ -1534,11 +1536,11 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                             do {
                                 local_86_flag = !local_86_flag;
                                 if ((bVar1 & local_70[iVar7]) != 0) {
-                                    unsigned char bVar2 = *(unsigned char *)(*piVar11b + iVar10b + (int)DAT_00489ea8);
+                                    unsigned char bVar2 = *(unsigned char *)(*piVar11b + iVar10b + (intptr_t)DAT_00489ea8);
                                     if (bVar2 == 0) {
                                         if (*DAT_00481eb0 < 1000) {
                                             DAT_00481e94[*DAT_00481eb0 * 2] = *piVar11b + iVar10b;
-                                            *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
+                                            *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = (char)(iVar7 + 'e');
                                             *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = local_86_flag + 1;
                                             *DAT_00481eb0 = *DAT_00481eb0 + 1;
                                         }
@@ -1555,10 +1557,10 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                             } while (iVar7 < 8);
                         }
                     }
-                } else if (*(char *)(iVar10b + (int)DAT_00489ea8) == '\0') {
+                } else if (*(char *)(iVar10b + (intptr_t)DAT_00489ea8) == '\0') {
                     if (*DAT_00481eb0 < 1000) {
                         DAT_00481e94[*DAT_00481eb0 * 2] = *local_84;
-                        *(char *)((int)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = *(char *)((int)local_84 + 5);
+                        *(char *)((intptr_t)DAT_00481e94 + *DAT_00481eb0 * 8 + 5) = *((char *)local_84 + 5);
                         *(char *)(DAT_00481e94 + *DAT_00481eb0 * 2 + 1) = (char)local_84[1];
                         *DAT_00481eb0 = *DAT_00481eb0 + 1;
                     }
@@ -1603,7 +1605,7 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
     if (local_7c != 0) {
         int iVar7 = local_7c % DAT_00487a04;
         iVar10 = local_7c / DAT_00487a04;
-        bVar14 = (99 < (unsigned char)*(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8)) ? 1 : 0;
+        bVar14 = (99 < (unsigned char)*(char *)(iVar10 * DAT_00487a04 + iVar7 + (intptr_t)DAT_00489ea8)) ? 1 : 0;
         if (bVar14) {
             iVar7 = local_78 % DAT_00487a04;
             iVar10 = local_78 / DAT_00487a04;
@@ -1611,12 +1613,12 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
 
         /* Trace path from start side */
         unsigned int uVar9 = 0;
-        char cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+        char cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (intptr_t)DAT_00489ea8);
         while (cVar4 != 'c') {  /* 99 = 'c' */
             unsigned int uVar8b = uVar9 & 0x80000001;
             bVar15 = (uVar8b == 0) ? 1 : 0;
             if ((int)uVar8b < 0) {
-                bVar15 = ((uVar8b - 1 | 0xfffffffe) == 0xffffffff) ? 1 : 0;
+                bVar15 = (((uVar8b - 1) | 0xfffffffe) == 0xffffffff) ? 1 : 0;
             }
             if (bVar15) {
                 param_1[param_1[0x3c] * 2 + 0x3e] = iVar7 * 0x12;
@@ -1629,7 +1631,7 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
             iVar10 = iVar10 + local_60[local_80 + 0x10];
             iVar7 = iVar7 + local_60[local_80 + 8];
             uVar9++;
-            cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+            cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (intptr_t)DAT_00489ea8);
         }
 
         /* Reverse the waypoint array */
@@ -1660,11 +1662,11 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
             iVar7 = local_78 % DAT_00487a04;
             uVar9 = 0;
             iVar10 = local_78 / DAT_00487a04;
-            cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+            cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (intptr_t)DAT_00489ea8);
             while (cVar4 != (char)0xc7) {  /* 199 = 0xC7 */
                 unsigned int uVar8b = uVar9 & 0x80000001;
                 if ((int)uVar8b < 0) {
-                    uVar8b = (uVar8b - 1 | 0xfffffffe) + 1;
+                    uVar8b = ((uVar8b - 1) | 0xfffffffe) + 1;
                 }
                 if (uVar8b == 1) {
                     param_1[param_1[0x3c] * 2 + 0x3e] = iVar7 * 0x12;
@@ -1679,7 +1681,7 @@ static int FUN_00448470(int *param_1, int param_2, int param_3)
                 iVar10 = iVar10 + local_60[local_80 + 0x10];
                 iVar7 = iVar7 + local_60[local_80 + 8];
                 uVar9++;
-                cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (int)DAT_00489ea8);
+                cVar4 = *(char *)(iVar10 * DAT_00487a04 + iVar7 + (intptr_t)DAT_00489ea8);
             }
         }
     }
@@ -1710,7 +1712,7 @@ static void FUN_0044ad30(int *param_1, int param_2)
 
     /* If no enemy found and health is low, try evasion */
     if (((char)uVar3 == '\0') &&
-        ((double)param_1[8] / (double)*(int *)(param_2 * 0x40 + 0x28 + (int)DAT_0048780c) < _DAT_00475640)) {
+        ((double)param_1[8] / (double)*(int *)(param_2 * 0x40 + 0x28 + (intptr_t)DAT_0048780c) < _DAT_00475640)) {
         unsigned int uVar4 = FUN_0044ac80(param_1);
         if ((char)uVar4 != '\0') return;
         unsigned int uVar4b = FUN_00449420(param_1);
@@ -1734,7 +1736,7 @@ static void FUN_0044ad30(int *param_1, int param_2)
             param_1[0x116] = 2;
             goto LAB_0044aecc;
         }
-        if ((double)param_1[8] / (double)*(int *)(param_2 * 0x40 + 0x28 + (int)DAT_0048780c) < _DAT_00475680)
+        if ((double)param_1[8] / (double)*(int *)(param_2 * 0x40 + 0x28 + (intptr_t)DAT_0048780c) < _DAT_00475680)
             goto LAB_0044ae83;
         param_1[0x114] = param_1[0x117];
         param_1[0x115] = param_1[0x118];
@@ -1796,7 +1798,7 @@ static void FUN_0044c9a0(int *ent, int player_idx)
 {
     int heading = ent[6];  /* +0x18: heading angle 0-0x7FF */
     int cfg_off = player_idx * 0x40;
-    unsigned char accel = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x23);
+    unsigned char accel = *(unsigned char *)((intptr_t)DAT_0048780c + cfg_off + 0x23);
     int boost_active = (ent[0x35] > 0) ? 1 : 0;  /* +0xD4: speed boost timer */
     int shift = 0xB + boost_active;
 
@@ -1856,7 +1858,7 @@ static void FUN_0044be20(int *ent)
     if (DAT_00487840 != 0) {
         iVar4 = 0xc000;
         do {
-            Entity *entity = &g_EntityPool[*(int *)(iVar4 + (int)DAT_0048781c)];
+            Entity *entity = &g_EntityPool[*(int *)(iVar4 + (intptr_t)DAT_0048781c)];
             if ((Player_Get(entity->owner)->team !=
                  (char)ent[0xb]) &&
                 (entity->type == 0x18))
@@ -1884,13 +1886,12 @@ static void FUN_0044be20(int *ent)
  * depending on weapon type. Plays fire sound. */
 static void FUN_0044ca40_impl(int *ent, int idx)
 {
-    unsigned int *uent = (unsigned int *)ent;
     int heading = ent[6];  /* +0x18 */
     unsigned char weapon_type = *(unsigned char *)(ent + 0x23);  /* +0x8C: weapon type byte */
     int *lut = (int *)DAT_00487ab0;
 
     /* Set "has fired" flag */
-    *(unsigned char *)((int)ent + 0x1D) = 1;
+    *(unsigned char *)((intptr_t)ent + 0x1D) = 1;
 
     /* Set fire cooldown */
     if (DAT_004892e5 == '\x01') {
@@ -1911,30 +1912,30 @@ static void FUN_0044ca40_impl(int *ent, int idx)
     ent[0x26] = new_energy;
 
     /* Determine projectile speed from entity type table */
-    int speed = *(int *)((int)DAT_00487abc + 0xAC);
+    int speed = *(int *)((intptr_t)DAT_00487abc + 0xAC);
     if (weapon_type > 8) speed = 800;
     if (DAT_004892e5 != '\0') speed = 0xFA;
 
     /* Compute sprite/palette index based on weapon type */
-    int *sprIdx = NULL;
+    int sprIdx = -1;
     if ((char)ent[0x23] == '\0') {
         unsigned int r = rand() & 0x80000003;
-        if ((int)r < 0) r = (r - 1 | 0xfffffffc) + 1;
-        sprIdx = (int *)(r + 0x5a);
+        if ((int)r < 0) r = ((r - 1) | 0xfffffffc) + 1;
+        sprIdx = (int)r + 0x5a;
     }
     if ((char)ent[0x23] == '\x01') {
-        sprIdx = (int *)(rand() % 5 + 0x66);
+        sprIdx = rand() % 5 + 0x66;
     }
     if ((char)ent[0x23] == '\x02') {
-        sprIdx = (int *)(rand() % 3 + 0x79);
+        sprIdx = rand() % 3 + 0x79;
     }
     if (2 < weapon_type) {
-        sprIdx = NULL;
+        sprIdx = -1;
     }
 
 
     /* Spawn primary projectile (straight ahead) */
-    if ((*(char *)((int)ent + 0x8D) == '\0' || *(char *)((int)ent + 0x8D) == '\x02') &&
+    if ((*(char *)((intptr_t)ent + 0x8D) == '\0' || *(char *)((intptr_t)ent + 0x8D) == '\x02') &&
         g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
         Entity *projectile = &g_EntityPool[g_EntityCount];
 
@@ -1961,15 +1962,15 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         /* Sprite/type data from entity type table */
         if (weapon_type < 6) {
             projectile->type = 0;
-            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
-            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
-            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+            projectile->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
             projectile->subtype = weapon_type;
         } else {
             projectile->type = 0x69;
-            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
-            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
-            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+            projectile->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
             projectile->subtype = weapon_type - 6;
         }
         projectile->callback_address = 0;  /* behavior callback (not implemented) */
@@ -1984,13 +1985,13 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         projectile->motion_y_14 = ent[1];
 
         /* Set palette color for pixel dot rendering (sprite_idx >= 30000) */
-        if (sprIdx != NULL) {
+        if (sprIdx >= 0) {
             projectile->palette_value =
-                (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
+                (unsigned int)*(unsigned short *)((intptr_t)DAT_00487aa8 + sprIdx * 2) + 30000;
         }
 
         /* Weapon type 8 + ship flag 'd': set special damage type */
-        if (weapon_type == 8 && *(char *)(idx * 0x40 + 0x33 + (int)DAT_0048780c) == 'd') {
+        if (weapon_type == 8 && *(char *)(idx * 0x40 + 0x33 + (intptr_t)DAT_0048780c) == 'd') {
             projectile->state_20 = 0x19;
         }
 
@@ -2001,7 +2002,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
     }
 
     /* Spawn side projectiles (fire mode 1 or 2) */
-    if ((*(char *)((int)ent + 0x8D) == '\x01' || *(char *)((int)ent + 0x8D) == '\x02') &&
+    if ((*(char *)((intptr_t)ent + 0x8D) == '\x01' || *(char *)((intptr_t)ent + 0x8D) == '\x02') &&
         g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
 
         int shipStatOff = idx * 0x40;
@@ -2009,7 +2010,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
         /* Left side projectile: heading + 0x200 (perpendicular) */
         unsigned int side_angle = (heading + 0x200) & 0x7FF;
-        int ship_radius = (int)(unsigned int)*(unsigned char *)(shipStatOff + 0x22 + (int)DAT_0048780c);
+        int ship_radius = (int)(unsigned int)*(unsigned char *)(shipStatOff + 0x22 + (intptr_t)DAT_0048780c);
         Entity *projectile = &g_EntityPool[g_EntityCount];
 
         projectile->position_x = (ship_radius * lut2[side_angle]) / 2 + ent[0];
@@ -2028,15 +2029,15 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
         if (weapon_type < 6) {
             projectile->type = 0;
-            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
-            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
-            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+            projectile->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
             projectile->subtype = weapon_type;
         } else {
             projectile->type = 0x69;
-            projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
-            projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
-            projectile->palette_value = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+            projectile->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+            projectile->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+            projectile->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
             projectile->subtype = weapon_type - 6;
         }
         projectile->callback_address = 0;
@@ -2048,9 +2049,9 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
         projectile->motion_x_10 = ent[0];
         projectile->motion_y_14 = ent[1];
-        if (sprIdx != NULL) {
+        if (sprIdx >= 0) {
             projectile->palette_value =
-                (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
+                (unsigned int)*(unsigned short *)((intptr_t)DAT_00487aa8 + sprIdx * 2) + 30000;
         }
 
         /* Right side projectile: heading - 0x200 (opposite perpendicular) */
@@ -2075,15 +2076,15 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
             if (weapon_type < 6) {
                 projectile->type = 0;
-                projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
-                projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
-                projectile->palette_value = *(int *)((int)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
+                projectile->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0x88 + (unsigned int)weapon_type * 4);
+                projectile->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xC4 + (unsigned int)weapon_type * 4);
+                projectile->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xF4 + (unsigned int)weapon_type * 4);
                 projectile->subtype = weapon_type;
             } else {
                 projectile->type = 0x69;
-                projectile->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
-                projectile->damage_44 = *(int *)((int)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
-                projectile->palette_value = *(int *)((int)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
+                projectile->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xDC48 + (unsigned int)weapon_type * 4);
+                projectile->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xDC84 + (unsigned int)weapon_type * 4);
+                projectile->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xDCB4 + (unsigned int)weapon_type * 4);
                 projectile->subtype = weapon_type - 6;
             }
             projectile->callback_address = 0;
@@ -2095,9 +2096,9 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
             projectile->motion_x_10 = ent[0];
             projectile->motion_y_14 = ent[1];
-            if (sprIdx != NULL) {
+            if (sprIdx >= 0) {
                 projectile->palette_value =
-                    (unsigned int)*(unsigned short *)((int)DAT_00487aa8 + (int)sprIdx * 2) + 30000;
+                    (unsigned int)*(unsigned short *)((intptr_t)DAT_00487aa8 + sprIdx * 2) + 30000;
             }
         }
     }
@@ -2116,15 +2117,15 @@ static void FUN_0044ca40_impl(int *ent, int idx)
  *   +0x470 → 0x0B nuke barrel, +0x474 → 0x28 pipebomb, +0x478 → 0x29/0x2A turret. */
 static void FUN_0044d650_impl(int *ent, int idx)
 {
-    if (((*(unsigned char *)((int)ent + 0xb8) & 0x20) == 0) ||
-        (*(char *)((int)ent + 0xa2) != '\0'))
+    if (((*(unsigned char *)((intptr_t)ent + 0xb8) & 0x20) == 0) ||
+        (*(char *)((intptr_t)ent + 0xa2) != '\0'))
         return;
 
     int count = g_EntityCount;
     int i;
 
     /* Type 1: 0x0B (slot +0x470) -> 0xFA */
-    if ((*(int *)((int)ent + 0x470) != 0) && (0 < count)) {
+    if ((*(int *)((intptr_t)ent + 0x470) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
             Entity *entity = &g_EntityPool[i];
             if ((entity->subtype == 1) && (entity->type == 0x0b) &&
@@ -2134,7 +2135,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
         }
     }
     /* Type 2: 0x2E (slot +0x46C) -> 0xFB */
-    if ((*(int *)((int)ent + 0x46c) != 0) && (0 < count)) {
+    if ((*(int *)((intptr_t)ent + 0x46c) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
             Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x2e) && (entity->owner == (unsigned char)idx)) {
@@ -2143,7 +2144,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
         }
     }
     /* Type 3: 0x27 (slot +0x468) -> 0xFB */
-    if ((*(int *)((int)ent + 0x468) != 0) && (0 < count)) {
+    if ((*(int *)((intptr_t)ent + 0x468) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
             Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x27) && (entity->scratch_2c == 1) &&
@@ -2153,7 +2154,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
         }
     }
     /* Type 4: 0x22 (slot +0x464) -> 0xFA */
-    if ((*(int *)((int)ent + 0x464) != 0) && (0 < count)) {
+    if ((*(int *)((intptr_t)ent + 0x464) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
             Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x22) && (entity->subtype != 0) &&
@@ -2163,7 +2164,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
         }
     }
     /* Type 5: 0x28 (slot +0x474) -> 0xFA */
-    if ((*(int *)((int)ent + 0x474) != 0) && (0 < count)) {
+    if ((*(int *)((intptr_t)ent + 0x474) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
             Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x28) && (entity->owner == (unsigned char)idx)) {
@@ -2172,7 +2173,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
         }
     }
     /* Type 6: 0x29/0x2A (slot +0x478) -> 0xFA */
-    if ((*(int *)((int)ent + 0x478) != 0) && (0 < count)) {
+    if ((*(int *)((intptr_t)ent + 0x478) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
             Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x29 || entity->type == 0x2a) &&
@@ -2186,28 +2187,28 @@ static void FUN_0044d650_impl(int *ent, int idx)
 /* ===== FUN_0044d860 — Fire Secondary Weapon (0044D860) ===== */
 static void FUN_0044d860_impl(int *ent, int idx)
 {
-    unsigned char *pbVar1 = (unsigned char *)((int)ent +
-        *(char *)((int)ent + 0x34) + 0x3c);
-    unsigned int weapIdx = *(unsigned char *)((int)ent + 0x35) +
+    unsigned char *pbVar1 = (unsigned char *)((intptr_t)ent +
+        *(char *)((intptr_t)ent + 0x34) + 0x3c);
+    unsigned int weapIdx = *(unsigned char *)((intptr_t)ent + 0x35) +
                            (unsigned int)(*pbVar1) * 0x86;
 
-    unsigned int cooldown = (unsigned int)(*(int *)((int)DAT_00487abc + 0xdc + weapIdx * 4)) *
-        (unsigned int)*(unsigned char *)((int)ent + 0x9c) *
+    unsigned int cooldown = (unsigned int)(*(int *)((intptr_t)DAT_00487abc + 0xdc + weapIdx * 4)) *
+        (unsigned int)*(unsigned char *)((intptr_t)ent + 0x9c) *
         (unsigned int)DAT_0048382c >> 0xc;
-    *(unsigned int *)((int)ent + 0x94) = cooldown;
+    *(unsigned int *)((intptr_t)ent + 0x94) = cooldown;
 
-    int newEnergy = *(int *)((int)ent + 0x98) +
-        *(int *)((int)DAT_00487abc + 0x10c + weapIdx * 4) * -7;
+    int newEnergy = *(int *)((intptr_t)ent + 0x98) +
+        *(int *)((intptr_t)DAT_00487abc + 0x10c + weapIdx * 4) * -7;
 
     int minEnergy = (int)((unsigned int)DAT_00483830 +
         ((unsigned int)DAT_00483830 >> 0x1f & 0x7fU)) >> 7;
     if (newEnergy < minEnergy) {
-        if (cooldown < 0x20) *(int *)((int)ent + 0x94) = 0x20;
-        if (*(unsigned int *)((int)ent + 0x90) < 0x20)
-            *(int *)((int)ent + 0x90) = 0x20;
+        if (cooldown < 0x20) *(int *)((intptr_t)ent + 0x94) = 0x20;
+        if (*(unsigned int *)((intptr_t)ent + 0x90) < 0x20)
+            *(int *)((intptr_t)ent + 0x90) = 0x20;
         if (newEnergy < 0) newEnergy = 0;
     }
-    *(int *)((int)ent + 0x98) = newEnergy;
+    *(int *)((intptr_t)ent + 0x98) = newEnergy;
 
     FUN_00401000_impl(idx);
 }
@@ -2230,8 +2231,8 @@ static void FUN_0044e950_impl(int *ent, int idx)
             int row, col;
             for (row = 0; row < 16 && clear; row++) {
                 for (col = 0; col < 16; col++) {
-                    if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tidx) *
-                        0x20 + 1 + (int)DAT_00487928) == '\0') {
+                    if (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + tidx) *
+                        0x20 + 1 + (intptr_t)DAT_00487928) == '\0') {
                         clear = 0; break;
                     }
                     tidx++;
@@ -2243,7 +2244,7 @@ static void FUN_0044e950_impl(int *ent, int idx)
                 DAT_00486be8[idx] += 0x30d;
                 ent[4] = 0;
                 ent[5] = 0;
-                *(unsigned char *)((int)ent + 0x4a0) = 0xff;
+                *(unsigned char *)((intptr_t)ent + 0x4a0) = 0xff;
                 ent[0] = iVar1 * FIXED_SCALE;
                 ent[1] = iVar2 * FIXED_SCALE;
                 ent[2] = iVar1 * FIXED_SCALE;
@@ -2268,14 +2269,14 @@ static void FUN_0044e5a0_impl(int *ent)
 
     if (DAT_0048925c >= 0x5dc) return;
 
-    int base = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+    intptr_t base = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
 
     *(int *)(base + 0x00) = (rand() % 10 - 5) * FIXED_SCALE + ent[0];
     *(int *)(base + 0x04) = (rand() % 10 - 5) * FIXED_SCALE + ent[1];
 
     int speed = rand() % 0x1e + 10;
-    *(int *)(base + 0x08) = speed * *(int *)((int)DAT_00487ab0 + (angle + 0x300) * 4) >> 6;
-    *(int *)(base + 0x0c) = speed * *(int *)((int)DAT_00487ab0 + 0x800 + (angle + 0x300) * 4) >> 6;
+    *(int *)(base + 0x08) = speed * *(int *)((intptr_t)DAT_00487ab0 + (angle + 0x300) * 4) >> 6;
+    *(int *)(base + 0x0c) = speed * *(int *)((intptr_t)DAT_00487ab0 + 0x800 + (angle + 0x300) * 4) >> 6;
 
     unsigned int ptype = rand() & 3;
     *(char *)(base + 0x10) = (char)ptype;
@@ -2288,7 +2289,7 @@ static void FUN_0044e5a0_impl(int *ent)
 
     unsigned int flag = rand() & 3;
     if (flag == 0) {
-        *(unsigned char *)(DAT_0048925c * 0x20 + (int)DAT_00481f2c - 0xb) = 1;
+        *(unsigned char *)(DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c - 0xb) = 1;
     }
 }
 
@@ -2303,7 +2304,6 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
     FUN_0040fd70(idx, 0xc, ent[0], ent[1]);
 
     /* Knockback all nearby entities */
-    int playerIdx = 0;
     if (DAT_00489240 > 0) {
         for (int p = 0; p < DAT_00489240; p++) {
             PlayerData *player = Player_Get(p);
@@ -2317,8 +2317,8 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
                         unsigned long long uVar7 = FUN_004257e0(piVar1[0], piVar1[1],
                             player->position_x, player->position_y);
                         unsigned int uVar2 = ((int)uVar7 + 0x200) & 0x7ff;
-                        player->velocity_x = *(int *)((int)DAT_00487ab0 + uVar2 * 4) >> 1;
-                        player->velocity_y = *(int *)((int)DAT_00487ab0 + 0x800 + uVar2 * 4) >> 1;
+                        player->velocity_x = *(int *)((intptr_t)DAT_00487ab0 + uVar2 * 4) >> 1;
+                        player->velocity_y = *(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar2 * 4) >> 1;
                     }
                 }
             }
@@ -2326,11 +2326,11 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
     }
 
     /* Check for destructible terrain below — spawn debris if present */
-    if (((*(unsigned char *)((piVar1[0] >> 0x16) + (int)DAT_00487814 +
+    if (((*(unsigned char *)((piVar1[0] >> 0x16) + (intptr_t)DAT_00487814 +
          (piVar1[1] >> 0x16) * DAT_004879f8) & 8) != 0) &&
         (*(char *)((unsigned int)*(unsigned char *)((piVar1[0] >> 0x12) + 7 +
-            (int)DAT_0048782c + ((piVar1[1] >> 0x12) + 4 <<
-            ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (int)DAT_00487928) == '\x01') &&
+            (intptr_t)DAT_0048782c + (((piVar1[1] >> 0x12) + 4) <<
+            ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (intptr_t)DAT_00487928) == '\x01') &&
         (g_EntityCount < ENTITY_ACTIVE_CAPACITY))
     {
         int r = rand();
@@ -2340,9 +2340,9 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
         debris->position_x = piVar1[0] + 0x1c0000;
         debris->position_y = piVar1[1] + 0x100000;
         debris->velocity_x = (rand() % 0x14 + 0x1e) *
-            (*(int *)((int)DAT_00487ab0 + iVar5 * 4)) >> 6;
+            (*(int *)((intptr_t)DAT_00487ab0 + iVar5 * 4)) >> 6;
         debris->velocity_y = (rand() % 0x14 + 0x1e) *
-            (*(int *)((int)DAT_00487ab0 + 0x800 + iVar5 * 4)) >> 6;
+            (*(int *)((intptr_t)DAT_00487ab0 + 0x800 + iVar5 * 4)) >> 6;
         debris->previous_x = piVar1[0] + 0x1c0000;
         debris->previous_y = piVar1[1] + 0x100000;
         debris->motion_x_10 = 0;
@@ -2353,13 +2353,13 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
         debris->auxiliary_26 = 0xff;
         debris->owner = 0xff;
         debris->health_or_damage_28 = 0;
-        debris->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd1e8);
-        debris->damage_44 = *(int *)((int)DAT_00487abc + 0xd224);
+        debris->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xd1e8);
+        debris->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xd224);
         debris->scratch_48 = 0;
-        debris->palette_value = *(int *)((int)DAT_00487abc + 0xd254);
+        debris->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xd254);
         debris->animation_frame = 0;
         debris->subtype = 0;
-        debris->callback_address = *(int *)((int)DAT_00487abc + 0xd160);
+        debris->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xd160);
         debris->counter_3c = 0;
         debris->timer_5c = 0;
 
@@ -2370,14 +2370,14 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
 
     /* Area-of-effect tile damage via FUN_004357b0 */
     if (((*(unsigned char *)(piVar1 + 0x29) & 7) == 0) ||
-        (*(char *)((tile_type & 0xffff) * 0x20 + 6 + (int)DAT_00487928) == '\x01'))
+        (*(char *)((tile_type & 0xffff) * 0x20 + 6 + (intptr_t)DAT_00487928) == '\x01'))
     {
         DAT_00481e8c = 0;
         DAT_00481e8e = 0;
 
         unsigned char tileAtPrev = *(unsigned char *)((piVar1[2] >> 0x12) +
-            (int)DAT_0048782c + ((piVar1[3] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)));
-        char passable = *(char *)((unsigned int)tileAtPrev * 0x20 + 4 + (int)DAT_00487928);
+            (intptr_t)DAT_0048782c + ((piVar1[3] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f)));
+        char passable = *(char *)((unsigned int)tileAtPrev * 0x20 + 4 + (intptr_t)DAT_00487928);
         if (passable == '\0') tileAtPrev = 0;
 
         int iVar4 = piVar1[0] >> 0x12;
@@ -2385,14 +2385,14 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
         if (iVar4 > 0 && iVar5 > 0 && iVar4 < (int)DAT_004879f0 && iVar5 < (int)DAT_004879f4) {
             FUN_004357b0(iVar4, iVar5, 9, (int)(unsigned char)tileAtPrev,
                 *(char *)((iVar5 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar4 +
-                    (int)DAT_0048782c) == '\x0c',
+                    (intptr_t)DAT_0048782c) == '\x0c',
                 0, 0, 0, 0, '\x03', '\0', (unsigned char)idx);
         }
 
         /* Spawn scattered debris from destroyed tiles */
         unsigned int destroyedCount = (unsigned int)DAT_00481e8e >> 2;
         if (destroyedCount != 0 &&
-            ((*(unsigned char *)((piVar1[0] >> 0x16) + (int)DAT_00487814 +
+            ((*(unsigned char *)((piVar1[0] >> 0x16) + (intptr_t)DAT_00487814 +
                 (piVar1[1] >> 0x16) * DAT_004879f8) & 8) != 0))
         {
             int angleStep = 0x800 / (int)destroyedCount;
@@ -2402,24 +2402,24 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
 
                 unsigned int randAngle = (unsigned int)rand() & 0x7ff;
                 int signedRand = (int)randAngle;
-                if (signedRand < 0) signedRand = (signedRand - 1 | (int)0xfffff800) + 1;
+                if (signedRand < 0) signedRand = ((signedRand - 1) | (int)0xfffff800) + 1;
                 unsigned int uVar6 = (((signedRand + (signedRand >> 0x1f & 3)) >> 2) + angle) & 0x7ff;
                 int iVar3 = rand() % 0x28 + 10;
 
                 Entity *debris = &g_EntityPool[g_EntityCount];
 
-                int rx = rand() & 7; if (rx < 0) rx = (rx - 1 | (int)0xfffffff8) + 1;
+                int rx = rand() & 7; if (rx < 0) rx = ((rx - 1) | (int)0xfffffff8) + 1;
                 debris->position_x = ((unsigned int)(rx - 4) + (unsigned int)iVar4) * FIXED_SCALE;
-                int ry = rand() & 7; if (ry < 0) ry = (ry - 1 | (int)0xfffffff8) + 1;
+                int ry = rand() & 7; if (ry < 0) ry = ((ry - 1) | (int)0xfffffff8) + 1;
                 debris->position_y = ((unsigned int)(ry - 4) + (unsigned int)iVar5) * FIXED_SCALE;
-                debris->velocity_x = *(int *)((int)DAT_00487ab0 + uVar6 * 4) * iVar3 +
-                    (piVar1[4] >> 2) >> 6;
-                debris->velocity_y = *(int *)((int)DAT_00487ab0 + 0x800 + uVar6 * 4) * iVar3 +
-                    (piVar1[4] >> 2) >> 6;
+                debris->velocity_x = (*(int *)((intptr_t)DAT_00487ab0 + uVar6 * 4) * iVar3 +
+                    (piVar1[4] >> 2)) >> 6;
+                debris->velocity_y = (*(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar6 * 4) * iVar3 +
+                    (piVar1[4] >> 2)) >> 6;
 
-                int rx2 = rand() & 7; if (rx2 < 0) rx2 = (rx2 - 1 | (int)0xfffffff8) + 1;
+                int rx2 = rand() & 7; if (rx2 < 0) rx2 = ((rx2 - 1) | (int)0xfffffff8) + 1;
                 debris->previous_x = ((unsigned int)(rx2 - 4) + (unsigned int)iVar4) * FIXED_SCALE;
-                int ry2 = rand() & 7; if (ry2 < 0) ry2 = (ry2 - 1 | (int)0xfffffff8) + 1;
+                int ry2 = rand() & 7; if (ry2 < 0) ry2 = ((ry2 - 1) | (int)0xfffffff8) + 1;
                 debris->previous_y = ((unsigned int)(ry2 - 4) + (unsigned int)iVar5) * FIXED_SCALE;
                 debris->motion_x_10 = 0;
                 debris->motion_y_14 = 0;
@@ -2429,13 +2429,13 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
                 debris->auxiliary_26 = 0xff;
                 debris->owner = 0xff;
                 debris->health_or_damage_28 = 0;
-                debris->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd1e8);
-                debris->damage_44 = *(int *)((int)DAT_00487abc + 0xd224);
+                debris->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xd1e8);
+                debris->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xd224);
                 debris->scratch_48 = 0;
-                debris->palette_value = *(int *)((int)DAT_00487abc + 0xd254);
+                debris->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xd254);
                 debris->animation_frame = 0;
                 debris->subtype = 0;
-                debris->callback_address = *(int *)((int)DAT_00487abc + 0xd160);
+                debris->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xd160);
                 debris->counter_3c = 0;
                 debris->timer_5c = 0;
 
@@ -2464,12 +2464,12 @@ static void FUN_0044f840_impl(int *ent)
 
     /* Lose 1/3 of velocity per axis (drag), set splash refractory timer (+0x49E). */
     ent[5] = ent[5] - ent[5] / 3;
-    *(unsigned char *)((int)ent + 0x49e) = 10;
+    *(unsigned char *)((intptr_t)ent + 0x49e) = 10;
     ent[4] = ent[4] - ent[4] / 3;
 
     if (DAT_00483835 != '\0') {
         FUN_0044f630(ent[0], ent[1], ent[4], ent[5], 1.0f, 0x18, 0xc,
-                     *(char *)((int)ent + 0x49d));
+                     *(char *)((intptr_t)ent + 0x49d));
     }
 }
 
@@ -2485,8 +2485,8 @@ static void FUN_0044f900_impl(int *ent, int idx)
     char local_5e = '\x04';  /* default terrain speed */
 
     /* Check current tile for terrain speed modifier */
-    unsigned char bVar1 = *(unsigned char *)((tileY << (bVar3 & 0x1f)) + tileX + (int)DAT_0048782c);
-    int tileProps = (unsigned int)bVar1 * 0x20 + (int)DAT_00487928;
+    unsigned char bVar1 = *(unsigned char *)((tileY << (bVar3 & 0x1f)) + tileX + (intptr_t)DAT_0048782c);
+    intptr_t tileProps = (unsigned int)bVar1 * 0x20 + (intptr_t)DAT_00487928;
     char cVar6 = *(char *)(tileProps + 0x18);
     if (cVar6 != '\0') {
         local_5e = *(char *)(tileProps + 0x19);
@@ -2494,16 +2494,16 @@ static void FUN_0044f900_impl(int *ent, int idx)
     int local_5d = (cVar6 == '\0' || bVar1 == 0x1f) ? 1 : 0;
 
     /* Check tile below */
-    bVar1 = *(unsigned char *)(((tileY + 1) << (bVar3 & 0x1f)) + tileX + (int)DAT_0048782c);
-    tileProps = (unsigned int)bVar1 * 0x20 + (int)DAT_00487928;
+    bVar1 = *(unsigned char *)(((tileY + 1) << (bVar3 & 0x1f)) + tileX + (intptr_t)DAT_0048782c);
+    tileProps = (unsigned int)bVar1 * 0x20 + (intptr_t)DAT_00487928;
     if (*(char *)(tileProps + 0x18) != '\0') {
         local_5e = *(char *)(tileProps + 0x19);
         local_5d = (bVar1 == 0x1f) ? 1 : 0;
     }
 
     /* Check tile above */
-    bVar1 = *(unsigned char *)(((tileY - 1) << (bVar3 & 0x1f)) + tileX + (int)DAT_0048782c);
-    tileProps = (unsigned int)bVar1 * 0x20 + (int)DAT_00487928;
+    bVar1 = *(unsigned char *)(((tileY - 1) << (bVar3 & 0x1f)) + tileX + (intptr_t)DAT_0048782c);
+    tileProps = (unsigned int)bVar1 * 0x20 + (intptr_t)DAT_00487928;
     if (*(char *)(tileProps + 0x18) != '\0') {
         local_5e = *(char *)(tileProps + 0x19);
         local_5d = (bVar1 == 0x1f) ? 1 : 0;
@@ -2517,15 +2517,16 @@ static void FUN_0044f900_impl(int *ent, int idx)
         int attempts = 0;
         int iVar8 = ent[0];
         do {
-            iVar8 = (*(int *)((int)DAT_00487ab0 + (int)uVar16 * 4) >> 2) + iVar8;
+            iVar8 = (*(int *)((intptr_t)DAT_00487ab0 + (int)uVar16 * 4) >> 2) + iVar8;
             ent[0] = iVar8;
-            int iVar12 = ent[1] + (*(int *)((int)DAT_00487ab0 + 0x800 + (int)uVar16 * 4) >> 2);
+            int iVar12 = ent[1] + (*(int *)((intptr_t)DAT_00487ab0 + 0x800 + (int)uVar16 * 4) >> 2);
             ent[1] = iVar12;
             int tx = iVar8 >> 0x12;
             iVar12 = iVar12 >> 0x12;
-            if (0 < tx && tx < DAT_004879f0 && 0 < iVar12 && iVar12 < DAT_004879f4 &&
+            if (0 < tx && tx < (int)DAT_004879f0 &&
+                0 < iVar12 && iVar12 < (int)DAT_004879f4 &&
                 *(char *)((unsigned int)*(unsigned char *)((iVar12 << ((unsigned char)DAT_00487a18 & 0x1f)) +
-                    (int)DAT_0048782c + tx) * 0x20 + 1 + (int)DAT_00487928) == '\x01')
+                    (intptr_t)DAT_0048782c + tx) * 0x20 + 1 + (intptr_t)DAT_00487928) == '\x01')
                 break;
             attempts++;
         } while (attempts < 10);
@@ -2536,22 +2537,22 @@ static void FUN_0044f900_impl(int *ent, int idx)
     }
 
     /* Terrain speed effect on turret rotation */
-    cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (int)DAT_0048782c +
-        ((ent[1] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (int)DAT_00487928);
+    cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (intptr_t)DAT_0048782c +
+        ((ent[1] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (intptr_t)DAT_00487928);
     *(unsigned char *)(ent + 0x28) = 0x14;
 
     /* Charge weapon if on matching terrain */
     if ((local_5e == (char)ent[0xb] || local_5e == -1) && !local_5d) {
         int iVar12 = ent[8] + (unsigned int)DAT_00483754[1] * 0x200;
         ent[8] = iVar12;
-        int iVar8 = *(int *)(idx * 0x40 + 0x28 + (int)DAT_0048780c);
+        int iVar8 = *(int *)(idx * 0x40 + 0x28 + (intptr_t)DAT_0048780c);
         if (iVar8 < iVar12) {
             ent[8] = iVar8;
-            *(unsigned char *)((int)ent + 0xa1) = 1;
+            *(unsigned char *)((intptr_t)ent + 0xa1) = 1;
         } else {
-            *(unsigned char *)((int)ent + 0xa1) = 2;
+            *(unsigned char *)((intptr_t)ent + 0xa1) = 2;
         }
-        *(unsigned char *)((int)ent + 0xa2) = 10;
+        *(unsigned char *)((intptr_t)ent + 0xa2) = 10;
     }
 
     /* Turret rotation speed based on terrain */
@@ -2586,34 +2587,34 @@ static void FUN_0044f900_impl(int *ent, int idx)
     }
 
     /* Weapon selection logic (manual vs AI) */
-    if (*(char *)((int)ent + 0xdd) == '\0') {
+    if (*(char *)((intptr_t)ent + 0xdd) == '\0') {
         /* Manual weapon selection — player controlled */
         if (199 < ent[0x122] && 0xdb < ent[0x121]) {
             /* Toggle weapon menu on button press (bit 0x20) */
             if ((ent[0x2f] & 0x20U) == 0 && (*(unsigned char *)(ent + 0x2e) & 0x20) != 0 &&
-                *(char *)((int)ent + 0x9e) == '\0') {
-                *(unsigned char *)((int)ent + 0x9e) = 1;
+                *(char *)((intptr_t)ent + 0x9e) == '\0') {
+                *(unsigned char *)((intptr_t)ent + 0x9e) = 1;
             } else if ((ent[0x2f] & 0x20U) == 0 && (*(unsigned char *)(ent + 0x2e) & 0x20) != 0 &&
-                *(char *)((int)ent + 0x9e) == '\x01') {
-                *(unsigned char *)((int)ent + 0x9e) = 0;
+                *(char *)((intptr_t)ent + 0x9e) == '\x01') {
+                *(unsigned char *)((intptr_t)ent + 0x9e) = 0;
             }
         }
 
         int bVar4 = 0;
-        if (*(char *)((int)ent + 0x9e) == '\x01') {
+        if (*(char *)((intptr_t)ent + 0x9e) == '\x01') {
             /* Weapon menu open — navigate with d-pad */
             ent[0x30] = ent[0x2e];
 
             /* Check underwater tile check for aiming */
             if (cVar6 == '\0') {
-                cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (int)DAT_0048782c +
-                    (((ent[1] >> 0x12) - 1) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 0x18 + (int)DAT_00487928);
+                cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (intptr_t)DAT_0048782c +
+                    (((ent[1] >> 0x12) - 1) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 0x18 + (intptr_t)DAT_00487928);
             } else {
-                cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (int)DAT_0048782c +
-                    (((ent[1] >> 0x12) + 1) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 0x18 + (int)DAT_00487928);
+                cVar6 = *(char *)((unsigned int)*(unsigned char *)((ent[0] >> 0x12) + (intptr_t)DAT_0048782c +
+                    (((ent[1] >> 0x12) + 1) << ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 0x18 + (intptr_t)DAT_00487928);
             }
             if (cVar6 != '\0') {
-                *(unsigned char *)((int)ent + 0xc5) = 2;
+                *(unsigned char *)((intptr_t)ent + 0xc5) = 2;
             }
 
             /* Left button: cycle weapon backward */
@@ -2698,10 +2699,9 @@ static void FUN_0044f900_impl(int *ent, int idx)
 
         /* Fire button check */
         if (((*(unsigned char *)(ent + 0x2f) & 8) != 0 && (*(unsigned char *)(ent + 0x2e) & 8) == 0)) {
-            unsigned int weapIdx = (unsigned int)*(unsigned char *)((char)ent[0xd] + 0x3c + (int)ent);
-            unsigned int uVar9 = weapIdx * 0x43;
-            if (*(char *)((int)DAT_00487abc + 0x7d + weapIdx * 0x218) != '\0') {
-                *(char *)((int)ent + 0x35) = *(char *)((int)ent + 0x35) + 1;
+            unsigned int weapIdx = (unsigned int)*(unsigned char *)((char)ent[0xd] + 0x3c + (intptr_t)ent);
+            if (*(char *)((intptr_t)DAT_00487abc + 0x7d + weapIdx * 0x218) != '\0') {
+                *(char *)((intptr_t)ent + 0x35) = *(char *)((intptr_t)ent + 0x35) + 1;
             } else if (!bVar4) {
                 return;
             }
@@ -2711,13 +2711,13 @@ static void FUN_0044f900_impl(int *ent, int idx)
 
         /* Set up weapon firing */
         ent[0x29] = 0;
-        unsigned char *pbVar14 = (unsigned char *)((char)ent[0xd] + 0x3c + (int)ent);
+        unsigned char *pbVar14 = (unsigned char *)((char)ent[0xd] + 0x3c + (intptr_t)ent);
         *(unsigned char *)(ent + 0x32) = 0xfa;
-        if (*(unsigned char *)((int)DAT_00487abc + 0x7d + (unsigned int)*pbVar14 * 0x218) <
-            *(unsigned char *)((int)ent + 0x35)) {
-            *(unsigned char *)((int)ent + 0x35) = 0;
+        if (*(unsigned char *)((intptr_t)DAT_00487abc + 0x7d + (unsigned int)*pbVar14 * 0x218) <
+            *(unsigned char *)((intptr_t)ent + 0x35)) {
+            *(unsigned char *)((intptr_t)ent + 0x35) = 0;
         }
-        iVar8 = (unsigned int)*(unsigned char *)((int)ent + 0x35) + (unsigned int)*pbVar14 * 0x86;
+        iVar8 = (unsigned int)*(unsigned char *)((intptr_t)ent + 0x35) + (unsigned int)*pbVar14 * 0x86;
     } else {
         /* AI weapon selection — pick a random available weapon each time this
          * path runs, matching 0x0044FC16-0x0044FCB8. */
@@ -2743,7 +2743,7 @@ static void FUN_0044f900_impl(int *ent, int idx)
             while (1) {
                 iVar12 = rand();
                 iVar12 = iVar12 % (int)uVar9;
-                if (*(char *)((int)DAT_00487abc + 0x7c + (unsigned int)local_50[iVar12] * 0x218) != '\0')
+                if (*(char *)((intptr_t)DAT_00487abc + 0x7c + (unsigned int)local_50[iVar12] * 0x218) != '\0')
                     break;
                 int iVar13 = uVar9 - 1;
                 unsigned int uVar11 = ent[0xe];
@@ -2757,7 +2757,7 @@ static void FUN_0044f900_impl(int *ent, int idx)
             iVar8 = 0;
             if (0 < ent[0xe]) {
                 do {
-                    if (*(unsigned char *)(iVar8 + 0x3c + (int)ent) == local_50[iVar12]) {
+                    if (*(unsigned char *)(iVar8 + 0x3c + (intptr_t)ent) == local_50[iVar12]) {
                         *(char *)(ent + 0xd) = (char)iVar8;
                         break;
                     }
@@ -2767,16 +2767,16 @@ static void FUN_0044f900_impl(int *ent, int idx)
         }
 
         ent[0x29] = 0;
-        unsigned char *pbVar14 = (unsigned char *)((char)ent[0xd] + 0x3c + (int)ent);
+        unsigned char *pbVar14 = (unsigned char *)((char)ent[0xd] + 0x3c + (intptr_t)ent);
         iVar8 = rand();
-        uVar9 = iVar8 % (int)(*(unsigned char *)((int)DAT_00487abc + 0x7d +
+        uVar9 = iVar8 % (int)(*(unsigned char *)((intptr_t)DAT_00487abc + 0x7d +
             (unsigned int)*pbVar14 * 0x218) + 1);
-        *(char *)((int)ent + 0x35) = (char)uVar9;
+        *(char *)((intptr_t)ent + 0x35) = (char)uVar9;
         iVar8 = (uVar9 & 0xff) + (unsigned int)*pbVar14 * 0x86;
     }
 
     /* Apply weapon fire rate */
-    ent[0x25] = *(int *)((int)DAT_00487abc + 0xdc + iVar8 * 4) *
+    ent[0x25] = *(int *)((intptr_t)DAT_00487abc + 0xdc + iVar8 * 4) *
         (unsigned int)*(unsigned char *)(ent + 0x27) * DAT_0048382c >> 0xc;
 }
 
@@ -2789,16 +2789,16 @@ static void FUN_00450080_impl(int *ent, char param_2)
 
     if (param_2 == '\0') {
         int iVar6 = (iVar5 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar14;
-        unsigned short uVar3 = *(unsigned short *)((int)DAT_00481f50 + iVar6 * 2);
+        unsigned short uVar3 = *(unsigned short *)((intptr_t)DAT_00481f50 + iVar6 * 2);
         uVar11 = (unsigned char)((char)(uVar3 >> 5) << 3) + 0x2d;
         uVar7 = (unsigned char)((unsigned char)(uVar3 >> 10) << 3) + 0x2d;
-        uVar10 = (unsigned char)(*(char *)((int)DAT_00481f50 + iVar6 * 2) << 3) + 0x2d;
+        uVar10 = (unsigned char)(*(char *)((intptr_t)DAT_00481f50 + iVar6 * 2) << 3) + 0x2d;
     } else {
         int iVar6 = (iVar5 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar14;
-        unsigned short uVar3 = *(unsigned short *)((int)DAT_00481f50 + iVar6 * 2);
+        unsigned short uVar3 = *(unsigned short *)((intptr_t)DAT_00481f50 + iVar6 * 2);
         uVar7 = (unsigned int)(unsigned char)((unsigned char)(uVar3 >> 10) << 3);
         uVar11 = (unsigned int)(unsigned char)((char)(uVar3 >> 5) << 3);
-        uVar10 = (unsigned int)(unsigned char)(*(char *)((int)DAT_00481f50 + iVar6 * 2) << 3);
+        uVar10 = (unsigned int)(unsigned char)(*(char *)((intptr_t)DAT_00481f50 + iVar6 * 2) << 3);
     }
     if (uVar7 > 0xff) uVar7 = 0xff;
     if (uVar11 > 0xff) uVar11 = 0xff;
@@ -2811,15 +2811,15 @@ static void FUN_00450080_impl(int *ent, char param_2)
         int iVar8 = iVar14 - 5;
         while (iVar8 < iVar14 + 6) {
             int iVar12 = iVar6 << ((unsigned char)DAT_00487a18 & 0x1f);
-            char cVar2 = *(char *)((int)DAT_0048782c + iVar12 + iVar8);
+            char cVar2 = *(char *)((intptr_t)DAT_0048782c + iVar12 + iVar8);
             if (cVar2 == '\x04' || cVar2 == '\x15') {
-                unsigned short *puVar1 = (unsigned short *)((int)DAT_00481f50 + (iVar12 + iVar8) * 2);
-                *puVar1 = *(unsigned short *)((int)DAT_004876b8 +
-                    (unsigned int)*(unsigned short *)((int)DAT_00489230 + (unsigned int)*puVar1 * 2) * 2);
+                unsigned short *puVar1 = (unsigned short *)((intptr_t)DAT_00481f50 + (iVar12 + iVar8) * 2);
+                *puVar1 = *(unsigned short *)((intptr_t)DAT_004876b8 +
+                    (unsigned int)*(unsigned short *)((intptr_t)DAT_00489230 + (unsigned int)*puVar1 * 2) * 2);
                 iVar12 = iVar6 << ((unsigned char)DAT_00487a18 & 0x1f);
-                if (*(short *)((int)DAT_00481f50 + (iVar12 + iVar8) * 2) == 0) {
+                if (*(short *)((intptr_t)DAT_00481f50 + (iVar12 + iVar8) * 2) == 0) {
                     local_1c++;
-                    *(unsigned char *)(iVar12 + (int)DAT_0048782c + iVar8) = 0;
+                    *(unsigned char *)(iVar12 + (intptr_t)DAT_0048782c + iVar8) = 0;
                 }
             }
             iVar8++;
@@ -2832,12 +2832,12 @@ static void FUN_00450080_impl(int *ent, char param_2)
     while (iVar6 < iVar5 + 4) {
         for (int iVar8 = iVar14 - 3; iVar8 < iVar14 + 4; iVar8++) {
             int iVar12 = iVar6 << ((unsigned char)DAT_00487a18 & 0x1f);
-            char cVar2 = *(char *)((int)DAT_0048782c + iVar12 + iVar8);
+            char cVar2 = *(char *)((intptr_t)DAT_0048782c + iVar12 + iVar8);
             if (cVar2 == '\x04' || cVar2 == '\x15') {
-                *(unsigned short *)((int)DAT_00481f50 + (iVar12 + iVar8) * 2) = 0;
+                *(unsigned short *)((intptr_t)DAT_00481f50 + (iVar12 + iVar8) * 2) = 0;
                 local_1c++;
                 *(unsigned char *)((iVar6 << ((unsigned char)DAT_00487a18 & 0x1f)) +
-                    (int)DAT_0048782c + iVar8) = 0;
+                    (intptr_t)DAT_0048782c + iVar8) = 0;
             }
         }
         iVar6++;
@@ -2861,7 +2861,7 @@ static void FUN_00450080_impl(int *ent, char param_2)
         int absVelY = (int)(((unsigned int)ent[5] ^ uVar13) - uVar13);
         spawn->velocity_x =
             ((r1 % 2000 + ((absVelX + absVelY) >> 9)) *
-            (*(int *)((int)DAT_00487ab0 + (uVar9 & 0x7ff) * 4) >> 1) >> 0xb) - ((int)uVar4 >> 2);
+            (*(int *)((intptr_t)DAT_00487ab0 + (uVar9 & 0x7ff) * 4) >> 1) >> 0xb) - ((int)uVar4 >> 2);
 
         uVar4 = (unsigned int)ent[5];
         int r2 = rand();
@@ -2870,7 +2870,7 @@ static void FUN_00450080_impl(int *ent, char param_2)
         absVelX = (int)(((unsigned int)ent[4] ^ uVar13) - uVar13);
         spawn->velocity_y =
             ((r2 % 2000 + ((absVelY + absVelX) >> 9)) *
-            (*(int *)((int)DAT_00487ab0 + 0x800 + (uVar9 & 0x7ff) * 4) >> 1) >> 0xb) - ((int)uVar4 >> 2);
+            (*(int *)((intptr_t)DAT_00487ab0 + 0x800 + (uVar9 & 0x7ff) * 4) >> 1) >> 0xb) - ((int)uVar4 >> 2);
 
         spawn->previous_x = iVar14 << 0x12;
         spawn->previous_y = iVar5 << 0x12;
@@ -2882,13 +2882,13 @@ static void FUN_00450080_impl(int *ent, char param_2)
         spawn->auxiliary_26 = 0xff;
         spawn->owner = 0xff;
         spawn->health_or_damage_28 = 0;
-        spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd618);
-        spawn->damage_44 = *(int *)((int)DAT_00487abc + 0xd654);
+        spawn->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xd618);
+        spawn->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xd654);
         spawn->scratch_48 = 0;
-        spawn->palette_value = *(int *)((int)DAT_00487abc + 0xd684);
+        spawn->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xd684);
         spawn->animation_frame = 0;
         spawn->subtype = 0;
-        spawn->callback_address = *(int *)((int)DAT_00487abc + 0xd590);
+        spawn->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xd590);
         spawn->counter_3c = 0;
         spawn->timer_5c = 0;
 
@@ -2915,9 +2915,9 @@ static void FUN_00450080_impl(int *ent, char param_2)
 /* ===== FUN_00450f10 — Lava Damage Zone Check (00450F10) ===== */
 static int FUN_00450f10_impl(int x, int y)
 {
-    unsigned int spr_w = *(unsigned char *)((int)DAT_00489e8c + 0x19b);
-    int frame_off = *(int *)((int)DAT_00489234 + 0x66c);
-    unsigned char spr_h = *(unsigned char *)((int)DAT_00489e88 + 0x19b);
+    unsigned int spr_w = *(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
+    int frame_off = *(int *)((intptr_t)DAT_00489234 + 0x66c);
+    unsigned char spr_h = *(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b);
     int sx = (x >> 0x12) - (int)(spr_w >> 1);
     int sy = (y >> 0x12) - (int)(spr_h >> 1);
     unsigned int idx2 = (sy << ((unsigned char)DAT_00487a18 & 0x1f)) + sx;
@@ -2929,11 +2929,11 @@ static int FUN_00450f10_impl(int x, int y)
             int tx = sx;
             if (spr_w != 0) {
                 do {
-                    if ((*(char *)((int)DAT_00489e94 + frame_off) != '\0') &&
+                    if ((*(char *)((intptr_t)DAT_00489e94 + frame_off) != '\0') &&
                         (0 < tx) && (tx < (int)DAT_004879f0) &&
                         (0 < sy) && (sy < (int)DAT_004879f4) &&
-                        (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + idx2) *
-                                   0x20 + 10 + (int)DAT_00487928) != '\0'))
+                        (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + idx2) *
+                                   0x20 + 10 + (intptr_t)DAT_00487928) != '\0'))
                     {
                         return 1;
                     }
@@ -2954,9 +2954,9 @@ static int FUN_00450f10_impl(int x, int y)
 /* ===== FUN_00450ce0 — Pickup Collision Check (00450CE0) ===== */
 static int FUN_00450ce0_impl(int x, int y)
 {
-    unsigned int spr_w = *(unsigned char *)((int)DAT_00489e8c + 0x19b);
-    int frame_off = *(int *)((int)DAT_00489234 + 0x66c);
-    unsigned char spr_h = *(unsigned char *)((int)DAT_00489e88 + 0x19b);
+    unsigned int spr_w = *(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
+    int frame_off = *(int *)((intptr_t)DAT_00489234 + 0x66c);
+    unsigned char spr_h = *(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b);
     int sx = (x >> 0x12) - (int)(spr_w >> 1);
     int sy = (y >> 0x12) - (int)(spr_h >> 1);
     unsigned int idx2 = (sy << ((unsigned char)DAT_00487a18 & 0x1f)) + sx;
@@ -2968,12 +2968,12 @@ static int FUN_00450ce0_impl(int x, int y)
             int tx = sx;
             if (spr_w != 0) {
                 do {
-                    if ((*(char *)((int)DAT_00489e94 + frame_off) != '\0') &&
+                    if ((*(char *)((intptr_t)DAT_00489e94 + frame_off) != '\0') &&
                         (0 < tx) && (tx < (int)DAT_004879f0) &&
                         (0 < sy) && (sy < (int)DAT_004879f4) &&
-                        (*(unsigned char *)((int)DAT_0048782c + idx2) > 0xef))
+                        (*(unsigned char *)((intptr_t)DAT_0048782c + idx2) > 0xef))
                     {
-                        return *(unsigned char *)((int)DAT_0048782c + idx2);
+                        return *(unsigned char *)((intptr_t)DAT_0048782c + idx2);
                     }
                     frame_off++;
                     idx2++;
@@ -2996,20 +2996,20 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
 {
     unsigned int *puVar1 = ent;
     unsigned int local_c = ent[1];
-    unsigned int *puVar5 = (unsigned int *)ent[0];
+    unsigned int puVar5 = ent[0];
     int iVar2 = (unsigned int)*(unsigned char *)((unsigned int)(unsigned char)(param_2 + 0x10) *
-        0x20 + 0x17 + (int)DAT_00489e80) * 0x10;
+        0x20 + 0x17 + (intptr_t)DAT_00489e80) * 0x10;
     unsigned int local_4 = 10;
-    int iVar4 = *(int *)(iVar2 + 4 + (int)g_PhysicsParams) >> 1;
-    unsigned int *param_1 = puVar5;
+    int iVar4 = *(int *)(iVar2 + 4 + (intptr_t)g_PhysicsParams) >> 1;
+    unsigned int candidate_left = puVar5;
     unsigned int local_8 = local_c;
 
     while (1) {
         local_4--;
         if ((int)puVar5 >> 0x12 < (int)DAT_004879f0 - 1)
-            puVar5 = (unsigned int *)((int)puVar5 + 0x10000);
-        if (0 < (int)((unsigned int)param_1 & 0xfffc0000))
-            param_1 = (unsigned int *)((int)param_1 - 0x10000);
+            puVar5 += 0x10000;
+        if (0 < (int)(candidate_left & 0xfffc0000))
+            candidate_left -= 0x10000;
         if ((int)local_8 >> 0x12 < (int)DAT_004879f4 - 1)
             local_8 += FIXED_SCALE;
         if (0 < (int)(local_c & 0xfffc0000))
@@ -3017,13 +3017,13 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
 
         unsigned int uVar3 = FUN_00450dd0((int)puVar5, puVar1[1]);
         if ((char)uVar3 == '\0') {
-            puVar1[0] = (unsigned int)puVar5;
+            puVar1[0] = puVar5;
             puVar1[4] = puVar1[4] + (unsigned int)iVar4;
             return;
         }
-        uVar3 = FUN_00450dd0((int)param_1, puVar1[1]);
+        uVar3 = FUN_00450dd0((int)candidate_left, puVar1[1]);
         if ((char)uVar3 == '\0') {
-            puVar1[0] = (unsigned int)param_1;
+            puVar1[0] = candidate_left;
             puVar1[4] = puVar1[4] - (unsigned int)iVar4;
             return;
         }
@@ -3044,7 +3044,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
             /* All directions blocked — apply crush damage */
             if ((char)puVar1[9] != '\0') return;
 
-            int damage = *(int *)(iVar2 + 8 + (int)g_PhysicsParams);
+            int damage = *(int *)(iVar2 + 8 + (intptr_t)g_PhysicsParams);
             puVar1[8] -= (unsigned int)damage;
             DAT_00486be8[param_3] += (int)((unsigned int)(damage + ((int)damage >> 0x1f & 0x1fff)) >> 0xd);
 
@@ -3063,9 +3063,9 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
 
                 *(unsigned int *)((char *)spawn + 0x00) = puVar1[0];
                 *(unsigned int *)((char *)spawn + 0x08) = puVar1[1];
-                spawn->velocity_x = (*(int *)((int)DAT_00487ab0 + angle * 4) *
+                spawn->velocity_x = (*(int *)((intptr_t)DAT_00487ab0 + angle * 4) *
                     (speed % 0x32) >> 6) + ((int)puVar1[4] >> 2);
-                spawn->velocity_y = (*(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) *
+                spawn->velocity_y = (*(int *)((intptr_t)DAT_00487ab0 + 0x800 + angle * 4) *
                     (speed % 0x32) >> 6) + ((int)puVar1[5] >> 2);
                 *(unsigned int *)((char *)spawn + 0x04) = puVar1[0];
                 *(unsigned int *)((char *)spawn + 0x0c) = puVar1[1];
@@ -3077,13 +3077,13 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
                 spawn->auxiliary_26 = 0xff;
                 spawn->owner = 0xff;
                 spawn->health_or_damage_28 = 0;
-                spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd830);
-                spawn->damage_44 = *(int *)((int)DAT_00487abc + 0xd86c);
+                spawn->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xd830);
+                spawn->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xd86c);
                 spawn->scratch_48 = 0;
-                spawn->palette_value = *(int *)((int)DAT_00487abc + 0xd89c);
+                spawn->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xd89c);
                 spawn->animation_frame = 0;
                 spawn->subtype = 0;
-                spawn->callback_address = *(int *)((int)DAT_00487abc + 0xd7a8);
+                spawn->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xd7a8);
                 spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
 
@@ -3095,7 +3095,7 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
                 g_EntityPool[g_EntityCount - 1].scratch_64 = 0x12;
                 Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
                 last_spawn->palette_value =
-                    *(unsigned short *)((int)DAT_00487aa8 +
+                    *(unsigned short *)((intptr_t)DAT_00487aa8 +
                         (unsigned int)last_spawn->scratch_65 * 2) + 30000;
             }
             return;
@@ -3111,13 +3111,13 @@ static void FUN_00451590_impl(int *ent, int param_2)
     int *piVar4;
     int iVar7;
 
-    if (*(char *)((int)ent + 0x4a2) == '\0') {
+    if (*(char *)((intptr_t)ent + 0x4a2) == '\0') {
         /* Self/env kill */
-        *(unsigned char *)((int)ent + 0xcb) = 200;
+        *(unsigned char *)((intptr_t)ent + 0xcb) = 200;
         ent[0x125] = ent[0x125] - 1;
-        piVar4 = (int *)((unsigned int)*(unsigned char *)(ent + 0xb) * 0x4000 + 4 + (int)DAT_00487aa4);
+        piVar4 = (int *)((unsigned int)*(unsigned char *)(ent + 0xb) * 0x4000 + 4 + (intptr_t)DAT_00487aa4);
     } else {
-        unsigned char bVar1 = *(unsigned char *)((int)ent + 0x4a1);
+        unsigned char bVar1 = *(unsigned char *)((intptr_t)ent + 0x4a1);
         if (bVar1 < 0x50) {
             /* Killed by another player */
             PlayerData *killer = Player_Get(bVar1);
@@ -3126,28 +3126,28 @@ static void FUN_00451590_impl(int *ent, int param_2)
             if (uVar5 != victim->team) {
                 /* Enemy kill — increment killer's score */
                 killer->frag_count = tou_binary::add_wrap_i32(killer->frag_count, 1);
-                piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
+                piVar4 = (int *)(uVar5 * 0x4000 + 4 + (intptr_t)DAT_00487aa4);
                 iVar7 = *piVar4 + 1;
                 goto LAB_apply;
             }
             /* Team kill — decrement killer's score */
             killer->frag_count = tou_binary::sub_wrap_i32(killer->frag_count, 1);
-            piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
+            piVar4 = (int *)(uVar5 * 0x4000 + 4 + (intptr_t)DAT_00487aa4);
         } else if (bVar1 < 200) {
             /* Killed by entity type (bVar1 - 100) */
             unsigned int uVar5 = (unsigned int)(bVar1 - 100);
             if (uVar5 != *(unsigned char *)(ent + 0xb)) {
-                piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
+                piVar4 = (int *)(uVar5 * 0x4000 + 4 + (intptr_t)DAT_00487aa4);
                 iVar7 = *piVar4 + 1;
                 goto LAB_apply;
             }
-            piVar4 = (int *)(uVar5 * 0x4000 + 4 + (int)DAT_00487aa4);
+            piVar4 = (int *)(uVar5 * 0x4000 + 4 + (intptr_t)DAT_00487aa4);
         } else {
             /* Environment kill (bVar1 >= 200) */
             DAT_0048929c++;
-            *(unsigned char *)((int)ent + 0xcb) = 200;
+            *(unsigned char *)((intptr_t)ent + 0xcb) = 200;
             ent[0x125] = ent[0x125] - 1;
-            piVar4 = (int *)((unsigned int)*(unsigned char *)(ent + 0xb) * 0x4000 + 4 + (int)DAT_00487aa4);
+            piVar4 = (int *)((unsigned int)*(unsigned char *)(ent + 0xb) * 0x4000 + 4 + (intptr_t)DAT_00487aa4);
         }
     }
     iVar7 = *piVar4 - 1;
@@ -3180,19 +3180,19 @@ LAB_apply:
     else                             ent[0xc] = -1;
 
     /* Increment team death counter */
-    int *piVar4b = (int *)((unsigned int)*(unsigned char *)(ent + 0xb) * 0x4000 + (int)DAT_00487aa4);
+    int *piVar4b = (int *)((unsigned int)*(unsigned char *)(ent + 0xb) * 0x4000 + (intptr_t)DAT_00487aa4);
     *piVar4b = *piVar4b + 1;
 
     /* Reset entity state */
     *(unsigned char *)(ent + 9) = 1;       /* mark as dead */
     victim->death_count = tou_binary::add_wrap_i32(victim->death_count, 1);
     ent[8] = 0;                            /* health = 0 */
-    *(unsigned char *)((int)ent + 0x47d) = 0x32;  /* invuln timer */
-    *(unsigned char *)((int)ent + 0xc6) = 0;
+    *(unsigned char *)((intptr_t)ent + 0x47d) = 0x32;  /* invuln timer */
+    *(unsigned char *)((intptr_t)ent + 0xc6) = 0;
     ent[0x34] = 0;
     ent[0x29] = 0;
-    *(unsigned char *)((int)ent + 0x4a1) = 0;
-    *(unsigned char *)((int)ent + 0x4a2) = 0;
+    *(unsigned char *)((intptr_t)ent + 0x4a1) = 0;
+    *(unsigned char *)((intptr_t)ent + 0x4a2) = 0;
     *(unsigned char *)(ent + 0x33) = 200;  /* spawn protection */
 
     FUN_00451500();
@@ -3248,9 +3248,9 @@ LAB_apply:
             particle->position_x = ent[0];
             particle->position_y = ent[1];
             particle->velocity_x = (rand() % 0x32) *
-                *(int *)((int)DAT_00487ab0 + nextSin) >> 5;
+                *(int *)((intptr_t)DAT_00487ab0 + nextSin) >> 5;
             particle->velocity_y = (rand() % 0x32) *
-                *(int *)(nextCos + (int)DAT_00487ab0) >> 5;
+                *(int *)(nextCos + (intptr_t)DAT_00487ab0) >> 5;
             particle->sprite_index = (uint8_t)(ptype + 1);
             unsigned int sub = (unsigned int)rand() & 3;
             particle->frame_number = (uint8_t)sub;
@@ -3278,8 +3278,8 @@ LAB_apply:
         Entity *fragment = &g_EntityPool[g_EntityCount];
         fragment->position_x = ent[2];
         fragment->position_y = ent[3];
-        fragment->velocity_x = (*(int *)((int)DAT_00487ab0 + uVar5 * 4) * speed >> 7) + ent[4];
-        fragment->velocity_y = (*(int *)((int)DAT_00487ab0 + 0x800 + uVar5 * 4) * speed >> 7) + ent[5];
+        fragment->velocity_x = (*(int *)((intptr_t)DAT_00487ab0 + uVar5 * 4) * speed >> 7) + ent[4];
+        fragment->velocity_y = (*(int *)((intptr_t)DAT_00487ab0 + 0x800 + uVar5 * 4) * speed >> 7) + ent[5];
         fragment->previous_x = ent[2];
         fragment->previous_y = ent[3];
         fragment->motion_x_10 = 0;
@@ -3292,13 +3292,13 @@ LAB_apply:
         fragment->health_or_damage_28 = 0;
 
         int iVar3 = iVar8 * 0x86;
-        fragment->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x88 + (rand() % 3 + iVar3) * 4);
-        fragment->damage_44 = *(int *)((int)DAT_00487abc + 0xc4 + (rand() % 3 + iVar3) * 4);
+        fragment->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0x88 + (rand() % 3 + iVar3) * 4);
+        fragment->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xc4 + (rand() % 3 + iVar3) * 4);
         fragment->scratch_48 = 0;
-        fragment->palette_value = *(int *)((int)DAT_00487abc + 0xf4 + (rand() % 3 + iVar3) * 4);
+        fragment->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xf4 + (rand() % 3 + iVar3) * 4);
         fragment->animation_frame = 0;
         fragment->subtype = (unsigned char)(rand() % 3);
-        fragment->callback_address = *(int *)((int)DAT_00487abc + iVar8 * 0x218);
+        fragment->callback_address = *(int *)((intptr_t)DAT_00487abc + iVar8 * 0x218);
         fragment->counter_3c = 0;
         fragment->timer_5c = 0;
 
@@ -3311,7 +3311,7 @@ LAB_apply:
         }
         fragment->health_or_damage_28 = rand() % 0x5a + 100;
         fragment->scratch_48 =
-            rand() % (int)(*(unsigned char *)((int)DAT_00487abc + 0x126 + iVar8 * 0x218) - 1);
+            rand() % (int)(*(unsigned char *)((intptr_t)DAT_00487abc + 0x126 + iVar8 * 0x218) - 1);
     }
 }
 
@@ -3325,8 +3325,8 @@ static void FUN_0044dea0_impl(int *ent, int idx)
     while (1) {
         iVar1 = FUN_0044dfb0(idx);
         if (iVar1 != 0) break;
-        if (*(char *)((int)ent + 0x26) != -1)
-            *(char *)((int)ent + 0x26) = *(char *)((int)ent + 0x26) + 1;
+        if (*(char *)((intptr_t)ent + 0x26) != -1)
+            *(char *)((intptr_t)ent + 0x26) = *(char *)((intptr_t)ent + 0x26) + 1;
         iVar2++;
         if (iVar2 > 7) return;
     }
@@ -3335,15 +3335,15 @@ static void FUN_0044dea0_impl(int *ent, int idx)
 
     int tileIdx = (ent[0] >> 0x12) +
         ((ent[1] >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1f));
-    unsigned char tileType = *(unsigned char *)((int)DAT_0048782c + tileIdx);
-    if (*(char *)((unsigned int)tileType * 0x20 + 4 + (int)DAT_00487928) == '\x01')
-        *(unsigned char *)((int)ent + 0x49f) = 0x3f;
+    unsigned char tileType = *(unsigned char *)((intptr_t)DAT_0048782c + tileIdx);
+    if (*(char *)((unsigned int)tileType * 0x20 + 4 + (intptr_t)DAT_00487928) == '\x01')
+        *(unsigned char *)((intptr_t)ent + 0x49f) = 0x3f;
     else
-        *(unsigned char *)((int)ent + 0x49f) = 0;
+        *(unsigned char *)((intptr_t)ent + 0x49f) = 0;
 
-    *(unsigned char *)((int)ent + 0x25) = 0;
+    *(unsigned char *)((intptr_t)ent + 0x25) = 0;
     *(unsigned char *)(ent + 9) = 0;
-    int health = *(int *)(idx * 0x40 + 0x28 + (int)DAT_0048780c);
+    int health = *(int *)(idx * 0x40 + 0x28 + (intptr_t)DAT_0048780c);
     *(unsigned char *)(ent + 0x11f) = 1;
     ent[8] = health;
     *(unsigned char *)(ent + 0x127) = 0;
@@ -3351,8 +3351,8 @@ static void FUN_0044dea0_impl(int *ent, int idx)
     ent[4] = 0; ent[5] = 0;
     ent[0x24] = 0; ent[0x25] = 0;
     *(unsigned char *)(ent + 0x128) = 0xff;
-    *(unsigned char *)((int)ent + 0x4a3) = 0x30;
-    *(unsigned char *)((int)ent + 0x26) = 0;
+    *(unsigned char *)((intptr_t)ent + 0x4a3) = 0x30;
+    *(unsigned char *)((intptr_t)ent + 0x26) = 0;
     ent[0x26] = DAT_00483830;
 }
 
@@ -3394,7 +3394,7 @@ static void FUN_0040fb70_impl(int idx)
                     Player_Get(iVar8)->position_x,
                     Player_Get(iVar8)->position_y,
                     iVar1, iVar2);
-                int pan = (*(int *)((int)DAT_00487ab0 + (int)angle * 4) >> 0xc) + 0x80;
+                int pan = (*(int *)((intptr_t)DAT_00487ab0 + (int)angle * 4) >> 0xc) + 0x80;
                 if (minDist < (float)_DAT_004753e0_d) pan = 0x80;
 
                 if (vol >= 0x100) vol = 0xff;
@@ -3509,8 +3509,8 @@ static void FUN_00401000_impl(int idx)
 
     /* Stats update (runs for ALL weapon types) */
 
-    DAT_00486d28[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481ca8 + local_14);
-    DAT_004870e8[idx] += (unsigned int)*(unsigned char *)((int)&DAT_00481c58 + local_14);
+    DAT_00486d28[idx] += (unsigned int)*((unsigned char *)&DAT_00481ca8 + local_14);
+    DAT_004870e8[idx] += (unsigned int)*((unsigned char *)&DAT_00481c58 + local_14);
 
     uVar9 = (unsigned char)idx;
 
@@ -3537,25 +3537,25 @@ static void FUN_00401000_impl(int idx)
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 0;
                 uVar8 = rand(); uVar8 &= 0x80000001;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffe) + 1;
                 spawn->variant_24 = (short)uVar8 * 6;
                 spawn->state_20 = 0;
                 spawn->auxiliary_26 = 8;
                 spawn->owner = uVar9;
                 spawn->health_or_damage_28 = 0;
                 uVar8 = rand(); uVar8 &= 0x80000003;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
                 spawn->gravity_or_motion_38 = typeTable[uVar8 + 0x22];
                 uVar8 = rand(); uVar8 &= 0x80000003;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
                 spawn->damage_44 = typeTable[uVar8 + 0x31];
                 spawn->scratch_48 = 0;
                 uVar8 = rand(); uVar8 &= 0x80000003;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
                 spawn->palette_value = typeTable[uVar8 + 0x3d];
                 spawn->animation_frame = 0;
                 uVar8 = rand(); uVar8 &= 0x80000003;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
                 *(char *)((char *)spawn + 0x40) = (char)uVar8;
                 spawn->callback_address = typeTable[0];
                 spawn->counter_3c = 0;
@@ -3691,12 +3691,12 @@ static void FUN_00401000_impl(int idx)
                 uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
                 iVar13 = idx * 0x40;
                 Entity *spawn = &g_EntityPool[g_EntityCount];
-                spawn->position_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_x;
-                spawn->position_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_y;
+                spawn->position_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (intptr_t)DAT_0048780c) + player->position_x;
+                spawn->position_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (intptr_t)DAT_0048780c) + player->position_y;
                 spawn->velocity_x = (typeTable[player->weapon_mark + 0x137] * sincos[uVar8] >> 6) + player->velocity_x;
                 spawn->velocity_y = (typeTable[player->weapon_mark + 0x137] * sincos[0x200 + uVar8] >> 6) + player->velocity_y;
-                spawn->previous_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_x;
-                spawn->previous_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_y;
+                spawn->previous_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (intptr_t)DAT_0048780c) + player->position_x;
+                spawn->previous_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (intptr_t)DAT_0048780c) + player->position_y;
                 spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;
                 spawn->type = 2;
                 iVar13 = rand();
@@ -3717,9 +3717,9 @@ static void FUN_00401000_impl(int idx)
                 g_EntityCount++;
                 g_EntityPool[g_EntityCount - 1].timer_5c = 0x14;
                 uVar8 = rand(); uVar8 &= 0x8000000f;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff0) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffff0) + 1;
                 g_EntityPool[g_EntityCount - 1].palette_value =
-                    *(unsigned short *)((int)DAT_00487aa8 + 0x140 + uVar8 * 2) + 30000;
+                    *(unsigned short *)((intptr_t)DAT_00487aa8 + 0x140 + uVar8 * 2) + 30000;
                 iVar13 = rand();
                 g_EntityPool[g_EntityCount - 1].health_or_damage_28 = iVar13 % 400 + 0x96;
 
@@ -3775,7 +3775,7 @@ LAB_00401856:
         {
             char cVar3a = (char)player->weapon_mark << 1;
             uVar8 = rand(); uVar8 &= 0x80000001;
-            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+            if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffe) + 1;
             char cVar4 = (char)uVar8;
             FUN_00407210(player->previous_x, player->previous_y,
                          0, 0, cVar4 * '\x02' + -1, iVar11, uVar9, cVar3a);
@@ -3793,7 +3793,7 @@ LAB_00401856:
         player->velocity_y += sincos[0x200 + uVar7] >> 3;
 
         if ((*(unsigned char *)((player->position_x >> 0x16) +
-             (int)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0)
+             (intptr_t)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0)
         {
             /* 0x402CCA-0x402CE7: x87_ftol(DAT_0048385c * 14.0f + 1.0f). */
             int ftol_count = static_cast<int>(tou_binary::x87_ftol(
@@ -3826,12 +3826,12 @@ LAB_00401856:
                 g_EntityPool[g_EntityCount - 1].counter_3c = 0;
                 g_EntityPool[g_EntityCount - 1].timer_5c = 3;
                 uVar8 = rand(); uVar8 &= 0x80000007;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff8) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffff8) + 1;
                 g_EntityPool[g_EntityCount - 1].scratch_65 = (char)uVar8 + '\x14';
                 g_EntityPool[g_EntityCount - 1].scratch_64 = 0x12;
                 {
                     Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
-                    last_spawn->palette_value = *(unsigned short *)((int)DAT_00487aa8 +
+                    last_spawn->palette_value = *(unsigned short *)((intptr_t)DAT_00487aa8 +
                         (unsigned int)last_spawn->scratch_65 * 2) + 30000;
                 }
                 local_c++;
@@ -3848,7 +3848,7 @@ LAB_00401856:
         uVar9 = player->team;
         iVar11 = rand(); iVar11 = (iVar11 % 100 + 300) * 0x200;
         uVar8 = rand(); uVar8 &= 0x80000001;
-        if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+        if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffe) + 1;
         FUN_00407210(player->previous_x, player->previous_y,
                      0, 0, (char)uVar8 * '\x02' + -1, iVar11, uVar9, '\x01');
 
@@ -3884,7 +3884,7 @@ LAB_00401856:
                 while (1) {
                     if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                     uVar6 = rand(); uVar6 &= 0x8000003f;
-                    if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffffc0) + 1;
+                    if ((int)uVar6 < 0) uVar6 = ((uVar6 - 1) | 0xffffffc0) + 1;
                     unsigned int uVar15 = (unsigned int)FUN_004257e0(
                         player->position_x >> 0x12,
                         player->position_y >> 0x12, foundX, foundY);
@@ -3917,32 +3917,32 @@ LAB_00401856:
                     spawn->timer_5c = 0;
                     g_EntityCount++;
                     uVar6 = rand(); uVar6 &= 0x80000007;
-                    if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffff8) + 1;
+                    if ((int)uVar6 < 0) uVar6 = ((uVar6 - 1) | 0xfffffff8) + 1;
                     angleParam += 0x40;
                     g_EntityPool[g_EntityCount - 1].timer_5c = (char)uVar6 + '\x04';
                     g_EntityPool[g_EntityCount - 1].scratch_65 = 0x27;
                     g_EntityPool[g_EntityCount - 1].scratch_64 = 0x21;
                     {
-                        int pp2 = g_EntityCount * 0x80 + (int)g_EntityPool;
-                        *(unsigned int *)(pp2 - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp2 - 0x1b) * 2) + 30000;
+                        intptr_t pp2 = g_EntityCount * 0x80 + (intptr_t)g_EntityPool;
+                        *(unsigned int *)(pp2 - 0x34) = *(unsigned short *)((intptr_t)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp2 - 0x1b) * 2) + 30000;
                     }
                     if (0x1fff < (int)angleParam) break;
                 }
                 /* Spawn water edge records if in water */
                 if ((*(unsigned char *)((player->position_x >> 0x16) +
-                     (int)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0)
+                     (intptr_t)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0)
                 {
                     iVar11 = 0;
                     do {
                         if (0x5db < DAT_0048925c) break;
-                        int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+                        intptr_t e = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
                         *(int *)(e) = player->position_x;
                         *(int *)(e + 4) = player->position_y;
                         uVar6 = rand(); uVar6 &= 0x800000ff;
-                        if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffff00) + 1;
+                        if ((int)uVar6 < 0) uVar6 = ((uVar6 - 1) | 0xffffff00) + 1;
                         *(unsigned int *)(e + 8) = (0x80 - uVar6) * 0x400;
                         uVar6 = rand(); uVar6 &= 0x800000ff;
-                        if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffff00) + 1;
+                        if ((int)uVar6 < 0) uVar6 = ((uVar6 - 1) | 0xffffff00) + 1;
                         *(unsigned int *)(e + 0xc) = (0x80 - uVar6) * 0x400;
                         iVar16 = rand(); *(char *)(e + 0x10) = (char)(iVar16 % 5) + '\x02';
                         iVar16 = rand(); *(char *)(e + 0x11) = (char)(iVar16 % 3);
@@ -3982,16 +3982,16 @@ LAB_00401856:
         iVar13 = rand();
         uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
         if (((*(unsigned char *)((player->position_x >> 0x16) +
-             (int)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0) &&
+             (intptr_t)DAT_00487814 + (player->position_y >> 0x16) * DAT_004879f8) & 8) != 0) &&
             ((float)_DAT_004753e0_d < DAT_0048385c) && (DAT_0048925c < 0x5dc))
         {
-            int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+            intptr_t e = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
             *(int *)(e) = (sincos[uVar7] * 600 >> 6) + player->position_x;
             *(int *)(e + 4) = (sincos[0x200 + uVar7] * 600 >> 6) + player->position_y;
             *(int *)(e + 8) = (sincos[uVar8] * 0x32 >> 6) + (player->velocity_x >> 1);
             *(int *)(e + 0xc) = (sincos[0x200 + uVar8] * 0x32 >> 6) - 500 + (player->velocity_y >> 1);
             uVar6 = rand(); uVar6 &= 0x80000001;
-            if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffffe) + 1;
+            if ((int)uVar6 < 0) uVar6 = ((uVar6 - 1) | 0xfffffffe) + 1;
             *(char *)(e + 0x10) = (char)uVar6;
             *(unsigned char *)(e + 0x11) = 0; *(unsigned short *)(e + 0x12) = 0;
             *(unsigned char *)(e + 0x14) = 0xff; *(unsigned char *)(e + 0x15) = 0;
@@ -4005,7 +4005,7 @@ LAB_00401856:
             particle->velocity_x = (sincos[uVar8] * 0x30 >> 6) + player->velocity_x;
             particle->velocity_y = (sincos[0x200 + uVar8] * 0x30 >> 6) + player->velocity_y;
             uVar8 = rand(); uVar8 &= 0x80000003;
-            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+            if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
             particle->sprite_index = (uint8_t)(uVar8 + 1);
             particle->frame_number = 1;
             particle->frame_timer = 2;
@@ -4033,7 +4033,7 @@ LAB_00401856:
         do {
             if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
             uVar8 = rand(); uVar8 &= 0x800007ff;
-            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffff800) + 1;
+            if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffff800) + 1;
             iVar13 = rand(); iVar13 = iVar13 % 0x32 + 0x3c;
             Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
@@ -4202,18 +4202,18 @@ LAB_00401856:
     case 0x20:
     {
         if (DAT_0048925c < 0x5dc) {
-            int e = DAT_0048925c * 0x20 + (int)DAT_00481f2c;
+            intptr_t e = DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c;
             *(int *)(e) = player->position_x;
             *(int *)(e + 4) = player->position_y;
             *(int *)(e + 8) = 0; *(int *)(e + 0xc) = 0;
             iVar13 = rand(); *(char *)(e + 0x10) = (char)(iVar13 % 3) + '\f';
             uVar8 = rand(); uVar8 &= 0x80000003;
-            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+            if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
             *(char *)(e + 0x11) = (char)uVar8;
             *(unsigned short *)(e + 0x12) = 0;
             *(unsigned char *)(e + 0x14) = uVar9; *(unsigned char *)(e + 0x15) = 0;
             DAT_0048925c++;
-            *(unsigned char *)(DAT_0048925c * 0x20 + (int)DAT_00481f2c - 0xb) = 2;
+            *(unsigned char *)(DAT_0048925c * 0x20 + (intptr_t)DAT_00481f2c - 0xb) = 2;
 
         }
         break;
@@ -4223,7 +4223,7 @@ LAB_00401856:
     case 0x21:
     {
         if (DAT_0048926c < 100) {
-            int e = DAT_0048926c * 0x20 + (int)DAT_00487a9c;
+            intptr_t e = DAT_0048926c * 0x20 + (intptr_t)DAT_00487a9c;
             *(int *)(e) = player->position_x;
             *(int *)(e + 4) = player->position_y;
             *(int *)(e + 8) = player->velocity_x;
@@ -4231,7 +4231,7 @@ LAB_00401856:
             *(unsigned char *)(e + 0x18) = uVar9;
             *(int *)(e + 0x10) = player->heading;
             uVar8 = rand(); uVar8 &= 0x80000001;
-            if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+            if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffe) + 1;
             *(char *)(e + 0x19) = (char)uVar8;
             iVar13 = rand(); *(char *)(e + 0x1a) = (char)(iVar13 % 0x50) + '\x14';
             *(int *)(e + 0x14) = 2000;
@@ -4303,17 +4303,17 @@ LAB_00401856:
 
         }
 
-        if (*(char *)(player->weapon_mark + 0x5cc0 + (int)DAT_00487abc) != '\0') {
+        if (*(char *)(player->weapon_mark + 0x5cc0 + (intptr_t)DAT_00487abc) != '\0') {
             piVar1 = &player->velocity_x;
             *piVar1 -= sincos[uVar7] >> 7;
             player->velocity_y -= sincos[0x200 + uVar7] >> 7;
             player->timer_c4 = 3;
             uVar7 = rand(); uVar7 &= 0x800007ff;
-            if ((int)uVar7 < 0) uVar7 = (uVar7 - 1 | 0xfffff800) + 1;
+            if ((int)uVar7 < 0) uVar7 = ((uVar7 - 1) | 0xfffff800) + 1;
             player->velocity_x -= sincos[uVar7] >> 5;
             player->velocity_y -= sincos[0x200 + uVar7] >> 5;
             uVar7 = rand(); uVar7 &= 0x800007ff;
-            if ((int)uVar7 < 0) uVar7 = (uVar7 - 1 | 0xfffff800) + 1;
+            if ((int)uVar7 < 0) uVar7 = ((uVar7 - 1) | 0xfffff800) + 1;
             player->position_x += sincos[uVar7];
             piVar1 = &player->position_y;
             *piVar1 += sincos[0x200 + uVar7];
@@ -4429,19 +4429,19 @@ LAB_00401856:
         if (local_14 == 0) {
             if ((char)player->weapon_mark == '\0') {
                 uVar8 = rand(); uVar8 &= 0x80000003;
-                if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
+                if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffc) + 1;
                 g_EntityPool[g_EntityCount - 1].palette_value =
-                    *(unsigned short *)((int)DAT_00487aa8 + 0xb4 + uVar8 * 2) + 30000;
+                    *(unsigned short *)((intptr_t)DAT_00487aa8 + 0xb4 + uVar8 * 2) + 30000;
             }
             if ((char)player->weapon_mark == '\x01') {
                 iVar13 = rand();
                 g_EntityPool[g_EntityCount - 1].palette_value =
-                    *(unsigned short *)((int)DAT_00487aa8 + 0xcc + (iVar13 % 5) * 2) + 30000;
+                    *(unsigned short *)((intptr_t)DAT_00487aa8 + 0xcc + (iVar13 % 5) * 2) + 30000;
             }
             if ((char)player->weapon_mark == '\x02') {
                 iVar13 = rand();
                 g_EntityPool[g_EntityCount - 1].palette_value =
-                    *(unsigned short *)((int)DAT_00487aa8 + 0xf2 + (iVar13 % 3) * 2) + 30000;
+                    *(unsigned short *)((intptr_t)DAT_00487aa8 + 0xf2 + (iVar13 % 3) * 2) + 30000;
             }
         }
 
@@ -4489,7 +4489,7 @@ LAB_00401856:
                     iVar13 = rand();
                     g_EntityPool[g_EntityCount - 1].scratch_30 = iVar13 % 10 + 1;
                     uVar8 = rand(); uVar8 &= 0x80000001;
-                    if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
+                    if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffffe) + 1;
                     g_EntityPool[g_EntityCount - 1].state_20 = (char)uVar8;
                 } else {
                     player->counter_464 += 1;
@@ -4564,7 +4564,7 @@ LAB_0040651d:
         {
             Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
 
-            if (*(char *)((unsigned int)last_spawn->subtype + local_14 * 0x218 + 0x130 + (int)DAT_00487abc) == '\x01') {
+            if (*(char *)((unsigned int)last_spawn->subtype + local_14 * 0x218 + 0x130 + (intptr_t)DAT_00487abc) == '\x01') {
                 unsigned int pIdx2 = 99;
                 if (local_14 == 0xb) pIdx2 = 0;
                 else if (local_14 == 0x17) pIdx2 = 1;
@@ -4576,7 +4576,7 @@ LAB_0040651d:
                 else if (local_14 == 0x2e) pIdx2 = 7;
                 else if (local_14 == 0x27) pIdx2 = 8;
                 last_spawn->timer_5c = 6;
-                *(int *)((int)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = g_EntityCount - 1;
+                *(int *)((intptr_t)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = g_EntityCount - 1;
                 g_EntityPool[g_EntityCount - 1].scratch_50 = DAT_00487834[pIdx2];
 
                 DAT_00487834[pIdx2]++;
@@ -4592,17 +4592,17 @@ LAB_00402bc8:
     {
         unsigned char bVar2 = *(unsigned char *)(
             (unsigned int)player->weapon_mark +
-            local_14 * 0x218 + 0xa0 + (int)DAT_00487abc);
+            local_14 * 0x218 + 0xa0 + (intptr_t)DAT_00487abc);
         if (bVar2 != 0) {
             piVar1 = &player->velocity_x;
             *piVar1 -= (int)(((int)(sincos[uVar7] * (unsigned int)bVar2) >> 4) *
-                       (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) >> 8;
+                       (unsigned int)*((unsigned char *)&DAT_00483750 + 2)) >> 8;
             piVar1 = &player->velocity_y;
             *piVar1 -= (int)(((int)((unsigned int)*(unsigned char *)(
                 (unsigned int)player->weapon_mark +
-                local_14 * 0x218 + 0xa0 + (int)DAT_00487abc) *
+                local_14 * 0x218 + 0xa0 + (intptr_t)DAT_00487abc) *
                 sincos[0x200 + uVar7]) >> 4) *
-                (unsigned int)*(unsigned char *)((int)&DAT_00483750 + 2)) >> 8;
+                (unsigned int)*((unsigned char *)&DAT_00483750 + 2)) >> 8;
         }
     }
 }
@@ -4647,9 +4647,9 @@ static void FUN_0044d9f0_impl(int *ent)
             if ((ey - 0x1400000 < py) && (py < ey + 0x1400000)) {
                 int angle = FUN_004257e0(px, py, ex, ey);
                 player->velocity_x = tou_binary::add_wrap_i32(player->velocity_x,
-                    *(int *)((int)DAT_00487ab0 + angle * 4) >> 1);
+                    *(int *)((intptr_t)DAT_00487ab0 + angle * 4) >> 1);
                 player->velocity_y = tou_binary::add_wrap_i32(player->velocity_y,
-                    *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1);
+                    *(int *)((intptr_t)DAT_00487ab0 + 0x800 + angle * 4) >> 1);
             }
         }
     }
@@ -4672,9 +4672,9 @@ static void FUN_0044d9f0_impl(int *ent)
             int py2 = ent[1];
             if ((ey2 - 0x1400000 < py2) && (py2 < ey2 + 0x1400000)) {
                 int angle = FUN_004257e0(px2, py2, ex2, ey2);
-                entity->velocity_x += *(int *)((int)DAT_00487ab0 + angle * 4) >> 1;
+                entity->velocity_x += *(int *)((intptr_t)DAT_00487ab0 + angle * 4) >> 1;
                 entity->velocity_y +=
-                    *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
+                    *(int *)((intptr_t)DAT_00487ab0 + 0x800 + angle * 4) >> 1;
             }
         }
     }
@@ -4703,13 +4703,13 @@ static void FUN_0044dbb0_impl(int *ent, int idx)
     bomb->auxiliary_26 = 0xfe;
     bomb->owner = (unsigned char)idx;
     bomb->health_or_damage_28 = 0;
-    bomb->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0x2638);
-    bomb->damage_44 = *(int *)((int)DAT_00487abc + 0x2674);
+    bomb->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0x2638);
+    bomb->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0x2674);
     bomb->scratch_48 = 0;
-    bomb->palette_value = *(int *)((int)DAT_00487abc + 0x26a4);
+    bomb->palette_value = *(int *)((intptr_t)DAT_00487abc + 0x26a4);
     bomb->animation_frame = 0;
     bomb->subtype = 0;
-    bomb->callback_address = *(int *)((int)DAT_00487abc + 0x25b0);
+    bomb->callback_address = *(int *)((intptr_t)DAT_00487abc + 0x25b0);
     bomb->counter_3c = 0;
     bomb->timer_5c = 0;
 
@@ -4720,7 +4720,7 @@ static void FUN_0044dbb0_impl(int *ent, int idx)
 /* ===== FUN_0044ea70 — Energy Explosion Particles (0044EA70) ===== */
 static void FUN_0044ea70_impl(int *ent)
 {
-    *(unsigned char *)((int)ent + 0xc6) = 0;
+    *(unsigned char *)((intptr_t)ent + 0xc6) = 0;
 
     int particleCount = 10;  /* original reads from FPU; approximate */
 
@@ -4736,9 +4736,9 @@ static void FUN_0044ea70_impl(int *ent)
 
         particle->position_x = ent[2];
         particle->position_y = ent[3];
-        particle->velocity_x = *(int *)((int)DAT_00487ab0 + angle * 4) * speed >> 7;
+        particle->velocity_x = *(int *)((intptr_t)DAT_00487ab0 + angle * 4) * speed >> 7;
         particle->velocity_y =
-            *(int *)((int)DAT_00487ab0 + 0x800 + angle * 4) * speed >> 7;
+            *(int *)((intptr_t)DAT_00487ab0 + 0x800 + angle * 4) * speed >> 7;
         particle->previous_x = ent[2];
         particle->previous_y = ent[3];
         particle->motion_x_10 = 0;
@@ -4749,13 +4749,13 @@ static void FUN_0044ea70_impl(int *ent)
         particle->auxiliary_26 = 0xff;
         particle->owner = 0xff;
         particle->health_or_damage_28 = 0;
-        particle->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xd1e8);
-        particle->damage_44 = *(int *)((int)DAT_00487abc + 0xd224);
+        particle->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xd1e8);
+        particle->damage_44 = *(int *)((intptr_t)DAT_00487abc + 0xd224);
         particle->scratch_48 = 0;
-        particle->palette_value = *(int *)((int)DAT_00487abc + 0xd254);
+        particle->palette_value = *(int *)((intptr_t)DAT_00487abc + 0xd254);
         particle->animation_frame = 0;
         particle->subtype = 0;
-        particle->callback_address = *(int *)((int)DAT_00487abc + 0xd160);
+        particle->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xd160);
         particle->counter_3c = 0;
         particle->timer_5c = 0;
 
@@ -4764,7 +4764,7 @@ static void FUN_0044ea70_impl(int *ent)
         particle->health_or_damage_28 = rand() % 0x50 + 0x32;
         int colorIdx = rand() % 0xc;
         particle->palette_value =
-            *(unsigned short *)((int)DAT_00487aa8 + 0xc6 + colorIdx * 2) + 30000;
+            *(unsigned short *)((intptr_t)DAT_00487aa8 + 0xc6 + colorIdx * 2) + 30000;
     }
 }
 
@@ -4772,13 +4772,14 @@ static void FUN_0044ea70_impl(int *ent)
 /* vol_override: 0xFF = use volume from g_SoundTable, else use this value directly */
 void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
 {
+    (void)param5;
     float fVar2;
     int iVar3, iVar5, iVar7;
     int iVar8 = 0xff;
     float minDist = 10000.0f;
 
     if (DAT_0048371f == '\0' || g_SoundEnabled == 0) return;
-    if (*(int *)((int)g_SoundTable + snd * 8) == 0) return;
+    if (*(int *)((intptr_t)g_SoundTable + snd * 8) == 0) return;
 
     if (0 < DAT_00487808) {
         int *pIdx = (int *)&DAT_004877f8;
@@ -4803,7 +4804,7 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
             if ((vol_override & 0xFF) != 0xFF) {
                 vol_byte = vol_override & 0xFF;
             } else {
-                vol_byte = (int)*(unsigned char *)((int)g_SoundTable + snd * 8 + 4);
+                vol_byte = (int)*(unsigned char *)((intptr_t)g_SoundTable + snd * 8 + 4);
             }
             /* Original formula: vol = (int)(vol_byte / minDist) * 2
              * Boosted ×4 for modern Windows audio stack (WASAPI vs DirectSound) */
@@ -4813,7 +4814,7 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
                 Player_Get(iVar8)->position_x,
                 Player_Get(iVar8)->position_y,
                 x, y);
-            int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
+            int pan = (*(int *)((intptr_t)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
             if (minDist < (float)_DAT_004753e0_d) pan = 0x80;
 
             if (iVar7 >= 0x100) iVar7 = 0xff;
@@ -4926,7 +4927,7 @@ static void FUN_0044bbb0(PlayerData *player)
 static void FUN_0044bf20(PlayerData *player, int player_idx)
 {
     unsigned int buttons = player->buttons;
-    unsigned char turn_rate = *(unsigned char *)((int)DAT_0048780c + player_idx * 0x40 + 0x24);
+    unsigned char turn_rate = *(unsigned char *)((intptr_t)DAT_0048780c + player_idx * 0x40 + 0x24);
     int boost_active = (player->boost_timer > 0) ? 1 : 0;
 
     /* Halve turn rate during boost */
@@ -4947,7 +4948,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
 {
     int heading = player->heading;
     int cfg_off = player_idx * 0x40;
-    unsigned char accel = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x23);
+    unsigned char accel = *(unsigned char *)((intptr_t)DAT_0048780c + cfg_off + 0x23);
     int boost_active = (player->boost_timer > 0) ? 1 : 0;
     int shift = 0xB + boost_active;  /* halve thrust during boost */
 
@@ -4962,7 +4963,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
     char counter = (char)player->exhaust_counter + 1;
     player->exhaust_counter = (unsigned char)counter;
 
-    unsigned char fire_interval = *(unsigned char *)((int)DAT_0048780c + cfg_off + 0x2E);
+    unsigned char fire_interval = *(unsigned char *)((intptr_t)DAT_0048780c + cfg_off + 0x2E);
     if (counter == (char)fire_interval) {
         player->exhaust_counter = 0;
 
@@ -4976,7 +4977,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                      *   0 = complex emitter (g_EntityPool, stride 0x80) — big thruster
                      *   1 = fire type A (sprite 5 or 6)
                      *   2 = fire type B (sprite 3 or 4) */
-                    char exhaust_type = *(char *)((int)DAT_0048780c + cfg_off + 0x2D);
+                    char exhaust_type = *(char *)((intptr_t)DAT_0048780c + cfg_off + 0x2D);
 
                     if (exhaust_type == '\0') {
                         /* Type 0: Complex emitter particles in g_EntityPool (stride 0x80).
@@ -5008,8 +5009,8 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                             spawn->owner = (unsigned char)player_idx;
                             spawn->health_or_damage_28 = 0;
                             /* Sprite/animation data from entity type table */
-                            spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD830);
-                            spawn->callback_address = *(int *)((int)DAT_00487abc + 0xD7A8);
+                            spawn->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xD830);
+                            spawn->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xD7A8);
                             spawn->counter_3c = 0;
                             spawn->subtype = 0;
                             spawn->damage_44 = 0x2800;
@@ -5018,7 +5019,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                             spawn->timer_5c = 1;
                             spawn->scratch_64 = 0x72;
                             spawn->scratch_65 = 0x7F;
-                            spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                            spawn->palette_value = (int)*(unsigned short *)((intptr_t)DAT_00487aa8 + 0x7F * 2) + 30000;
                             g_EntityCount++;
 
                             /* Second emitter particle on the OPPOSITE side.
@@ -5046,8 +5047,8 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                                 spawn->auxiliary_26 = 0xFE;
                                 spawn->owner = (unsigned char)player_idx;
                                 spawn->health_or_damage_28 = 0;
-                                spawn->gravity_or_motion_38 = *(int *)((int)DAT_00487abc + 0xD830);
-                                spawn->callback_address = *(int *)((int)DAT_00487abc + 0xD7A8);
+                                spawn->gravity_or_motion_38 = *(int *)((intptr_t)DAT_00487abc + 0xD830);
+                                spawn->callback_address = *(int *)((intptr_t)DAT_00487abc + 0xD7A8);
                                 spawn->counter_3c = 0;
                                 spawn->subtype = 0;
                                 spawn->damage_44 = 0x2800;
@@ -5056,7 +5057,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                                 spawn->timer_5c = 1;
                                 spawn->scratch_64 = 0x72;
                                 spawn->scratch_65 = 0x7F;
-                                spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
+                                spawn->palette_value = (int)*(unsigned short *)((intptr_t)DAT_00487aa8 + 0x7F * 2) + 30000;
                                 g_EntityCount++;
                             }
                         }
@@ -5172,11 +5173,11 @@ static void FUN_0044e3b0(int *ent)
             int a = (int)angle;
 
             if (projectile->subtype != 0) {
-                ent[4] += *(int *)((int)DAT_00487ab0 + a * 4) >> 2;
-                ent[5] += *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 2;
+                ent[4] += *(int *)((intptr_t)DAT_00487ab0 + a * 4) >> 2;
+                ent[5] += *(int *)((intptr_t)DAT_00487ab0 + 0x800 + a * 4) >> 2;
             } else {
-                ent[4] -= *(int *)((int)DAT_00487ab0 + a * 4) >> 1;
-                ent[5] -= *(int *)((int)DAT_00487ab0 + 0x800 + a * 4) >> 1;
+                ent[4] -= *(int *)((intptr_t)DAT_00487ab0 + a * 4) >> 1;
+                ent[5] -= *(int *)((intptr_t)DAT_00487ab0 + 0x800 + a * 4) >> 1;
             }
             return;
         }
@@ -5193,7 +5194,7 @@ static void FUN_0044e7a0(int *ent)
 
     if (0 < DAT_00489264) {
         int off = 0;
-        int base = (int)DAT_00487780;
+        intptr_t base = (intptr_t)DAT_00487780;
         do {
             int ex = ent[0];
             if (*(int *)(base + off) - 0x280000 < ex &&
@@ -5206,38 +5207,38 @@ static void FUN_0044e7a0(int *ent)
                     if (((char)ent[0xb] == team || team == '\x03') &&
                         (bFound = 1,
                          *(int *)(base + 8 + off) == 0) &&
-                        *(char *)((int)ent + 0x47f) == '\0')
+                        *(char *)((intptr_t)ent + 0x47f) == '\0')
                     {
                         FUN_0040f9b0(7, ex, ey);
-                        *(unsigned char *)((int)ent + 0x47f) = 0xfa;
+                        *(unsigned char *)((intptr_t)ent + 0x47f) = 0xfa;
 
-                        int paired_base = base + 0x14;
+                        intptr_t paired_base = base + 0x14;
                         int dest_off = (unsigned int)*(unsigned char *)(paired_base + off) * 0x20;
 
-                        *(int *)((int)DAT_00487780 + 0xc + off) = 0x36;
-                        *(int *)(dest_off + 0xc + (int)DAT_00487780) = 0x36;
+                        *(int *)((intptr_t)DAT_00487780 + 0xc + off) = 0x36;
+                        *(int *)(dest_off + 0xc + (intptr_t)DAT_00487780) = 0x36;
 
                         ent[4] = 0;
                         ent[5] = 0;
 
                         FUN_004357b0(
-                            *(int *)(dest_off + (int)DAT_00487780) >> 0x12,
-                            *(int *)(dest_off + 4 + (int)DAT_00487780) >> 0x12,
+                            *(int *)(dest_off + (intptr_t)DAT_00487780) >> 0x12,
+                            *(int *)(dest_off + 4 + (intptr_t)DAT_00487780) >> 0x12,
                             9, 0, '\x02', 0, 0, 0, 0, '\0', '\0', 0xff);
 
-                        base = (int)DAT_00487780;
+                        base = (intptr_t)DAT_00487780;
 
                         /* Check if destination tile is walkable (type prop[1]==1) */
-                        int dx = *(int *)(dest_off + (int)DAT_00487780) >> 0x12;
-                        int dy = *(int *)(dest_off + 4 + (int)DAT_00487780) >> 0x12;
+                        int dx = *(int *)(dest_off + (intptr_t)DAT_00487780) >> 0x12;
+                        int dy = *(int *)(dest_off + 4 + (intptr_t)DAT_00487780) >> 0x12;
                         int tidx = dx + (dy << ((unsigned char)DAT_00487a18 & 0x1f));
-                        if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tidx) *
-                            0x20 + 1 + (int)DAT_00487928) == '\x01')
+                        if (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + tidx) *
+                            0x20 + 1 + (intptr_t)DAT_00487928) == '\x01')
                         {
                             *(unsigned char *)(ent + 0x128) = 0xff;
-                            ent[0] = *(int *)(dest_off + (int)DAT_00487780);
-                            ent[1] = *(int *)(dest_off + 4 + (int)DAT_00487780);
-                            base = (int)DAT_00487780;
+                            ent[0] = *(int *)(dest_off + (intptr_t)DAT_00487780);
+                            ent[1] = *(int *)(dest_off + 4 + (intptr_t)DAT_00487780);
+                            base = (intptr_t)DAT_00487780;
                         }
                     }
                 }
@@ -5248,13 +5249,13 @@ static void FUN_0044e7a0(int *ent)
     }
 
     /* Decrement cooldown timer */
-    if (*(char *)((int)ent + 0x47f) != '\0') {
-        *(char *)((int)ent + 0x47f) -= 1;
+    if (*(char *)((intptr_t)ent + 0x47f) != '\0') {
+        *(char *)((intptr_t)ent + 0x47f) -= 1;
     }
 
     /* Reset cooldown if not touching any teleporter */
     if (!bFound) {
-        *(unsigned char *)((int)ent + 0x47f) = 0;
+        *(unsigned char *)((intptr_t)ent + 0x47f) = 0;
     }
 }
 
@@ -5276,7 +5277,7 @@ static void FUN_0044e1c0(int *ent)
     /* Read tile at current position */
     int tx = ent[0] >> 0x12;
     int ty = ent[1] >> 0x12;
-    unsigned char tile = *(unsigned char *)((int)DAT_0048782c +
+    unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c +
         (ty << ((unsigned char)DAT_00487a18 & 0x1F)) + tx);
 
     /* Tile-based conveyor/force effects.
@@ -5328,7 +5329,7 @@ static void FUN_0044e1c0(int *ent)
 
     /* Type 0x0C entities have lower speed cap */
     if (ent[0x29] != 0 &&
-        *(char *)((char)ent[0xD] + 0x3C + (int)ent) == '\x0C') {
+        *(char *)((char)ent[0xD] + 0x3C + (intptr_t)ent) == '\x0C') {
         max_speed = 0x118;
     } else {
         max_speed = 0x157C;
@@ -5362,10 +5363,10 @@ static void FUN_00450630(int *ent, int player_idx)
     int void_hit = 0;    /* hit a void tile (prop[0]==0) */
 
     /* Sprite 0x19B collision mask dimensions */
-    int frame_off = *(int *)((int)DAT_00489234 + 0x66c);
-    unsigned int spr_w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+    int frame_off = *(int *)((intptr_t)DAT_00489234 + 0x66c);
+    unsigned int spr_w = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
     unsigned int half_w = spr_w >> 1;
-    unsigned char spr_h = *(unsigned char *)((int)DAT_00489e88 + 0x19b);
+    unsigned char spr_h = *(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b);
     unsigned int half_h = (unsigned int)(spr_h >> 1);
 
     /* Entity position in tile coords, centered on sprite */
@@ -5377,7 +5378,7 @@ static void FUN_00450630(int *ent, int player_idx)
      * use alternate passability check (offset 7 instead of 3) */
     int use_alt_pass = 0;
     if (ent[0x29] != 0 &&
-        *(char *)((char)ent[0xd] + 0x3c + (int)ent) == '\x0c') {
+        *(char *)((char)ent[0xd] + 0x3c + (intptr_t)ent) == '\x0c') {
         use_alt_pass = 1;
     }
 
@@ -5388,14 +5389,14 @@ static void FUN_00450630(int *ent, int player_idx)
             int col = 0;
             if ((int)spr_w > 0) {
                 do {
-                    if (*(char *)((int)DAT_00489e94 + frame_off) != '\0') {
+                    if (*(char *)((intptr_t)DAT_00489e94 + frame_off) != '\0') {
                         int tx = col + sx;
                         int ty = row + sy;
                         if (tx > 0 && tx < (int)DAT_004879f0 &&
                             ty > 0 && ty < (int)DAT_004879f4)
                         {
                             char *props = (char *)((unsigned int)*(unsigned char *)
-                                ((int)DAT_0048782c + tile_idx) * 0x20 + (int)DAT_00487928);
+                                ((intptr_t)DAT_0048782c + tile_idx) * 0x20 + (intptr_t)DAT_00487928);
 
                             /* Check passability: normal=props[3], flying=props[7] */
                             int blocked = 0;
@@ -5430,7 +5431,7 @@ static void FUN_00450630(int *ent, int player_idx)
         } while (row < (int)(unsigned int)spr_h);
 
         /* Energy explosion on void tile contact */
-        if (void_hit && *(unsigned char *)((int)ent + 0xc6) != 0) {
+        if (void_hit && *(unsigned char *)((intptr_t)ent + 0xc6) != 0) {
             FUN_0044ea70_impl(ent);
         }
 
@@ -5450,13 +5451,13 @@ static void FUN_00450630(int *ent, int player_idx)
 
     /* Phase 2A: Light collision (1-3 pixels) — push through solid tiles */
     {
-        int frame_off2 = *(int *)((int)DAT_00489234 + 0x66c);
-        unsigned int w2 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+        int frame_off2 = *(int *)((intptr_t)DAT_00489234 + 0x66c);
+        unsigned int w2 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
         int sx2 = (ent[0] >> 0x12) - (int)(w2 >> 1);
         int sy2 = (ent[1] >> 0x12) -
-            (int)((unsigned int)(*(unsigned char *)((int)DAT_00489e88 + 0x19b)) >> 1);
+            (int)((unsigned int)(*(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b)) >> 1);
         int idx2 = (sy2 << ((unsigned char)DAT_00487a18 & 0x1f)) + sx2;
-        unsigned int h2 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b);
+        unsigned int h2 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b);
 
         if (h2 != 0) {
             int r2 = 0;
@@ -5465,22 +5466,22 @@ static void FUN_00450630(int *ent, int player_idx)
                 int tx2 = sx2;
                 if (w2 > 0) {
                     do {
-                        if (*(char *)((int)DAT_00489e94 + frame_off2) != '\0' &&
+                        if (*(char *)((intptr_t)DAT_00489e94 + frame_off2) != '\0' &&
                             tx2 > 0 && tx2 < (int)DAT_004879f0 &&
                             sy2 > 0 && sy2 < (int)DAT_004879f4)
                         {
-                            int ti = (unsigned int)*(unsigned char *)((int)DAT_0048782c + idx2) * 0x20
-                                     + (int)DAT_00487928;
+                            intptr_t ti = (unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + idx2) * 0x20
+                                     + (intptr_t)DAT_00487928;
                             if (*(char *)(ti + 3) == '\0' && *(char *)(ti + 0xb) == '\0') {
                                 /* Replace tile with its replacement (prop[0xe]) */
-                                *(unsigned char *)((int)DAT_0048782c + idx2) =
+                                *(unsigned char *)((intptr_t)DAT_0048782c + idx2) =
                                     *(unsigned char *)(ti + 0xe);
                                 /* Update color map */
-                                unsigned char new_tile = *(unsigned char *)((int)DAT_0048782c + idx2);
-                                if (*(char *)((unsigned int)new_tile * 0x20 + (int)DAT_00487928) == '\x01') {
-                                    *(unsigned short *)((int)DAT_00481f50 + idx2 * 2) = 0;
+                                unsigned char new_tile = *(unsigned char *)((intptr_t)DAT_0048782c + idx2);
+                                if (*(char *)((unsigned int)new_tile * 0x20 + (intptr_t)DAT_00487928) == '\x01') {
+                                    *(unsigned short *)((intptr_t)DAT_00481f50 + idx2 * 2) = 0;
                                 } else {
-                                    *(unsigned short *)((int)DAT_00481f50 + idx2 * 2) = DAT_0048384c;
+                                    *(unsigned short *)((intptr_t)DAT_00481f50 + idx2 * 2) = DAT_0048384c;
                                 }
                             }
                         }
@@ -5488,13 +5489,13 @@ static void FUN_00450630(int *ent, int player_idx)
                         idx2++;
                         c2++;
                         tx2++;
-                    } while (c2 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b));
+                    } while (c2 < (int)(unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b));
                 }
-                w2 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+                w2 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
                 idx2 += (int)DAT_00487a00 - (int)w2;
                 r2++;
                 sy2++;
-            } while (r2 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b));
+            } while (r2 < (int)(unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b));
         }
 
         /* Apply drag (multiply velocity by 0.95) */
@@ -5540,8 +5541,8 @@ heavy_collision:
             /* Scale factor: 2^-19 (double at 0x4757e0 = 0x3EC0000000000000) */
             double lut_scale = 1.0 / 524288.0;  /* 2^-19 */
 
-            int sinVal = *(int *)((int)DAT_00487ab0 + reflAngle * 4);
-            int cosVal = *(int *)((int)DAT_00487ab0 + 0x800 + reflAngle * 4);
+            int sinVal = *(int *)((intptr_t)DAT_00487ab0 + reflAngle * 4);
+            int cosVal = *(int *)((intptr_t)DAT_00487ab0 + 0x800 + reflAngle * 4);
 
             ent[4] = (int)(speed * (double)sinVal * lut_scale * (double)bounce_raw);
             ent[5] = (int)(speed * (double)cosVal * lut_scale * (double)bounce_raw);
@@ -5559,8 +5560,8 @@ heavy_collision:
                 /* Play random bounce sound */
                 FUN_0040f9b0(rand() % 3 + 0x116, ent[0], ent[1]);
                 /* Set hurt state */
-                *(unsigned char *)((int)ent + 0xa3) = 1;
-                *(unsigned char *)((int)ent + 0xc4) = 3;
+                *(unsigned char *)((intptr_t)ent + 0xa3) = 1;
+                *(unsigned char *)((intptr_t)ent + 0xc4) = 3;
             }
         }
 
@@ -5570,13 +5571,13 @@ heavy_collision:
 
         /* Phase 2B cleanup: clear solid tiles at restored position (only for alive entities) */
         if ((char)ent[9] == '\0') {
-            int frame_off3 = *(int *)((int)DAT_00489234 + 0x66c);
-            unsigned int w3 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+            int frame_off3 = *(int *)((intptr_t)DAT_00489234 + 0x66c);
+            unsigned int w3 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
             int sx3 = (ent[2] >> 0x12) - (int)(w3 >> 1);
             int sy3 = (ent[3] >> 0x12) -
-                (int)((unsigned int)(*(unsigned char *)((int)DAT_00489e88 + 0x19b)) >> 1);
+                (int)((unsigned int)(*(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b)) >> 1);
             int idx3 = (sy3 << ((unsigned char)DAT_00487a18 & 0x1f)) + sx3;
-            unsigned int h3 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x19b);
+            unsigned int h3 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x19b);
 
             if ((int)h3 > 0) {
                 int r3 = 0;
@@ -5585,22 +5586,22 @@ heavy_collision:
                     int tx3 = sx3;
                     if ((int)w3 > 0) {
                         do {
-                            if (*(char *)((int)DAT_00489e94 + frame_off3) != '\0' &&
+                            if (*(char *)((intptr_t)DAT_00489e94 + frame_off3) != '\0' &&
                                 tx3 > 0 && tx3 < (int)DAT_004879f0 &&
                                 sy3 > 0 && sy3 < (int)DAT_004879f4)
                             {
-                                int ti = (unsigned int)*(unsigned char *)((int)DAT_0048782c + idx3)
-                                         * 0x20 + (int)DAT_00487928;
+                                intptr_t ti = (unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + idx3)
+                                         * 0x20 + (intptr_t)DAT_00487928;
                                 if (*(char *)(ti + 3) == '\0' && *(char *)(ti + 0xb) == '\0') {
-                                    *(unsigned char *)((int)DAT_0048782c + idx3) =
+                                    *(unsigned char *)((intptr_t)DAT_0048782c + idx3) =
                                         *(unsigned char *)(ti + 0xe);
                                     unsigned char new_tile = *(unsigned char *)
-                                        ((int)DAT_0048782c + idx3);
+                                        ((intptr_t)DAT_0048782c + idx3);
                                     if (*(char *)((unsigned int)new_tile * 0x20 +
-                                        (int)DAT_00487928) == '\x01') {
-                                        *(unsigned short *)((int)DAT_00481f50 + idx3 * 2) = 0;
+                                        (intptr_t)DAT_00487928) == '\x01') {
+                                        *(unsigned short *)((intptr_t)DAT_00481f50 + idx3 * 2) = 0;
                                     } else {
-                                        *(unsigned short *)((int)DAT_00481f50 + idx3 * 2) =
+                                        *(unsigned short *)((intptr_t)DAT_00481f50 + idx3 * 2) =
                                             DAT_0048384c;
                                     }
                                 }
@@ -5610,14 +5611,14 @@ heavy_collision:
                             c3++;
                             tx3++;
                         } while (c3 < (int)(unsigned int)*(unsigned char *)
-                                 ((int)DAT_00489e8c + 0x19b));
+                                 ((intptr_t)DAT_00489e8c + 0x19b));
                     }
-                    w3 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x19b);
+                    w3 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x19b);
                     idx3 += (int)DAT_00487a00 - (int)w3;
                     r3++;
                     sy3++;
                 } while (r3 < (int)(unsigned int)*(unsigned char *)
-                         ((int)DAT_00489e88 + 0x19b));
+                         ((intptr_t)DAT_00489e88 + 0x19b));
             }
         }
     }
@@ -5719,10 +5720,10 @@ void FUN_0044b0b0(void)
 
             /* Thrust application (if conditions met) */
             int can_thrust = 0;
-            if ((*(char *)((int)ent + 0x9E) == '\0' || *(char *)((int)ent + 0xC5) != '\0' ||
+            if ((*(char *)((intptr_t)ent + 0x9E) == '\0' || *(char *)((intptr_t)ent + 0xC5) != '\0' ||
                  ent[0x34] != 0) &&
-                ((buttons & 4) || ent[0x34] != 0 || *(char *)((int)ent + 0xC5) != '\0') &&
-                *(char *)((int)ent + 0xC6) == '\0') {
+                ((buttons & 4) || ent[0x34] != 0 || *(char *)((intptr_t)ent + 0xC5) != '\0') &&
+                *(char *)((intptr_t)ent + 0xC6) == '\0') {
                 FUN_0044bfa0(player, i);
                 *(char *)(ent + 0x129) = 1;  /* +0x4A4: thrusting flag */
                 can_thrust = 1;
@@ -5732,9 +5733,9 @@ void FUN_0044b0b0(void)
             }
 
             /* Heading rotation and weapon controls */
-            if (*(char *)((int)ent + 0x9E) == '\0' && *(char *)((int)ent + 0xC6) == '\0') {
+            if (*(char *)((intptr_t)ent + 0x9E) == '\0' && *(char *)((intptr_t)ent + 0xC6) == '\0') {
                 /* Heading rotation */
-                if (*(char *)((int)ent + 0x47E) == '\0') {
+                if (*(char *)((intptr_t)ent + 0x47E) == '\0') {
                     FUN_0044bf20(player, i);
                 }
 
@@ -5746,19 +5747,19 @@ void FUN_0044b0b0(void)
                 /* Fire primary weapon */
                 if ((buttons & 0x08) && ent[0x24] == 0 &&
                     (ent[0x26] > 0x6F || ent[0x26] == (unsigned int)DAT_00483830) &&
-                    *(char *)((int)ent + 0x1D) == '\0' &&
+                    *(char *)((intptr_t)ent + 0x1D) == '\0' &&
                     g_EntityCount < ENTITY_ACTIVE_CAPACITY &&
-                    *(char *)((int)ent + 0xA2) == '\0') {
+                    *(char *)((intptr_t)ent + 0xA2) == '\0') {
                     FUN_0044ca40_impl((int *)ent, i);
                 }
 
                 /* Auto-release fire */
                 if (!(buttons & 0x08) || DAT_00483747 == '\x01') {
-                    *(char *)((int)ent + 0x1D) = 0;
+                    *(char *)((intptr_t)ent + 0x1D) = 0;
                 }
 
                 /* Fire secondary weapon */
-                if ((buttons & 0x10) && *(char *)((int)ent + 0xA2) == '\0' && ent[0x25] == 0) {
+                if ((buttons & 0x10) && *(char *)((intptr_t)ent + 0xA2) == '\0' && ent[0x25] == 0) {
                     FUN_0044d860_impl((int *)ent, i);
                 }
             }
@@ -5771,8 +5772,8 @@ void FUN_0044b0b0(void)
 
             /* Entity type-specific behaviors */
             if (ent[0x29] != 0) {
-                char anim_type = *(char *)((char)ent[0xD] + 0x3C + (int)ent);
-                if (anim_type == 0x17 && *(char *)((int)ent + 0x35) == '\x01' &&
+                char anim_type = *(char *)((char)ent[0xD] + 0x3C + (intptr_t)ent);
+                if (anim_type == 0x17 && *(char *)((intptr_t)ent + 0x35) == '\x01' &&
                     ent[0x29] % 5 == 0) {
                     FUN_00401000_impl(i);
                 }
@@ -5782,7 +5783,7 @@ void FUN_0044b0b0(void)
                 if (anim_type == 0x0D && (ent[0x29] & 7) == 0) {
                     FUN_0044d9f0_impl((int *)ent);
                 }
-                if (anim_type == 0x12 && *(char *)((int)ent + 0xC6) == '\0' &&
+                if (anim_type == 0x12 && *(char *)((intptr_t)ent + 0xC6) == '\0' &&
                     ent[0x29] % 0x19 == 0) {
                     FUN_0044dbb0_impl((int *)ent, i);
                 }
@@ -5790,12 +5791,12 @@ void FUN_0044b0b0(void)
 
             /* Hazard damage at low health */
             if ((double)Player_Get(i)->health /
-                (double)*(int *)(i * 0x40 + 0x28 + (int)DAT_0048780c) < 0.5) {
+                (double)*(int *)(i * 0x40 + 0x28 + (intptr_t)DAT_0048780c) < 0.5) {
                 int vp_x = ent[0] >> 0x16;
                 int vp_y = ent[1] >> 0x16;
                 if (vp_x >= 0 && vp_y >= 0 &&
                     vp_x < (int)DAT_004879f0 && vp_y < (int)DAT_004879f4) {
-                    unsigned char grid_byte = *(unsigned char *)((int)DAT_00487814 +
+                    unsigned char grid_byte = *(unsigned char *)((intptr_t)DAT_00487814 +
                         vp_x + vp_y * DAT_004879f8);
                     if (grid_byte & 0x08) {
                         FUN_0044e5a0_impl((int *)ent);
@@ -5808,12 +5809,12 @@ void FUN_0044b0b0(void)
         if (DAT_00483745 == '\x01' && ent[0xC] != 0xFFFFFFFF) {
             if (ent[0xC] == 0 || (ent[0x2E] & 0x20)) {
                 if ((char)ent[9] == '\x01') {
-                    *(char *)((int)ent + 0x25) = 1;  /* trigger respawn */
+                    *(char *)((intptr_t)ent + 0x25) = 1;  /* trigger respawn */
                 }
             }
         } else if ((ent[0x2E] & 0x20) || ent[0xC] == 0) {
             if ((char)ent[9] == '\x01') {
-                *(char *)((int)ent + 0x25) = 1;
+                *(char *)((intptr_t)ent + 0x25) = 1;
             }
         }
 
@@ -5834,12 +5835,12 @@ void FUN_0044b0b0(void)
         }
 
         /* Trigger respawn if flagged */
-        if (*(char *)((int)ent + 0x25) == '\x01') {
+        if (*(char *)((intptr_t)ent + 0x25) == '\x01') {
             FUN_0044dea0_impl((int *)ent, i);
         }
 
         /* Physics integration (only if alive flag +0x47C set) */
-        if (*(char *)((int)ent + 0x47C) == '\x01') {
+        if (*(char *)((intptr_t)ent + 0x47C) == '\x01') {
             FUN_0044e1c0((int *)ent);
 
             /* Force field effects (every 8th tick) */
@@ -5855,24 +5856,24 @@ void FUN_0044b0b0(void)
         int tx = ent[0] >> 0x12;
         int ty = ent[1] >> 0x12;
         int shift = (unsigned char)DAT_00487a18 & 0x1F;
-        unsigned short tile_val = *(unsigned char *)((int)DAT_0048782c + (ty << shift) + tx);
+        unsigned short tile_val = *(unsigned char *)((intptr_t)DAT_0048782c + (ty << shift) + tx);
 
         /* Animation-type 0x0C entity behavior (uses tile data) */
         if (ent[0x29] != 0 &&
-            *(char *)((char)ent[0xD] + 0x3C + (int)ent) == 0x0C) {
+            *(char *)((char)ent[0xD] + 0x3C + (intptr_t)ent) == 0x0C) {
             FUN_0044ed90_impl((int *)ent, i, (unsigned int)tile_val);
         }
 
         /* Tile pickup interaction */
 
         /* Check if tile is walkable — clear underwater flag if so */
-        if (*(char *)((int)DAT_00487928 + 0x18 + (unsigned int)tile_val * 0x20) == '\0' &&
+        if (*(char *)((intptr_t)DAT_00487928 + 0x18 + (unsigned int)tile_val * 0x20) == '\0' &&
             (char)ent[0x28] == '\0') {
-            *(char *)((int)ent + 0x9E) = 0;
+            *(char *)((intptr_t)ent + 0x9E) = 0;
         }
 
         /* Wall collision (only if alive) */
-        if (*(char *)((int)ent + 0x47C) == '\x01') {
+        if (*(char *)((intptr_t)ent + 0x47C) == '\x01') {
             FUN_00450630((int *)ent, i);
         }
 
@@ -5885,13 +5886,13 @@ void FUN_0044b0b0(void)
                 int ty2 = (int)ent[1] >> 0x12;
                 int tx2 = (int)ent[0] >> 0x12;
                 int sh2 = (unsigned char)DAT_00487a18 & 0x1F;
-                unsigned char cur_walk = *(unsigned char *)((unsigned int)tile_val * 0x20 + 0x18 + (int)DAT_00487928);
-                unsigned char below_idx = *(unsigned char *)((int)DAT_0048782c + ((ty2 + 1) << sh2) + tx2);
-                unsigned char above_idx = *(unsigned char *)((int)DAT_0048782c + ((ty2 - 1) << sh2) + tx2);
-                unsigned char below_walk = *(unsigned char *)((unsigned int)below_idx * 0x20 + 0x18 + (int)DAT_00487928);
-                unsigned char above_walk = *(unsigned char *)((unsigned int)above_idx * 0x20 + 0x18 + (int)DAT_00487928);
+                unsigned char cur_walk = *(unsigned char *)((unsigned int)tile_val * 0x20 + 0x18 + (intptr_t)DAT_00487928);
+                unsigned char below_idx = *(unsigned char *)((intptr_t)DAT_0048782c + ((ty2 + 1) << sh2) + tx2);
+                unsigned char above_idx = *(unsigned char *)((intptr_t)DAT_0048782c + ((ty2 - 1) << sh2) + tx2);
+                unsigned char below_walk = *(unsigned char *)((unsigned int)below_idx * 0x20 + 0x18 + (intptr_t)DAT_00487928);
+                unsigned char above_walk = *(unsigned char *)((unsigned int)above_idx * 0x20 + 0x18 + (intptr_t)DAT_00487928);
                 if (!((cur_walk == 0 && below_walk == 0 && above_walk == 0) ||
-                      (*(char *)((unsigned int)tile_val * 0x20 + 1 + (int)DAT_00487928) != '\x01' &&
+                      (*(char *)((unsigned int)tile_val * 0x20 + 1 + (intptr_t)DAT_00487928) != '\x01' &&
                        cur_walk == 0))) {
                     FUN_0044f900_impl((int *)ent, i);
                     do_lava = 0;
@@ -5913,7 +5914,7 @@ void FUN_0044b0b0(void)
 
         /* Pickup collision check */
         int pickup = FUN_00450ce0_impl(ent[0], ent[1]);
-        if ((char)pickup != '\0' && *(char *)((int)ent + 0x47C) == '\x01') {
+        if ((char)pickup != '\0' && *(char *)((intptr_t)ent + 0x47C) == '\x01') {
             FUN_00451010_impl(ent, (char)pickup, i);
         }
 
@@ -5932,27 +5933,27 @@ void FUN_0044b0b0(void)
         }
 
         /* Water splash on water entry/exit (FUN_0044f840) */
-        if ((char)ent[9] == '\0' && *(unsigned char *)((int)ent + 0x49E) == 0) {
-            char *tile_rec = (char *)((unsigned int)tile_val * 0x20 + (int)DAT_00487928);
-            if ((tile_rec[4] == '\x01' && *(char *)((int)ent + 0x49D) == '\0') ||
-                (*tile_rec == '\x01' && *(char *)((int)ent + 0x49D) == '\x01')) {
+        if ((char)ent[9] == '\0' && *(unsigned char *)((intptr_t)ent + 0x49E) == 0) {
+            char *tile_rec = (char *)((unsigned int)tile_val * 0x20 + (intptr_t)DAT_00487928);
+            if ((tile_rec[4] == '\x01' && *(char *)((intptr_t)ent + 0x49D) == '\0') ||
+                (*tile_rec == '\x01' && *(char *)((intptr_t)ent + 0x49D) == '\x01')) {
                 FUN_0044f840_impl((int *)ent);
             }
         }
 
         /* Update underwater tracking flag */
-        *(char *)((int)ent + 0x49D) =
-            *(unsigned char *)((unsigned int)tile_val * 0x20 + 4 + (int)DAT_00487928);
+        *(char *)((intptr_t)ent + 0x49D) =
+            *(unsigned char *)((unsigned int)tile_val * 0x20 + 4 + (intptr_t)DAT_00487928);
 
         /* Underwater counter */
-        if (*(char *)((unsigned int)tile_val * 0x20 + 4 + (int)DAT_00487928) == '\x01') {
-            char val = *(char *)((int)ent + 0x49F) + 4;
+        if (*(char *)((unsigned int)tile_val * 0x20 + 4 + (intptr_t)DAT_00487928) == '\x01') {
+            char val = *(char *)((intptr_t)ent + 0x49F) + 4;
             if (val > 0x3F) val = 0x3F;
-            *(char *)((int)ent + 0x49F) = val;
+            *(char *)((intptr_t)ent + 0x49F) = val;
         } else {
-            char val = *(char *)((int)ent + 0x49F) - 4;
+            char val = *(char *)((intptr_t)ent + 0x49F) - 4;
             if (val < 0) val = 0;
-            *(char *)((int)ent + 0x49F) = val;
+            *(char *)((intptr_t)ent + 0x49F) = val;
         }
     }
 }

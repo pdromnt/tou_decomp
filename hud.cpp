@@ -16,7 +16,7 @@ static float _DAT_004753e8_fog = 1.0f;
  * player_data[0xCA] selects the string via switch. */
 void FUN_0040aca0(Framebuffer *framebuffer, int param_3)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     char local_20[32];
     const char *text = NULL;
@@ -40,7 +40,7 @@ void FUN_0040aca0(Framebuffer *framebuffer, int param_3)
 
     /* Y offset: viewport bottom - 0x12, with extra -0xD if viewport width <= 255 */
     int y_off = DAT_004806e4 - ((DAT_004806d8 > 0xFF) ? 0x12 : (0x12 + 0x0D));
-    int dest = param_1 + ((y_off + DAT_004806e8) * param_2 + DAT_004806ec) * 2 + 8;
+    uintptr_t dest = param_1 + ((y_off + DAT_004806e8) * param_2 + DAT_004806ec) * 2 + 8;
     Draw_Text_To_Buffer(local_20, 1, 5, (unsigned short *)dest, param_2, 0, DAT_004806d8 - 0x0C, 0);
 }
 
@@ -49,7 +49,7 @@ void FUN_0040aca0(Framebuffer *framebuffer, int param_3)
  * DAT_004892a4 == 0xFF: all dead, == player team: your team wins, else: team N wins. */
 void FUN_004094f0(Framebuffer *framebuffer, int param_3)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     char local_34[52];
 
@@ -71,7 +71,7 @@ void FUN_004094f0(Framebuffer *framebuffer, int param_3)
         y_off = (DAT_004806d8 > 399) ? 0x23 : (0x23 + 0x0A);
     }
 
-    int dest = param_1 + ((DAT_004806e4 - y_off + DAT_004806e8) * param_2 + DAT_004806ec) * 2 + 8;
+    uintptr_t dest = param_1 + ((DAT_004806e4 - y_off + DAT_004806e8) * param_2 + DAT_004806ec) * 2 + 8;
     Draw_Text_To_Buffer(local_34, 1, 5, (unsigned short *)dest, param_2, 0, DAT_004806d8 - 0x12, 0);
 }
 
@@ -80,13 +80,13 @@ void FUN_004094f0(Framebuffer *framebuffer, int param_3)
  * Multiplayer mode (DAT_0048764a != 0) shows 3 stat fields instead. */
 void FUN_00409280(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     char local_24[12];
     char local_18[12];
     char local_c[12];
 
-    int base_dest = param_1 + ((DAT_004806e8 + 0x23) * param_2 + DAT_004806ec + DAT_004806d8) * 2;
+    uintptr_t base_dest = param_1 + ((DAT_004806e8 + 0x23) * param_2 + DAT_004806ec + DAT_004806d8) * 2;
 
     if (DAT_0048764a != 0) {
         /* Multiplayer: 3 separate stat fields */
@@ -158,7 +158,7 @@ void FUN_00408f90(unsigned int param_1, unsigned short *param_2, int param_3)
  * Friend/foe distinguished by palette (same team = 0x0C, different = 0x10). */
 void FUN_004090e0(Framebuffer *framebuffer, unsigned int param_3)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     if (0x0C >= 100) return;  /* Sanity */
     unsigned short *blend_lut = (unsigned short *)DAT_004876a4[0x0C];
@@ -228,7 +228,7 @@ void FUN_004090e0(Framebuffer *framebuffer, unsigned int param_3)
  * DAT_00489230 (brightness remap), then looks up colored value in palette LUT. */
 void FUN_0040b860(Framebuffer *framebuffer, int param_3)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     int health = Player_Get(param_3)->health;
     if (health <= 0) return;
@@ -239,7 +239,7 @@ void FUN_0040b860(Framebuffer *framebuffer, int param_3)
 
     /* Compute bar height: ratio of current health to max health, scaled to pixels.
      * max_health from ship stats table: DAT_0048780c + player * 0x40 + 0x28 */
-    int max_health = *(int *)((int)DAT_0048780c + param_3 * 0x40 + 0x28);
+    int max_health = *(int *)((intptr_t)DAT_0048780c + param_3 * 0x40 + 0x28);
     if (max_health <= 0) max_health = 1;
     int bar_h = (int)((float)max_bar * (float)health / (float)max_health);
     if (health > 0 && bar_h < 1) bar_h = 1;
@@ -307,7 +307,7 @@ void FUN_0040b860(Framebuffer *framebuffer, int param_3)
  * Bar height = player[+0x98] / DAT_00483830 * (viewport_height - 50). */
 void FUN_0040b580(Framebuffer *framebuffer, int param_3)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     int shield_val = Player_Get(param_3)->shield_value;
     if (DAT_00483830 == 0) return;
@@ -370,7 +370,7 @@ void FUN_0040b580(Framebuffer *framebuffer, int param_3)
 void FUN_0040aaf0(Framebuffer *framebuffer, int param_3, int param_4,
                   int param_5, char param_6)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     if (!DAT_00487ab4 || !DAT_00489234 || !DAT_00489e8c || !DAT_00489e88) return;
 
@@ -460,7 +460,7 @@ void FUN_0040aaf0(Framebuffer *framebuffer, int param_3, int param_4,
 void FUN_0040a710(Framebuffer *framebuffer, int param_3, int param_4,
                   int param_5, int param_6)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     if (param_6 <= 0) return;
     if (!DAT_00487ab0) return;
@@ -534,8 +534,6 @@ void FUN_0040a710(Framebuffer *framebuffer, int param_3, int param_4,
  * Current weapon highlighted (param_6=0 = selected). */
 void FUN_0040a9e0(Framebuffer *framebuffer, int param_3)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
-    int param_2 = framebuffer->stride;
     PlayerData *player = Player_Get(param_3);
     int cur_slot = (int)(int8_t)player->weapon_type;
     int total_slots = player->highest_weapon_slot;
@@ -597,7 +595,7 @@ void FUN_0040a9e0(Framebuffer *framebuffer, int param_3)
  * param_3 = player index (0-3) */
 void FUN_004095e0(Framebuffer *framebuffer, int param_3)
 {
-    unsigned int param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     unsigned int step = (unsigned int)(unsigned char)DAT_0048372e;
     PlayerData *player = Player_Get(DAT_004877f8[param_3]);
@@ -680,13 +678,13 @@ void FUN_004095e0(Framebuffer *framebuffer, int param_3)
                         int ty = (player->position_y >> 0x12) - row;
                         int tx = (player->position_x + ray_fx) >> 0x12;
                         int tile_idx = (ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx - player_x;
-                        unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                        unsigned char tile = *(unsigned char *)(tile_idx + (intptr_t)DAT_0048782c);
                         accum += dist;
 
-                        if (accum < 0x201 || *(char *)(tile * 0x20 + (int)DAT_00487928) != '\0') {
+                        if (accum < 0x201 || *(char *)(tile * 0x20 + (intptr_t)DAT_00487928) != '\0') {
                             if (hit_wall) darkness += dist;
                         } else {
-                            if (*(char *)(tile * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                            if (*(char *)(tile * 0x20 + 4 + (intptr_t)DAT_00487928) != '\0') {
                                 if (accum > threshold) darkness += dist >> 1;
                                 if (hit_wall) darkness += dist;
                             } else {
@@ -762,13 +760,13 @@ void FUN_004095e0(Framebuffer *framebuffer, int param_3)
                             int ty = (player->position_y >> 0x12) + row;
                             int tx = (player->position_x + ray2_fx) >> 0x12;
                             int tile_idx = (ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx - player_x;
-                            unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                            unsigned char tile = *(unsigned char *)(tile_idx + (intptr_t)DAT_0048782c);
                             accum += dist;
 
-                            if (accum < 0x201 || *(char *)(tile * 0x20 + (int)DAT_00487928) != '\0') {
+                            if (accum < 0x201 || *(char *)(tile * 0x20 + (intptr_t)DAT_00487928) != '\0') {
                                 if (hit_wall) darkness += dist;
                             } else {
-                                if (*(char *)(tile * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                                if (*(char *)(tile * 0x20 + 4 + (intptr_t)DAT_00487928) != '\0') {
                                     if (accum > threshold) darkness += dist >> 1;
                                     if (hit_wall) darkness += dist;
                                 } else {
@@ -851,10 +849,10 @@ void FUN_004095e0(Framebuffer *framebuffer, int param_3)
                     if ((c & 2) != 0) {
                         int ty = (player->position_y + ray_fx) >> 0x12;
                         int dy = ty - player_y;
-                        if (dy < DAT_004879f4 && dy > 0) {
+                        if (dy < (int)DAT_004879f4 && dy > 0) {
                             int tx = (player->position_x >> 0x12) - c;
                             int tile_idx = (dy << ((unsigned char)DAT_00487a18 & 0x1f)) + tx;
-                            unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                            unsigned char tile = *(unsigned char *)(tile_idx + (intptr_t)DAT_0048782c);
                             (void)tile; /* tile used for wall check */
                         }
                         accum += dist;
@@ -864,12 +862,12 @@ void FUN_004095e0(Framebuffer *framebuffer, int param_3)
                              ((unsigned char)DAT_00487a18 & 0x1f)) +
                             ((player->position_x >> 0x12) - c);
                         unsigned char tile_value =
-                            *(unsigned char *)((int)DAT_0048782c + tile_index);
+                            *(unsigned char *)((intptr_t)DAT_0048782c + tile_index);
                         if (accum < 0x201 ||
-                            *(char *)(tile_value * 0x20 + (int)DAT_00487928) != '\0') {
+                            *(char *)(tile_value * 0x20 + (intptr_t)DAT_00487928) != '\0') {
                             if (hit_wall) darkness += dist;
                         } else {
-                            char *ent = (char *)(tile_value * 0x20 + (int)DAT_00487928);
+                            char *ent = (char *)(tile_value * 0x20 + (intptr_t)DAT_00487928);
                             if (ent[4] != '\0') {
                                 if (accum > threshold) darkness += dist >> 1;
                                 if (hit_wall) darkness += dist;
@@ -942,10 +940,10 @@ void FUN_004095e0(Framebuffer *framebuffer, int param_3)
                         if ((c & 2) != 0) {
                             int ty = (player->position_y + ray_fx) >> 0x12;
                             int dy = ty - player_y;
-                            if (dy < DAT_004879f4 && dy > 0) {
+                            if (dy < (int)DAT_004879f4 && dy > 0) {
                                 int tx = (player->position_x >> 0x12) + c;
                                 int tile_idx = (dy << ((unsigned char)DAT_00487a18 & 0x1f)) + tx;
-                                unsigned char tile = *(unsigned char *)(tile_idx + (int)DAT_0048782c);
+                                unsigned char tile = *(unsigned char *)(tile_idx + (intptr_t)DAT_0048782c);
                                 (void)tile;
                             }
                             accum += dist;
@@ -955,12 +953,12 @@ void FUN_004095e0(Framebuffer *framebuffer, int param_3)
                                  ((unsigned char)DAT_00487a18 & 0x1f)) +
                                 ((player->position_x >> 0x12) + c);
                             unsigned char tile_val =
-                                *(unsigned char *)((int)DAT_0048782c + tile_index);
+                                *(unsigned char *)((intptr_t)DAT_0048782c + tile_index);
 
-                            if (accum < 0x201 || *(char *)(tile_val * 0x20 + (int)DAT_00487928) != '\0') {
+                            if (accum < 0x201 || *(char *)(tile_val * 0x20 + (intptr_t)DAT_00487928) != '\0') {
                                 if (hit_wall) darkness += dist;
                             } else {
-                                if (*(char *)(tile_val * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                                if (*(char *)(tile_val * 0x20 + 4 + (intptr_t)DAT_00487928) != '\0') {
                                     if (accum > threshold) darkness += dist >> 1;
                                     if (hit_wall) darkness += dist;
                                 } else {
@@ -1081,8 +1079,8 @@ apply_rendering:
                     unsigned short color;
                     if (tile_px != 0) {
                         /* Check if tile entity has transparency flag */
-                        unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + tilemap_row);
-                        if (*(char *)(tile_type * 0x20 + 4 + (int)DAT_00487928) != '\0') {
+                        unsigned char tile_type = *(unsigned char *)((intptr_t)DAT_0048782c + tilemap_row);
+                        if (*(char *)(tile_type * 0x20 + 4 + (intptr_t)DAT_00487928) != '\0') {
                             /* Apply remap then LUT[39] */
                             unsigned short remapped = ((unsigned short *)DAT_00489230)[tile_px];
                             color = ((unsigned short *)DAT_004876a4[39])[remapped];

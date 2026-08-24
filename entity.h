@@ -128,7 +128,7 @@ extern void                 *DAT_00489e90;       /* ballistic arc LUT (word tabl
 /* ===== Turret Placement ===== */
 extern int                   DAT_00489280;       /* turret array capacity */
 extern int                   DAT_0048927c;       /* turret count */
-extern int                   DAT_00481f48;       /* turret array ptr (cast from int) */
+extern uint8_t              *DAT_00481f48;      /* turret array, 8-byte records */
 extern int                   DAT_00489284;       /* turret init counter */
 
 /* ===== Trooper Spawn Placement ===== */

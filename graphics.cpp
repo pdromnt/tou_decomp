@@ -83,7 +83,7 @@ static unsigned short *g_ScratchBuffer = NULL;
  * Each pixel under the cross is remapped: pixel → DAT_00489230[pixel] → DAT_004876a4[12][remap].
  * param_1: framebuffer base, param_2: stride, param_3: arm size,
  * param_4: screen X center, param_5: screen Y center */
-static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int param_5)
+static void FUN_00408a60(unsigned short *param_1, int param_2, int param_3, int param_4, int param_5)
 {
     unsigned short *remap_lut = (unsigned short *)DAT_00489230;
     unsigned short *color_lut = (unsigned short *)DAT_004876a4[12];
@@ -99,7 +99,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar8; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar5 >= 0 && iVar5 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -110,7 +110,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar8; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar2 >= 0 && iVar2 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -121,7 +121,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar6; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar5 >= 0 && iVar5 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -133,7 +133,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar6; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar2 >= 0 && iVar2 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -143,7 +143,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar8 >= 0 && iVar8 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -154,7 +154,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar2 >= 0 && iVar2 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -165,7 +165,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5b; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar8 >= 0 && iVar8 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -177,7 +177,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5b; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar2 >= 0 && iVar2 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -187,7 +187,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
 /* Draws 4 contracting cross shapes around a spawning entity.
  * Timer at entity+0x4A3 controls the size — starts large and shrinks to zero.
  * param_1: buffer, param_2: stride, param_3: entity index */
-static void FUN_00408ea0(int param_1, int param_2, int param_3)
+static void FUN_00408ea0(unsigned short *param_1, int param_2, int param_3)
 {
     PlayerData *player = Player_Get(param_3);
     unsigned int timer = player->timer_4a3;
@@ -432,7 +432,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
             unsigned char timer = player->timer_4a3;
             if (timer != 0 && timer < 0x2F &&
                 player->state_24 == 0) {
-                FUN_00408ea0((int)buffer, stride, p);
+                FUN_00408ea0(buffer, stride, p);
             }
         }
     }
@@ -744,7 +744,7 @@ void Render_Frame(void)
 static int Menu_Text_Width(const char *str, int font_idx)
 {
     int width = 0;
-    if (!str || !Font_Char_Table)
+    if (!str)
         return 0;
     int font_base = (font_idx & 0xFF) * 256;
     while (*str)
@@ -788,7 +788,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x06: {
                 if (DAT_00487abc != NULL) {
                     static char wpn_name[21];
-                    char *raw = (char *)((int)DAT_00487abc + item->string_idx * 0x218 + 4);
+                    char *raw = static_cast<char *>(DAT_00487abc) +
+                                item->string_idx * 0x218 + 4;
                     memcpy(wpn_name, raw, 20);
                     wpn_name[20] = '\0';
                     for (int ti = 19; ti >= 0 && wpn_name[ti] == ' '; ti--)
@@ -1548,9 +1549,12 @@ static int Font_Palettes_Built = 0;
 /* Helper: pack R8,G8,B8 to RGB565 */
 static inline unsigned short PackRGB565(int r, int g, int b)
 {
-    if (r < 0) r = 0; if (r > 255) r = 255;
-    if (g < 0) g = 0; if (g > 255) g = 255;
-    if (b < 0) b = 0; if (b > 255) b = 255;
+    if (r < 0) r = 0;
+    if (r > 255) r = 255;
+    if (g < 0) g = 0;
+    if (g > 255) g = 255;
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
     return (unsigned short)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b >> 3)));
 }
 
@@ -1645,6 +1649,7 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
                          unsigned short *dest_buf, int stride, int hover,
                          int max_width, int len)
 {
+    (void)max_width;
     if (!str || !Font_Pixel_Data)
         return;
 

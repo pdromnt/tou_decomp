@@ -85,6 +85,11 @@ else()
 endif()
 target_compile_features(TOU PRIVATE cxx_std_11)
 target_include_directories(TOU PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+if(MSVC)
+    target_compile_options(TOU PRIVATE /W4 /WX)
+else()
+    target_compile_options(TOU PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
 target_link_libraries(TOU PRIVATE
     SDL3::SDL3
     SDL3_mixer::SDL3_mixer-static

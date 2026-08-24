@@ -92,10 +92,10 @@ void FUN_0045adc0(void);
 void FUN_0045b2a0(void);
 int  FUN_00422fc0(void);
 void FUN_0040c280(int param_1, int param_2, int param_3, unsigned char param_4,
-                  int param_5, int param_6, unsigned char param_7);
+                  uintptr_t param_5, int param_6, unsigned char param_7);
 void FUN_0040c590(int frame, int player, int x, int y, unsigned char palette,
-                  int buffer, int stride, unsigned char blend);
-void FUN_0040c940(unsigned int px, unsigned int py, unsigned int buffer,
+                  uintptr_t buffer, int stride, unsigned char blend);
+void FUN_0040c940(unsigned int px, unsigned int py, uintptr_t buffer,
                   int stride, int intensity);
 void FUN_0040dbd0(Framebuffer *framebuffer);
 void FUN_0040dce0(Framebuffer *framebuffer);
