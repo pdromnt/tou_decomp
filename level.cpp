@@ -561,12 +561,17 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
             while (1) {
                 unsigned char b0 = *rle_data++;
                 unsigned char b1 = *rle_data++;
+                if (b0 == 0xFF) {
+                    break;
+                }
+
                 int remap_idx = b0 >> 2;
 
-                /* Bounds check: any index >= 33 is terminator (original
-                 * table entry [33] = 0xFF). The RLE stream ends with
-                 * b0=0xFC (remap_idx=63) or similar out-of-range value. */
-                if (remap_idx >= 33) {
+                /* The original stream terminator is the literal first byte
+                 * 0xFF. Palette index 33 is valid and remaps to tile 0xFF,
+                 * which GG generation uses as its sign-placement marker. */
+                if (remap_idx >= (int)sizeof(tile_remap)) {
+                    LOG("[LEVEL] WARNING: invalid RLE palette index %d\n", remap_idx);
                     break;
                 }
 

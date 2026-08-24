@@ -155,10 +155,16 @@ legacy tools. Build a native replacement instead of embedding them.
 
 ### M3.1 — Complete writer specification  [P0]
 
-- Recover every `.lev` header, extra/config section, placement record, marker
-  color, RLE rule, JPEG/parallax block, and GG field.
-- Treat original converter output and shipped levels as authoritative.
-- Add golden fixtures from `makelev/Jungle.*` and `Normal.txt`.
+- [x] Recover the normal/GG container, packed config, JPEG/parallax sections,
+  placement record layout, exact terrain palette, COLPICK marker families, and
+  RLE writer rules in `docs/LEVEL_FORMAT.md` and `docs/LEVEL_PALETTE.json`.
+- [x] Treat original converter output and shipped levels as authoritative; the
+  Jungle oracle matches every meaningful byte and differs only in three unused
+  placement-padding bytes.
+- [x] Add a read-only structural inspector/comparator for `.lev` fixtures.
+- [x] Resolve GG cyan-sign RLE semantics against original runtime assembly and
+  fix the reconstructed loader to preserve tile `0xFF` sign markers.
+- [ ] Verify every decoded placement parameter against original runtime assembly.
 - Document every unsupported or still-unknown value explicitly.
 
 ### M3.2 — Shared `tou_level` library and CLI  [P0]

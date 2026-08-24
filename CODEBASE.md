@@ -85,6 +85,8 @@ do not access SDL renderer objects directly.
 | `platform.h` | Portable window, events, timing, dialogs, and display services |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
 | `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
+| `docs/LEVEL_PALETTE.json` | Machine-readable attribute colors and placement-marker families |
+| `tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
 | `docs/SPRITE_FORMAT.md` | Recovered `.gfx` frame stream and pixel encodings |
 | `docs/SHIP_FORMAT.md` | Recovered `.SHP` metadata, stats, and sprite-frame layout |
 
