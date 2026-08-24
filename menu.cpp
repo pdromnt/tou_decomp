@@ -794,20 +794,6 @@ void FUN_0041aea0(void)
         /* Set heading to 0 (pointing right) */
         player->heading = 0;
 
-        /* Default key bindings (overwritten by FUN_0041a8c0 from config blob).
-         * These serve as initial fallback values during level loading. */
-        if (i == 0) {
-            const uint8_t defaults[7] = {0xCB, 0xCD, 0xC8, 0x36, 0x9D, 0x35, 0xD0};
-            memcpy(player->key_scan_codes, defaults, sizeof(defaults));
-        } else {
-            /* Player 2+ defaults: WASD + space/lctrl/lshift */
-            const uint8_t defaults[7] = {0x1E, 0x20, 0x11, 0x39, 0x1D, 0x2A, 0x1F};
-            memcpy(player->key_scan_codes, defaults, sizeof(defaults));
-        }
-
-        /* Mark as human player (0 = human, nonzero = AI) */
-        player->ai_level = 0;
-
         /* Initialize energy to max */
         player->shield_value = DAT_00483830;
 

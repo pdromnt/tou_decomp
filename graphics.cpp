@@ -1068,9 +1068,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x07: {
                 int scanCode = cfgPtr ? (int)*cfgPtr : 0;
                 if (g_InputMode == 2 && DAT_004877e6 == (unsigned char)i) {
-                    /* Waiting for key press - show ESC hint */
-                    if (g_KeyNameTable && g_KeyNameTable[1])
-                        str = g_KeyNameTable[1];
+                    str = "?";
                 } else {
                     if (g_KeyNameTable && scanCode < 256 && g_KeyNameTable[scanCode])
                         str = g_KeyNameTable[scanCode];

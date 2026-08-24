@@ -76,6 +76,7 @@ int           DAT_00489e9c   = 0;
 unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - saved scan-code state */
 unsigned char DAT_004877e5   = 0;  /* input event trigger */
 unsigned char DAT_004877e6   = 0;  /* input mode item index */
+static unsigned char s_KeyCapturePreviousState[256] = {0};
 float         DAT_004877d4   = 0.0f;  /* scroll position (0.0 - 1.0) */
 int           DAT_004877d8   = 0;  /* scrollbar area width */
 int           DAT_004877dc   = 0;  /* scrollbar area top */
@@ -2314,34 +2315,26 @@ void FUN_00425fe0(void)
     }
 
     /* ---- Input processing ---- */
-    /* Key-bind capture keeps the original saved scan-code contract:
-     * scan the whole state, use the last pressed key, reserve Escape for
-     * cancel, and handle Right Ctrl separately because it is also the menu's
-     * keyboard equivalent of a primary click. */
+    /* Capture only a new key press after the row was clicked.  Snapshotting
+     * the state when capture begins prevents an already-held key from being
+     * accepted before the user has seen the '?' prompt. */
     if (g_InputMode == 2) {
         int selected_scan_code = 0x100;
         for (int scan_code = 0; scan_code < 0x100; scan_code++) {
-            if ((g_KeyboardState[scan_code] & 0x80) != 0 && scan_code != 0x9D)
+            if ((g_KeyboardState[scan_code] & 0x80) != 0 &&
+                (s_KeyCapturePreviousState[scan_code] & 0x80) == 0)
                 selected_scan_code = scan_code;
         }
 
-        if ((g_KeyboardState[0x9D] & 0x80) != 0) {
-            if ((DAT_004877bd & 1) == 0) {
-                DAT_004877bd |= 1;
-                selected_scan_code = 0x9D;
-            }
-        } else if ((DAT_004877bd & 1) != 0) {
-            DAT_004877bd ^= 1;
-        }
-
         if (selected_scan_code != 0x100) {
-            DAT_004877e8 = selected_scan_code;
+            DAT_004877e8 = (selected_scan_code == 0x01)
+                ? 0x100 : selected_scan_code;
             DAT_004877e5 = 1;
-        }
-        if ((g_KeyboardState[0x01] & 0x80) != 0) {
-            DAT_004877e8 = 0x100;
-            DAT_004877e5 = 1;
-            DAT_004877bd |= 8;
+            if (selected_scan_code == 0x01)
+                DAT_004877bd |= 8;
+        } else {
+            memcpy(s_KeyCapturePreviousState, g_KeyboardState,
+                   sizeof(s_KeyCapturePreviousState));
         }
     }
 
@@ -4141,7 +4134,9 @@ void FUN_00427df0(int param_1, char param_2)
     case 7: /* Key-bind capture mode */
         g_InputMode = 2;
         DAT_004877e6 = (unsigned char)param_1;
-        DAT_004877e8 = (int)*data;
+        DAT_004877e8 = 0;
+        memcpy(s_KeyCapturePreviousState, g_KeyboardState,
+               sizeof(s_KeyCapturePreviousState));
         return;
 
     case 8: { /* Level/map cycle */
