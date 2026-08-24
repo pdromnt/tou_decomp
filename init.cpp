@@ -703,6 +703,8 @@ void FUN_0041f900(void)
     w[61] = 0;
     wb[0xF8] = 0;
 }
+static const size_t MENU_DYNAMIC_TEXT_CAPACITY = 128;
+
 /* ===== FUN_0042d8b0 - Session/UI init (0042D8B0) ===== */
 /* Initializes game state for menu, allocates and fills the key name table
  * (256 legacy scan code to display string) and menu string table (~350 entries).
@@ -873,10 +875,10 @@ void FUN_0042d8b0(void)
     g_MenuStrings = (char **)Mem_Alloc(350u * sizeof(*g_MenuStrings));
 
     /* Allocate 50-byte dynamic buffers for player/stats entries */
-    pvVar = Mem_Alloc(0x32);
+    pvVar = Mem_Alloc(MENU_DYNAMIC_TEXT_CAPACITY);
     g_MenuStrings[0x65] = (char *)pvVar;  /* entry 101 - dynamic text */
     for (i = 0x71; i <= 0x8B; ++i) {
-        pvVar = Mem_Alloc(0x32);
+        pvVar = Mem_Alloc(MENU_DYNAMIC_TEXT_CAPACITY);
         g_MenuStrings[i] = (char *)pvVar;
     }
 
@@ -3117,13 +3119,13 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x28, 0xc, 1, 0, 0, 0, 1, 0xff);           /* heading */
         /* Copy game mode names into dynamic menu strings */
         if (g_MenuStrings) {
-            strcpy(g_MenuStrings[0x71], "Custom");
-            strcpy(g_MenuStrings[0x72], "Quite normal");
-            strcpy(g_MenuStrings[0x73], "Turret wars");
-            strcpy(g_MenuStrings[0x74], "Cyberdeath");
-            strcpy(g_MenuStrings[0x75], "Quick rounds");
-            strcpy(g_MenuStrings[0x76], "Subspace trench");
-            strcpy(g_MenuStrings[0x77], "Base defending");
+            snprintf(g_MenuStrings[0x71], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.custom"));
+            snprintf(g_MenuStrings[0x72], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.quite_normal"));
+            snprintf(g_MenuStrings[0x73], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.turret_wars"));
+            snprintf(g_MenuStrings[0x74], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.cyberdeath"));
+            snprintf(g_MenuStrings[0x75], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.quick_rounds"));
+            snprintf(g_MenuStrings[0x76], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.subspace_trench"));
+            snprintf(g_MenuStrings[0x77], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.base_defending"));
         }
         FUN_00430200(0, 100, 0x95, 0, 2, 2, 0, 4, 0xff);           /* "Game type" label */
         iVar7 = FUN_00430200(0, 100, 0x71, 0, 2, 1, 0x30, 5, 0xff); /* game mode value */
@@ -3472,7 +3474,7 @@ void FUN_0042a470(void)
         FUN_0042fc90(CFG_ADDR(0x481f58));
         FUN_0042fcf0();
         if (g_MenuStrings && g_MenuStrings[0x71])
-            FUN_004644af_bounded(g_MenuStrings[0x71], 50,
+            FUN_004644af_bounded(g_MenuStrings[0x71], MENU_DYNAMIC_TEXT_CAPACITY,
                 (const unsigned char *)Text_Get("levels.summary_format"),
                 DAT_0048508c, DAT_00486484);
         FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
@@ -3557,16 +3559,16 @@ void FUN_0042a470(void)
         /* Result text based on match outcome */
         if (g_MenuStrings && g_MenuStrings[0x65]) {
             if (DAT_00487640[3] == 3) {
-                FUN_004644af_bounded(g_MenuStrings[0x65], 50,
-                    (const unsigned char *)"Draw!");
+                FUN_004644af_bounded(g_MenuStrings[0x65], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.draw"));
             } else if (DAT_00487640[3] == 2) {
-                FUN_004644af_bounded(g_MenuStrings[0x65], 50,
-                    (const unsigned char *)"Team %d and team %d win with a draw!",
+                FUN_004644af_bounded(g_MenuStrings[0x65], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.team_draw_format"),
                     (int)(unsigned char)DAT_00487644[0] + 1,
                     (int)(unsigned char)DAT_00487644[1] + 1);
             } else {
-                FUN_004644af_bounded(g_MenuStrings[0x65], 50,
-                    (const unsigned char *)"Team %d wins!",
+                FUN_004644af_bounded(g_MenuStrings[0x65], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.team_wins_format"),
                     (int)(unsigned char)DAT_00487644[0] + 1);
             }
         }
@@ -3582,19 +3584,19 @@ void FUN_0042a470(void)
 
                 /* Column 1: Wins (from DAT_0048693c bytes 1-3) */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
                         (const unsigned char *)"%d", (int)teamWins);
                 FUN_00430200(0xb1, rowY, strIdx, color, 0, 0, 0, 0, 0xff);
 
                 /* Column 2: Frags (from DAT_00486944) */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], MENU_DYNAMIC_TEXT_CAPACITY,
                         (const unsigned char *)"%d", DAT_00486944[team]);
                 FUN_00430200(0x12d, rowY, strIdx + 1, color, 0, 0, 0, 0, 0xff);
 
                 /* Column 3: Deaths (from DAT_00486954) */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 2])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], MENU_DYNAMIC_TEXT_CAPACITY,
                         (const unsigned char *)"%d", DAT_00486954[team]);
                 FUN_00430200(0x1b4, rowY, strIdx + 2, color, 0, 0, 0, 0, 0xff);
 
@@ -3604,8 +3606,8 @@ void FUN_0042a470(void)
 
             /* "Debris killed: %d" — strIdx = 0x7A after loop */
             if (g_MenuStrings && g_MenuStrings[strIdx])
-                FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
-                    (const unsigned char *)"Debris killed: %d", DAT_00486964);
+                FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.debris_killed_format"), DAT_00486964);
             FUN_00430200(0x28, 0x136, strIdx, 1, 2, 0, 0, 0, 0xff);
 
             /* "Game elapsed: %d hours, %d minutes, %d seconds" — strIdx+1 = 0x7B */
@@ -3615,8 +3617,8 @@ void FUN_0042a470(void)
                 int minutes = (int)((totalSec % 3600) / 60);
                 int seconds = (int)(totalSec % 60);
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], 50,
-                        (const unsigned char *)"Game elapsed: %d hours, %d minutes, %d seconds",
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], MENU_DYNAMIC_TEXT_CAPACITY,
+                        (const unsigned char *)Text_Get("results.elapsed_format"),
                         hours, minutes, seconds);
             }
             FUN_00430200(0x28, 0x156, strIdx + 1, 1, 1, 0, 0, 0, 0xff);
@@ -3682,8 +3684,8 @@ void FUN_0042a470(void)
                     char *awardName = (char *)&DAT_00487368[1 + a * 0x20];
                     int playerNum = (int)(unsigned char)DAT_004874c9[a] + 1;
                     if (g_MenuStrings && g_MenuStrings[awardBufIdx])
-                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], 50,
-                            (const unsigned char *)"%s (Player %d)",
+                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                            (const unsigned char *)Text_Get("results.player_award_format"),
                             awardName, playerNum);
                     /* Small font keeps two-digit 64-player labels inside the
                      * 640-pixel logical canvas. Headers retain the original
@@ -3702,8 +3704,8 @@ void FUN_0042a470(void)
                     char *awardName = (char *)&DAT_004874d4[1 + a * 0x20];
                     int teamNum = (int)(unsigned char)DAT_00487635[a] + 1;
                     if (g_MenuStrings && g_MenuStrings[awardBufIdx])
-                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], 50,
-                            (const unsigned char *)"%s (Team %d)",
+                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                            (const unsigned char *)Text_Get("results.team_award_format"),
                             awardName, teamNum);
                     FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x32, 0, 0xff);
                     awardBufIdx++;
@@ -4684,7 +4686,7 @@ void FUN_00426650(void)
 
             /* Column 1: Player number (render_mode 0x1A = display text, non-clickable) */
             if (g_MenuStrings && g_MenuStrings[strIdx + (int)i])
-                snprintf(g_MenuStrings[strIdx + (int)i], 50, "%d", pidx + 1);
+                snprintf(g_MenuStrings[strIdx + (int)i], MENU_DYNAMIC_TEXT_CAPACITY, "%d", pidx + 1);
             FUN_00430200(0x3C, yPos, strIdx + (int)i, 2, 2, 0, 0x1A, 0, 0xff);
 
             /* Column 2: Color swatch (render_mode 0x1B, clickable=1) */
@@ -4777,7 +4779,7 @@ void FUN_00426650(void)
             for (unsigned int row = 0; row < maxVisible; row++) {
                 /* Column 1: Player number */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
                                          (const unsigned char *)"%d", playerNum);
                 FUN_00430200(0x3C, yPos, strIdx, 1, 0, 0, 0x1A, 0, 0xFF);
 
@@ -4786,20 +4788,20 @@ void FUN_00426650(void)
                 if (DAT_00487810)
                     shipVal = Player_Get(playerDataOff / 0x598)->team;
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], MENU_DYNAMIC_TEXT_CAPACITY,
                                          (const unsigned char *)"%d", shipVal + 1);
                 FUN_00430200(0xAA, yPos, strIdx + 1, shipVal + 6, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 3: Kills */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 2])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], MENU_DYNAMIC_TEXT_CAPACITY,
                                          (const unsigned char *)"%d",
                                  DAT_00486968[scrollOff + (int)row]);
                 FUN_00430200(0x118, yPos, strIdx + 2, 1, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 4: Deaths */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 3])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx + 3], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 3], MENU_DYNAMIC_TEXT_CAPACITY,
                                          (const unsigned char *)"%d",
                                  DAT_00486aa8[scrollOff + (int)row]);
                 FUN_00430200(0x17C, yPos, strIdx + 3, 1, 0, 0, 0x1A, 0, 0xFF);
@@ -4856,7 +4858,7 @@ void FUN_00426650(void)
             for (unsigned int row = 0; row < maxVisible; row++) {
                 /* Player number label */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
                                          (const unsigned char *)"%d", playerNum);
                 FUN_00430200(0x14, yPos, strIdx, 2, 2, 0, 0x1A, 0, 0xFF);
                 strIdx++;
@@ -5759,7 +5761,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most valuable", best_idx);
+                AddPlayerAward(Text_Get("awards.most_valuable"), best_idx);
             }
         }
 
@@ -5782,7 +5784,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most violent", best_idx);
+                AddPlayerAward(Text_Get("awards.most_violent"), best_idx);
             }
         }
 
@@ -5805,7 +5807,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Survivor", best_idx);
+                AddPlayerAward(Text_Get("awards.survivor"), best_idx);
             }
         }
 
@@ -5828,7 +5830,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most moving", best_idx);
+                AddPlayerAward(Text_Get("awards.most_moving"), best_idx);
             }
         }
 
@@ -5851,7 +5853,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most explosive", best_idx);
+                AddPlayerAward(Text_Get("awards.most_explosive"), best_idx);
             }
         }
 
@@ -5874,7 +5876,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Base builder award", best_idx);
+                AddPlayerAward(Text_Get("awards.base_builder"), best_idx);
             }
         }
 
@@ -5897,7 +5899,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most useless", best_idx);
+                AddPlayerAward(Text_Get("awards.most_useless"), best_idx);
             }
         }
 
@@ -5919,7 +5921,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Greedy award", best_idx);
+                AddPlayerAward(Text_Get("awards.greedy"), best_idx);
             }
         }
 
@@ -5996,7 +5998,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("The best", best_team);
+                AddTeamAward(Text_Get("awards.the_best"), best_team);
             }
         }
 
@@ -6006,7 +6008,7 @@ void FUN_0041d740(void)
             if (r == 0) {
                 unsigned int team = rand() % 4;
                 if (team_player_count[team] != 0) {
-                    AddTeamAward("Odd award", team);
+                    AddTeamAward(Text_Get("awards.odd"), team);
                 }
             }
         }
@@ -6035,7 +6037,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("Greedy award", best_team);
+                AddTeamAward(Text_Get("awards.greedy"), best_team);
             }
         }
 
@@ -6063,7 +6065,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("Most violent", best_team);
+                AddTeamAward(Text_Get("awards.most_violent"), best_team);
             }
         }
 
@@ -6091,7 +6093,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("Explosive award", best_team);
+                AddTeamAward(Text_Get("awards.explosive"), best_team);
             }
         }
 

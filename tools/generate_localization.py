@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate TOU's English catalog and starter translation overlays.
+"""Generate TOU's authoritative English catalog.
 
 The legacy menu table remains the compatibility source while it is gradually
 replaced with direct Text_Get() calls. Keys include both the stable numeric
@@ -19,6 +19,30 @@ SOURCE = ROOT / "init.cpp"
 OUTPUT = ROOT / "lang"
 
 DIRECT_ENGLISH = {
+    "menu.tooltip.hold": "Hold &",
+    "menu.tooltip.drag": "drag",
+    "menu.value.infinite": "INFINITE",
+    "menu.value.random": "Random",
+    "menu.game_mode.custom": "Custom",
+    "menu.game_mode.quite_normal": "Quite normal",
+    "menu.game_mode.turret_wars": "Turret wars",
+    "menu.game_mode.cyberdeath": "Cyberdeath",
+    "menu.game_mode.quick_rounds": "Quick rounds",
+    "menu.game_mode.subspace_trench": "Subspace trench",
+    "menu.game_mode.base_defending": "Base defending",
+    "key.backspace": "Backspace", "key.enter": "Enter",
+    "key.left_ctrl": "Left ctrl", "key.right_ctrl": "Right ctrl",
+    "key.left_shift": "Left shift", "key.right_shift": "Right shift",
+    "key.left_alt": "Left alt", "key.right_alt": "Right alt",
+    "key.spacebar": "Spacebar", "key.caps_lock": "Caps Lock",
+    "key.num_lock": "Numlock", "key.scroll_lock": "Scroll lock",
+    "key.numpad": "numpad", "key.pause": "Pause", "key.home": "Home",
+    "key.up_arrow": "Up arrow", "key.page_up": "Page up",
+    "key.left_arrow": "Left arrow", "key.right_arrow": "Right arrow",
+    "key.end": "End", "key.down_arrow": "Down arrow",
+    "key.page_down": "Page down", "key.insert": "Insert", "key.delete": "Delete",
+    "key.left_system": "Left system key", "key.right_system": "Right system key",
+    "key.application": "Application key",
     "levels.hover.gg_author_format": "GG THEME AUTHOR: %s",
     "levels.hover.gg_name_format": "GG THEME NAME: %s",
     "levels.hover.level_author_format": "LEVEL AUTHOR: %s",
@@ -28,6 +52,44 @@ DIRECT_ENGLISH = {
     "levels.hover.type.gg_theme": "GG THEME",
     "levels.hover.type.normal_level": "NORMAL LEVEL",
     "levels.summary_format": "You have %d levels and %d GG themes",
+    "results.draw": "Draw!",
+    "results.team_draw_format": "Team %d and team %d win with a draw!",
+    "results.team_wins_format": "Team %d wins!",
+    "results.debris_killed_format": "Debris killed: %d",
+    "results.elapsed_format": "Game elapsed: %d hours, %d minutes, %d seconds",
+    "results.player_award_format": "%s (Player %d)",
+    "results.team_award_format": "%s (Team %d)",
+    "awards.most_valuable": "Most valuable",
+    "awards.most_violent": "Most violent",
+    "awards.survivor": "Survivor",
+    "awards.most_moving": "Most moving",
+    "awards.most_explosive": "Most explosive",
+    "awards.base_builder": "Base builder award",
+    "awards.most_useless": "Most useless",
+    "awards.greedy": "Greedy award",
+    "awards.the_best": "The best",
+    "awards.odd": "Odd award",
+    "awards.explosive": "Explosive award",
+    "hud.frags_format": "Frags: %d",
+    "hud.lives_format": "Lives: %d",
+    "hud.you_are_dead": "You are dead!",
+    "hud.pause_format": "Game Paused. Press \"%s\" to continue.",
+    "hud.level_skipped": "Level skipped",
+    "hud.everybody_died": "Draw. Everybody died",
+    "hud.team_wins_round_format": "Team %d wins the round",
+    "hud.team_format": "Team %d",
+    "hud.wins_the_round": "wins the round",
+    "hud.team_1": "Team 1", "hud.team_2": "Team 2", "hud.team_3": "Team 3",
+    "hud.all_teams_dead": "All teams are dead",
+    "hud.your_team_only_alive": "Your team is the only team alive!",
+    "hud.team_only_alive_format": "Team %d is the only team alive.",
+    "pickup.full_energy": "Full energy", "pickup.booby_trap": "Booby trap",
+    "pickup.death_ring": "Death Ring", "pickup.four_miniships": "4 Miniships",
+    "pickup.six_insects": "6 Insects", "pickup.weapon_loaded": "Weapon loaded",
+    "pickup.faster_special": "Faster special gun", "pickup.better_basic": "Better basic gun",
+    "pickup.small_medikit": "Small medikit", "pickup.large_medikit": "Large medikit",
+    "pickup.hurry_up": "Hurry up!",
+    "error.could_not_load_ships": "Could not load ships!",
 }
 
 ASSIGNMENT = re.compile(
@@ -38,7 +100,10 @@ DYNAMIC_SLOTS = {0x65, *range(0x71, 0x8C), *range(0x149, 0x14D)}
 
 def decode_c_string(value: str) -> str:
     raw = ast.literal_eval(f'b"{value}"')
-    return raw.decode("utf-8") if raw.startswith((b"\xc2", b"\xc3")) else raw.decode("latin-1")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
 
 
 def slug(value: str) -> str:
@@ -61,14 +126,6 @@ def read_english() -> dict[str, str]:
     return dict(sorted(strings.items()))
 
 
-def translated(english: dict[str, str], values: dict[int, str],
-               direct: dict[str, str]) -> dict[str, str]:
-    by_index = {int(key.split(".")[1]): key for key in english if key.startswith("menu.")}
-    result = {by_index[index]: text for index, text in values.items() if index in by_index}
-    result.update(direct)
-    return result
-
-
 def write_catalog(code: str, name: str, strings: dict[str, str]) -> None:
     payload = {"schemaVersion": 1, "locale": code, "name": name, "strings": strings}
     filename = "pt-br" if code == "pt-BR" else code
@@ -80,70 +137,7 @@ def main() -> None:
     OUTPUT.mkdir(exist_ok=True)
     english = read_english()
     write_catalog("en", "English", english)
-    write_catalog("es", "Español", translated(english, {
-        1: "Combate a muerte por equipos", 2: "Niveles", 3: "Jugadores",
-        4: "Opciones", 5: "Créditos", 6: "Salir del juego",
-        8: "Menú de opciones", 9: "Audio", 10: "Detalles y gráficos",
-        11: "Eventos", 12: "Reglas principales", 13: "Varios",
-        14: "Prohibir armas", 15: "Atrás", 0x147: "Restablecer valores",
-        0x148: "Valores restablecidos.", 0x14D: "Modo",
-        0x14E: "Ventana", 0x14F: "Pantalla completa", 0x150: "Idioma",
-        0x5C: "Cantidad de niveles", 0x5D: "Aleatorizar niveles",
-        0xEA: "Opciones del nivel",
-    }, {
-        "levels.hover.gg_author_format": "AUTOR DEL TEMA GG: %s",
-        "levels.hover.gg_name_format": "NOMBRE DEL TEMA GG: %s",
-        "levels.hover.level_author_format": "AUTOR DEL NIVEL: %s",
-        "levels.hover.level_name_format": "NOMBRE DEL NIVEL: %s",
-        "levels.hover.author_email_format": "CORREO DEL AUTOR: %s",
-        "levels.hover.level_type_format": "TIPO DE NIVEL: %s",
-        "levels.hover.type.gg_theme": "TEMA GG",
-        "levels.hover.type.normal_level": "NIVEL NORMAL",
-        "levels.summary_format": "Tienes %d niveles y %d temas GG",
-    }))
-    write_catalog("pt-BR", "Português (Brasil)", translated(english, {
-        1: "Mata-mata em equipe", 2: "Fases", 3: "Jogadores",
-        4: "Opções", 5: "Créditos", 6: "Sair do jogo",
-        8: "Menu de opções", 9: "Áudio", 10: "Detalhes e gráficos",
-        11: "Eventos", 12: "Regras principais", 13: "Diversos",
-        14: "Banir armas", 15: "Voltar", 0x147: "Restaurar padrões",
-        0x148: "Padrões restaurados.", 0x14D: "Modo",
-        0x14E: "Janela", 0x14F: "Tela cheia", 0x150: "Idioma",
-        0x5C: "Quantidade de fases", 0x5D: "Embaralhar fases",
-        0xEA: "Opções da fase",
-    }, {
-        "levels.hover.gg_author_format": "AUTOR DO TEMA GG: %s",
-        "levels.hover.gg_name_format": "NOME DO TEMA GG: %s",
-        "levels.hover.level_author_format": "AUTOR DA FASE: %s",
-        "levels.hover.level_name_format": "NOME DA FASE: %s",
-        "levels.hover.author_email_format": "E-MAIL DO AUTOR: %s",
-        "levels.hover.level_type_format": "TIPO DA FASE: %s",
-        "levels.hover.type.gg_theme": "TEMA GG",
-        "levels.hover.type.normal_level": "FASE NORMAL",
-        "levels.summary_format": "Você tem %d fases e %d temas GG",
-    }))
-    write_catalog("fi", "Suomi", translated(english, {
-        1: "Joukkuekuolonottelu", 2: "Kentät", 3: "Pelaajat",
-        4: "Asetukset", 5: "Tekijät", 6: "Lopeta peli",
-        8: "Asetusvalikko", 9: "Ääni", 10: "Yksityiskohdat ja grafiikka",
-        11: "Tapahtumat", 12: "Pääsäännöt", 13: "Muut",
-        14: "Kiellä aseita", 15: "Takaisin", 0x147: "Palauta oletukset",
-        0x148: "Oletukset palautettu.", 0x14D: "Tila",
-        0x14E: "Ikkuna", 0x14F: "Koko näyttö", 0x150: "Kieli",
-        0x5C: "Kenttien määrä", 0x5D: "Sekoita kentät",
-        0xEA: "Kenttäasetukset",
-    }, {
-        "levels.hover.gg_author_format": "GG-TEEMAN TEKIJÄ: %s",
-        "levels.hover.gg_name_format": "GG-TEEMAN NIMI: %s",
-        "levels.hover.level_author_format": "KENTÄN TEKIJÄ: %s",
-        "levels.hover.level_name_format": "KENTÄN NIMI: %s",
-        "levels.hover.author_email_format": "TEKIJÄN SÄHKÖPOSTI: %s",
-        "levels.hover.level_type_format": "KENTÄN TYYPPI: %s",
-        "levels.hover.type.gg_theme": "GG-TEEMA",
-        "levels.hover.type.normal_level": "NORMAALI KENTTÄ",
-        "levels.summary_format": "Sinulla on %d kenttää ja %d GG-teemaa",
-    }))
-    print(f"Generated {len(english)} English strings and 3 starter overlays")
+    print(f"Generated {len(english)} authoritative English strings")
 
 
 if __name__ == "__main__":

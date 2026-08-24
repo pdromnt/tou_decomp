@@ -253,7 +253,9 @@ The original four atlases are never rewritten: `tools/generate_latin_fonts.py`
 builds separate Latin supplements for Spanish and Brazilian Portuguese from
 the original letter shapes. Regenerate catalogs with
 `tools/generate_localization.py` and validate them with
-`tools/validate_localization.py`.
+`tools/validate_localization.py`. `tools/bootstrap_translations.py` can fill
+new catalog gaps for human review; it is an opt-in maintainer helper and never
+runs in builds or CI.
 
 ## Building and Cleaning
 

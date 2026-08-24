@@ -100,7 +100,7 @@ settings rather than a JSON dump of recovered memory.
 
 ---
 
-## M2 — Internationalization  [FOUNDATION IMPLEMENTED / TRANSLATION IN PROGRESS]
+## M2 — Internationalization  [CATALOG COMPLETE / VISUAL QA]
 
 Initial locales:
 
@@ -128,9 +128,16 @@ Initial locales:
 
 ### M2.3 — String extraction and translations
 
-- [ ] Extract menus, HUD, results, awards, errors, controls, weapon/pickup names,
-  prompts, and gameplay messages.
-- Create and review complete `en`, `es`, `pt-BR`, and `fi` catalogs.
+- [x] Extract all 299 legacy menu slots plus code-rendered HUD, results, awards,
+  errors, control-key names, pickups, prompts, and gameplay messages.
+- [x] Keep all four catalogs at exact key parity; validate placeholders and every
+  required bitmap glyph automatically.
+- [ ] Complete native-speaker review of the initial Spanish, Brazilian Portuguese,
+  and Finnish translations.
+- [ ] Decide whether content-defined proper names (weapons, ships, levels, and GG
+  themes) remain universal or gain separate localized display-name metadata.
+- [ ] Replace or overlay the few English labels baked into legacy menu/panel sprites;
+  JSON catalogs cannot alter text that is part of an image.
 
 ### M2 acceptance
 

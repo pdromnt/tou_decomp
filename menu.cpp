@@ -213,7 +213,8 @@ gg_level_ready:
     /* FUN_004249c0() - Ship sprite loading (fatal on failure in original) */
     result = FUN_004249c0();
     if (result != 1) {
-        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c), "Could not load ships!");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c), "%s",
+                 Text_Get("error.could_not_load_ships"));
         return 0;
     }
 

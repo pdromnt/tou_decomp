@@ -78,6 +78,9 @@ void Apply_Display_Settings(void)
 /* Scratch buffer for compositing particles onto RGB565 before conversion */
 static unsigned short *g_ScratchBuffer = NULL;
 
+static const char *Menu_Key_Name(int scan_code, const char *fallback,
+                                 char *buffer, size_t buffer_size);
+
 /* ===== FUN_00408a60 — Shield cross/ring drawing primitive ===== */
 /* Draws 8 line segments forming a cross shape using double LUT color transform.
  * Each pixel under the cross is remapped: pixel → DAT_00489230[pixel] → DAT_004876a4[12][remap].
@@ -522,7 +525,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
             /* Frag count text */
             if (player->timer_cb != 0) {
                 char frag_buf[100];
-                FUN_004644af(frag_buf, (const unsigned char *)"Frags: %d",
+                FUN_004644af(frag_buf, (const unsigned char *)Text_Get("hud.frags_format"),
                              player->frag_count);
                 Draw_Text_To_Buffer(frag_buf, 1, 1,
                     buffer + (DAT_004806e8 + 0x32) * stride + DAT_004806ec + 4,
@@ -533,9 +536,9 @@ static void Render_Game_World(Framebuffer *framebuffer)
             if (player->timer_cc != 0) {
                 char lives_buf[32];
                 if (player->lives == 0) {
-                    strcpy(lives_buf, "You are dead!");
+                    snprintf(lives_buf, sizeof(lives_buf), "%s", Text_Get("hud.you_are_dead"));
                 } else {
-                    FUN_004644af(lives_buf, (const unsigned char *)"Lives: %d",
+                    FUN_004644af(lives_buf, (const unsigned char *)Text_Get("hud.lives_format"),
                                  player->lives);
                 }
                 Draw_Text_To_Buffer(lives_buf, 1, 5,
@@ -563,12 +566,14 @@ static void Render_Game_World(Framebuffer *framebuffer)
         if (g_SubState == GAMEPLAY_PAUSED) {
             /* State 1 (Pause key): text overlay with key name + version string.
              * Original: "Game Paused. Press \"[KEY]\" to continue." + "TOU v1.0" */
-            char pause_msg[100];
+            char pause_msg[128];
+            char key_buf[64];
             const char *key_name = "???";
             if (g_KeyNameTable && g_KeyNameTable[DAT_004837ba])
-                key_name = g_KeyNameTable[DAT_004837ba];
+                key_name = Menu_Key_Name(DAT_004837ba, g_KeyNameTable[DAT_004837ba],
+                                         key_buf, sizeof(key_buf));
             snprintf(pause_msg, sizeof(pause_msg),
-                     "Game Paused. Press \"%s\" to continue.", key_name);
+                     Text_Get("hud.pause_format"), key_name);
             Draw_Text_To_Buffer(pause_msg, 3, 2,
                 buffer + (DAT_0048923c - 0x1e) * stride + 8,
                 stride, 0, DAT_00489238 - 0x10, 0);
@@ -644,19 +649,19 @@ static void Render_Game_World(Framebuffer *framebuffer)
 
                     /* Round result text */
                     if ((char)DAT_00487640[0] == 0) {
-                        strcpy(text_buf, "Level skipped");
+                        snprintf(text_buf, sizeof(text_buf), "%s", Text_Get("hud.level_skipped"));
                     } else if ((char)DAT_00487640[0] == (char)-1) {
-                        strcpy(text_buf, "Draw. Everybody died");
+                        snprintf(text_buf, sizeof(text_buf), "%s", Text_Get("hud.everybody_died"));
                     } else {
-                        FUN_004644af(text_buf, (const unsigned char *)"Team %d wins the round",
+                        FUN_004644af(text_buf, (const unsigned char *)Text_Get("hud.team_wins_round_format"),
                                      (int)(unsigned char)DAT_00487640[0]);
                     }
                     /* Two-line display: "Team N" + "wins the round" (font 1, centered) */
                     if ((char)DAT_00487640[0] > 0 && (char)DAT_00487640[0] != (char)-1) {
                         char line1[32], line2[32];
-                        FUN_004644af(line1, (const unsigned char *)"Team %d",
+                        FUN_004644af(line1, (const unsigned char *)Text_Get("hud.team_format"),
                                      (int)(unsigned char)DAT_00487640[0]);
-                        strcpy(line2, "wins the round");
+                        snprintf(line2, sizeof(line2), "%s", Text_Get("hud.wins_the_round"));
                         Draw_Text_To_Buffer(line1, 1, 1,
                             buffer + (panel_y + 0x1f) * stride + panel_x + 0x12,
                             stride, 0, spr_w - 0x24, 0);
@@ -670,7 +675,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     }
 
                     /* Team names and win counts */
-                    Draw_Text_To_Buffer("Team1", 1, 6,
+                    Draw_Text_To_Buffer(Text_Get("hud.team_1"), 1, 6,
                         buffer + (panel_y + 0x55) * stride + panel_x + 10,
                         stride, 0, 0xFA, 0);
                     FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[0]);
@@ -678,7 +683,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                         buffer + (panel_y + 100) * stride + panel_x + 0x1E,
                         stride, 0, 0xFA, 0);
 
-                    Draw_Text_To_Buffer("Team2", 1, 7,
+                    Draw_Text_To_Buffer(Text_Get("hud.team_2"), 1, 7,
                         buffer + (panel_y + 0x55) * stride + panel_x + 0x5A,
                         stride, 0, 0xFA, 0);
                     FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[1]);
@@ -686,7 +691,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                         buffer + (panel_y + 100) * stride + panel_x + 0x6E,
                         stride, 0, 0xFA, 0);
 
-                    Draw_Text_To_Buffer("Team3", 1, 8,
+                    Draw_Text_To_Buffer(Text_Get("hud.team_3"), 1, 8,
                         buffer + (panel_y + 0x55) * stride + panel_x + 0xAF,
                         stride, 0, 0xFA, 0);
                     FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[2]);
@@ -754,6 +759,54 @@ static int Menu_Text_Width(const char *str, int font_idx)
         width += Font_Char_Table[font_base + glyph].width;
     }
     return width;
+}
+
+static const char *Menu_Key_Name(int scan_code, const char *fallback,
+                                 char *buffer, size_t buffer_size)
+{
+    const char *key = NULL;
+    switch (scan_code) {
+    case 0x0E: key = "key.backspace"; break;
+    case 0x1C: key = "key.enter"; break;
+    case 0x1D: key = "key.left_ctrl"; break;
+    case 0x2A: key = "key.left_shift"; break;
+    case 0x36: key = "key.right_shift"; break;
+    case 0x38: key = "key.left_alt"; break;
+    case 0x39: key = "key.spacebar"; break;
+    case 0x3A: key = "key.caps_lock"; break;
+    case 0x45: key = "key.num_lock"; break;
+    case 0x46: key = "key.scroll_lock"; break;
+    case 0x9D: key = "key.right_ctrl"; break;
+    case 0xB8: key = "key.right_alt"; break;
+    case 0xC5: key = "key.pause"; break;
+    case 0xC7: key = "key.home"; break;
+    case 0xC8: key = "key.up_arrow"; break;
+    case 0xC9: key = "key.page_up"; break;
+    case 0xCB: key = "key.left_arrow"; break;
+    case 0xCD: key = "key.right_arrow"; break;
+    case 0xCF: key = "key.end"; break;
+    case 0xD0: key = "key.down_arrow"; break;
+    case 0xD1: key = "key.page_down"; break;
+    case 0xD2: key = "key.insert"; break;
+    case 0xD3: key = "key.delete"; break;
+    case 0xDB: key = "key.left_system"; break;
+    case 0xDC: key = "key.right_system"; break;
+    case 0xDD: key = "key.application"; break;
+    default: break;
+    }
+    if (key) return Text_Get(key);
+
+    const bool numpad = (scan_code >= 0x37 && scan_code <= 0x53) ||
+                        scan_code == 0x9C || scan_code == 0xB3 || scan_code == 0xB5;
+    if (numpad && fallback && buffer && buffer_size > 0) {
+        const char *separator = strstr(fallback, " (numpad)");
+        if (separator) {
+            snprintf(buffer, buffer_size, "%.*s (%s)",
+                     (int)(separator - fallback), fallback, Text_Get("key.numpad"));
+            return buffer;
+        }
+    }
+    return fallback;
 }
 
 void Render_Game_View_To(Framebuffer *framebuffer)
@@ -1029,7 +1082,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 default: break;
                 }
                 if (item->render_mode == 0x34 && val > 1200) {
-                    str = "INFINITE";
+                    str = Text_Get("menu.value.infinite");
                 } else if (item->render_mode == 0x0E || item->render_mode == 0x13 ||
                            item->render_mode == 0x14 || item->render_mode == 0x15 ||
                            item->render_mode == 0x16 || item->render_mode == 0x34) {
@@ -1081,7 +1134,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                     str = "?";
                 } else {
                     if (g_KeyNameTable && scanCode < 256 && g_KeyNameTable[scanCode])
-                        str = g_KeyNameTable[scanCode];
+                        str = Menu_Key_Name(scanCode, g_KeyNameTable[scanCode],
+                                            valBuf, sizeof(valBuf));
                 }
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
@@ -1179,7 +1233,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
 
                 if (shipType == 9) {
                     /* "Random" text */
-                    str = "Random";
+                    str = Text_Get("menu.value.random");
                 } else if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
                     /* Draw ship preview sprite at index 0xE5 + ship_type */
                     int sIdx = (int)shipType + 0xE5;
@@ -1414,8 +1468,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 /* Compact two-line drag hint at the frozen drag-start cursor. */
                 int cursor_x = g_MouseDeltaX >> 18;
                 int cursor_y = g_MouseDeltaY >> 18;
-                const char *tip_top = "Hold &";
-                const char *tip_bottom = "drag";
+                const char *tip_top = Text_Get("menu.tooltip.hold");
+                const char *tip_bottom = Text_Get("menu.tooltip.drag");
                 int tip_top_w = Menu_Text_Width(tip_top, 2);
                 int tip_bottom_w = Menu_Text_Width(tip_bottom, 2);
                 int box_w = 0x61;

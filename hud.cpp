@@ -18,25 +18,25 @@ void FUN_0040aca0(Framebuffer *framebuffer, int param_3)
 {
     uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
-    char local_20[32];
+    char local_20[96];
     const char *text = NULL;
 
     switch (Player_Get(param_3)->hud_banner_id) {
-    case 0:    text = "Full energy"; break;
-    case 1:    text = "Booby trap"; break;
-    case 2:    text = "Death Ring"; break;
-    case 3:    text = "4 Miniships"; break;
-    case 4:    text = "6 Insects"; break;
-    case 5:    text = "Weapon loaded"; break;
-    case 6:    text = "Faster special gun"; break;
-    case 7:    text = "Better basic gun"; break;
-    case 0x14: text = "Small medikit"; break;
-    case 0x15: text = "Large medikit"; break;
-    case 0xC8: text = "Hurry up!"; break;
+    case 0:    text = Text_Get("pickup.full_energy"); break;
+    case 1:    text = Text_Get("pickup.booby_trap"); break;
+    case 2:    text = Text_Get("pickup.death_ring"); break;
+    case 3:    text = Text_Get("pickup.four_miniships"); break;
+    case 4:    text = Text_Get("pickup.six_insects"); break;
+    case 5:    text = Text_Get("pickup.weapon_loaded"); break;
+    case 6:    text = Text_Get("pickup.faster_special"); break;
+    case 7:    text = Text_Get("pickup.better_basic"); break;
+    case 0x14: text = Text_Get("pickup.small_medikit"); break;
+    case 0x15: text = Text_Get("pickup.large_medikit"); break;
+    case 0xC8: text = Text_Get("pickup.hurry_up"); break;
     default:   return;  /* Unknown pickup type, don't draw */
     }
 
-    strcpy(local_20, text);
+    snprintf(local_20, sizeof(local_20), "%s", text);
 
     /* Y offset: viewport bottom - 0x12, with extra -0xD if viewport width <= 255 */
     int y_off = DAT_004806e4 - ((DAT_004806d8 > 0xFF) ? 0x12 : (0x12 + 0x0D));
@@ -51,16 +51,16 @@ void FUN_004094f0(Framebuffer *framebuffer, int param_3)
 {
     uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
-    char local_34[52];
+    char local_34[128];
 
     if ((unsigned char)DAT_004892a4 == 0xFF) {
-        strcpy(local_34, "All teams are dead");
+        snprintf(local_34, sizeof(local_34), "%s", Text_Get("hud.all_teams_dead"));
     }
     else if (((unsigned char)DAT_004892a4 & 0xFF) - 1 == param_3) {
-        strcpy(local_34, "Your team is the only team alive!");
+        snprintf(local_34, sizeof(local_34), "%s", Text_Get("hud.your_team_only_alive"));
     }
     else {
-        FUN_004644af(local_34, (const unsigned char *)"Team %d is the only team alive.",
+        FUN_004644af(local_34, (const unsigned char *)Text_Get("hud.team_only_alive_format"),
                      (int)((unsigned char)DAT_004892a4 & 0xFF));
     }
 
