@@ -5,7 +5,6 @@
  *            FUN_0044e510, FUN_00450630
  */
 #include "tou.h"
-#include <dinput.h>
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -4841,14 +4840,9 @@ static void FUN_0044bb70(void)
 }
 
 /* ===== FUN_0044b990 — Read_Keyboard_To_Buttons ===== */
-/* Reads DirectInput keyboard state and maps per-player key bindings
- * to button flags at entity +0xB8. Uses lpDI_Keyboard (= DAT_00489ee4). */
+/* Maps SDL-populated legacy scan-code state to per-player button flags. */
 static void FUN_0044b990(void)
 {
-#ifndef TOU_HAS_SDL
-    unsigned char keyState[256];
-    HRESULT hr;
-#endif
     int i;
 
     /* Save previous buttons, then clear the current input frame. */
@@ -4858,18 +4852,7 @@ static void FUN_0044b990(void)
         player->buttons = 0;
     }
 
-#ifndef TOU_HAS_SDL
-    if (lpDI_Keyboard == NULL) return;
-    hr = lpDI_Keyboard->GetDeviceState(256, keyState);
-    if (FAILED(hr)) {
-        if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-            lpDI_Keyboard->Acquire();
-        }
-        return;
-    }
-#else
     const unsigned char *keyState = g_KeyboardState;
-#endif
 
     /* Map key bindings to button flags for each human player */
     for (i = 0; i < DAT_00489240; i++) {

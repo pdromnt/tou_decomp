@@ -1,8 +1,7 @@
 /* SDL3 implementation of the renderer backend.
  *
- * First migration boundary: SDL wraps the existing native window and presents
- * the recovered 640x480 RGB565 software framebuffer. Window creation, input,
- * audio, and the game loop remain on their verified legacy paths for now. */
+ * Presents the recovered 640x480 RGB565 software framebuffer through the
+ * SDL-owned window. */
 #include "tou.h"
 #include "render_backend.h"
 #include "platform.h"
@@ -24,9 +23,8 @@ static void SDLBackend_ReleaseTexture(void)
     s_TextureHeight = 0;
 }
 
-static int SDLBackend_Initialize(void *window_handle)
+static int SDLBackend_Initialize(void)
 {
-    (void)window_handle;
     s_Window = (SDL_Window *)Platform_GetSdlWindow();
     if (s_Window == NULL) {
         LOG("[GFX] SDL platform window is unavailable\n");
@@ -97,7 +95,7 @@ static int SDLBackend_Present(const Framebuffer *framebuffer)
         return 0;
     }
 
-    RECT destination;
+    PresentationRect destination;
     Get_Game_Presentation_Rect(&destination);
     SDL_FRect target = {
         (float)destination.left,

@@ -1,4 +1,4 @@
-/* SDL input adapter preserving TOU's legacy DirectInput scan-code namespace. */
+/* SDL input adapter preserving TOU's legacy saved scan-code namespace. */
 #include "tou.h"
 #include "input.h"
 #include "platform.h"

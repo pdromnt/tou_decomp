@@ -1,11 +1,9 @@
 /*
- * init.cpp - System initialization, DirectInput, game config
+ * init.cpp - System initialization and game config
  * Addresses: System_Init_Check=0041D480, Early_Init_Vars=0041EAD0,
- *            Init_DirectInput=004620F0, Init_Game_Config=004207C0
+ *            Init_Game_Config=004207C0
  */
 #include "tou.h"
-#define INITGUID
-#include <dinput.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,12 +11,6 @@
 #include <ctype.h>
 
 /* ===== Globals defined in this module ===== */
-
-/* DirectInput */
-LPDIRECTINPUT        lpDI           = NULL;  /* 00489ED4 */
-LPDIRECTINPUTDEVICE  lpDI_Keyboard  = NULL;  /* 00489EE4 */
-LPDIRECTINPUTDEVICE  lpDI_Mouse     = NULL;  /* 00489EC0 */
-HANDLE               hMouseEvent    = NULL;  /* 00489EE0 */
 
 /* Display mode struct: {flags, current_mode, desired_mode, ...} */
 unsigned char DAT_00487640[4] = {0, 0xFF, 5, 0};
@@ -80,7 +72,7 @@ int           DAT_00487824   = 0;
 unsigned char g_WindowMode = 0;
 int           DAT_00487784   = 0;
 int           DAT_00489e9c   = 0;
-unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - DirectInput keyboard state */
+unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - saved scan-code state */
 unsigned char DAT_004877e5   = 0;  /* input event trigger */
 unsigned char DAT_004877e6   = 0;  /* input mode item index */
 float         DAT_004877d4   = 0.0f;  /* scroll position (0.0 - 1.0) */
@@ -709,7 +701,7 @@ void FUN_0041f900(void)
 }
 /* ===== FUN_0042d8b0 - Session/UI init (0042D8B0) ===== */
 /* Initializes game state for menu, allocates and fills the key name table
- * (256 DirectInput scan code → display string) and menu string table (~350 entries).
+ * (256 legacy scan code to display string) and menu string table (~350 entries).
  * Sets palette[3] = 0x7FF0 (gold) BEFORE sprite loading - critical for variant 3 color. */
 void FUN_0042d8b0(void)
 {
@@ -738,7 +730,7 @@ void FUN_0042d8b0(void)
     g_GameViewData = Mem_Alloc(0x4718);
 
     /* --- Key sort/priority table (DAT_00481d48..00481d76) --- */
-    /* Maps an ordering index to DirectInput scan codes */
+    /* Maps an ordering index to saved scan codes. */
     static const unsigned char key_order[47] = {
         0x12, 0x0F, 0x16, 0x06, 0x05, 0x0C, 0x18, 0x01,  /* E,Tab,U,5,4,-,O,Esc */
         0x24, 0x11, 0x15, 0x22, 0x25, 0x10, 0x23, 0x13,  /* J,W,Y,G,K,Q,H,R */
@@ -750,7 +742,7 @@ void FUN_0042d8b0(void)
     memcpy(g_KeyOrderTable, key_order, 47);
     DAT_00481d84 = 0x2F;  /* DIK_V */
 
-    /* --- Key name table (256 entries, one per DirectInput scan code) --- */
+    /* --- Key name table (256 entries, one per saved scan code) --- */
     g_KeyNameTable = (char **)Mem_Alloc(0x400);  /* 256 * 4 = 1024 bytes */
 
     /* Default: all keys show "???" */
@@ -1517,7 +1509,7 @@ int FUN_00423150(void)
         case 0: case 1: {
             /* BGR24 -> RGB565 conversion.
              * all3.gfx stores pixels as BGR (byte0=B, byte1=G, byte2=R).
-             * Original binary encoded to X1R5G5B5 for DirectDraw surfaces.
+             * Original binary encoded to X1R5G5B5 display pixels.
              * We encode to RGB565 to match our compat rendering pipeline. */
             ((int *)DAT_00489234)[sprite_index] = DAT_00481d28;
             unsigned char *src = (unsigned char *)DAT_00481cf8;
@@ -2192,8 +2184,8 @@ void FUN_0041e4a0(void)
  * Handles one-shot init (menu page build + background load),
  * keyboard polling, input processing, and rendering.
  *
- * Original performs DDraw lock/copy/unlock/flip for rendering.
- * COMPAT: Uses Render_Frame() instead (RGB565→ARGB8888 windowed blit). */
+ * Original performs a locked-surface copy/flip for rendering.
+ * The SDL path presents the RGB565 frame through Render_Frame(). */
 void FUN_00425fe0(void)
 {
     /* ---- One-shot init when DAT_004877b1 is set (by Game_State_Manager case 0x03) ---- */
@@ -2229,60 +2221,10 @@ void FUN_00425fe0(void)
         DAT_004877e8   = 0;
         DAT_004877ec   = 0;
 
-        /* COMPAT: Restore the window's normal active/focused state after the
-         * menu surface is rebuilt. Avoid TOPMOST toggling here: that causes a
-         * synthetic deactivate/reactivate cycle and can leave DirectInput
-         * waiting for the next mouse click. */
-        BringWindowToTop(hWnd_Main);
-        SetForegroundWindow(hWnd_Main);
-        SetActiveWindow(hWnd_Main);
-        SetFocus(hWnd_Main);
-
-        /* COMPAT: Temporarily capture the mouse on the post-match scoreboard.
-         * The window is already foreground/focused and both cursor coordinate
-         * systems agree, but Windows still withholds motion until a click
-         * after the DDraw transition. WM_MOUSEMOVE releases this capture on
-         * the first real movement. */
-        if (DAT_004877a4 == 0x13) {
-#ifndef TOU_HAS_SDL
-            HWND captured = SetCapture(hWnd_Main);
-            LOG("[SCOREBOARD CURSOR] capture previous=%p current=%p active=%d "
-                "foreground=%p focus=%p logical=(%d,%d) palette=%04X/%04X/%04X\n",
-                captured, GetCapture(), g_bIsActive, GetForegroundWindow(), GetFocus(),
-                g_MouseDeltaX >> 18, g_MouseDeltaY >> 18,
-                DAT_00483838[0], DAT_00483838[1], DAT_00483838[2]);
-#endif
-        }
     }
 
     /* ---- Reset per-frame click state ---- */
     DAT_004877bc = 0;
-
-    /* ---- Poll keyboard via DirectInput in the legacy build. The SDL build
-     * refreshes the same 256-byte state once per application tick. ---- */
-#ifndef TOU_HAS_SDL
-    if (lpDI_Keyboard != NULL) {
-        HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
-        if (FAILED(hr)) {
-            if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-                lpDI_Keyboard->Acquire();
-            }
-            memset(g_KeyboardState, 0, 256);
-        }
-    }
-
-    /* COMPAT: Acquire the DirectInput mouse device.
-     * In the original fullscreen game, the mouse stayed acquired because the
-     * fullscreen window always had foreground (DISCL_FOREGROUND). In windowed
-     * mode, the mouse can lose acquisition during DDraw surface recreation
-     * (state transitions via case 0x03). Input_Update's error recovery calls
-     * Acquire() on DIERR_NOTACQUIRED, but the device may still be unacquired
-     * when FUN_00425fe0 runs. Explicitly acquire here so DirectInput mouse
-     * events are available for Input_Update on subsequent frames. */
-    if (lpDI_Mouse != NULL) {
-        lpDI_Mouse->Acquire();
-    }
-#endif
 
     /* ---- F12 (scan 0x58): immediate exit ---- */
     if ((g_KeyboardState[0x58] & 0x80) != 0) {
@@ -2290,15 +2232,8 @@ void FUN_00425fe0(void)
         DAT_004877a4 = 0xFE;
     }
 
-    /* COMPAT: Sync game cursor and mouse buttons from the platform window.
-     * Original used exclusive fullscreen with hidden system cursor;
-     * the game rendered its own cursor sprite at (g_MouseDeltaX>>18, g_MouseDeltaY>>18).
-     * In windowed mode, DirectInput reports relative deltas which desync from the
-     * visible Windows cursor, and DirectInput mouse device can lose acquisition
-     * during state transitions (DDraw surface recreation, etc.), causing
-     * g_MouseButtons to become stale. Use Win32 API for both position and buttons. */
+    /* Sync the game cursor and mouse buttons from SDL. */
     {
-#ifdef TOU_HAS_SDL
         int pointer_x = 0;
         int pointer_y = 0;
         unsigned char pointer_buttons = 0;
@@ -2311,62 +2246,22 @@ void FUN_00425fe0(void)
             g_MouseDeltaY = game_y << 18;
         }
         g_MouseButtons = (char)pointer_buttons;
-#else
-        POINT pt;
-        RECT client;
-        GetCursorPos(&pt);
-        ScreenToClient(hWnd_Main, &pt);
-        GetClientRect(hWnd_Main, &client);
-        /* The original freezes DAT_004877B4/B8 while a slider is active and
-         * records horizontal motion in DAT_004877E8 instead.  Keeping the
-         * absolute cursor synced during a drag made the palette popup wander
-         * away from its click origin. */
-        if (g_bIsActive && g_InputMode == 0 && PtInRect(&client, pt)) {
-            int game_x, game_y;
-            Client_To_Game_Coordinates(pt.x, pt.y, &game_x, &game_y);
-            g_MouseDeltaX = game_x << 18;
-            g_MouseDeltaY = game_y << 18;
-        }
-        g_MouseButtons = 0;
-        if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
-        if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g_MouseButtons |= 2;
-#endif
 
-        /* COMPAT: Fallback slider delta from cursor position.
-         * Input_Update accumulates DAT_004877e8 from DirectInput mouse
-         * relative events, but DInput mouse can lose acquisition in
-         * windowed mode.  As a safety net, also accumulate from the
-         * Win32 absolute cursor delta so sliders work even if DInput
-         * mouse is not reporting events. */
+        /* Sliders retain their click anchor and consume horizontal motion. */
         static int s_lastCursorX = -1;
         if (g_InputMode == 1) {
-            /* DirectInput normally supplied this delta earlier in the frame.
-             * Only use the Win32 path when no DInput X event arrived, or the
-             * same physical movement is counted twice. */
-            if (s_lastCursorX >= 0
-#ifndef TOU_HAS_SDL
-                && !g_DirectInputMouseXSeen
-#endif
-            ) {
-#ifdef TOU_HAS_SDL
+            if (s_lastCursorX >= 0) {
                 int dx = pointer_x - s_lastCursorX;
-#else
-                int dx = pt.x - s_lastCursorX;
-#endif
                 DAT_004877e8 += dx * 0x80;
             }
-#ifdef TOU_HAS_SDL
             s_lastCursorX = pointer_x;
-#else
-            s_lastCursorX = pt.x;
-#endif
         } else {
             s_lastCursorX = -1;
         }
     }
 
     /* ---- Input processing ---- */
-    /* Key-bind capture keeps the original DirectInput scan-code contract:
+    /* Key-bind capture keeps the original saved scan-code contract:
      * scan the whole state, use the last pressed key, reserve Escape for
      * cancel, and handle Right Ctrl separately because it is also the menu's
      * keyboard equivalent of a primary click. */
@@ -2498,12 +2393,12 @@ void FUN_00425fe0(void)
     FUN_00426650();
 
     /* ---- Render frame to screen ---- */
-    /* COMPAT: Replaces original DDraw lock → FUN_00428650 → unlock → Blt/Flip */
+    /* Present the recovered software frame through SDL. */
     Render_Frame();
 
     /* ---- COMPAT: Frame rate limiter (~60fps) ---- */
-    /* Original used DDraw exclusive fullscreen with vsync-locked flip chain.
-     * In windowed mode we need explicit frame limiting. */
+    /* The original fullscreen flip chain supplied pacing. Menus still need an
+     * explicit limiter independent of the gameplay fixed-step loop. */
     {
         static DWORD lastFrame = 0;
         DWORD end = timeGetTime();
@@ -6228,7 +6123,7 @@ void Set_Config_Defaults(void)
     memset(g_GameConfig.values.setup_limits, 0,
            sizeof(g_GameConfig.values.setup_limits));
 
-    /* === Default key bindings (DirectInput scan codes) === */
+    /* === Default key bindings (legacy scan codes) === */
     g_GameConfig.values.pause_key = 0x19;
     g_GameConfig.values.camera_key = 0x40;
     g_GameConfig.values.menu_keys[0] = 0xc9;
@@ -6470,91 +6365,4 @@ int System_Init_Check(void)
     DAT_0048764a = 0;
 
     return 1;
-}
-
-/* ===== Init_DirectInput (004620F0) ===== */
-int Init_DirectInput(void)
-{
-#ifdef TOU_HAS_SDL
-    return 1;
-#else
-    HRESULT hr;
-    DIPROPDWORD dipdw;
-
-    /* 1. Create DirectInput interface */
-    hr = DirectInputCreateA(GetModuleHandle(NULL), DIRECTINPUT_VERSION, &lpDI, NULL);
-    if (FAILED(hr)) {
-        return 0;
-    }
-
-    /* 2. Keyboard setup */
-    hr = lpDI->CreateDevice(GUID_SysKeyboard, &lpDI_Keyboard, NULL);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Keyboard->SetDataFormat(&c_dfDIKeyboard);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Keyboard->SetCooperativeLevel(hWnd_Main, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Keyboard->Acquire();
-    if (FAILED(hr)) goto cleanup;
-
-    /* 3. Mouse setup */
-    hr = lpDI->CreateDevice(GUID_SysMouse, &lpDI_Mouse, NULL);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Mouse->SetDataFormat(&c_dfDIMouse);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Mouse->SetCooperativeLevel(hWnd_Main, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    if (FAILED(hr)) goto cleanup;
-
-    /* 4. Mouse event notification */
-    hMouseEvent = CreateEventA(NULL, FALSE, FALSE, NULL);
-    if (hMouseEvent == NULL) {
-        goto cleanup;
-    }
-
-    hr = lpDI_Mouse->SetEventNotification(hMouseEvent);
-    if (FAILED(hr)) goto cleanup;
-
-    /* 5. Set mouse buffer size to 16 entries */
-    dipdw.diph.dwSize       = sizeof(DIPROPDWORD);
-    dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-    dipdw.diph.dwObj        = 0;
-    dipdw.diph.dwHow        = DIPH_DEVICE;
-    dipdw.dwData            = 16;
-
-    hr = lpDI_Mouse->SetProperty(DIPROP_BUFFERSIZE, &dipdw.diph);
-    if (FAILED(hr)) goto cleanup;
-
-    /* Acquire mouse (original relies on Input_Update re-acquire path,
-     * but acquiring here avoids losing the first frame of input) */
-    lpDI_Mouse->Acquire();
-
-    return 1;
-
-cleanup:
-    /* Release everything on failure */
-    if (lpDI_Mouse != NULL) {
-        lpDI_Mouse->Unacquire();
-        lpDI_Mouse->Release();
-        lpDI_Mouse = NULL;
-    }
-    if (lpDI_Keyboard != NULL) {
-        lpDI_Keyboard->Unacquire();
-        lpDI_Keyboard->Release();
-        lpDI_Keyboard = NULL;
-    }
-    if (lpDI != NULL) {
-        lpDI->Release();
-        lpDI = NULL;
-    }
-    if (hMouseEvent != NULL) {
-        CloseHandle(hMouseEvent);
-        hMouseEvent = NULL;
-    }
-    return 0;
-#endif
 }

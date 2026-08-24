@@ -71,7 +71,7 @@ extern int                   DAT_0048923c;      /* Screen/viewport height (defau
 
 /* ===== Function Prototypes: graphics.cpp ===== */
 void Apply_Display_Settings(void);
-void Get_Game_Presentation_Rect(RECT *rect);
+void Get_Game_Presentation_Rect(PresentationRect *rect);
 void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *game_y);
 void Render_Frame(void);
 int  Render_Game_View(void);

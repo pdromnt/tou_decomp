@@ -47,7 +47,7 @@ Requirements:
 - CMake 3.24 or newer
 - Ninja or GNU Make
 - `windres`
-- Windows DirectDraw and WinMM development libraries
+- Windows WinMM development library (temporary recovered-timing dependency)
 
 The primary build statically links SDL3 and SDL_mixer and uses them for
 presentation, input, WAV effects, and Ogg Vorbis/MP3 music. Build from a 32-bit
@@ -59,8 +59,7 @@ cmake --build build --parallel 8
 ```
 
 The output is `TOU.exe`. Both SDL libraries are fetched at pinned releases and
-statically linked, so the game does not require separate SDL or FMOD DLLs. Pass
-`--directdraw` to run the legacy presentation backend for A/B comparison.
+statically linked, so the game does not require separate runtime DLLs.
 
 The separate `Build` GitHub Actions workflow performs this 32-bit build for
 every push and pull request. It validates the executable architecture but never

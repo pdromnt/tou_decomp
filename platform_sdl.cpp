@@ -1,14 +1,9 @@
-/* SDL-owned window and event boundary.
- *
- * The native window handle remains exposed temporarily for DirectDraw fallback,
- * Win32 dialogs, and a few focus compatibility paths. Those consumers can
- * disappear independently in later passes. */
+/* SDL-owned window and event boundary. */
 #include "tou.h"
 #include "platform.h"
 #include <SDL3/SDL.h>
 
 static SDL_Window *s_PlatformWindow = NULL;
-static void *s_NativeWindow = NULL;
 
 int Platform_CreateWindow(const char *title, int width, int height)
 {
@@ -28,20 +23,6 @@ int Platform_CreateWindow(const char *title, int width, int height)
                           SDL_WINDOWPOS_CENTERED);
     SDL_HideCursor();
 
-#ifdef _WIN32
-    SDL_PropertiesID properties = SDL_GetWindowProperties(s_PlatformWindow);
-    s_NativeWindow = SDL_GetPointerProperty(
-        properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
-#else
-    s_NativeWindow = NULL;
-#endif
-    if (s_NativeWindow == NULL) {
-        LOG("[PLATFORM] SDL did not expose a native window handle: %s\n",
-            SDL_GetError());
-        Platform_DestroyWindow();
-        return 0;
-    }
-
     LOG("[PLATFORM] SDL window created\n");
     return 1;
 }
@@ -57,7 +38,6 @@ void Platform_ShowWindow(void)
 
 void Platform_DestroyWindow(void)
 {
-    s_NativeWindow = NULL;
     if (s_PlatformWindow != NULL) {
         SDL_DestroyWindow(s_PlatformWindow);
         s_PlatformWindow = NULL;
@@ -65,14 +45,16 @@ void Platform_DestroyWindow(void)
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
-void *Platform_GetNativeWindowHandle(void)
-{
-    return s_NativeWindow;
-}
-
 void *Platform_GetSdlWindow(void)
 {
     return s_PlatformWindow;
+}
+
+int Platform_GetWindowSize(int *width, int *height)
+{
+    if (s_PlatformWindow == NULL)
+        return 0;
+    return SDL_GetWindowSize(s_PlatformWindow, width, height) ? 1 : 0;
 }
 
 int Platform_PollEvent(PlatformEvent *event)
@@ -109,6 +91,13 @@ int Platform_PollEvent(PlatformEvent *event)
         break;
     }
     return 1;
+}
+
+void Platform_ShowError(const char *message)
+{
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tunnels of Underworld",
+                             message != NULL ? message : "Unknown error",
+                             s_PlatformWindow);
 }
 
 int Platform_GetMousePosition(int *x, int *y)

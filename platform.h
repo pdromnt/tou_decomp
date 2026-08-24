@@ -18,10 +18,11 @@ typedef struct PlatformEvent {
 int   Platform_CreateWindow(const char *title, int width, int height);
 void  Platform_ShowWindow(void);
 void  Platform_DestroyWindow(void);
-void *Platform_GetNativeWindowHandle(void);
 void *Platform_GetSdlWindow(void);
 int   Platform_PollEvent(PlatformEvent *event);
 int   Platform_GetMousePosition(int *x, int *y);
+int   Platform_GetWindowSize(int *width, int *height);
 int   Platform_ApplyDisplaySettings(int width, int height, int fullscreen);
+void  Platform_ShowError(const char *message);
 
 #endif

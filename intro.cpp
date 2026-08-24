@@ -247,7 +247,7 @@ void Intro_Sequence(void)
         return;
     }
 
-    /* Legacy scan-code state is populated by DirectInput or the SDL adapter. */
+    /* Legacy scan-code state is populated by the SDL adapter. */
     if ((g_KeyboardState[0x01] & 0x80) ||
         (g_KeyboardState[0x39] & 0x80) ||
         (g_KeyboardState[0x1C] & 0x80)) {
@@ -310,7 +310,7 @@ void Intro_Sequence(void)
     Render_Frame();
 
     /* COMPAT: Frame rate limiter (~60fps).
-     * Original used DDraw exclusive fullscreen with flip chain which
+     * Original used an exclusive fullscreen flip chain which
      * was vsync-locked. Windowed mode runs uncapped, causing frame-count
      * based animation timers (particle +0x12) to advance way too fast. */
     {

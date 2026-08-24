@@ -4,9 +4,7 @@
  *            Handle_Menu_State=004611D0, Game_Update_Render=00461710
  */
 #include "tou.h"
-#ifndef TOU_HAS_SDL
-#include <dinput.h>
-#endif
+#include "platform.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -24,7 +22,6 @@ int  g_SpectatorCameraX = 0;
 int  g_SpectatorCameraY = 0;
 char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
-char g_DirectInputMouseXSeen = 0;     /* windowed-mode fallback guard */
 DWORD        DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
 unsigned int DAT_00489eec = 0;       /* Last pressed key scan code */
 
@@ -33,93 +30,10 @@ char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
 
 /* Pause menu state (unused — original binary has no visible pause menu selection) */
 
-/* ===== Input_Update (00462560) - Mouse polling via DirectInput ===== */
-void Input_Update(void)
-{
-#ifdef TOU_HAS_SDL
-    /* SDL mouse state is sampled through Input_GetMouseState in the menu loop. */
-    g_DirectInputMouseXSeen = 0;
-#else
-    DIDEVICEOBJECTDATA didod;
-    DWORD dwElements;
-    HRESULT hr;
-
-    g_DirectInputMouseXSeen = 0;
-
-    if (lpDI_Mouse == NULL)
-        return;
-
-    while (1) {
-        dwElements = 1;
-        hr = lpDI_Mouse->GetDeviceData(sizeof(DIDEVICEOBJECTDATA), &didod, &dwElements, 0);
-
-        if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-            if (lpDI_Mouse != NULL) {
-                if (g_bIsActive != 0) {
-                    lpDI_Mouse->Acquire();
-                } else {
-                    lpDI_Mouse->Unacquire();
-                }
-            }
-            return;
-        }
-
-        if (FAILED(hr))
-            return;
-
-        if (dwElements == 0)
-            break;
-
-        switch (didod.dwOfs) {
-        case DIMOFS_X:                          /* 0x00 */
-            g_DirectInputMouseXSeen = 1;
-            if (g_InputMode == 1) {
-                DAT_004877e8 += didod.dwData * 0x80;
-            } else if (g_InputMode == 0) {
-                g_MouseDeltaX += didod.dwData * 0x80000;
-            }
-            break;
-
-        case DIMOFS_Y:                          /* 0x04 */
-            if (g_InputMode == 0) {
-                g_MouseDeltaY += didod.dwData * 0x80000;
-            }
-            break;
-
-        case DIMOFS_BUTTON0:                    /* 0x0C */
-            if ((didod.dwData & 0x80) == 0) {
-                /* Button released */
-                if (g_MouseButtons & 1) {
-                    g_MouseButtons ^= 1;
-                }
-            } else {
-                /* Button pressed */
-                g_MouseButtons |= 1;
-            }
-            break;
-
-        case DIMOFS_BUTTON1:                    /* 0x0D */
-            if ((didod.dwData & 0x80) == 0) {
-                if (g_MouseButtons & 2) {
-                    g_MouseButtons ^= 2;
-                }
-            } else {
-                g_MouseButtons |= 2;
-            }
-            break;
-        }
-    }
-#endif
-}
-
 /* ===== Game_State_Manager (00461260) ===== */
 void Game_State_Manager(void)
 {
     int iVar2;
-#ifndef TOU_HAS_SDL
-    HRESULT mouse_hr;
-    HRESULT keyboard_hr;
-#endif
 
     switch (g_GameState) {
     case GAME_STATE_RENDER_GAMEPLAY:
@@ -142,7 +56,7 @@ void Game_State_Manager(void)
             iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
-                MessageBoxA(hWnd_Main, STR_ERR_RENDER_MODE, STR_TITLE, MB_ICONERROR);
+                Platform_ShowError(STR_ERR_RENDER_MODE);
                 Request_App_Quit();
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
@@ -169,34 +83,7 @@ void Game_State_Manager(void)
             GameState_Transition(GAME_STATE_SHUTDOWN);
         }
 
-        /* COMPAT: Ensure window has foreground/focus after DDraw operations.
-         * Original ran DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN which auto-maintained
-         * foreground. In windowed DDSCL_NORMAL mode, DDraw surface creation
-         * (FUN_0042fc40) can cause the window to lose foreground, making
-         * DISCL_FOREGROUND DirectInput devices lose acquisition. Force the
-         * window to foreground so keyboard/mouse work immediately. */
-        BringWindowToTop(hWnd_Main);
-        SetForegroundWindow(hWnd_Main);
-        SetActiveWindow(hWnd_Main);
-        SetFocus(hWnd_Main);
-
-#ifndef TOU_HAS_SDL
-        mouse_hr = DI_OK;
-        keyboard_hr = DI_OK;
-        if (lpDI_Mouse != NULL)
-            mouse_hr = lpDI_Mouse->Acquire();
-        if (lpDI_Keyboard != NULL)
-            keyboard_hr = lpDI_Keyboard->Acquire();
-
-        g_bIsActive = (GetForegroundWindow() == hWnd_Main) ? 1 : 0;
-        LOG("[MENU TRANSITION] foreground=%p self=%p focus=%p active=%d "
-            "mouse=0x%08lX keyboard=0x%08lX page=%u\n",
-            GetForegroundWindow(), hWnd_Main, GetFocus(), g_bIsActive,
-            (unsigned long)mouse_hr, (unsigned long)keyboard_hr,
-            (unsigned int)DAT_004877a4);
-#else
         g_bIsActive = 1;
-#endif
 
         FUN_00425fe0();
         return;
@@ -233,7 +120,7 @@ void Game_State_Manager(void)
             iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
-                MessageBoxA(hWnd_Main, STR_ERR_RENDER_MODE, STR_TITLE, MB_ICONERROR);
+                Platform_ShowError(STR_ERR_RENDER_MODE);
                 Request_App_Quit();
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
@@ -465,12 +352,12 @@ static void Gameplay_Tick(void)
 
 /* ===== Game_Update_Render (00461710) - Gameplay frame ===== */
 /* Main gameplay loop: keyboard input, game state updates, rendering.
- * Called from WinMain when g_GameState == 0.
+ * Called from the SDL application loop when g_GameState == 0.
  *
- * Original: reads DirectInput keyboard, processes game keys (ESC, Enter,
+ * Original: reads keyboard state, processes game keys (ESC, Enter,
  * configurable bindings), runs Gameplay_Tick when g_SubState == 0,
  * handles state transitions (pause, round end, game over),
- * then renders via FUN_00407720 → DDraw blit/flip.
+ * then renders via the software framebuffer presentation path.
  *
  * g_SubState values in gameplay:
  *   0 = active play (runs Gameplay_Tick)
@@ -482,21 +369,7 @@ static void Gameplay_Tick(void)
  *   101 = game over */
 void Game_Update_Render(void)
 {
-    /* ---- Read keyboard via DirectInput in the legacy build. SDL refreshes
-     * g_KeyboardState once per main-loop tick. ---- */
-#ifndef TOU_HAS_SDL
-    if (g_ProcessInput != 0 && lpDI_Keyboard != NULL) {
-        HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
-        if (FAILED(hr)) {
-            if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-                lpDI_Keyboard->Acquire();
-            }
-            memset(g_KeyboardState, 0, 256);
-        }
-    }
-#endif
-
-    /* NOTE: Cursor sync (GetCursorPos/ScreenToClient) moved to WinMain main loop
+    /* NOTE: Cursor sync is handled by the SDL main loop
      * so it runs for ALL game states, not just g_GameState==0. */
 
     /* ---- Input processing ---- */

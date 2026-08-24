@@ -3,9 +3,7 @@
  * Address: Render_Frame=0045D800
  */
 #include "tou.h"
-#ifdef TOU_HAS_SDL
 #include "platform.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,16 +17,13 @@ int                 DAT_0048923c    = 480;   /* Screen/viewport height */
 
 /* The recovered renderer remains natively 640x480. Display settings resize
  * only its presentation viewport, keeping gameplay coordinates untouched. */
-void Get_Game_Presentation_Rect(RECT *rect)
+void Get_Game_Presentation_Rect(PresentationRect *rect)
 {
-    RECT client = {0, 0, 640, 480};
-    if (hWnd_Main != NULL)
-        GetClientRect(hWnd_Main, &client);
-
-    int client_w = client.right - client.left;
-    int client_h = client.bottom - client.top;
+    int client_w = 640;
+    int client_h = 480;
+    Platform_GetWindowSize(&client_w, &client_h);
     if (client_w <= 0 || client_h <= 0) {
-        *rect = client;
+        rect->left = rect->top = rect->right = rect->bottom = 0;
         return;
     }
 
@@ -47,7 +42,7 @@ void Get_Game_Presentation_Rect(RECT *rect)
 
 void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *game_y)
 {
-    RECT viewport;
+    PresentationRect viewport;
     Get_Game_Presentation_Rect(&viewport);
     int width = viewport.right - viewport.left;
     int height = viewport.bottom - viewport.top;
@@ -69,49 +64,15 @@ void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *ga
 
 void Apply_Display_Settings(void)
 {
-    if (hWnd_Main == NULL)
-        return;
-
     unsigned int mode = g_GameConfig.values.resolution_index;
     if (g_NumDisplayModes <= 0 || mode >= (unsigned int)g_NumDisplayModes)
         mode = 5;
 
     int requested_width = g_ModeWidths[mode];
     int requested_height = g_ModeHeights[mode];
-#ifdef TOU_HAS_SDL
-    if (Platform_ApplyDisplaySettings(requested_width, requested_height,
-                                      g_WindowMode != 0)) {
-        InvalidateRect(hWnd_Main, NULL, TRUE);
-        return;
-    }
-#endif
-
-    MONITORINFO monitor = {};
-    monitor.cbSize = sizeof(monitor);
-    GetMonitorInfoA(MonitorFromWindow(hWnd_Main, MONITOR_DEFAULTTONEAREST), &monitor);
-
-    if (g_WindowMode != 0) {
-        SetWindowLongA(hWnd_Main, GWL_STYLE, WS_POPUP);
-        SetWindowPos(hWnd_Main, HWND_TOP,
-            monitor.rcMonitor.left, monitor.rcMonitor.top,
-            monitor.rcMonitor.right - monitor.rcMonitor.left,
-            monitor.rcMonitor.bottom - monitor.rcMonitor.top,
-            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    } else {
-        DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-        RECT window_rect = {0, 0, requested_width, requested_height};
-        AdjustWindowRect(&window_rect, style, FALSE);
-        int width = window_rect.right - window_rect.left;
-        int height = window_rect.bottom - window_rect.top;
-        int x = monitor.rcWork.left + ((monitor.rcWork.right - monitor.rcWork.left) - width) / 2;
-        int y = monitor.rcWork.top + ((monitor.rcWork.bottom - monitor.rcWork.top) - height) / 2;
-
-        SetWindowLongA(hWnd_Main, GWL_STYLE, style);
-        SetWindowPos(hWnd_Main, HWND_NOTOPMOST, x, y, width, height,
-            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    }
-
-    InvalidateRect(hWnd_Main, NULL, TRUE);
+    if (!Platform_ApplyDisplaySettings(requested_width, requested_height,
+                                       g_WindowMode != 0))
+        LOG("[GFX] Could not apply display settings\n");
 }
 
 /* Scratch buffer for compositing particles onto RGB565 before conversion */
@@ -741,9 +702,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
 
 /* ===== Render_Frame (0045D800) ===== */
 /*
- * The original DirectDraw lock/blit sequence is now split at a stable boundary:
- * this function composes the RGB565 software frame, then the selected backend
- * presents it. The DirectDraw backend retains the existing conversion/scaling.
+ * The original lock/blit sequence is split at a stable boundary: this function
+ * composes the RGB565 software frame, then SDL presents it.
  */
 void Render_Frame(void)
 {
@@ -782,7 +742,7 @@ void Render_Frame(void)
 
 /* ===== Render_Game_View_To - Draw menu items onto a target buffer ===== */
 /* Called every frame by Render_Frame on the scratch buffer.
- * The scratch framebuffer replaces the original locked DirectDraw surface. */
+ * The scratch framebuffer replaces the original locked display surface. */
 static int Menu_Text_Width(const char *str, int font_idx)
 {
     int width = 0;

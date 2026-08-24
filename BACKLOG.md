@@ -8,7 +8,7 @@ wholesale. Refactors should remain organized into behavior-neutral boundaries
 that can be compared and reverted independently, even when several boundaries
 are delivered together in one larger pull request.
 
-## Current Foundation Status (v0.3)
+## Current Foundation Status (v0.4)
 
 - `Entity` and `PlayerData` have verified sizes, offset assertions, and typed
   accessors. Player storage and the complete weapon/effect dispatcher are typed.
@@ -20,14 +20,10 @@ are delivered together in one larger pull request.
   Packed-width accesses remain only where original code crosses nominal fields.
 - Binary compatibility helpers, original RNG ordering, x87 conversion, and
   callback-address dispatch are production code and must survive all refactors.
-- The software renderer now uses typed framebuffer and viewport boundaries,
-  and DirectDraw is isolated behind `RenderBackend`. The first SDL3 backend is
-  active: it presents the unchanged RGB565 framebuffer through an SDL texture,
-  with DirectDraw retained as a command-line A/B fallback. SDL now also owns
-  the window, display modes, event queue, keyboard, and mouse. The Win32 entry
-  point, native dialogs/focus bridges, and DirectDraw fallback remain
-  transitional dependencies. SDL_mixer now owns audio completely; FMOD and
-  its old comparison build have been removed after runtime acceptance.
+- The software renderer uses typed framebuffer and viewport boundaries. SDL3
+  presents the unchanged RGB565 framebuffer and owns the portable entry point,
+  window, display modes, event queue, keyboard, mouse, focus, and dialogs.
+  DirectDraw, DirectInput, and FMOD have been removed completely.
 - `GameConfig` is the canonical byte-exact config record, and the main and
   gameplay state machines use named enum values.
 
@@ -194,13 +190,13 @@ unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 ### T2.1 — Split `tou.h` into subsystem headers  [DONE]
 `tou.h` was 791 lines of intermixed externs. It is now a 24-line aggregate over:
 - `types.h` — structs, enums, constants
-- `gfx.h` — DirectDraw globals, render prototypes
-- `input.h` — DI globals, keyboard/mouse state
+- `gfx.h` — renderer globals and prototypes
+- `input.h` — saved scan-code state and keyboard/mouse declarations
 - `sound.h` — sound table and game-facing audio lifecycle
 - `level.h` — map data, tilemap, .lev format
 - `entity.h` — entity arrays, behavior callbacks, AI globals
 - `gamestate.h` — state machine, timers, config
-- `compat.h` — Windows/DirectX version macros
+- `compat.h` — remaining Windows timing and file-enumeration declarations
 
 Keep `tou.h` as an aggregate include during transition.
 
@@ -307,7 +303,8 @@ typedef struct {
 ---
 
 ### T4.3 — `RenderBackend` interface  [DONE]
-Isolate DirectDraw behind an interface for future SDL2/OpenGL migration.
+The presentation interface isolated the recovered software renderer and enabled
+the completed SDL migration. The temporary DirectDraw backend is now deleted.
 
 ```c
 typedef struct {
@@ -320,11 +317,11 @@ typedef struct {
 
 **AC:**
 - [x] `RenderBackend` interface defined
-- [x] DirectDraw implementation isolated in `gfx_ddraw.cpp`
+- [x] DirectDraw implementation isolated during migration, then removed
 - [x] Startup, mode configuration, surface lifecycle, restoration, and frame
   presentation call the backend rather than DirectDraw directly
-- [x] All DirectDraw API and surface access is confined to `gfx_ddraw.cpp`
-- [x] Clean 32-bit build works with the DirectDraw backend
+- [x] No DirectDraw API, source file, header, fallback flag, or link dependency remains
+- [x] Clean 32-bit build works with the SDL backend
 
 ---
 
@@ -430,7 +427,7 @@ typedef struct {
 
 ### T8.1 — SDL input adapter  [DONE]
 SDL now supplies keyboard and mouse state to the recovered game code while
-preserving the 256-entry DirectInput scan-code namespace used by saved configs.
+preserving the 256-entry legacy scan-code namespace used by saved configs.
 
 ```c
 typedef struct {
@@ -441,10 +438,10 @@ typedef struct {
 ```
 
 **AC:**
-- [x] Primary CMake build has no DirectInput runtime import
+- [x] CMake build has no DirectInput runtime import
 - [x] Existing `options.cfg` key bindings keep their physical-key meanings
 - [x] Menu mouse position, buttons, slider dragging, and key capture use SDL
-- [x] Legacy Makefile retains its DirectInput comparison path
+- [x] DirectInput source, headers, globals, and comparison path removed
 
 ---
 
@@ -519,8 +516,8 @@ Water/lava propagation in `FUN_0045fc00`.
 
 ### T11.1 — SDL3 platform and renderer backend  [IN PROGRESS / P0]
 SDL3 is pinned and statically linked by the primary CMake build. It owns the
-window, display-mode transitions, event queue, and software-frame presentation.
-DirectDraw remains selectable with `--directdraw` for parity comparisons.
+portable entry point, window, display-mode transitions, event queue, input,
+dialogs, and software-frame presentation.
 
 **AC:**
 - [x] `gfx_sdl.cpp` implements `RenderBackend`
@@ -528,9 +525,8 @@ DirectDraw remains selectable with `--directdraw` for parity comparisons.
 - [x] SDL owns windowed/fullscreen transitions and event pumping
 - [x] Windowed mode works without a DirectDraw presentation path
 - [x] DirectInput replaced by SDL input
-- [ ] Win32 entry point and native window bridge removed
-- [ ] After the entry-point migration, delete DirectDraw/DirectInput source,
-      headers, command-line fallback, and link dependencies completely
+- [x] Win32 entry point and native window bridge removed
+- [x] DirectDraw/DirectInput source, headers, fallback, and links removed
 - [x] FMOD replaced by a portable audio backend in the primary build
 - [ ] Native Windows, Linux, and macOS builds pass
 
@@ -561,8 +557,7 @@ pull request, with optional manual dispatch.
 ---
 
 ### T12.1 — CMake build system  [IN PROGRESS / P0]
-The primary Windows build uses CMake and pinned static SDL3. The legacy Makefile
-is retained temporarily for a DirectDraw-only comparison build.
+The primary Windows build uses CMake and pinned static SDL3.
 
 **AC:**
 - [x] `CMakeLists.txt` builds the SDL-enabled Windows target

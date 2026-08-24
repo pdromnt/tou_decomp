@@ -11,18 +11,17 @@ changing its representation**. A build passing does not prove gameplay parity.
 
 ## Runtime Shape
 
-`WinMain` initializes platform services and game data, then enters the main game
-loop. SDL3 owns the primary window, event queue, keyboard, and mouse; a native
-`HWND` bridge remains temporarily for DirectDraw fallback and legacy dialogs.
-The broad flow is:
+SDL's portable `main()` initializes platform services and game data, then enters
+the main game loop. SDL3 owns the window, event queue, keyboard, mouse, dialogs,
+and presentation. The broad flow is:
 
 ```text
-winmain.cpp
+main.cpp
   -> initialization and asset/config loading
   -> menu or match state
   -> input, simulation, entity callbacks, effects
   -> software rendering into a backend-neutral RGB565 framebuffer
-  -> platform presentation through the selected render backend
+  -> SDL presentation
   -> audio through the SDL_mixer backend
 ```
 
@@ -38,16 +37,15 @@ may still create local integer views where preserving original 32-bit pointer
 arithmetic matters; those views no longer leak through subsystem call sites.
 
 `RenderBackend` owns platform presentation. `gfx_sdl.cpp` uploads the unchanged
-framebuffer to a streaming SDL texture and is the default. `gfx_ddraw.cpp`
-retains the legacy implementation as an A/B fallback. Simulation and software
-rendering code do not access either backend's objects.
+framebuffer to a streaming SDL texture. Simulation and software rendering code
+do not access SDL renderer objects directly.
 
 ## Source Map
 
 | Module | Responsibility |
 | --- | --- |
-| `winmain.cpp` | Transitional Windows entry point and application lifecycle |
-| `platform_sdl.cpp` | SDL window, display modes, event queue, native-handle bridge |
+| `main.cpp` | Portable SDL entry point and application lifecycle |
+| `platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
 | `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
@@ -59,8 +57,7 @@ rendering code do not access either backend's objects.
 | `binary_compat.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
 | `effects.cpp` | Explosions, particles, lighting, terrain effects |
 | `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
-| `render_backend.cpp` | Active presentation-backend interface and dispatch |
-| `gfx_ddraw.cpp` | DirectDraw device, surfaces, RGB conversion, scaling, presentation |
+| `render_backend.cpp` | Presentation-backend interface and SDL dispatch |
 | `gfx_sdl.cpp` | SDL streaming texture and framebuffer presentation |
 | `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
 | `assets.cpp` | Font and image asset loading |
@@ -81,7 +78,7 @@ rendering code do not access either backend's objects.
 | `level.h` | Level data, loading, and GG generator declarations |
 | `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
 | `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
-| `compat.h` | Legacy Windows and DirectX API-level includes |
+| `compat.h` | Remaining Windows timing and file-enumeration compatibility includes |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
 
 ## Runtime Data
@@ -209,8 +206,7 @@ cmake --build build --parallel 8
 ```
 
 The primary CMake build fetches pinned SDL3, links it statically, compiles the
-game as 32-bit, and embeds `icon.ico` through `tou.rc`. The transitional
-Makefile still builds the DirectDraw-only backend. Generated build trees,
+game as 32-bit, and embeds `icon.ico` through `tou.rc`. Generated build trees,
 objects, executables, logs, and `dist/` packages are ignored by Git.
 
 `.github/workflows/build.yml` repeats the SDL-enabled 32-bit CMake build and PE

@@ -17,7 +17,7 @@
  * and sets up the menu sub-state. Returns 1 on success, 0 on failure.
  *
  * Despite the name, this is NOT a loop — it's an init function.
- * The "loop" is the main message loop in WinMain, with Game_State_Manager
+ * The "loop" is the SDL application loop, with Game_State_Manager
  * dispatching to FUN_00425fe0 when g_GameState=0/1 and g_SubState=4 (MENU). */
 int Menu_Init_And_Loop(void)
 {
@@ -1824,7 +1824,7 @@ int FUN_004249c0(void)
         }
 
         /* COMPAT: Convert ship pixels from X1R5G5B5 → RGB565 for display.
-         * Original ran fullscreen DDraw which handled this in hardware.
+         * Original fullscreen presentation handled this in hardware.
          * Our compat renderer uses RGB565 throughout. */
         {
             int px_count = total_pixels;

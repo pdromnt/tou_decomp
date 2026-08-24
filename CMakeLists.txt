@@ -49,7 +49,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(SDL3_mixer)
 
 set(TOU_SOURCES
-    winmain.cpp
+    main.cpp
     sound.cpp
     audio_sdl.cpp
     assets.cpp
@@ -60,7 +60,6 @@ set(TOU_SOURCES
     graphics.cpp
     platform_sdl.cpp
     render_backend.cpp
-    gfx_ddraw.cpp
     gfx_sdl.cpp
     intro.cpp
     menu.cpp
@@ -80,12 +79,10 @@ set(TOU_SOURCES
 
 add_executable(TOU WIN32 ${TOU_SOURCES})
 target_compile_features(TOU PRIVATE cxx_std_11)
-target_compile_definitions(TOU PRIVATE TOU_HAS_SDL=1 SDL_MAIN_HANDLED=1)
 target_include_directories(TOU PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(TOU PRIVATE
     SDL3::SDL3
     SDL3_mixer::SDL3_mixer-static
-    ddraw
     winmm
 )
 

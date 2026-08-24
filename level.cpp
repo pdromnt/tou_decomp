@@ -108,7 +108,7 @@ int Load_SWP_Sky(const char *level_name)
     fclose(f);
 
     /* Convert RGB555 (X1R5G5B5) → RGB565 (R5G6B5).
-     * SWP files store pixels in the original DirectDraw RGB555 format.
+     * SWP files store pixels in the original RGB555 display format.
      * Our compat renderer uses RGB565, same conversion as the sprite loader. */
     {
         unsigned short *px = (unsigned short *)DAT_00489ea0;
