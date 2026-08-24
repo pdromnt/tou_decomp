@@ -35,10 +35,10 @@ The required order is:
 Preserving the original game's observable behavior remains mandatory across
 all targets. A successful cross-compile alone is not runtime acceptance.
 
-The native portability implementation compiles across the full matrix, but
-runtime acceptance remains open. Initial testing exposed host-pointer
-truncation on Windows x64 and Apple Silicon plus missing macOS app-bundle
-packaging; these must pass on real hosts before the milestone is complete.
+The native portability implementation compiles across the full matrix. Windows
+x64 and macOS Apple Silicon now have hands-on gameplay acceptance, including
+configuration, menus, audio, input, Events, AI, and match completion. Runtime
+acceptance remains open for Windows ARM64, Linux x64/ARM64, and macOS Intel.
 
 ## Current Foundation Status (v0.4)
 
@@ -63,7 +63,7 @@ packaging; these must pass on real hosts before the milestone is complete.
 
 ## Theme 1: Types & Data Structures
 
-### T1.1 — Entity struct (128 bytes)  [IN PROGRESS / P0]
+### T1.1 — Entity struct (128 bytes)  [DONE]
 Replace raw entity blob with typed access without changing original behavior.
 
 The verified `Entity` layout and offset assertions live in `types.h`, and the
@@ -74,11 +74,11 @@ death fragments, ambient and level spawns, ship exhaust, and the major
 entity-pool scanners. The pool physically allocates 2600 records
 (`0x51400 / 0x80`), while gameplay limits active entities to 2500.
 
-Remaining work is concentrated in a smaller set of legacy raw views: intro
-entities, packed-width accesses where one field is intentionally read at
-multiple widths, and raw expressions embedded in player-relative weapon paths.
-Convert these by complete routine or complete effect family, preserving partial
-initialization, post-count writes, signed state checks, and RNG order.
+The final raw pool-index arithmetic in tracked-entity collision, turret
+projectile construction, teleport effects, and moving-level debris has been
+replaced with typed `Entity` access. Packed-width views remain only inside
+already selected records where the original deliberately crosses nominal field
+boundaries; those are compatibility operations rather than an untyped pool.
 
 **Known layout:**
 ```
@@ -256,14 +256,13 @@ Trig tables, ballistic LUT (`DAT_00489e90`), and vector helpers currently live i
 
 ## Theme 3: Memory Safety
 
-### T3.1 — Bounds checks on all spawn/alloc sites  [IN PROGRESS / P0]
+### T3.1 — Bounds checks on all spawn/alloc sites  [DONE]
 Hard limits: 2500 entities, 2000 particles, 5000 fluid sources, 300 level names.
 
 The typed runtime pools use named capacities at their spawn boundaries. Level,
-GG-theme, and music discovery now stop safely at their 300-entry catalogs.
-Legacy fluid, edge-particle, decoration, wall-segment, and spawn-point arrays
-already guard their known limits but still need named constants and complete
-record-layout audits.
+GG-theme, and music discovery stop safely at their 300-entry catalogs. Fluid
+sources, map edges, and fire/edge records now use named capacities shared by
+their allocations and every recovered spawn boundary.
 
 **Key functions:** `FUN_00413720`, `FUN_00434310`, `FUN_00454b00`, `FUN_0045fc00`, `FUN_00407210`, `FUN_00406d20`
 
@@ -510,9 +509,12 @@ like the original.
 
 ## Theme 9: AI & Pathfinding
 
-### T9.1 — AI behavior extraction  [P2]
-Current ship AI remains concentrated in `entity.cpp`; recovered weapon/effect
-callbacks now live in `entity_callbacks.cpp`.
+### T9.1 — AI behavior extraction  [IN PROGRESS / P1]
+Current ship AI remains concentrated in `entity.cpp`, but its recovered entry
+points are now named `AI_UpdateShip` and `AI_ScanNearbyThreats`. Turret LOS and
+firing has the public `TurretSystem_UpdateTargeting` boundary. Physical source
+splitting remains after a deterministic simulation boundary exists; moving the
+code alone would not make it network-safe.
 
 **AC:**
 - Extract `FUN_0044ad30` into `ai_decide(Entity *e, PlayerData *player)`
@@ -524,8 +526,12 @@ callbacks now live in `entity_callbacks.cpp`.
 
 ## Theme 10: Particle & Effect Systems
 
-### T10.1 — Particle system abstraction  [P2]
-2000-entry particle array with inline physics in stubs.cpp.
+### T10.1 — Particle system abstraction  [IN PROGRESS / P1]
+The 2000-entry animated-particle pool is typed and capacity guarded.
+`ParticleSystem_Update` and `FireParticleSystem_Update` now expose the two
+distinct recovered update paths instead of misleading address names. Spawn
+helpers remain effect-specific because their initialization and RNG ordering
+differ in the original.
 
 **AC:**
 - `ParticleSystem_Spawn(type, x, y, vx, vy, lifetime, palette)`
@@ -534,13 +540,13 @@ callbacks now live in `entity_callbacks.cpp`.
 
 ---
 
-### T10.2 — Fluid simulation abstraction  [P2]
+### T10.2 — Fluid simulation abstraction  [DONE]
 Water/lava propagation in `FUN_0045fc00`.
 
-**AC:**
-- `FluidSystem_Update()` wrapper
-- `FluidSource_Spawn(x, y, type)`
-- Separate from particle system (different physics rules)
+`FluidSystem_Update` is the named simulation boundary for original routine
+`0x0045FC00`. Its 5,000-entry source pool has a named capacity shared by
+allocation and all eight propagation directions. Fluid remains separate from
+both animated particles and fire/edge particles.
 
 ---
 
@@ -561,7 +567,8 @@ dialogs, and software-frame presentation.
 - [x] DirectDraw/DirectInput source, headers, fallback, and links removed
 - [x] FMOD replaced by a portable audio backend in the primary build
 - [x] Native Windows, Linux, and macOS builds pass in CI
-- [ ] Native runtime acceptance passes on Windows, Linux, and macOS
+- [ ] Native runtime acceptance passes on every supported desktop target
+  (Windows x64 and macOS Apple Silicon currently accepted)
 
 ---
 
@@ -651,7 +658,7 @@ subsystem globals remain intentionally address-named until ownership is clear.
 
 ---
 
-### T13.2 — Replace Ghidra function names  [P2]
+### T13.2 — Replace Ghidra function names  [IN PROGRESS / P1]
 Rename `FUN_004xxxxx` to semantic names after understanding each function.
 
 **Priority order:**
@@ -715,7 +722,7 @@ and safe refactoring rules.
 
 ---
 
-### T15.1 — Document `.lev` v1.4 format spec  [P1]
+### T15.1 — Document `.lev` v1.4 format spec  [DONE]
 Write a standalone `docs/LEVEL_FORMAT.md`.
 
 **AC:**
@@ -727,7 +734,7 @@ Write a standalone `docs/LEVEL_FORMAT.md`.
 
 ---
 
-### T15.2 — Document `.gfx` sprite format  [P2]
+### T15.2 — Document `.gfx` sprite format  [DONE]
 Write `docs/SPRITE_FORMAT.md`.
 
 **AC:**
@@ -738,13 +745,63 @@ Write `docs/SPRITE_FORMAT.md`.
 
 ---
 
-### T15.3 — Document `.SHP` ship format  [P2]
+### T15.3 — Document `.SHP` ship format  [DONE]
 Write `docs/SHIP_FORMAT.md`.
 
 **AC:**
 - 64-byte record layout
 - Field descriptions (speed, health, weapons, sprites)
 - Example for one ship type
+
+---
+
+## Theme 16: Networked Multiplayer Foundation
+
+The v0.5 cleanup makes network work approachable, but netplay must not transmit
+or mirror raw process memory. The next milestone is a deterministic,
+serializable match simulation with presentation and local input outside the
+authoritative state boundary.
+
+### T16.1 — Define authoritative match state  [P0]
+
+- Inventory every mutable value that can affect gameplay, including RNG state,
+  pool counts/order, players, tiles, fluids, timers, Events, and AI state.
+- Exclude renderer, audio channels, menu state, SDL objects, and local cameras.
+- Give guest callback addresses stable serialized identities.
+
+### T16.2 — Command-frame input boundary  [P0]
+
+- Convert local key state into one compact command per player per simulation
+  tick.
+- Make human, AI, replay, and network commands enter through the same boundary.
+- Preserve the original update and RNG order after command collection.
+
+### T16.3 — Snapshot and checksum format  [P0]
+
+- Serialize authoritative state without native pointers or compiler padding.
+- Add a versioned snapshot header and per-tick deterministic checksum.
+- Prove save/restore continuity by comparing uninterrupted and restored runs.
+
+### T16.4 — Local deterministic replay harness  [P0]
+
+- Record initial snapshot plus command frames.
+- Replay headlessly and compare checksums at every tick.
+- Treat the first mismatch as a simulation bug before adding networking.
+
+### T16.5 — Client/server transport  [P1]
+
+- Start with an authoritative server and delayed command frames rather than
+  peer-to-peer lockstep.
+- Add join/leave, lobby configuration, snapshot transfer, resync, latency, and
+  disconnect handling.
+- Keep split-screen/local multiplayer working through the same command path.
+
+### T16.6 — Prediction and rollback  [P2]
+
+- Add only after deterministic replay is stable.
+- Predict local commands, retain bounded snapshots, and resimulate on late
+  authoritative input.
+- Never make audio or rendering part of the rollback state.
 
 ---
 
@@ -776,20 +833,16 @@ T8.1 (InputDevice) ──> T8.2 (Input mapping)
 T7.1 (AudioEngine) ──> T11.1 (SDL3)
 ```
 
-## Suggested Sprint Order
+## Next Milestone Order
 
-| Sprint | Items |
+| Milestone | Items |
 |--------|-------|
-| 1 | T1.1, T1.2, T3.3 |
-| 2 | T1.3, T1.4, T1.5, T1.6, T3.1, T3.2 |
-| 3 | T4.1, T4.2 |
-| 4 | T5.1, T6.1, T14.1 |
-| 5 | T13.1, T13.2 (batch rename pass) |
-| 6 | T4.3, T7.1, T8.1 |
-| 7 | T9.1, T10.1, T10.2 |
-| 8 | T11.1, T12.1 |
-| 9 | T15.1, T15.2, T15.3 |
-| 10 | T2.2, T11.2, T14.2, T14.3 (cleanup) |
+| v0.5 acceptance | Cross-platform runtime testing, warnings clean, remaining safe subsystem names |
+| Netplay foundation A | T16.1 authoritative state, T16.2 command-frame input |
+| Netplay foundation B | T16.3 snapshots/checksums, T16.4 deterministic replay |
+| First playable netcode | T16.5 authoritative client/server transport |
+| Later responsiveness | T16.6 prediction and rollback |
+| Opportunistic cleanup | T2.2, T11.2, T14.2, T14.3 only when behavior remains covered |
 
 ---
 

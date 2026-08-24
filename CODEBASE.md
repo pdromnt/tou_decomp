@@ -54,8 +54,8 @@ do not access SDL renderer objects directly.
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
 | `config.h` | Byte-exact typed `options.cfg` layout and recovered field aliases |
 | `menu.cpp` | Menu behavior, player setup, rendering helpers, config interaction |
-| `sim.cpp` | Main simulation dispatcher and legacy entity behavior fallback |
-| `entity.cpp` | Player ships, AI, physics, weapons, collisions, entity lifecycle |
+| `sim.cpp` | Ordered subsystem updates, particles, fluids, turrets, pickups, and legacy entity fallback |
+| `entity.cpp` | Player ships, ship AI, physics, weapons, collisions, and entity lifecycle |
 | `entity_callbacks.cpp` | Recovered original-address callbacks for weapons/effects |
 | `binary_compat.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
 | `effects.cpp` | Explosions, particles, lighting, terrain effects |
@@ -83,6 +83,38 @@ do not access SDL renderer objects directly.
 | `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
 | `platform.h` | Portable window, events, timing, dialogs, and display services |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
+| `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
+| `docs/SPRITE_FORMAT.md` | Recovered `.gfx` frame stream and pixel encodings |
+| `docs/SHIP_FORMAT.md` | Recovered `.SHP` metadata, stats, and sprite-frame layout |
+
+## Simulation Boundaries
+
+The original update order remains centralized in `gameloop.cpp`. The following
+named entry points identify recovered subsystem boundaries without changing
+their relative order:
+
+- `TrooperSystem_Update`
+- `TurretSystem_UpdateTargeting`
+- `PickupSystem_Update`
+- `ExplosionSystem_UpdateLegacy`
+- `TrapDoorSystem_Update`
+- `FluidSystem_Update`
+- `ParticleSystem_Update`
+- `FireParticleSystem_Update`
+
+Ship intelligence is bounded inside `entity.cpp` by `AI_UpdateShip` and
+`AI_ScanNearbyThreats`. These names describe observed responsibility; they do
+not authorize reordering RNG calls, pool iteration, callbacks, or state writes.
+Physical source-file extraction can happen later, once deterministic replay can
+prove that a move did not change behavior.
+
+## Multiplayer Boundary
+
+Network play must begin below SDL and above the recovered simulation. The next
+foundation is a versioned authoritative-state model, per-tick player commands,
+portable snapshots/checksums, and a deterministic local replay harness. Only
+after replay continuity passes should a transport be connected. `BACKLOG.md`
+Theme 16 tracks that sequence.
 
 ## Runtime Data
 
