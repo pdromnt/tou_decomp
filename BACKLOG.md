@@ -67,29 +67,29 @@ Browser/WebAssembly remains last-of-last and is not part of the current plan.
 
 ---
 
-## M1 — Human-Readable Settings  [P0]
+## M1 — Human-Readable Settings  [IMPLEMENTED / TESTING]
 
 Replace `options.cfg` with a versioned `settings.json` containing user-facing
 settings rather than a JSON dump of recovered memory.
 
 ### M1.1 — Typed user-settings model
 
-- Add a normal `UserSettings` model independent of packed `GameConfig` storage.
-- Map verified user settings into legacy runtime fields at one boundary.
-- Cover visible options, key bindings, display/audio, player profiles, colors,
+- [x] Add a normal `UserSettings` model independent of packed `GameConfig` storage.
+- [x] Map verified user settings into legacy runtime fields at one boundary.
+- [x] Cover visible options, key bindings, display/audio, player profiles, colors,
   ships, weapon availability/loadouts, and level selection.
-- Exclude reserved bytes and level-derived/runtime-only values.
-- Include `schemaVersion` and `language` from schema version 1.
+- [x] Exclude reserved bytes and level-derived/runtime-only values.
+- [x] Include `schemaVersion` and `language` from schema version 1.
 
 ### M1.2 — JSON load/save and migration
 
-- Read/write pretty-printed UTF-8 JSON.
-- Load defaults, overlay valid JSON fields, validate/clamp, then map to runtime.
-- Ignore unknown keys; recover malformed known fields individually.
-- Save atomically through a temporary file and replacement.
-- If JSON is absent and a valid `options.cfg` exists, migrate known values once,
+- [x] Read/write pretty-printed UTF-8 JSON.
+- [x] Load defaults, overlay valid JSON fields, validate/clamp, then map to runtime.
+- [x] Ignore unknown keys; recover malformed known fields individually.
+- [x] Save atomically through a temporary file and replacement.
+- [x] If JSON is absent and a valid `options.cfg` exists, migrate known values once,
   write JSON, and retain the binary file as a backup.
-- Preserve the current app-local macOS settings location.
+- [x] Preserve the current app-local macOS settings location.
 
 ### M1 acceptance
 

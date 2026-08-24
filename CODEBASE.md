@@ -52,7 +52,8 @@ do not access SDL renderer objects directly.
 | `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
-| `config.h` | Byte-exact typed `options.cfg` layout and recovered field aliases |
+| `config.h` | Byte-exact compatibility layout used by recovered runtime code |
+| `settings.cpp` | Typed, validated JSON settings and legacy-config migration |
 | `menu.cpp` | Menu behavior, player setup, rendering helpers, config interaction |
 | `sim.cpp` | Ordered subsystem updates, particles, fluids, turrets, pickups, and legacy entity fallback |
 | `entity.cpp` | Player ships, ship AI, physics, weapons, collisions, and entity lifecycle |
@@ -130,11 +131,11 @@ The executable expects these paths relative to its working directory:
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
 | `help/` | Original HTML help, restyled for the decomp release |
-| `options.cfg` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
+| `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local
-`options.cfg` are intentionally excluded. Keep it synchronized when adding a
+`settings.json` and legacy `options.cfg` files are intentionally excluded. Keep it synchronized when adding a
 new required runtime path.
 
 ## Binary-Compatibility Layer
@@ -219,12 +220,17 @@ operations into independent field assignments can change behavior.
 
 ## Config Ownership
 
-`options.cfg` has one canonical, packed `GameConfig` representation in
-`config.h`. Its typed SDL-era layout is exactly 6405 bytes; the extra window-mode
-byte remains appended. Older 6408-byte records are intentionally rejected after
-removing three obsolete audio-backend settings. Recovered
-`DAT_004837xx` names are aliases into that same record, so menu writes, runtime
-reads, loading, and saving cannot drift into stale copies anymore.
+`settings.cpp` owns the versioned, human-readable `settings.json` format. Its
+normal `UserSettings` model contains only user-facing choices, validates values,
+and maps them into recovered runtime state at the load/save boundary. Writes use
+a same-directory temporary file followed by replacement.
+
+`GameConfig` in `config.h` remains a 6405-byte compatibility record because
+recovered menu and gameplay code still address that layout directly. It is no
+longer the persistence format. If JSON is absent, a compatible legacy
+`options.cfg` is imported once and retained as a backup; after that JSON is
+authoritative. Recovered `DAT_004837xx` names remain aliases into `GameConfig`,
+so menu writes and runtime reads cannot drift into stale copies.
 
 `g_ConfigBlob` remains as a byte view for menu descriptors and fields whose
 semantics are not proven yet. It is not separate storage. Offset assertions in

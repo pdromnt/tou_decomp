@@ -23,7 +23,7 @@ int Platform_SetRuntimeDirectory(void)
     std::string runtime_path(base_path);
 #if defined(__APPLE__)
     /* SDL returns Contents/MacOS for an app bundle. Assets and the deliberately
-     * app-local options.cfg live together in Contents/Resources. */
+     * app-local settings.json live together in Contents/Resources. */
     runtime_path += "../Resources";
 #endif
     if (TOU_CHDIR(runtime_path.c_str()) != 0) {

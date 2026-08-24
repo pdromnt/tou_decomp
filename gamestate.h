@@ -115,7 +115,7 @@ void Early_Init_Vars(void);
 int  System_Init_Check(void);
 void Init_Game_Config(void);
 void Set_Config_Defaults(void);      /* hardcoded defaults → g_ConfigBlob (no I/O) */
-void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → options.cfg → globals */
+void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → settings.json */
 void Init_Math_Tables(int *buffer, unsigned int count);
 void FUN_0041a8c0(void);          /* session/level init */
 void FUN_0045c300(void);          /* game mode presets (local) */
@@ -163,8 +163,8 @@ void FUN_0041aea0(void);        /* player spawn init */
 void FUN_00449040(char param);  /* visibility map (0=incremental, 1=full) */
 
 /* ===== Function Prototypes: init.cpp (config) ===== */
-void Load_Options_Config(void);   /* reads options.cfg → g_ConfigBlob */
-void Save_Options_Config(void);   /* writes g_ConfigBlob → options.cfg */
+void Load_Options_Config(void);   /* reads settings.json / migrates options.cfg */
+void Save_Options_Config(void);   /* writes user-facing state to settings.json */
 
 /* ===== Utility functions (init.cpp) ===== */
 void FUN_004644af_bounded(char *dest, size_t capacity,

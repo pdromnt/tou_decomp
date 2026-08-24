@@ -4,6 +4,7 @@
  *            Init_Game_Config=004207C0
  */
 #include "tou.h"
+#include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2130,7 +2131,7 @@ int FUN_00414060(void)
 
     /* If round count is still the default (1) and we have multiple levels,
      * set it to the actual level count so all levels play through. Once the
-     * user saves via the menu, their preference persists in options.cfg. */
+     * user saves via the menu, their preference persists in settings.json. */
     if (g_GameConfig.values.active_level_count == 1 && DAT_00485088 > 1) {
         g_GameConfig.values.active_level_count =
             (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
@@ -6104,8 +6105,8 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.level_flags[2] = 0x32;
 
     /* === Level indirection table (200 ints at offset 4) ===
-     * Original zeros this, relying on options.cfg for saved level order.
-     * Sequential default ensures levels play in scanned order without options.cfg. */
+     * Original zeros this, relying on saved config for the level order.
+     * Sequential default ensures levels play in scanned order without a save. */
     {
         for (int i = 0; i < 200; i++)
             g_GameConfig.values.level_order[i] = i;
@@ -6238,7 +6239,7 @@ void Init_Game_Config(void)
 {
     Set_Config_Defaults();
 
-    /* Load saved config from options.cfg (overwrites defaults above) */
+    /* Load settings.json, or migrate a compatible legacy options.cfg once. */
     Load_Options_Config();
 
     /* Older reconstructed saves wrote an all-zero team palette block.  These
@@ -6263,7 +6264,7 @@ void Init_Game_Config(void)
 /* ===== Reset_Config_To_Defaults =====
  * Called from the Options menu "Reset defaults" action (main menu
  * switch case 0xFD). Restores hardcoded defaults in g_ConfigBlob,
- * persists them to options.cfg so the reset survives a restart, and
+ * persists them to settings.json so the reset survives a restart, and
  * syncs the runtime globals that hold aliased copies of blob fields.
  *
  * Mirrors Init_Game_Config's boot sequence except it writes to disk
@@ -6276,42 +6277,55 @@ void Reset_Config_To_Defaults(void)
     Save_Options_Config();
 }
 
-/* ===== Load_Options_Config (0042F360) ===== */
-/* Reads the current packed record and rejects incompatible older layouts. */
-void Load_Options_Config(void)
+/* Reads the old packed record only for one-time settings.json migration. */
+static bool Load_Legacy_Options_Config(void)
 {
     FILE *fp = fopen("options.cfg", "rb");
-    if (fp != NULL) {
-        fseek(fp, 0, SEEK_END);
-        long fileSize = ftell(fp);
-        rewind(fp);
+    if (fp == NULL) return false;
 
-        const long configSize = (long)sizeof(g_GameConfig);
-        if (fileSize == configSize || fileSize == configSize + 1) {
-            if (fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp) ==
-                sizeof(g_GameConfig)) {
-                unsigned char savedWindowMode = 0;
-                if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
-                    g_WindowMode = savedWindowMode;
-            }
-        } else {
-            LOG("[CFG] Ignoring incompatible options.cfg (%ld bytes, expected %ld or %ld)\n",
-                fileSize, configSize, configSize + 1);
-        }
+    fseek(fp, 0, SEEK_END);
+    const long fileSize = ftell(fp);
+    rewind(fp);
+
+    const long configSize = static_cast<long>(sizeof(g_GameConfig));
+    if (fileSize != configSize && fileSize != configSize + 1) {
+        LOG("[CFG] Ignoring incompatible options.cfg (%ld bytes, expected %ld or %ld)\n",
+            fileSize, configSize, configSize + 1);
         fclose(fp);
+        return false;
+    }
+
+    if (fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp) !=
+        sizeof(g_GameConfig)) {
+        fclose(fp);
+        return false;
+    }
+
+    unsigned char savedWindowMode = 0;
+    if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
+        g_WindowMode = savedWindowMode;
+    fclose(fp);
+    return true;
+}
+
+/* ===== Load_Options_Config (0042F360) ===== */
+/* Compatibility entry point: JSON is authoritative after first migration. */
+void Load_Options_Config(void)
+{
+    const SettingsLoadResult result = Settings_LoadJson();
+    if (result == SETTINGS_LOAD_MISSING && Load_Legacy_Options_Config()) {
+        if (Settings_SaveJson())
+            LOG("[CFG] Migrated options.cfg to settings.json\n");
+        else
+            LOG("[CFG] Loaded options.cfg but could not write settings.json\n");
     }
 }
 
 /* ===== Save_Options_Config (0042F320) ===== */
-/* Writes the current packed record plus the decomp window-mode byte. */
+/* Compatibility entry point used throughout recovered menu code. */
 void Save_Options_Config(void)
 {
-    FILE *fp = fopen("options.cfg", "wb");
-    if (fp != NULL) {
-        fwrite(&g_GameConfig, 1, sizeof(g_GameConfig), fp);
-        fwrite(&g_WindowMode, 1, 1, fp);
-        fclose(fp);
-    }
+    Settings_SaveJson();
 }
 
 /* ===== Init_Math_Tables (00425780) ===== */

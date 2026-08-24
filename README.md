@@ -34,7 +34,7 @@ remaining work.
 Download the archive matching your operating system and architecture and
 extract it completely. Run `TOU.exe` on Windows, `TOU` on Linux, or
 `TOU.app` on macOS. Do not move the executable or app away from its packaged
-assets. The game creates `options.cfg` beside the assets; on macOS it lives in
+assets. The game creates `settings.json` beside the assets; on macOS it lives in
 `TOU.app/Contents/Resources`.
 
 The original default controls were designed for a Windows keyboard and are

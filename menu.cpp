@@ -85,7 +85,7 @@ int Load_Level_Resources(void)
     char *levelName;
 
     /* Set up flags for local mode.
-     * Team mode / player count come from config blob (options.cfg). */
+     * Team mode / player count come from the compatibility config record. */
     DAT_0048396d = 0;      /* not a generated map */
     DAT_00483960 = 0;      /* no swap file */
     DAT_004892e4 = 0;      /* no random mirror */
@@ -980,7 +980,7 @@ char          DAT_004892a5 = 0;       /* activation flag */
 void         *DAT_00489e80 = NULL;    /* wall segment array */
 
 /* ===== Init function globals ===== */
-/* Difficulty / Team / Config (from options.cfg config blob at 0x48372x-0x48375x) */
+/* Difficulty / Team / Config (compatibility record at 0x48372x-0x48375x) */
 int           DAT_004892a8 = 0;       /* difficulty constant 1 (round tick limit) */
 int           DAT_004892ac = 0;       /* difficulty constant 2 */
 

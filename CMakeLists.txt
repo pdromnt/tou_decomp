@@ -4,6 +4,15 @@ project(TunnelsOfUnderworld LANGUAGES C CXX)
 
 include(FetchContent)
 
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+    URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 if(MSVC)
     # Release archives are self-contained and must not require the VC runtime.
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -82,6 +91,7 @@ set(TOU_SOURCES
     gg_gen.cpp
     binary_compat.cpp
     entity_callbacks.cpp
+    settings.cpp
     stb_image.c
 )
 
@@ -120,6 +130,7 @@ endif()
 target_link_libraries(TOU PRIVATE
     SDL3::SDL3
     SDL3_mixer::SDL3_mixer-static
+    nlohmann_json::nlohmann_json
 )
 
 set_target_properties(TOU PROPERTIES
