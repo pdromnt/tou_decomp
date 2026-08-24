@@ -130,26 +130,9 @@ void Game_State_Manager(void)
             g_DisplayWidth  = 640; /* Mode 5 = 640x480 */
             g_DisplayHeight = 480;
 
-            /* Release existing surfaces */
-            if (lpDD != NULL) {
-                if (lpDDS_Primary != NULL) {
-                    lpDDS_Primary->Release();
-                    lpDDS_Primary = NULL;
-                }
-                if (lpDDS_Offscreen != NULL) {
-                    lpDDS_Offscreen->Release();
-                    lpDDS_Offscreen = NULL;
-                }
-            }
-
-            iVar2 = Init_DirectDraw(g_DisplayWidth, g_DisplayHeight);
+            iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
-                /* DDraw init failed - fatal */
-                if (lpDD != NULL) {
-                    Release_DirectDraw_Surfaces();
-                    lpDD->Release();
-                    lpDD = NULL;
-                }
+                RenderBackend_Shutdown();
                 MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
                 DestroyWindow(hWnd_Main);
                 g_GameState = 0xFE;
@@ -234,24 +217,9 @@ void Game_State_Manager(void)
             g_DisplayHeight = 480;
             g_DisplayWidth  = 640;
 
-            if (lpDD != NULL) {
-                if (lpDDS_Primary != NULL) {
-                    lpDDS_Primary->Release();
-                    lpDDS_Primary = NULL;
-                }
-                if (lpDDS_Offscreen != NULL) {
-                    lpDDS_Offscreen->Release();
-                    lpDDS_Offscreen = NULL;
-                }
-            }
-
-            iVar2 = Init_DirectDraw(g_DisplayWidth, g_DisplayHeight);
+            iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
-                if (lpDD != NULL) {
-                    Release_DirectDraw_Surfaces();
-                    lpDD->Release();
-                    lpDD = NULL;
-                }
+                RenderBackend_Shutdown();
                 MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
                 DestroyWindow(hWnd_Main);
                 g_GameState = 0xFE;

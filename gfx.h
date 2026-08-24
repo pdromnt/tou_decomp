@@ -3,13 +3,7 @@
 
 #include "compat.h"
 #include "types.h"
-
-/* ===== DirectDraw Globals (graphics.cpp) ===== */
-extern LPDIRECTDRAW          lpDD;              /* 00489EC8 */
-extern LPDIRECTDRAWSURFACE   lpDDS_Primary;     /* 00489ED8 */
-extern LPDIRECTDRAWSURFACE   lpDDS_Back;        /* 00489ECC */
-extern LPDIRECTDRAWSURFACE   lpDDS_Offscreen;   /* 00489ED0 */
-extern LPDIRECTDRAWSURFACE   DAT_00481d44;      /* 00481D44 - offscreen surface 640x480 */
+#include "render_backend.h"
 
 /* ===== Frame / Render (memory.cpp) ===== */
 extern unsigned short       *Software_Buffer;   /* 004877C0 */
@@ -34,15 +28,18 @@ extern int                   g_NumDisplayModes; /* 00483C00 */
 extern int                   g_ModeWidths[16];  /* 00483C04 */
 extern int                   g_ModeHeights[16]; /* 00483C44 */
 
-/* ===== Viewport (effects.cpp) ===== */
-extern int                   DAT_004806dc;      /* viewport left */
-extern int                   DAT_004806d0;      /* viewport right */
-extern int                   DAT_004806e0;      /* viewport top */
-extern int                   DAT_004806d4;      /* viewport bottom */
-extern int                   DAT_004806d8;      /* viewport width */
-extern int                   DAT_004806e4;      /* viewport height */
-extern int                   DAT_004806e8;      /* camera/scroll Y */
-extern int                   DAT_004806ec;      /* camera/scroll X */
+/* ===== Active world viewport =====
+ * Address-style aliases remain temporarily so lifted renderers can migrate
+ * without changing their arithmetic. New code should use g_Viewport fields. */
+extern Viewport              g_Viewport;
+#define DAT_004806dc (g_Viewport.left)
+#define DAT_004806d0 (g_Viewport.right)
+#define DAT_004806e0 (g_Viewport.top)
+#define DAT_004806d4 (g_Viewport.bottom)
+#define DAT_004806d8 (g_Viewport.width)
+#define DAT_004806e4 (g_Viewport.height)
+#define DAT_004806e8 (g_Viewport.screen_y)
+#define DAT_004806ec (g_Viewport.screen_x)
 
 /* ===== Sprite data tables (memory.cpp) ===== */
 extern void                 *DAT_00487ab4;      /* Sprite pixel data RGB555 (2.8MB) */
@@ -73,15 +70,12 @@ extern int                   DAT_00489238;      /* Screen/viewport width (defaul
 extern int                   DAT_0048923c;      /* Screen/viewport height (default 480) */
 
 /* ===== Function Prototypes: graphics.cpp ===== */
-int  Init_DirectDraw(int width, int height);
 void Apply_Display_Settings(void);
 void Get_Game_Presentation_Rect(RECT *rect);
 void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *game_y);
 void Render_Frame(void);
 int  Render_Game_View(void);
-void Render_Game_View_To(unsigned short *frame);
-void Release_DirectDraw_Surfaces(void);
-void Restore_Surfaces(void);
+void Render_Game_View_To(Framebuffer *framebuffer);
 
 /* ===== Function Prototypes: assets.cpp ===== */
 int   Load_Background_To_Buffer(char index);
@@ -103,33 +97,33 @@ void FUN_0040c590(int frame, int player, int x, int y, unsigned char palette,
                   int buffer, int stride, unsigned char blend);
 void FUN_0040c940(unsigned int px, unsigned int py, unsigned int buffer,
                   int stride, int intensity);
-void FUN_0040dbd0(int buffer, unsigned int stride);
-void FUN_0040dce0(int buffer, unsigned int stride);
-void FUN_0040bb60(unsigned int buffer, unsigned int stride);
-void FUN_0040a870(int buffer, unsigned int stride);
-void FUN_0040d6c0(int buffer, int stride);
-void FUN_0040d810(int buffer, unsigned int stride);
-void FUN_0040caf0(int buffer, unsigned int stride);
-void FUN_0040d930(int buffer, unsigned int stride);
-void FUN_0040d360(int buffer, int stride);
-void FUN_0040d100(int buffer, int stride);
-void FUN_004076d0(int buffer, int stride);
+void FUN_0040dbd0(Framebuffer *framebuffer);
+void FUN_0040dce0(Framebuffer *framebuffer);
+void FUN_0040bb60(Framebuffer *framebuffer);
+void FUN_0040a870(Framebuffer *framebuffer);
+void FUN_0040d6c0(Framebuffer *framebuffer);
+void FUN_0040d810(Framebuffer *framebuffer);
+void FUN_0040caf0(Framebuffer *framebuffer);
+void FUN_0040d930(Framebuffer *framebuffer);
+void FUN_0040d360(Framebuffer *framebuffer);
+void FUN_0040d100(Framebuffer *framebuffer);
+void FUN_004076d0(Framebuffer *framebuffer);
 int  FUN_004257e0(int cx, int cy, int px, int py);
 int  FUN_004599f0(int src_x, int src_y, int dst_x, int dst_y, int side, float range_sqrt, int gravity);
 char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y, int angle, float range_sqrt, int gravity);
 int  FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt);
 
 /* ===== Function Prototypes: hud.cpp ===== */
-void FUN_0040aca0(int buffer, int stride, int player_idx);     /* pickup text */
-void FUN_004094f0(int buffer, int stride, int team);           /* team status text */
-void FUN_00409280(int buffer, int stride);                     /* timer display */
+void FUN_0040aca0(Framebuffer *framebuffer, int player_idx);     /* pickup text */
+void FUN_004094f0(Framebuffer *framebuffer, int team);           /* team status text */
+void FUN_00409280(Framebuffer *framebuffer);                     /* timer display */
 void FUN_00408f90(unsigned int palette, unsigned short *dest, int stride); /* minimap dot */
-void FUN_004090e0(int buffer, int stride, unsigned int player_idx); /* minimap/radar */
-void FUN_0040b860(int buffer, int stride, int player_idx);     /* health bar */
-void FUN_0040b580(int buffer, int stride, int player_idx);     /* shield/energy bar */
-void FUN_004095e0(unsigned int buffer, int stride, int player_idx);  /* fog of war */
-void FUN_0040aaf0(int buffer, int stride, int x, int y, int weapon, char state); /* weapon icon */
-void FUN_0040a710(int buffer, int stride, int x, int y, int loaded, int total);  /* ammo dots */
-void FUN_0040a9e0(int buffer, int stride, int player_idx);     /* weapon grid */
+void FUN_004090e0(Framebuffer *framebuffer, unsigned int player_idx); /* minimap/radar */
+void FUN_0040b860(Framebuffer *framebuffer, int player_idx);     /* health bar */
+void FUN_0040b580(Framebuffer *framebuffer, int player_idx);     /* shield/energy bar */
+void FUN_004095e0(Framebuffer *framebuffer, int player_idx);  /* fog of war */
+void FUN_0040aaf0(Framebuffer *framebuffer, int x, int y, int weapon, char state); /* weapon icon */
+void FUN_0040a710(Framebuffer *framebuffer, int x, int y, int loaded, int total);  /* ammo dots */
+void FUN_0040a9e0(Framebuffer *framebuffer, int player_idx);     /* weapon grid */
 
 #endif /* TOU_GFX_H */

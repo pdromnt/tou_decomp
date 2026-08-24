@@ -1,11 +1,6 @@
 /*
- * graphics.cpp - DirectDraw surfaces, rendering pipeline
- * Addresses: Init_DirectDraw=004610E0, Render_Frame=0045D800,
- *            Release_DirectDraw_Surfaces=004610A0, Restore_Surfaces=00461070
- *
- * COMPAT HACK: Windowed mode + RGB565->RGB32 conversion for modern Windows.
- * Original binary uses exclusive fullscreen 16bpp which doesn't work on
- * Windows 10/11 (broken colors, mode not supported).
+ * graphics.cpp - software renderer and presentation geometry
+ * Address: Render_Frame=0045D800
  */
 #include "tou.h"
 #include <stdio.h>
@@ -18,44 +13,6 @@
 int                 DAT_00489238    = 640;   /* Screen/viewport width */
 int                 DAT_0048923c    = 480;   /* Screen/viewport height */
 
-LPDIRECTDRAW        lpDD            = NULL;  /* 00489EC8 */
-LPDIRECTDRAWSURFACE lpDDS_Primary   = NULL;  /* 00489ED8 */
-LPDIRECTDRAWSURFACE lpDDS_Back      = NULL;  /* 00489ECC */
-LPDIRECTDRAWSURFACE lpDDS_Offscreen = NULL;  /* 00489ED0 */
-LPDIRECTDRAWSURFACE DAT_00481d44    = NULL;  /* 00481D44 - offscreen surface 640x480 */
-static LPDIRECTDRAWSURFACE s_PresentationSurface = NULL;
-static int s_PresentationWidth = 0;
-static int s_PresentationHeight = 0;
-
-static int Ensure_Presentation_Surface(int width, int height)
-{
-    if (width <= 0 || height <= 0 || lpDD == NULL)
-        return 0;
-    if (s_PresentationSurface != NULL &&
-        s_PresentationWidth == width && s_PresentationHeight == height)
-        return 1;
-
-    if (s_PresentationSurface != NULL) {
-        s_PresentationSurface->Release();
-        s_PresentationSurface = NULL;
-    }
-
-    DDSURFACEDESC desc = {};
-    desc.dwSize = sizeof(desc);
-    desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
-    desc.dwWidth = width;
-    desc.dwHeight = height;
-    desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
-    if (lpDD->CreateSurface(&desc, &s_PresentationSurface, NULL) != DD_OK) {
-        s_PresentationWidth = 0;
-        s_PresentationHeight = 0;
-        return 0;
-    }
-
-    s_PresentationWidth = width;
-    s_PresentationHeight = height;
-    return 1;
-}
 
 /* The recovered renderer remains natively 640x480. Display settings resize
  * only its presentation viewport, keeping gameplay coordinates untouched. */
@@ -142,102 +99,6 @@ void Apply_Display_Settings(void)
     }
 
     InvalidateRect(hWnd_Main, NULL, TRUE);
-}
-
-/* ===== Init_DirectDraw (004610E0) ===== */
-/*
- * Original: SetDisplayMode(w,h,16) + primary flip chain + offscreen 16bpp
- * Compat:   Windowed mode, no mode change, primary + clipper + offscreen 32bpp
- */
-int Init_DirectDraw(int width, int height)
-{
-    HRESULT hr;
-    DDSURFACEDESC ddsd;
-
-    if (lpDD == NULL) {
-        LOG("[GFX] Init_DirectDraw: lpDD is NULL!\n");
-        return 0;
-    }
-
-    LOG("[GFX] Init_DirectDraw(%d, %d) - windowed mode\n", width, height);
-
-    /* COMPAT: No SetDisplayMode - stay in desktop resolution/depth */
-
-    /* Create primary surface (no flip chain in windowed mode) */
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize         = sizeof(ddsd);
-    ddsd.dwFlags        = DDSD_CAPS;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
-
-    hr = lpDD->CreateSurface(&ddsd, &lpDDS_Primary, NULL);
-    if (hr != DD_OK) {
-        LOG("[GFX] CreateSurface(Primary) failed: 0x%08X\n", hr);
-        return 0;
-    }
-    LOG("[GFX] Primary surface created OK\n");
-
-    /* Create and attach clipper for windowed rendering */
-    LPDIRECTDRAWCLIPPER lpClipper = NULL;
-    hr = lpDD->CreateClipper(0, &lpClipper, NULL);
-    if (hr != DD_OK)
-        return 0;
-
-    lpClipper->SetHWnd(0, hWnd_Main);
-    lpDDS_Primary->SetClipper(lpClipper);
-    lpClipper->Release();
-
-    /* No back buffer in windowed mode */
-    lpDDS_Back = NULL;
-
-    /* Create offscreen surface in system memory (matches desktop format) */
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize         = sizeof(ddsd);
-    ddsd.dwFlags        = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH;
-    ddsd.dwWidth        = width;
-    ddsd.dwHeight       = height;
-    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
-
-    hr = lpDD->CreateSurface(&ddsd, &lpDDS_Offscreen, NULL);
-    if (hr != DD_OK) {
-        LOG("[GFX] CreateSurface(Offscreen) failed: 0x%08X\n", hr);
-        return 0;
-    }
-    LOG("[GFX] Offscreen surface created OK\n");
-
-    g_SurfaceReady = 2;
-    LOG("[GFX] Init_DirectDraw success\n");
-    return 1;
-}
-
-/* ===== Release_DirectDraw_Surfaces (004610A0) ===== */
-void Release_DirectDraw_Surfaces(void)
-{
-    if (lpDD != NULL) {
-        if (s_PresentationSurface != NULL) {
-            s_PresentationSurface->Release();
-            s_PresentationSurface = NULL;
-            s_PresentationWidth = 0;
-            s_PresentationHeight = 0;
-        }
-        if (lpDDS_Primary != NULL) {
-            lpDDS_Primary->Release();
-            lpDDS_Primary = NULL;
-        }
-        if (lpDDS_Offscreen != NULL) {
-            lpDDS_Offscreen->Release();
-            lpDDS_Offscreen = NULL;
-        }
-    }
-}
-
-/* ===== Restore_Surfaces (00461070) ===== */
-void Restore_Surfaces(void)
-{
-    if (lpDDS_Primary)   lpDDS_Primary->Restore();
-    if (lpDDS_Back)      lpDDS_Back->Restore();
-    if (lpDDS_Offscreen) lpDDS_Offscreen->Restore();
-    if (s_PresentationSurface) s_PresentationSurface->Restore();
-    g_SurfaceReady = 2;
 }
 
 /* Scratch buffer for compositing particles onto RGB565 before conversion */
@@ -383,8 +244,10 @@ static void FUN_00408ea0(int param_1, int param_2, int param_3)
  *
  * param_1: destination RGB565 buffer (640×480)
  * param_2: buffer stride in pixels (640) */
-static void Render_Game_World(unsigned short *buffer, int stride)
+static void Render_Game_World(Framebuffer *framebuffer)
 {
+    unsigned short *buffer = framebuffer->pixels;
+    int stride = framebuffer->stride;
     if (!DAT_00481f50 || DAT_004879f0 == 0 || DAT_004879f4 == 0)
         return;
 
@@ -572,20 +435,20 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     }
 
     /* Entity rendering subsystems (original order from FUN_00407720) */
-    FUN_0040dbd0((int)buffer, stride);       /* Static entities (turrets) */
-    FUN_0040dce0((int)buffer, stride);       /* Dynamic entities (troopers) */
-    FUN_0040bb60((unsigned int)buffer, stride); /* Main entities (items/ships) */
-    FUN_0040a870((int)buffer, stride);       /* Projectiles */
-    FUN_0040d6c0((int)buffer, stride);       /* Explosions */
-    FUN_0040d810((int)buffer, stride);       /* Debris/particles */
-    FUN_0040caf0((int)buffer, stride);       /* Player/ship */
-    FUN_0040d930((int)buffer, stride);       /* Misc effects (glow/smoke) */
-    FUN_0040d360((int)buffer, stride);       /* Edge tiles/detail */
-    FUN_0040d100((int)buffer, stride);       /* Particle overlay */
+    FUN_0040dbd0(framebuffer);       /* Static entities (turrets) */
+    FUN_0040dce0(framebuffer);       /* Dynamic entities (troopers) */
+    FUN_0040bb60(framebuffer);       /* Main entities (items/ships) */
+    FUN_0040a870(framebuffer);       /* Projectiles */
+    FUN_0040d6c0(framebuffer);       /* Explosions */
+    FUN_0040d810(framebuffer);       /* Debris/particles */
+    FUN_0040caf0(framebuffer);       /* Player/ship */
+    FUN_0040d930(framebuffer);       /* Misc effects (glow/smoke) */
+    FUN_0040d360(framebuffer);       /* Edge tiles/detail */
+    FUN_0040d100(framebuffer);       /* Particle overlay */
 
     /* Fog of War — raycasting visibility + darkening */
     if (DAT_0048372d != '\0' && DAT_00489eac[0] != NULL) {
-        FUN_004095e0((unsigned int)(uintptr_t)buffer, stride, 0);
+        FUN_004095e0(framebuffer, 0);
     }
 
     /* Spawn shield overlay — draw contracting cross effect for spawning players */
@@ -609,17 +472,17 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         if (player->timer_d0 == 0) {
             /* Minimap/radar — guarded by config flag DAT_00483743 (blob 0x17EB) */
             if (DAT_00483743 != 0 && DAT_00489230 != NULL) {
-                FUN_004090e0((int)buffer, stride, (unsigned int)pidx);
+                FUN_004090e0(framebuffer, (unsigned int)pidx);
             }
 
             /* Weapon selection grid (if player pressed weapon select key) */
             if (player->weapon_select_active == 1) {
-                FUN_0040a9e0((int)buffer, stride, pidx);
+                FUN_0040a9e0(framebuffer, pidx);
             }
 
             /* Health bar (if health > 0 and LUT system initialized) */
             if (player->health > 0 && DAT_00489230 != NULL) {
-                FUN_0040b860((int)buffer, stride, pidx);
+                FUN_0040b860(framebuffer, pidx);
             }
 
             /* Player/weapon name text */
@@ -638,7 +501,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
             /* Pickup/powerup text */
             if (player->hud_banner_timer != 0) {
-                FUN_0040aca0((int)buffer, stride, pidx);
+                FUN_0040aca0(framebuffer, pidx);
             }
 
             /* Weapon icon + ammo dots — only if weapon data is initialized */
@@ -664,14 +527,14 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                         }
                     }
 
-                    FUN_0040aaf0((int)buffer, stride, icon_x, icon_y, weapon_type, icon_state);
+                    FUN_0040aaf0(framebuffer, icon_x, icon_y, weapon_type, icon_state);
 
                     /* Weapon Mark selector dots around weapon icon */
                     if (DAT_00487ab0 != NULL) {
                         int selected_mark = player->weapon_mark + 1;
                         int highest_mark = *(unsigned char *)((char *)DAT_00487abc +
                                            weapon_type * 0x218 + 0x7D);
-                        FUN_0040a710((int)buffer, stride, icon_x, icon_y,
+                        FUN_0040a710(framebuffer, icon_x, icon_y,
                                      selected_mark, highest_mark);
                     }
                 }
@@ -679,7 +542,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
             /* Shield/energy bar — guarded by config flag DAT_00483742 (blob 0x17EA) */
             if (DAT_00483742 != 0 && DAT_00489230 != NULL) {
-                FUN_0040b580((int)buffer, stride, pidx);
+                FUN_0040b580(framebuffer, pidx);
             }
 
             /* Frag count text */
@@ -710,12 +573,12 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         /* Team status text (outside alive-check, always if team game active) */
         if (DAT_004892a4 != 0 && DAT_0048764a == 0) {
             int team = (int)(int8_t)player->team;
-            FUN_004094f0((int)buffer, stride, team);
+            FUN_004094f0(framebuffer, team);
         }
 
         /* Timer display */
         if (DAT_004892a8 != 0 && (DAT_004892a8 < 0x762 || DAT_0048764a != 0)) {
-            FUN_00409280((int)buffer, stride);
+            FUN_00409280(framebuffer);
         }
     }
 
@@ -865,39 +728,25 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
 /* ===== Render_Frame (0045D800) ===== */
 /*
- * Original pipeline:
- *   1. Lock offscreen surface (16bpp)
- *   2. Copy Software_Buffer frame to surface (RGB565 -> RGB565)
- *   3. Call FUN_004076d0 to draw particles/entities on surface (RGB565)
- *   4. Unlock + Blt/Flip
- *
- * Compat pipeline:
- *   1. Copy Software_Buffer frame to scratch buffer (RGB565)
- *   2. Call FUN_004076d0 to draw particles on scratch buffer (RGB565)
- *   3. Lock offscreen surface (32bpp)
- *   4. Convert scratch buffer RGB565 -> ARGB8888 to surface
- *   5. Unlock + Blt to primary (windowed)
+ * The original DirectDraw lock/blit sequence is now split at a stable boundary:
+ * this function composes the RGB565 software frame, then the selected backend
+ * presents it. The DirectDraw backend retains the existing conversion/scaling.
  */
 void Render_Frame(void)
 {
-    HRESULT hr;
-    DDSURFACEDESC ddsd;
-
-    if (lpDDS_Offscreen == NULL || lpDDS_Primary == NULL)
-        return;
-
     /* Allocate scratch buffer on first use */
     if (g_ScratchBuffer == NULL) {
         g_ScratchBuffer = (unsigned short *)malloc(640 * 480 * 2);
         if (!g_ScratchBuffer) return;
     }
+    Framebuffer framebuffer = {g_ScratchBuffer, 640, 480, 640};
 
     /* 1. Draw background into scratch buffer.
      *    Gameplay state (g_GameState==0) with level data: blit level background.
      *    Menu/intro: copy Software_Buffer (JPEG background). */
     if (g_GameState == 0 && DAT_00481f50 != NULL) {
         /* Game world: blit visible viewport from level background */
-        Render_Game_World(g_ScratchBuffer, 640);
+        Render_Game_World(&framebuffer);
     } else {
         /* Menu/intro: copy clean background from Software_Buffer */
         int frameOffset = (g_FrameIndex & 0xFF) * (640 * 480);
@@ -912,123 +761,15 @@ void Render_Frame(void)
      *    calling them during gameplay would draw stale menu text and apply
      *    fog a second time, making the screen too dark. */
     if (g_GameState != 0) {
-        Render_Game_View_To(g_ScratchBuffer);
-        FUN_004076d0((int)g_ScratchBuffer, 640);
+        Render_Game_View_To(&framebuffer);
+        FUN_004076d0(&framebuffer);
     }
-
-    /* 3. Lock the offscreen surface */
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(ddsd);
-
-    do {
-        hr = lpDDS_Offscreen->Lock(NULL, &ddsd, DDLOCK_WAIT, NULL);
-        if (hr == DDERR_SURFACELOST) {
-            Restore_Surfaces();
-            return;
-        }
-    } while (hr == DDERR_WASSTILLDRAWING);
-
-    if (hr != DD_OK) {
-        return;
-    }
-
-    /* 4. Convert scratch buffer (RGB565) to surface (32bpp ARGB) */
-    int pitchBytes = ddsd.lPitch;
-
-    for (int y = 0; y < 480; y++) {
-        unsigned int *dst = (unsigned int *)((char *)ddsd.lpSurface + y * pitchBytes);
-        for (int x = 0; x < 640; x++) {
-            unsigned short pixel = g_ScratchBuffer[y * 640 + x];
-            /* RGB565 -> ARGB8888 */
-            unsigned char r = (pixel >> 11) & 0x1F;
-            unsigned char g = (pixel >> 5)  & 0x3F;
-            unsigned char b = pixel & 0x1F;
-            r = (r << 3) | (r >> 2);
-            g = (g << 2) | (g >> 4);
-            b = (b << 3) | (b >> 2);
-            dst[x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-        }
-    }
-
-    /* 5. Unlock */
-    lpDDS_Offscreen->Unlock(NULL);
-
-    /* 6. Compose bars + scaled frame offscreen, then present atomically.
-     * Drawing the bars and frame separately to the visible primary surface
-     * caused obvious flicker. GDI HALFTONE gives cleaner non-integer scaling
-     * than DirectDraw's legacy stretch blit. */
-    RECT rcSrc = {0, 0, 640, 480};
-    RECT rcClient;
-    GetClientRect(hWnd_Main, &rcClient);
-    int client_w = rcClient.right - rcClient.left;
-    int client_h = rcClient.bottom - rcClient.top;
-    if (!Ensure_Presentation_Surface(client_w, client_h))
-        return;
-
-    DDBLTFX fill = {};
-    fill.dwSize = sizeof(fill);
-    fill.dwFillColor = 0;
-    s_PresentationSurface->Blt(NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fill);
-
-    RECT rcDest;
-    Get_Game_Presentation_Rect(&rcDest);
-    HDC source_dc = NULL;
-    HDC presentation_dc = NULL;
-    HRESULT source_hr = lpDDS_Offscreen->GetDC(&source_dc);
-    HRESULT presentation_hr = s_PresentationSurface->GetDC(&presentation_dc);
-    if (source_hr == DD_OK && presentation_hr == DD_OK) {
-        int dest_w = rcDest.right - rcDest.left;
-        int dest_h = rcDest.bottom - rcDest.top;
-        int scale_x = dest_w / 640;
-        int scale_y = dest_h / 480;
-        int pixel_perfect = scale_x >= 1 && scale_x == scale_y &&
-                            dest_w == 640 * scale_x && dest_h == 480 * scale_y;
-        /* Preserve razor-sharp pixels at exact integer scales (fullscreen on
-         * a 1440p display is exactly 3x); smooth only uneven scaling ratios. */
-        SetStretchBltMode(presentation_dc, pixel_perfect ? COLORONCOLOR : HALFTONE);
-        SetBrushOrgEx(presentation_dc, 0, 0, NULL);
-        StretchBlt(presentation_dc,
-            rcDest.left, rcDest.top,
-            dest_w, dest_h,
-            source_dc, 0, 0, 640, 480, SRCCOPY);
-    } else {
-        /* Conservative fallback for drivers that reject GetDC. */
-        if (presentation_hr == DD_OK) {
-            s_PresentationSurface->ReleaseDC(presentation_dc);
-            presentation_dc = NULL;
-        }
-        if (source_hr == DD_OK) {
-            lpDDS_Offscreen->ReleaseDC(source_dc);
-            source_dc = NULL;
-        }
-        s_PresentationSurface->Blt(&rcDest, lpDDS_Offscreen, &rcSrc, DDBLT_WAIT, NULL);
-    }
-    if (presentation_dc != NULL)
-        s_PresentationSurface->ReleaseDC(presentation_dc);
-    if (source_dc != NULL)
-        lpDDS_Offscreen->ReleaseDC(source_dc);
-
-    RECT presentation_src = {0, 0, client_w, client_h};
-    RECT presentation_dest = presentation_src;
-    POINT pt = {0, 0};
-    ClientToScreen(hWnd_Main, &pt);
-    OffsetRect(&presentation_dest, pt.x, pt.y);
-
-    do {
-        hr = lpDDS_Primary->Blt(&presentation_dest, s_PresentationSurface,
-                                &presentation_src, DDBLT_WAIT, NULL);
-        if (hr == DDERR_SURFACELOST) {
-            Restore_Surfaces();
-            return;
-        }
-    } while (hr == DDERR_WASSTILLDRAWING);
+    RenderBackend_Present(&framebuffer);
 }
 
 /* ===== Render_Game_View_To - Draw menu items onto a target buffer ===== */
 /* Called every frame by Render_Frame on the scratch buffer.
- * Original pipeline: Lock DDraw surface → copy Software_Buffer (clean bg) →
- *   draw menu items fresh onto surface → unlock → Blt.
- * COMPAT: Scratch buffer replaces the DDraw surface. */
+ * The scratch framebuffer replaces the original locked DirectDraw surface. */
 static int Menu_Text_Width(const char *str, int font_idx)
 {
     int width = 0;
@@ -1040,8 +781,9 @@ static int Menu_Text_Width(const char *str, int font_idx)
     return width;
 }
 
-void Render_Game_View_To(unsigned short *frame)
+void Render_Game_View_To(Framebuffer *framebuffer)
 {
+    unsigned short *frame = framebuffer != NULL ? framebuffer->pixels : NULL;
     if (!frame || !g_GameViewData)
         return;
 

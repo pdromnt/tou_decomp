@@ -5211,30 +5211,16 @@ hover_decay:
     }
 }
 
-/* ===== FUN_0042fc40 — Create Offscreen Surface (0042FC40) ===== */
-/* Creates a 640x480 DDSCAPS_OFFSCREENPLAIN surface via IDirectDraw::CreateSurface.
- * Result stored in DAT_00481d44. Returns 1 on success, 0 on failure. */
+/* ===== FUN_0042fc40 — Create backend game surface (0042FC40) ===== */
 int FUN_0042fc40(void)
 {
-    DDSURFACEDESC ddsd;
-    memset(&ddsd, 0, sizeof(ddsd));
-    ddsd.dwSize = sizeof(DDSURFACEDESC);         /* 0x6c */
-    ddsd.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH; /* 7 */
-    ddsd.dwHeight = 480;                          /* 0x1e0 */
-    ddsd.dwWidth = 640;                           /* 0x280 */
-    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN; /* 0x40 */
-
-    HRESULT hr = lpDD->CreateSurface(&ddsd, &DAT_00481d44, NULL);
-    return (hr == DD_OK) ? 1 : 0;
+    return RenderBackend_CreateGameSurface();
 }
 
 /* ===== FUN_0042fc10 — Release Offscreen Surface (0042FC10) ===== */
 void FUN_0042fc10(void)
 {
-    if (lpDD != NULL && DAT_00481d44 != NULL) {
-        DAT_00481d44->Release();
-        DAT_00481d44 = NULL;
-    }
+    RenderBackend_ReleaseGameSurface();
 }
 /* ===== FUN_0045c300 — Game Mode Presets (0045C300) ===== */
 /* Applies preset config overrides based on DAT_00483739 (game mode index 1-6).

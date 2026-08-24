@@ -14,8 +14,10 @@ static float _DAT_004753e8_fog = 1.0f;
 /* ===== FUN_0040aca0 - Pickup/powerup text display (0040ACA0) ===== */
 /* Shows pickup name near bottom of viewport when player collects an item.
  * player_data[0xCA] selects the string via switch. */
-void FUN_0040aca0(int param_1, int param_2, int param_3)
+void FUN_0040aca0(Framebuffer *framebuffer, int param_3)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     char local_20[32];
     const char *text = NULL;
 
@@ -45,8 +47,10 @@ void FUN_0040aca0(int param_1, int param_2, int param_3)
 /* ===== FUN_004094f0 - Team status text (004094F0) ===== */
 /* Shows team victory/death message near bottom of viewport.
  * DAT_004892a4 == 0xFF: all dead, == player team: your team wins, else: team N wins. */
-void FUN_004094f0(int param_1, int param_2, int param_3)
+void FUN_004094f0(Framebuffer *framebuffer, int param_3)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     char local_34[52];
 
     if ((unsigned char)DAT_004892a4 == 0xFF) {
@@ -74,8 +78,10 @@ void FUN_004094f0(int param_1, int param_2, int param_3)
 /* ===== FUN_00409280 - Timer display (00409280) ===== */
 /* Shows round countdown timer as "M:SS" in top-right of viewport.
  * Multiplayer mode (DAT_0048764a != 0) shows 3 stat fields instead. */
-void FUN_00409280(int param_1, int param_2)
+void FUN_00409280(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     char local_24[12];
     char local_18[12];
     char local_c[12];
@@ -150,8 +156,10 @@ void FUN_00408f90(unsigned int param_1, unsigned short *param_2, int param_3)
 /* Draws a 65x65 semi-transparent radar overlay at viewport top-left.
  * Shows grid lines every 8 pixels and player positions as 3x3 dots.
  * Friend/foe distinguished by palette (same team = 0x0C, different = 0x10). */
-void FUN_004090e0(int param_1, int param_2, unsigned int param_3)
+void FUN_004090e0(Framebuffer *framebuffer, unsigned int param_3)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     if (0x0C >= 100) return;  /* Sanity */
     unsigned short *blend_lut = (unsigned short *)DAT_004876a4[0x0C];
     unsigned short *remap = (unsigned short *)DAT_00489230;
@@ -218,8 +226,10 @@ void FUN_004090e0(int param_1, int param_2, unsigned int param_3)
  *   >40% = green (LUT 0x0C), >20% = yellow (LUT 0x0E), <=20% = red (LUT 0x10).
  * Uses LUT-blended pixel drawing: reads existing pixel, maps through
  * DAT_00489230 (brightness remap), then looks up colored value in palette LUT. */
-void FUN_0040b860(int param_1, int param_2, int param_3)
+void FUN_0040b860(Framebuffer *framebuffer, int param_3)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     int health = Player_Get(param_3)->health;
     if (health <= 0) return;
 
@@ -295,8 +305,10 @@ void FUN_0040b860(int param_1, int param_2, int param_3)
  * Uses DAT_004876a4[1] (edge) and DAT_004876a4[3] (fill) LUTs.
  * Only drawn when shield system is enabled (DAT_00483742 != 0 in caller).
  * Bar height = player[+0x98] / DAT_00483830 * (viewport_height - 50). */
-void FUN_0040b580(int param_1, int param_2, int param_3)
+void FUN_0040b580(Framebuffer *framebuffer, int param_3)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     int shield_val = Player_Get(param_3)->shield_value;
     if (DAT_00483830 == 0) return;
 
@@ -355,9 +367,11 @@ void FUN_0040b580(int param_1, int param_2, int param_3)
  * Two sprites overlaid: background frame + weapon-specific icon.
  * param_5 = weapon type index (into entity type table for icon sprite).
  * param_6: 0=selected (sprite 0xC8), 1=normal (0xD4), 2=empty (0xEF), else=0xEE */
-void FUN_0040aaf0(int param_1, int param_2, int param_3, int param_4,
+void FUN_0040aaf0(Framebuffer *framebuffer, int param_3, int param_4,
                   int param_5, char param_6)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     if (!DAT_00487ab4 || !DAT_00489234 || !DAT_00489e8c || !DAT_00489e88) return;
 
     /* Select background frame sprite */
@@ -443,9 +457,11 @@ void FUN_0040aaf0(int param_1, int param_2, int param_3, int param_4,
  * param_5 = selected Mark + 1 (bright dots 0x6739).
  * param_6 = highest zero-based Mark index (remaining dots are dim 0x2108).
  * Each dot is a 3x4 bordered pixel block. */
-void FUN_0040a710(int param_1, int param_2, int param_3, int param_4,
+void FUN_0040a710(Framebuffer *framebuffer, int param_3, int param_4,
                   int param_5, int param_6)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     if (param_6 <= 0) return;
     if (!DAT_00487ab0) return;
 
@@ -516,8 +532,10 @@ void FUN_0040a710(int param_1, int param_2, int param_3, int param_4,
 /* Displays 3-row x 6-column weapon selection grid centered on viewport.
  * Each cell shows a weapon icon via FUN_0040aaf0.
  * Current weapon highlighted (param_6=0 = selected). */
-void FUN_0040a9e0(int param_1, int param_2, int param_3)
+void FUN_0040a9e0(Framebuffer *framebuffer, int param_3)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     PlayerData *player = Player_Get(param_3);
     int cur_slot = (int)(int8_t)player->weapon_type;
     int total_slots = player->highest_weapon_slot;
@@ -551,7 +569,7 @@ void FUN_0040a9e0(int param_1, int param_2, int param_3)
                 unsigned char weapon_type = player->weapon_slots[slot];
                 char selected = (slot != cur_slot);
 
-                FUN_0040aaf0(param_1, param_2,
+                FUN_0040aaf0(framebuffer,
                              DAT_004806d8 / 2 + x_col - 0x5A + DAT_004806ec,
                              DAT_004806e4 / 2 + y_pos + DAT_004806e8,
                              (int)weapon_type, selected);
@@ -577,8 +595,10 @@ void FUN_0040a9e0(int param_1, int param_2, int param_3)
  * param_1 = framebuffer base address
  * param_2 = stride (pixels per row)
  * param_3 = player index (0-3) */
-void FUN_004095e0(unsigned int param_1, int param_2, int param_3)
+void FUN_004095e0(Framebuffer *framebuffer, int param_3)
 {
+    unsigned int param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     unsigned int step = (unsigned int)(unsigned char)DAT_0048372e;
     PlayerData *player = Player_Get(DAT_004877f8[param_3]);
     int player_x = (player->position_x >> 0x12) - DAT_004806dc;

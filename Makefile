@@ -10,7 +10,7 @@ RCFLAGS = -F pe-i386
 LDFLAGS = -mwindows -lddraw -lwinmm -ldinput -ldxguid -luuid -m32
 
 SRCS = winmain.cpp sound.cpp assets.cpp gameloop.cpp memory.cpp init.cpp \
-       graphics.cpp intro.cpp menu.cpp level.cpp math.cpp sim.cpp utils.cpp \
+       graphics.cpp render_backend.cpp gfx_ddraw.cpp intro.cpp menu.cpp level.cpp math.cpp sim.cpp utils.cpp \
        effects.cpp entity.cpp hud.cpp gg_gen.cpp binary_compat.cpp \
        entity_callbacks.cpp
 # tou_res.o carries the Win32 resource table (icon) produced from tou.rc.
