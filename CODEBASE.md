@@ -200,17 +200,18 @@ the old reconstruction wrote them past the end of the config allocation.
 ## Building and Cleaning
 
 ```powershell
-mingw32-make -j8
-mingw32-make clean
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 8
 ```
 
-The Makefile compiles every C/C++ source as 32-bit and embeds `icon.ico` through
-`tou.rc`. Generated objects, executables, logs, and `dist/` packages are ignored
-by Git.
+The primary CMake build fetches pinned SDL3, links it statically, compiles the
+game as 32-bit, and embeds `icon.ico` through `tou.rc`. The transitional
+Makefile still builds the DirectDraw-only backend. Generated build trees,
+objects, executables, logs, and `dist/` packages are ignored by Git.
 
-`.github/workflows/build.yml` repeats the 32-bit build and PE architecture check
-on pushes and pull requests. It is build-only; publishing remains exclusive to
-the manually dispatched release workflow.
+`.github/workflows/build.yml` repeats the SDL-enabled 32-bit CMake build and PE
+architecture check on pushes and pull requests. It is build-only; publishing
+remains exclusive to the manually dispatched release workflow.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it

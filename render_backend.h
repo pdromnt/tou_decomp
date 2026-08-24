@@ -33,7 +33,11 @@ typedef struct RenderBackend {
 } RenderBackend;
 
 extern const RenderBackend g_DirectDrawRenderBackend;
+#ifdef TOU_HAS_SDL
+extern const RenderBackend g_SdlRenderBackend;
+#endif
 
+int  RenderBackend_SelectByName(const char *name);
 int  RenderBackend_Initialize(void *window_handle);
 int  RenderBackend_Configure(int width, int height);
 void RenderBackend_Shutdown(void);

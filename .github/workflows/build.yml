@@ -20,19 +20,22 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
-      - name: Install 32-bit MinGW
+      - name: Install 32-bit MinGW and CMake
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW32
           update: true
           install: >-
-            make
             mingw-w64-i686-binutils
+            mingw-w64-i686-cmake
             mingw-w64-i686-gcc
+            mingw-w64-i686-ninja
 
       - name: Build game
         shell: msys2 {0}
-        run: make -j2
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel 2
 
       - name: Verify 32-bit executable
         shell: msys2 {0}

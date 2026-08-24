@@ -21,8 +21,10 @@ are delivered together in one larger pull request.
 - Binary compatibility helpers, original RNG ordering, x87 conversion, and
   callback-address dispatch are production code and must survive all refactors.
 - The software renderer now uses typed framebuffer and viewport boundaries,
-  and DirectDraw is isolated behind `RenderBackend`. SDL is the next
-  architectural milestone.
+  and DirectDraw is isolated behind `RenderBackend`. The first SDL3 backend is
+  active: it presents the unchanged RGB565 framebuffer through an SDL texture,
+  with DirectDraw retained as a command-line A/B fallback. SDL-owned windowing,
+  events, input, and audio are the next platform milestones.
 - `GameConfig` is the canonical byte-exact config record, and the main and
   gameplay state machines use named enum values.
 

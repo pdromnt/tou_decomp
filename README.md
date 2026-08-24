@@ -36,7 +36,7 @@ not move the executable away from `fmod.dll` or the asset directories. The game
 creates `options.cfg` beside the executable after first run.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
-`Tunnels of Underworld - RE/Decompiled - v0.3` so it cannot be confused with
+`Tunnels of Underworld - RE/Decompiled - v0.4` so it cannot be confused with
 the original executable.
 
 ## Building on Windows
@@ -44,19 +44,25 @@ the original executable.
 Requirements:
 
 - 32-bit MinGW-w64 GCC/G++
-- GNU Make (`mingw32-make`)
+- CMake 3.24 or newer
+- Ninja or GNU Make
 - `windres`
 - Windows DirectDraw, DirectInput, and WinMM development libraries
 
-Build from the repository root:
+The primary build statically links SDL3 and uses it for framebuffer
+presentation. Build from a 32-bit MinGW environment:
 
 ```powershell
-mingw32-make clean
-mingw32-make -j8
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 8
 ```
 
-The output is `TOU.exe`. `build.bat` performs the same clean build and closes an
-already-running decomp executable first.
+The output is `TOU.exe`. SDL3 is fetched at its pinned release and statically
+linked, so the game does not require a separate SDL DLL. Pass `--directdraw` to
+run the legacy presentation backend for A/B comparison.
+
+The old Makefile remains temporarily available as a DirectDraw-only fallback
+while the platform migration is underway.
 
 The separate `Build` GitHub Actions workflow performs this 32-bit build for
 every push and pull request. It validates the executable architecture but never
@@ -80,9 +86,11 @@ pushes do not trigger releases.
 
 ## Longer-Term Direction
 
-Once the recovered code is easier to maintain, likely follow-up work includes
-an SDL renderer/input/audio port, Linux/macOS/browser support, gamepads,
-non-split-screen netplay, and better tooling for `.lev` and GG level formats.
+The active SDL3 migration is moving presentation, windowing, input, and audio
+behind portable platform boundaries. Native Linux and macOS builds are the
+first portability target; browser support comes only after those are stable.
+Gamepads, non-split-screen netplay, and better tooling for `.lev` and GG level
+formats remain later possibilities.
 
 ## Contributing
 

@@ -10,6 +10,8 @@
 /* 0047F0EC */ #define STR_ERR_DDRAW_INSTALL  "DirectDraw Init FAILED.\nInstall DirectX 7.0 to play TOU.\n\nRead readme.txt for more\ninformation."
 /* 0047EF74 */ #define STR_ERR_DDRAW_MODE     "DirectDraw Init FAILED.\nCouldn't set video mode to 640x480 16-bit.\nYour video card must support this\nresolution to play TOU.\nRead readme.txt for more information"
 /* 0047F098 */ #define STR_ERR_DDRAW_MEMORY   "DirectDraw Init FAILED.\nNot enough memory.\n\nRead readme.txt for more\ninformation."
+/* COMPAT */   #define STR_ERR_RENDER_INIT    "Video renderer initialization failed.\n\nRun with --logging for details.\nUse --directdraw to try the legacy backend."
+/* COMPAT */   #define STR_ERR_RENDER_MODE    "Video renderer configuration failed.\n\nRun with --logging for details.\nUse --directdraw to try the legacy backend."
 /* 0047F058 */ #define STR_ERR_DINPUT         "DirectInput Init FAILED.\n\nRead readme.txt for more\ninformation."
 /* 0047F048 */ #define STR_ERR_UNKNOWN        "Unknown error."
 /* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."

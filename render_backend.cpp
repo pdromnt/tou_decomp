@@ -1,6 +1,28 @@
 #include "render_backend.h"
+#include <string.h>
 
+#ifdef TOU_HAS_SDL
+static const RenderBackend *s_Backend = &g_SdlRenderBackend;
+#else
 static const RenderBackend *s_Backend = &g_DirectDrawRenderBackend;
+#endif
+
+int RenderBackend_SelectByName(const char *name)
+{
+    if (name == NULL)
+        return 0;
+#ifdef TOU_HAS_SDL
+    if (strcmp(name, "sdl") == 0) {
+        s_Backend = &g_SdlRenderBackend;
+        return 1;
+    }
+#endif
+    if (strcmp(name, "directdraw") == 0) {
+        s_Backend = &g_DirectDrawRenderBackend;
+        return 1;
+    }
+    return 0;
+}
 
 int RenderBackend_Initialize(void *window_handle)
 {

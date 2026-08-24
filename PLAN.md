@@ -71,7 +71,7 @@ investigation; it is not part of release packages.
 
 The original executable is fullscreen-only. The decomp supports windowed and
 fullscreen modes for compatibility and is titled
-`Tunnels of Underworld - RE/Decompiled - v0.3`. That is intentional platform
+`Tunnels of Underworld - RE/Decompiled - v0.4`. That is intentional platform
 behavior, not an unresolved gameplay discrepancy.
 
 ## Merge Gates

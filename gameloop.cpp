@@ -133,7 +133,7 @@ void Game_State_Manager(void)
             iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
-                MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
+                MessageBoxA(hWnd_Main, STR_ERR_RENDER_MODE, STR_TITLE, MB_ICONERROR);
                 DestroyWindow(hWnd_Main);
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
@@ -220,7 +220,7 @@ void Game_State_Manager(void)
             iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
-                MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
+                MessageBoxA(hWnd_Main, STR_ERR_RENDER_MODE, STR_TITLE, MB_ICONERROR);
                 DestroyWindow(hWnd_Main);
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;

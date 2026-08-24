@@ -194,6 +194,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (lpCmdLine && strstr(lpCmdLine, "--logging")) {
         g_LogEnabled = 1;
     }
+    if (lpCmdLine && strstr(lpCmdLine, "--directdraw")) {
+        RenderBackend_SelectByName("directdraw");
+    }
+    if (lpCmdLine && strstr(lpCmdLine, "--sdl")) {
+        RenderBackend_SelectByName("sdl");
+    }
 
     /* 1. Early init - before anything else */
     Early_Init_Vars();
@@ -280,7 +286,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     iVar1 = RenderBackend_Initialize(hWnd);
     if (iVar1 == 0) {
         RenderBackend_Shutdown();
-        MessageBoxA(hWnd, STR_ERR_DDRAW_INSTALL, STR_TITLE, MB_ICONERROR);
+        MessageBoxA(hWnd, STR_ERR_RENDER_INIT, STR_TITLE, MB_ICONERROR);
         DestroyWindow(hWnd);
         timeEndPeriod(1);
         return 0;
