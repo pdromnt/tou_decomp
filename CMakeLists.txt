@@ -4,6 +4,11 @@ project(TunnelsOfUnderworld LANGUAGES C CXX)
 
 include(FetchContent)
 
+if(MSVC)
+    # Release archives are self-contained and must not require the VC runtime.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
