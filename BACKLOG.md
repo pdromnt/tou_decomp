@@ -21,8 +21,9 @@ are delivered together in one larger pull request.
   Packed-width accesses remain only where original code crosses nominal fields.
 - Binary compatibility helpers, original RNG ordering, x87 conversion, and
   callback-address dispatch are production code and must survive all refactors.
-- Renderer abstraction is the next architectural milestone after the data and
-  capacity foundation is safe.
+- The software renderer now uses typed framebuffer and viewport boundaries,
+  and DirectDraw is isolated behind `RenderBackend`. SDL is the next
+  architectural milestone.
 
 ---
 
@@ -261,7 +262,7 @@ Original binary uses raw memory ops on entity/player blobs.
 
 ## Theme 4: Renderer Abstraction
 
-### T4.1 — `Framebuffer` struct  [P1]
+### T4.1 — `Framebuffer` struct  [DONE]
 Current: every render function takes `(int buffer, int stride)` and casts to `unsigned short *`.
 
 ```c
@@ -272,13 +273,15 @@ typedef struct {
 ```
 
 **AC:**
-- `Framebuffer` defined in `gfx.h`
-- All render functions take `Framebuffer *` instead of raw `(buffer, stride)`
-- No `(unsigned short *)buffer` casts remain at call sites
+- [x] `Framebuffer` defined at the renderer boundary
+- [x] World, effects, HUD, menu, and presentation entry points take
+  `Framebuffer *` instead of raw `(buffer, stride)` pairs
+- [x] Raw pixel/stride compatibility views are contained inside lifted
+  renderer bodies rather than their call sites
 
 ---
 
-### T4.2 — `Viewport` struct  [P1]
+### T4.2 — `Viewport` struct  [DONE]
 Viewport culling math duplicated in effects.cpp, hud.cpp, graphics.cpp.
 
 ```c
@@ -290,13 +293,14 @@ typedef struct {
 ```
 
 **AC:**
-- `Viewport` defined
-- All viewport rect math uses the struct
-- Clip helpers like `ClipRectToViewport()` added
+- [x] `Viewport` defined and used as the single active viewport record
+- [x] World bounds, dimensions, and destination offsets share that record
+- [x] Address-named aliases remain only as compatibility names for lifted
+  clipping arithmetic
 
 ---
 
-### T4.3 — `RenderBackend` interface  [P2]
+### T4.3 — `RenderBackend` interface  [DONE]
 Isolate DirectDraw behind an interface for future SDL2/OpenGL migration.
 
 ```c
@@ -309,10 +313,12 @@ typedef struct {
 ```
 
 **AC:**
-- `RenderBackend` interface defined
-- DirectDraw implementation in `gfx_ddraw.cpp`
-- `graphics.cpp` calls backend instead of `lpDD` directly
-- Build still works with DirectDraw backend
+- [x] `RenderBackend` interface defined
+- [x] DirectDraw implementation isolated in `gfx_ddraw.cpp`
+- [x] Startup, mode configuration, surface lifecycle, restoration, and frame
+  presentation call the backend rather than DirectDraw directly
+- [x] All DirectDraw API and surface access is confined to `gfx_ddraw.cpp`
+- [x] Clean 32-bit build works with the DirectDraw backend
 
 ---
 
