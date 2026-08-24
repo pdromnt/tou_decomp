@@ -44,7 +44,7 @@ jobs:
         run: objdump -f stage/TOU.exe | grep -q "file format pei-i386"
 
       - name: Upload staged build
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: tou-windows-x86
           path: stage
@@ -164,7 +164,7 @@ jobs:
           }
 
       - name: Upload staged build
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: tou-${{ matrix.platform }}
           path: stage

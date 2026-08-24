@@ -82,7 +82,7 @@ jobs:
           -ExecutablePath stage/TOU.exe
 
       - name: Upload release archive
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-windows-x86
           path: dist/*
@@ -204,7 +204,7 @@ jobs:
           -ExecutablePath ${{ matrix.executable }}
 
       - name: Upload release archive
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}
           path: dist/*
@@ -217,7 +217,7 @@ jobs:
 
     steps:
       - name: Download release archives
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: release-*
           path: release-assets
@@ -227,6 +227,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           TAG_EXISTS: ${{ needs.prepare.outputs.tag_exists }}
           SOURCE_REF: ${{ needs.prepare.outputs.source_ref }}
@@ -239,11 +240,21 @@ jobs:
             throw "Expected 7 release archives, found $($archives.Count)"
           }
 
+          # A missing release is expected on the first run. PowerShell 7.4+
+          # can otherwise promote that native non-zero exit into a terminating
+          # error before the create branch is reached.
+          $PSNativeCommandUseErrorActionPreference = $false
           gh release view $env:RELEASE_TAG *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
             & gh release upload $env:RELEASE_TAG @archives --clobber
           } elseif ($env:TAG_EXISTS -eq "true") {
             & gh release create $env:RELEASE_TAG @archives --verify-tag --generate-notes
           } else {
             & gh release create $env:RELEASE_TAG @archives --target $env:SOURCE_REF --generate-notes
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub release publish failed with exit code $LASTEXITCODE"
           }
