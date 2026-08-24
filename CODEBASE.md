@@ -12,8 +12,8 @@ changing its representation**. A build passing does not prove gameplay parity.
 ## Runtime Shape
 
 `WinMain` initializes platform services and game data, then enters the main game
-loop. SDL3 owns the primary window and event queue; a native `HWND` bridge
-remains temporarily for DirectInput, DirectDraw fallback, and legacy dialogs.
+loop. SDL3 owns the primary window, event queue, keyboard, and mouse; a native
+`HWND` bridge remains temporarily for DirectDraw fallback and legacy dialogs.
 The broad flow is:
 
 ```text
@@ -48,6 +48,7 @@ rendering code do not access either backend's objects.
 | --- | --- |
 | `winmain.cpp` | Transitional Windows entry point and application lifecycle |
 | `platform_sdl.cpp` | SDL window, display modes, event queue, native-handle bridge |
+| `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
 | `config.h` | Byte-exact typed `options.cfg` layout and recovered field aliases |
@@ -74,7 +75,7 @@ rendering code do not access either backend's objects.
 | `tou.h` | Aggregate include retained while source files migrate to narrower headers |
 | `types.h` | Shared recovered structures |
 | `gfx.h` | Graphics, assets, typed framebuffer/viewport, effects, and HUD declarations |
-| `input.h` | DirectInput and keyboard/mouse declarations |
+| `input.h` | Shared legacy scan-code state and keyboard/mouse declarations |
 | `sound.h` | FMOD-facing audio declarations |
 | `level.h` | Level data, loading, and GG generator declarations |
 | `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |

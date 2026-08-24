@@ -2262,19 +2262,23 @@ void FUN_00425fe0(void)
          * after the DDraw transition. WM_MOUSEMOVE releases this capture on
          * the first real movement. */
         if (DAT_004877a4 == 0x13) {
+#ifndef TOU_HAS_SDL
             HWND captured = SetCapture(hWnd_Main);
             LOG("[SCOREBOARD CURSOR] capture previous=%p current=%p active=%d "
                 "foreground=%p focus=%p logical=(%d,%d) palette=%04X/%04X/%04X\n",
                 captured, GetCapture(), g_bIsActive, GetForegroundWindow(), GetFocus(),
                 g_MouseDeltaX >> 18, g_MouseDeltaY >> 18,
                 DAT_00483838[0], DAT_00483838[1], DAT_00483838[2]);
+#endif
         }
     }
 
     /* ---- Reset per-frame click state ---- */
     DAT_004877bc = 0;
 
-    /* ---- Poll keyboard via DirectInput ---- */
+    /* ---- Poll keyboard via DirectInput in the legacy build. The SDL build
+     * refreshes the same 256-byte state once per application tick. ---- */
+#ifndef TOU_HAS_SDL
     if (lpDI_Keyboard != NULL) {
         HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
         if (FAILED(hr)) {
@@ -2296,6 +2300,7 @@ void FUN_00425fe0(void)
     if (lpDI_Mouse != NULL) {
         lpDI_Mouse->Acquire();
     }
+#endif
 
     /* ---- F12 (scan 0x58): immediate exit ---- */
     if ((g_KeyboardState[0x58] & 0x80) != 0) {
@@ -2303,7 +2308,7 @@ void FUN_00425fe0(void)
         DAT_004877a4 = 0xFE;
     }
 
-    /* COMPAT: Sync game cursor and mouse buttons from Windows for windowed mode.
+    /* COMPAT: Sync game cursor and mouse buttons from the platform window.
      * Original used exclusive fullscreen with hidden system cursor;
      * the game rendered its own cursor sprite at (g_MouseDeltaX>>18, g_MouseDeltaY>>18).
      * In windowed mode, DirectInput reports relative deltas which desync from the
@@ -2311,6 +2316,20 @@ void FUN_00425fe0(void)
      * during state transitions (DDraw surface recreation, etc.), causing
      * g_MouseButtons to become stale. Use Win32 API for both position and buttons. */
     {
+#ifdef TOU_HAS_SDL
+        int pointer_x = 0;
+        int pointer_y = 0;
+        unsigned char pointer_buttons = 0;
+        int pointer_inside = Input_GetMouseState(&pointer_x, &pointer_y,
+                                                 &pointer_buttons);
+        if (g_bIsActive && g_InputMode == 0 && pointer_inside) {
+            int game_x, game_y;
+            Client_To_Game_Coordinates(pointer_x, pointer_y, &game_x, &game_y);
+            g_MouseDeltaX = game_x << 18;
+            g_MouseDeltaY = game_y << 18;
+        }
+        g_MouseButtons = (char)pointer_buttons;
+#else
         POINT pt;
         RECT client;
         GetCursorPos(&pt);
@@ -2329,6 +2348,7 @@ void FUN_00425fe0(void)
         g_MouseButtons = 0;
         if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
         if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g_MouseButtons |= 2;
+#endif
 
         /* COMPAT: Fallback slider delta from cursor position.
          * Input_Update accumulates DAT_004877e8 from DirectInput mouse
@@ -2341,19 +2361,62 @@ void FUN_00425fe0(void)
             /* DirectInput normally supplied this delta earlier in the frame.
              * Only use the Win32 path when no DInput X event arrived, or the
              * same physical movement is counted twice. */
-            if (s_lastCursorX >= 0 && !g_DirectInputMouseXSeen) {
+            if (s_lastCursorX >= 0
+#ifndef TOU_HAS_SDL
+                && !g_DirectInputMouseXSeen
+#endif
+            ) {
+#ifdef TOU_HAS_SDL
+                int dx = pointer_x - s_lastCursorX;
+#else
                 int dx = pt.x - s_lastCursorX;
+#endif
                 DAT_004877e8 += dx * 0x80;
             }
+#ifdef TOU_HAS_SDL
+            s_lastCursorX = pointer_x;
+#else
             s_lastCursorX = pt.x;
+#endif
         } else {
             s_lastCursorX = -1;
         }
     }
 
     /* ---- Input processing ---- */
+    /* Key-bind capture keeps the original DirectInput scan-code contract:
+     * scan the whole state, use the last pressed key, reserve Escape for
+     * cancel, and handle Right Ctrl separately because it is also the menu's
+     * keyboard equivalent of a primary click. */
+    if (g_InputMode == 2) {
+        int selected_scan_code = 0x100;
+        for (int scan_code = 0; scan_code < 0x100; scan_code++) {
+            if ((g_KeyboardState[scan_code] & 0x80) != 0 && scan_code != 0x9D)
+                selected_scan_code = scan_code;
+        }
+
+        if ((g_KeyboardState[0x9D] & 0x80) != 0) {
+            if ((DAT_004877bd & 1) == 0) {
+                DAT_004877bd |= 1;
+                selected_scan_code = 0x9D;
+            }
+        } else if ((DAT_004877bd & 1) != 0) {
+            DAT_004877bd ^= 1;
+        }
+
+        if (selected_scan_code != 0x100) {
+            DAT_004877e8 = selected_scan_code;
+            DAT_004877e5 = 1;
+        }
+        if ((g_KeyboardState[0x01] & 0x80) != 0) {
+            DAT_004877e8 = 0x100;
+            DAT_004877e5 = 1;
+            DAT_004877bd |= 8;
+        }
+    }
+
     /* Mode 0: arrow keys move viewport. Mode 1: arrow keys adjust drag delta.
-     * Both modes share the click/release detection code below. */
+     * All modes share the click/release detection code below. */
     if (g_InputMode == 0) {
         /* Arrow key viewport movement (time-based speed) */
         int spd = (int)DAT_004877f0;
@@ -6421,6 +6484,9 @@ MainInit:
 /* ===== Init_DirectInput (004620F0) ===== */
 int Init_DirectInput(void)
 {
+#ifdef TOU_HAS_SDL
+    return 1;
+#else
     HRESULT hr;
     DIPROPDWORD dipdw;
 
@@ -6499,4 +6565,5 @@ cleanup:
         hMouseEvent = NULL;
     }
     return 0;
+#endif
 }

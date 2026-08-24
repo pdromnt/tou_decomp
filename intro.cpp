@@ -247,10 +247,10 @@ void Intro_Sequence(void)
         return;
     }
 
-    /* Check for skip via keyboard (DirectInput in original, simplified here) */
-    if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) ||
-        (GetAsyncKeyState(VK_SPACE) & 0x8000) ||
-        (GetAsyncKeyState(VK_RETURN) & 0x8000)) {
+    /* Legacy scan-code state is populated by DirectInput or the SDL adapter. */
+    if ((g_KeyboardState[0x01] & 0x80) ||
+        (g_KeyboardState[0x39] & 0x80) ||
+        (g_KeyboardState[0x1C] & 0x80)) {
         /* Clear intro particles/entities so they don't bleed into menu */
         g_ParticleCount = 0;  /* particle count */
         g_EntityCount = 0;  /* entity count */

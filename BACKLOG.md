@@ -24,8 +24,9 @@ are delivered together in one larger pull request.
   and DirectDraw is isolated behind `RenderBackend`. The first SDL3 backend is
   active: it presents the unchanged RGB565 framebuffer through an SDL texture,
   with DirectDraw retained as a command-line A/B fallback. SDL now also owns
-  the window, display modes, and event queue. DirectInput, the Win32 entry point,
-  native dialogs/focus bridges, and FMOD remain transitional dependencies.
+  the window, display modes, event queue, keyboard, and mouse. The Win32 entry
+  point, native dialogs/focus bridges, DirectDraw fallback, and FMOD remain
+  transitional dependencies.
 - `GameConfig` is the canonical byte-exact config record, and the main and
   gameplay state machines use named enum values.
 
@@ -420,8 +421,9 @@ typedef struct {
 
 ## Theme 8: Input Abstraction
 
-### T8.1 — `InputDevice` interface  [P2]
-Abstract DirectInput so keyboard/mouse/gamepad can coexist.
+### T8.1 — SDL input adapter  [DONE]
+SDL now supplies keyboard and mouse state to the recovered game code while
+preserving the 256-entry DirectInput scan-code namespace used by saved configs.
 
 ```c
 typedef struct {
@@ -432,9 +434,10 @@ typedef struct {
 ```
 
 **AC:**
-- Interface defined; DI implementation in `input_dinput.cpp`
-- `Input_Update()` calls through interface
-- Windowed fallback (`GetCursorPos`/`GetAsyncKeyState`) moved into interface implementation
+- [x] Primary CMake build has no DirectInput runtime import
+- [x] Existing `options.cfg` key bindings keep their physical-key meanings
+- [x] Menu mouse position, buttons, slider dragging, and key capture use SDL
+- [x] Legacy Makefile retains its DirectInput comparison path
 
 ---
 
@@ -517,7 +520,7 @@ DirectDraw remains selectable with `--directdraw` for parity comparisons.
 - [x] Software framebuffer uploaded through an SDL streaming texture
 - [x] SDL owns windowed/fullscreen transitions and event pumping
 - [x] Windowed mode works without a DirectDraw presentation path
-- [ ] DirectInput replaced by SDL input
+- [x] DirectInput replaced by SDL input
 - [ ] Win32 entry point and native window bridge removed
 - [ ] FMOD replaced by a portable audio backend
 - [ ] Native Windows, Linux, and macOS builds pass

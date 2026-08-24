@@ -1,8 +1,8 @@
 /* SDL-owned window and event boundary.
  *
- * The native window handle remains exposed temporarily for DirectInput,
- * DirectDraw fallback, Win32 dialogs, and a few focus/capture compatibility
- * paths. Those consumers can disappear independently in later passes. */
+ * The native window handle remains exposed temporarily for DirectDraw fallback,
+ * Win32 dialogs, and a few focus compatibility paths. Those consumers can
+ * disappear independently in later passes. */
 #include "tou.h"
 #include "platform.h"
 #include <SDL3/SDL.h>

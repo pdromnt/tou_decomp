@@ -41,6 +41,7 @@ static void Set_Focus_Audio_Muted(int muted)
 
 static void Release_Legacy_Input(void)
 {
+#ifndef TOU_HAS_SDL
     if (lpDI_Mouse != NULL) {
         lpDI_Mouse->Unacquire();
         lpDI_Mouse->Release();
@@ -59,6 +60,7 @@ static void Release_Legacy_Input(void)
         CloseHandle(hMouseEvent);
         hMouseEvent = NULL;
     }
+#endif
 }
 
 static void Shutdown_Runtime(void)
@@ -75,6 +77,7 @@ static void Handle_App_Focus(int active)
 {
     g_bIsActive = active ? 1 : 0;
     if (g_bIsActive) {
+#ifndef TOU_HAS_SDL
         HRESULT mouse_hr = DI_OK;
         HRESULT keyboard_hr = DI_OK;
         if (lpDI_Mouse != NULL) mouse_hr = lpDI_Mouse->Acquire();
@@ -83,9 +86,14 @@ static void Handle_App_Focus(int active)
         LOG("[FOCUS] activate state=%u page=%u mouse=0x%08lX keyboard=0x%08lX\n",
             (unsigned int)g_GameState, (unsigned int)DAT_004877a4,
             (unsigned long)mouse_hr, (unsigned long)keyboard_hr);
+#else
+        LOG("[FOCUS] activate state=%u page=%u\n",
+            (unsigned int)g_GameState, (unsigned int)DAT_004877a4);
+#endif
     } else {
-        if (GetCapture() == hWnd_Main)
-            ReleaseCapture();
+#ifndef TOU_HAS_SDL
+        if (GetCapture() == hWnd_Main) ReleaseCapture();
+#endif
         if (g_GameState == GAME_STATE_GAMEPLAY && g_SubState == GAMEPLAY_ACTIVE) {
             g_SubState = GAMEPLAY_PAUSED;
             g_NeedsRedraw = 1;
@@ -112,11 +120,15 @@ static void Handle_Mouse_Motion(int client_x, int client_y)
                  mouse_y != (g_MouseDeltaY >> 18));
     g_MouseDeltaX = mouse_x << 18;
     g_MouseDeltaY = mouse_y << 18;
+#ifndef TOU_HAS_SDL
     if (moved && DAT_004877a4 == 0x13 && GetCapture() == hWnd_Main) {
         LOG("[SCOREBOARD CURSOR] first motion=(%d,%d), releasing capture\n",
             mouse_x, mouse_y);
         ReleaseCapture();
     }
+#else
+    (void)moved;
+#endif
 }
 
 void Request_App_Quit(void)
@@ -354,7 +366,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     Platform_ShowWindow();
 #endif
 
-    /* 6. Init DirectInput */
+    /* 6. Initialize legacy input only for the DirectDraw comparison build. */
+#ifndef TOU_HAS_SDL
     LOG("[INIT] Init_DirectInput...\n");
     iVar1 = Init_DirectInput();
     LOG("[INIT] Init_DirectInput returned %d\n", iVar1);
@@ -367,6 +380,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     iVar1 = Handle_Init_Error(hWnd, uVar3);
     if (iVar1 != 0) {
         /* Dead code in original binary - Handle_Init_Error always returns 0 */
+#else
+    {
+#endif
 MAIN_LOOP:
         LOG("[INIT] Entering MAIN_LOOP\n");
         g_MouseButtons = 0;
@@ -429,6 +445,9 @@ MAIN_LOOP:
                 Sleep(1);
             } else {
                 /* App is active - run game */
+#ifdef TOU_HAS_SDL
+                Input_UpdateKeyboardState();
+#endif
                 /* COMPAT: Sync cursor from Windows position for windowed mode.
                  * Must run for ALL game states (menu can be at g_GameState 0 or 1).
                  * Overrides DirectInput relative deltas with absolute Win32 coords. */

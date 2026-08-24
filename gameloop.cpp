@@ -4,7 +4,9 @@
  *            Handle_Menu_State=004611D0, Game_Update_Render=00461710
  */
 #include "tou.h"
+#ifndef TOU_HAS_SDL
 #include <dinput.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 
@@ -34,6 +36,10 @@ char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
 /* ===== Input_Update (00462560) - Mouse polling via DirectInput ===== */
 void Input_Update(void)
 {
+#ifdef TOU_HAS_SDL
+    /* SDL mouse state is sampled through Input_GetMouseState in the menu loop. */
+    g_DirectInputMouseXSeen = 0;
+#else
     DIDEVICEOBJECTDATA didod;
     DWORD dwElements;
     HRESULT hr;
@@ -103,14 +109,17 @@ void Input_Update(void)
             break;
         }
     }
+#endif
 }
 
 /* ===== Game_State_Manager (00461260) ===== */
 void Game_State_Manager(void)
 {
     int iVar2;
+#ifndef TOU_HAS_SDL
     HRESULT mouse_hr;
     HRESULT keyboard_hr;
+#endif
 
     switch (g_GameState) {
     case GAME_STATE_RENDER_GAMEPLAY:
@@ -171,6 +180,7 @@ void Game_State_Manager(void)
         SetActiveWindow(hWnd_Main);
         SetFocus(hWnd_Main);
 
+#ifndef TOU_HAS_SDL
         mouse_hr = DI_OK;
         keyboard_hr = DI_OK;
         if (lpDI_Mouse != NULL)
@@ -184,6 +194,9 @@ void Game_State_Manager(void)
             GetForegroundWindow(), hWnd_Main, GetFocus(), g_bIsActive,
             (unsigned long)mouse_hr, (unsigned long)keyboard_hr,
             (unsigned int)DAT_004877a4);
+#else
+        g_bIsActive = 1;
+#endif
 
         FUN_00425fe0();
         return;
@@ -469,7 +482,9 @@ static void Gameplay_Tick(void)
  *   101 = game over */
 void Game_Update_Render(void)
 {
-    /* ---- Read keyboard via DirectInput ---- */
+    /* ---- Read keyboard via DirectInput in the legacy build. SDL refreshes
+     * g_KeyboardState once per main-loop tick. ---- */
+#ifndef TOU_HAS_SDL
     if (g_ProcessInput != 0 && lpDI_Keyboard != NULL) {
         HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
         if (FAILED(hr)) {
@@ -479,6 +494,7 @@ void Game_Update_Render(void)
             memset(g_KeyboardState, 0, 256);
         }
     }
+#endif
 
     /* NOTE: Cursor sync (GetCursorPos/ScreenToClient) moved to WinMain main loop
      * so it runs for ALL game states, not just g_GameState==0. */

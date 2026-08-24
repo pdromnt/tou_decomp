@@ -26,6 +26,7 @@ set(TOU_SOURCES
     gameloop.cpp
     memory.cpp
     init.cpp
+    input_sdl.cpp
     graphics.cpp
     platform_sdl.cpp
     render_backend.cpp
@@ -56,9 +57,6 @@ target_link_libraries(TOU PRIVATE
     SDL3::SDL3
     ddraw
     winmm
-    dinput
-    dxguid
-    uuid
 )
 
 set_target_properties(TOU PROPERTIES

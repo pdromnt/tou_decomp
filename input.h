@@ -19,6 +19,13 @@ extern unsigned char         DAT_004877e6;      /* 004877E6 - input mode item in
 extern int                   DAT_004877e8;
 extern char                  g_DirectInputMouseXSeen;
 
+/* SDL input adapter. It intentionally emits the legacy DirectInput scan-code
+ * layout so saved bindings and recovered gameplay code remain unchanged. */
+#ifdef TOU_HAS_SDL
+void Input_UpdateKeyboardState(void);
+int  Input_GetMouseState(int *x, int *y, unsigned char *buttons);
+#endif
+
 /* ===== Configurable Key Scan Codes (from config blob) ===== */
 
 #endif /* TOU_INPUT_H */

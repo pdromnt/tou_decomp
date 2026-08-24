@@ -47,7 +47,7 @@ Requirements:
 - CMake 3.24 or newer
 - Ninja or GNU Make
 - `windres`
-- Windows DirectDraw, DirectInput, and WinMM development libraries
+- Windows DirectDraw and WinMM development libraries
 
 The primary build statically links SDL3 and uses it for framebuffer
 presentation. Build from a 32-bit MinGW environment:
@@ -61,8 +61,8 @@ The output is `TOU.exe`. SDL3 is fetched at its pinned release and statically
 linked, so the game does not require a separate SDL DLL. Pass `--directdraw` to
 run the legacy presentation backend for A/B comparison.
 
-The old Makefile remains temporarily available as a DirectDraw-only fallback
-while the platform migration is underway.
+The old Makefile remains temporarily available as a DirectDraw/DirectInput
+fallback while the platform migration is underway.
 
 The separate `Build` GitHub Actions workflow performs this 32-bit build for
 every push and pull request. It validates the executable architecture but never
