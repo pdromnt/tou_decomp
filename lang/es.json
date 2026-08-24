@@ -22,6 +22,18 @@
     "menu.333.mode": "Modo",
     "menu.334.windowed": "Ventana",
     "menu.335.fullscreen": "Pantalla completa",
-    "menu.336.language": "Idioma"
+    "menu.336.language": "Idioma",
+    "menu.092.level_amount": "Cantidad de niveles",
+    "menu.093.randomize_levels": "Aleatorizar niveles",
+    "menu.234.level_options": "Opciones del nivel",
+    "levels.hover.gg_author_format": "AUTOR DEL TEMA GG: %s",
+    "levels.hover.gg_name_format": "NOMBRE DEL TEMA GG: %s",
+    "levels.hover.level_author_format": "AUTOR DEL NIVEL: %s",
+    "levels.hover.level_name_format": "NOMBRE DEL NIVEL: %s",
+    "levels.hover.author_email_format": "CORREO DEL AUTOR: %s",
+    "levels.hover.level_type_format": "TIPO DE NIVEL: %s",
+    "levels.hover.type.gg_theme": "TEMA GG",
+    "levels.hover.type.normal_level": "NIVEL NORMAL",
+    "levels.summary_format": "Tienes %d niveles y %d temas GG"
   }
 }

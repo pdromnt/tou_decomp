@@ -22,6 +22,18 @@
     "menu.333.mode": "Tila",
     "menu.334.windowed": "Ikkuna",
     "menu.335.fullscreen": "Koko näyttö",
-    "menu.336.language": "Kieli"
+    "menu.336.language": "Kieli",
+    "menu.092.level_amount": "Kenttien määrä",
+    "menu.093.randomize_levels": "Sekoita kentät",
+    "menu.234.level_options": "Kenttäasetukset",
+    "levels.hover.gg_author_format": "GG-TEEMAN TEKIJÄ: %s",
+    "levels.hover.gg_name_format": "GG-TEEMAN NIMI: %s",
+    "levels.hover.level_author_format": "KENTÄN TEKIJÄ: %s",
+    "levels.hover.level_name_format": "KENTÄN NIMI: %s",
+    "levels.hover.author_email_format": "TEKIJÄN SÄHKÖPOSTI: %s",
+    "levels.hover.level_type_format": "KENTÄN TYYPPI: %s",
+    "levels.hover.type.gg_theme": "GG-TEEMA",
+    "levels.hover.type.normal_level": "NORMAALI KENTTÄ",
+    "levels.summary_format": "Sinulla on %d kenttää ja %d GG-teemaa"
   }
 }

@@ -22,6 +22,18 @@
     "menu.333.mode": "Modo",
     "menu.334.windowed": "Janela",
     "menu.335.fullscreen": "Tela cheia",
-    "menu.336.language": "Idioma"
+    "menu.336.language": "Idioma",
+    "menu.092.level_amount": "Quantidade de fases",
+    "menu.093.randomize_levels": "Embaralhar fases",
+    "menu.234.level_options": "Opções da fase",
+    "levels.hover.gg_author_format": "AUTOR DO TEMA GG: %s",
+    "levels.hover.gg_name_format": "NOME DO TEMA GG: %s",
+    "levels.hover.level_author_format": "AUTOR DA FASE: %s",
+    "levels.hover.level_name_format": "NOME DA FASE: %s",
+    "levels.hover.author_email_format": "E-MAIL DO AUTOR: %s",
+    "levels.hover.level_type_format": "TIPO DA FASE: %s",
+    "levels.hover.type.gg_theme": "TEMA GG",
+    "levels.hover.type.normal_level": "FASE NORMAL",
+    "levels.summary_format": "Você tem %d fases e %d temas GG"
   }
 }

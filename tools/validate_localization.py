@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from generate_localization import ROOT, read_english
@@ -34,6 +35,11 @@ def main() -> None:
         unknown = set(loaded[locale]) - english_keys
         if unknown:
             raise SystemExit(f"{locale}: unknown keys: {sorted(unknown)}")
+        for key, value in loaded[locale].items():
+            expected = re.findall(r"%(?:%|[-+0-9.]*[a-zA-Z])", loaded["en"][key])
+            actual = re.findall(r"%(?:%|[-+0-9.]*[a-zA-Z])", value)
+            if expected != actual:
+                raise SystemExit(f"{locale}: format placeholders differ for {key}")
     print(f"Validated {len(english_keys)} English keys and {len(CATALOGS) - 1} overlays")
 
 

@@ -110,7 +110,7 @@ void *DAT_00486488[LEVEL_CATALOG_CAPACITY] = {0};  /* GG theme directory names *
 static char s_HoverLevelName[128]   = "";
 static char s_HoverLevelAuthor[128] = "";
 static char s_HoverLevelEmail[128]  = "";
-static char s_HoverLevelType[32]    = "";
+static char s_HoverLevelType[96]    = "";
 static int  s_HoveredLevelIdx       = -1;
 static void Update_Level_Hover_Metadata(int level_idx);
 
@@ -2831,8 +2831,12 @@ static void Update_Level_Hover_Metadata(int level_idx)
 
     const char *name = (const char *)DAT_00485090[level_idx];
     int is_gg = (DAT_00485ea0[level_idx] == 2);
-    const char *kind_label = is_gg ? "GG THEME" : "LEVEL";
-    const char *type_value = is_gg ? "GG THEME" : "NORMAL LEVEL";
+    const char *name_format = Text_Get(is_gg ? "levels.hover.gg_name_format" :
+                                               "levels.hover.level_name_format");
+    const char *author_format = Text_Get(is_gg ? "levels.hover.gg_author_format" :
+                                                 "levels.hover.level_author_format");
+    const char *type_value = Text_Get(is_gg ? "levels.hover.type.gg_theme" :
+                                              "levels.hover.type.normal_level");
 
     char author_tmp[128] = "";
     char email_tmp[128]  = "";
@@ -2863,14 +2867,14 @@ static void Update_Level_Hover_Metadata(int level_idx)
         }
     }
 
-    snprintf(s_HoverLevelName,   sizeof(s_HoverLevelName),
-             "%s NAME: %s",   kind_label, name ? name : "");
+    snprintf(s_HoverLevelName, sizeof(s_HoverLevelName),
+             name_format, name ? name : "");
     snprintf(s_HoverLevelAuthor, sizeof(s_HoverLevelAuthor),
-             "%s AUTHOR: %s", kind_label, author_tmp);
+             author_format, author_tmp);
     snprintf(s_HoverLevelEmail,  sizeof(s_HoverLevelEmail),
-             "AUTHOR'S EMAIL: %s", email_tmp);
+             Text_Get("levels.hover.author_email_format"), email_tmp);
     snprintf(s_HoverLevelType,   sizeof(s_HoverLevelType),
-             "LEVEL TYPE: %s", type_value);
+             Text_Get("levels.hover.level_type_format"), type_value);
 }
 
 /* Builds the Options submenu item layout. Extracted so both the
@@ -3469,7 +3473,7 @@ void FUN_0042a470(void)
         FUN_0042fcf0();
         if (g_MenuStrings && g_MenuStrings[0x71])
             FUN_004644af_bounded(g_MenuStrings[0x71], 50,
-                (const unsigned char *)"You have %d levels and %d GG themes",
+                (const unsigned char *)Text_Get("levels.summary_format"),
                 DAT_0048508c, DAT_00486484);
         FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
 
@@ -4377,6 +4381,7 @@ void FUN_00427df0(int param_1, char param_2)
             *data = (unsigned char)index;
             Settings_SetLanguage(code);
             Settings_SaveJson();
+            s_HoveredLevelIdx = -2;
         }
         DAT_004877b1 = 1;
         break;
