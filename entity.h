@@ -113,14 +113,14 @@ extern float                 DAT_0048385c;       /* weather/temperature threshol
 extern int  DAT_00486944[4];       /* per-team stat counters A */
 extern int  DAT_00486954[4];       /* per-team stat counters B */
 extern int  DAT_00486964;          /* team stat counter total */
-extern int  DAT_00486968[80];      /* per-player kills stat array */
-extern int  DAT_00486aa8[80];      /* per-player deaths stat array */
-extern int  DAT_00486be8[80];      /* per-player damage received stats */
-extern int  DAT_00486d28[80];      /* per-player building stats */
-extern int  DAT_00486e68[80];      /* per-player damage dealt stats */
-extern int  DAT_00486fa8[80];      /* per-player distance traveled */
-extern int  DAT_004870e8[80];      /* per-player explosion stats */
-extern int  DAT_00487228[80];      /* per-player pickup counter */
+extern int  DAT_00486968[PLAYER_STORAGE_CAPACITY]; /* per-player kills */
+extern int  DAT_00486aa8[PLAYER_STORAGE_CAPACITY]; /* per-player deaths */
+extern int  DAT_00486be8[PLAYER_STORAGE_CAPACITY]; /* damage received */
+extern int  DAT_00486d28[PLAYER_STORAGE_CAPACITY]; /* building stats */
+extern int  DAT_00486e68[PLAYER_STORAGE_CAPACITY]; /* damage dealt */
+extern int  DAT_00486fa8[PLAYER_STORAGE_CAPACITY]; /* distance traveled */
+extern int  DAT_004870e8[PLAYER_STORAGE_CAPACITY]; /* explosion stats */
+extern int  DAT_00487228[PLAYER_STORAGE_CAPACITY]; /* pickup counter */
 extern char DAT_00483747;           /* weapon auto-release mode flag */
 extern char DAT_00483745;           /* detonation mode flag */
 

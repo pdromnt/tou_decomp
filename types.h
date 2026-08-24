@@ -7,6 +7,8 @@
 /* ===== Structures ===== */
 
 enum RuntimePoolCapacity {
+    GAMEPLAY_PLAYER_CAPACITY = 64,
+    PLAYER_STORAGE_CAPACITY = 80,
     ENTITY_ACTIVE_CAPACITY = 2500,
     ENTITY_STORAGE_CAPACITY = 2600,
     TROOPER_CAPACITY = 400,
@@ -14,6 +16,9 @@ enum RuntimePoolCapacity {
     PARTICLE_CAPACITY = 2000,
     DEBRIS_ITEM_CAPACITY = 100
 };
+
+static_assert(GAMEPLAY_PLAYER_CAPACITY <= PLAYER_STORAGE_CAPACITY,
+              "Selectable players must fit in the original player storage");
 
 /*
  * Original 0x80-byte entity record.

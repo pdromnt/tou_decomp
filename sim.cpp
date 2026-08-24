@@ -21,7 +21,7 @@
 /* ===== Globals defined in this module ===== */
 /* DAT_00487aa8 and DAT_0048781c already defined in memory.cpp */
 /* DAT_0048784c is DAT_00487834[6] in the original binary — aliased via tou.h */
-int   DAT_00487228[80] = {0};  /* per-player pickup counter */
+int   DAT_00487228[PLAYER_STORAGE_CAPACITY] = {0}; /* per-player pickup counter */
 char  DAT_0048372e = 0;        /* fog of war ray resolution (config 0x17D6) */
 char  DAT_0048372f = 0;        /* fog of war sub-option (config 0x17D7) */
 char  DAT_00483730 = 0;        /* fog of war wobble enable (config 0x17D8) */

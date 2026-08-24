@@ -5699,7 +5699,11 @@ void FUN_0041d740(void)
         /* ========== PLAYER AWARDS ========== */
 
         /* --- 1. "Most valuable" - highest kills/damage-taken ratio > 1.4 --- */
-        float ratios[16];
+        /* Original FUN_0041D740 reserves one float for every selectable
+         * player. Its 0x14C-byte local frame plus saved registers covers all
+         * 64 entries; the earlier reconstruction incorrectly used 16 and
+         * smashed the stack when a large match ended. */
+        float ratios[GAMEPLAY_PLAYER_CAPACITY];
         if (playerCount > 0) {
             for (int i = 0; i < (int)playerCount; i++) {
                 if (DAT_00486be8[i] == 0) {

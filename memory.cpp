@@ -132,8 +132,9 @@ void Init_Memory_Pools(void)
     const unsigned int debris_pool_bytes = sizeof(DebrisItemRecord) * DEBRIS_ITEM_CAPACITY;
     DAT_00487830 = static_cast<DebrisItemRecord *>(Mem_Alloc(debris_pool_bytes));
     g_MemoryTracker += debris_pool_bytes;
-    DAT_00487810 = static_cast<unsigned char *>(Mem_Alloc(0x1bf80)); /* 80 x 0x598 */
-    g_MemoryTracker += 0x1bf80;
+    const unsigned int player_pool_bytes = sizeof(PlayerData) * PLAYER_STORAGE_CAPACITY;
+    DAT_00487810 = static_cast<unsigned char *>(Mem_Alloc(player_pool_bytes));
+    g_MemoryTracker += player_pool_bytes;
     DAT_0048780c = Mem_Alloc(0x1400);  /* Ship stats table (80 * 0x40) */
     g_MemoryTracker += 0x1400;
     ALLOC_POOL(DAT_00487818, 0x140);
