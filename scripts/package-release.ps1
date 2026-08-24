@@ -17,7 +17,11 @@ $safeVersion = $Version -replace '[^A-Za-z0-9._-]', '-'
 $safePlatform = $Platform -replace '[^A-Za-z0-9._-]', '-'
 $packageName = "Tunnels-of-Underworld-$safeVersion-$safePlatform"
 $packageRoot = [System.IO.Path]::GetFullPath((Join-Path $distRoot $packageName))
-$archivePath = [System.IO.Path]::GetFullPath((Join-Path $distRoot "$packageName.zip"))
+$isWindowsPackage = $safePlatform.StartsWith(
+    "windows-", [System.StringComparison]::OrdinalIgnoreCase)
+$archiveExtension = if ($isWindowsPackage) { ".zip" } else { ".tar.gz" }
+$archivePath = [System.IO.Path]::GetFullPath(
+    (Join-Path $distRoot "$packageName$archiveExtension"))
 $distPrefix = $distRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
 
 if (-not $packageRoot.StartsWith($distPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -66,5 +70,13 @@ foreach ($relativePath in $requiredDirectories) {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot $relativePath) -Destination $packageRoot -Recurse
 }
 
-Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $archivePath -CompressionLevel Optimal
+if ($isWindowsPackage) {
+    Compress-Archive -Path (Join-Path $packageRoot "*") `
+        -DestinationPath $archivePath -CompressionLevel Optimal
+} else {
+    & tar -czf $archivePath -C $packageRoot .
+    if ($LASTEXITCODE -ne 0) {
+        throw "tar failed with exit code $LASTEXITCODE"
+    }
+}
 Write-Output $archivePath

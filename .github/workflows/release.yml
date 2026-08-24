@@ -67,6 +67,10 @@ jobs:
           cmake --build build --parallel 2
           cmake --install build --prefix stage
 
+      - name: Verify 32-bit executable
+        shell: msys2 {0}
+        run: objdump -f stage/TOU.exe | grep -q "file format pei-i386"
+
       - name: Package runtime
         shell: pwsh
         env:
@@ -81,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: release-windows-x86
-          path: dist/*.zip
+          path: dist/*
           if-no-files-found: error
 
   native:
@@ -96,11 +100,13 @@ jobs:
             platform: windows-x64
             cmake_arch: x64
             executable: stage/TOU.exe
+            expected_machine: "0x8664"
           - name: Windows ARM64
             runner: windows-11-arm
             platform: windows-arm64
             cmake_arch: ARM64
             executable: stage/TOU.exe
+            expected_machine: "0xAA64"
           - name: Linux x64
             runner: ubuntu-24.04
             platform: linux-x64
@@ -151,6 +157,41 @@ jobs:
           cmake --build build --config Release --parallel 2
           cmake --install build --config Release --prefix stage
 
+      - name: Verify Windows executable architecture
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $executable = Resolve-Path -LiteralPath stage/TOU.exe -ErrorAction Stop
+          $stream = [System.IO.File]::OpenRead($executable)
+          $reader = [System.IO.BinaryReader]::new($stream)
+          try {
+            $stream.Position = 0x3c
+            $peOffset = $reader.ReadInt32()
+            $stream.Position = $peOffset + 4
+            $machine = $reader.ReadUInt16()
+          } finally {
+            $reader.Dispose()
+            $stream.Dispose()
+          }
+          $expected = [Convert]::ToUInt16(
+            '${{ matrix.expected_machine }}'.Substring(2), 16)
+          if ($machine -ne $expected) {
+            throw ('Wrong PE machine: expected 0x{0:X4}, found 0x{1:X4}' `
+              -f $expected, $machine)
+          }
+
+      - name: Verify Unix executable architecture
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          file stage/TOU
+          case "${{ matrix.platform }}" in
+            linux-x64) file stage/TOU | grep -q 'x86-64' ;;
+            linux-arm64) file stage/TOU | grep -Eq 'ARM aarch64|ARM64' ;;
+            macos-x64) file stage/TOU | grep -q 'x86_64' ;;
+            macos-arm64) file stage/TOU | grep -q 'arm64' ;;
+          esac
+
       - name: Package runtime
         shell: pwsh
         env:
@@ -165,7 +206,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.platform }}
-          path: dist/*.zip
+          path: dist/*
           if-no-files-found: error
 
   publish:
@@ -189,7 +230,8 @@ jobs:
           TAG_EXISTS: ${{ needs.prepare.outputs.tag_exists }}
           SOURCE_REF: ${{ needs.prepare.outputs.source_ref }}
         run: |
-          $archives = @(Get-ChildItem -LiteralPath release-assets -Filter *.zip |
+          $archives = @(Get-ChildItem -LiteralPath release-assets -File |
+            Where-Object { $_.Name -match '\.(zip|tar\.gz)$' } |
             Sort-Object Name |
             ForEach-Object { $_.FullName })
           if ($archives.Count -ne 7) {
