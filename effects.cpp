@@ -9,15 +9,8 @@
 #include <string.h>
 #include <math.h>
 
-/* ===== Viewport globals (set by FUN_004076d0) ===== */
-int DAT_004806dc = 0;  /* viewport left */
-int DAT_004806d0 = 0;  /* viewport right */
-int DAT_004806e0 = 0;  /* viewport top */
-int DAT_004806d4 = 0;  /* viewport bottom */
-int DAT_004806d8 = 0;  /* viewport width */
-int DAT_004806e4 = 0;  /* viewport height */
-int DAT_004806e8 = 0;  /* camera/scroll Y offset */
-int DAT_004806ec = 0;  /* camera/scroll X offset */
+/* Active viewport shared by the recovered render passes. */
+Viewport g_Viewport = {};
 
 /* ===== Entity rendering counts (all zero until entity spawning is implemented) ===== */
 int DAT_00489274 = 0;     /* static entity count (turrets) */
@@ -521,8 +514,10 @@ int FUN_00422fc0(void)
  *   +0x14: byte unused
  *   +0x15: byte color_index   (blend LUT group)
  */
-void FUN_0040d100(int buffer, int stride)
+void FUN_0040d100(Framebuffer *framebuffer)
 {
+    int buffer = (int)(uintptr_t)framebuffer->pixels;
+    int stride = framebuffer->stride;
     if (g_ParticleCount <= 0) return;
 
     int i = 0;
@@ -966,8 +961,10 @@ void FUN_0040c940(unsigned int param_1, unsigned int param_2, unsigned int param
  * DAT_00489274 is always 0, so this renderer never executes.
  * Real turret/effect rendering uses FUN_0040d930 (DAT_00487780/DAT_00489264).
  */
-void FUN_0040dbd0(int param_1, unsigned int param_2)
+void FUN_0040dbd0(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     int offset = 0;
     int base = (int)DAT_00489e98;
 
@@ -999,8 +996,10 @@ void FUN_0040dbd0(int param_1, unsigned int param_2)
  * Renders troopers (foot soldiers). Two layers: optional helmet + body.
  * Array: g_TrooperPool, stride 0x40, count g_TrooperCount.
  */
-void FUN_0040dce0(int param_1, unsigned int param_2)
+void FUN_0040dce0(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     int vp_left = DAT_004806dc;
 
     for (int i = 0; i < g_TrooperCount; i++) {
@@ -1063,8 +1062,10 @@ void FUN_0040dce0(int param_1, unsigned int param_2)
  * Array: g_EntityPool, stride 0x80, count g_EntityCount.
  * Most complex renderer - handles pixel dots, sprites, shields, angle animations.
  */
-void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
+void FUN_0040bb60(Framebuffer *framebuffer)
 {
+    unsigned int param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     if (g_EntityCount <= 0) return;
 
     for (int i = 0; i < g_EntityCount; i++) {
@@ -1241,8 +1242,10 @@ void FUN_0040bb60(unsigned int param_1, unsigned int param_2)
  * Renders projectiles (bullets, missiles, etc).
  * Array: g_ProjectilePool, stride 0x40, count g_ProjectileCount.
  */
-void FUN_0040a870(int param_1, unsigned int param_2)
+void FUN_0040a870(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     for (int i = 0; i < g_ProjectileCount; i++) {
         const ProjectileRecord *projectile = &g_ProjectilePool[i];
         int px = projectile->position_x >> 0x12;
@@ -1291,8 +1294,10 @@ void FUN_0040a870(int param_1, unsigned int param_2)
  * Array: DAT_00487a9c, stride 0x20, count DAT_0048926c.
  * Uses FUN_0040c590 (explosion blitter).
  */
-void FUN_0040d6c0(int param_1, int param_2)
+void FUN_0040d6c0(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     int offset = 0;
 
     for (int i = 0; i < DAT_0048926c; i++) {
@@ -1326,8 +1331,10 @@ void FUN_0040d6c0(int param_1, int param_2)
  * Renders debris particles (small sprites).
  * Array: g_DebrisItemPool, stride 0x20, count g_DebrisItemCount.
  */
-void FUN_0040d810(int param_1, unsigned int param_2)
+void FUN_0040d810(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     for (int i = 0; i < g_DebrisItemCount; i++) {
         const DebrisItemRecord *debris = &g_DebrisItemPool[i];
         int px = debris->position_x >> 0x12;
@@ -1355,8 +1362,10 @@ void FUN_0040d810(int param_1, unsigned int param_2)
  * Array: DAT_00487810, stride 0x598, count DAT_00489240.
  * Two passes: (1) ship sprite, (2) overlay effects.
  */
-void FUN_0040caf0(int param_1, unsigned int param_2)
+void FUN_0040caf0(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     /* Pass 1: Ship sprites via FUN_0040c590 */
     int explosion_offset = 0;
     for (int i = 0; i < DAT_00489240; i++) {
@@ -1523,8 +1532,10 @@ void FUN_0040caf0(int param_1, unsigned int param_2)
  * Renders misc glow/smoke effects with inline grayscale blitter.
  * Array: DAT_00487780, stride 0x20, count DAT_00489264.
  */
-void FUN_0040d930(int param_1, unsigned int param_2)
+void FUN_0040d930(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    unsigned int param_2 = (unsigned int)framebuffer->stride;
     if (DAT_00489264 <= 0) return;
 
     int base = (int)DAT_00487780;
@@ -1609,8 +1620,10 @@ void FUN_0040d930(int param_1, unsigned int param_2)
  * Array: DAT_00481f2c, stride 0x20, count DAT_0048925c.
  * Three blend modes based on entry[0x15].
  */
-void FUN_0040d360(int param_1, int param_2)
+void FUN_0040d360(Framebuffer *framebuffer)
 {
+    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     if (DAT_0048925c <= 0) return;
 
     unsigned int entry_off = 0;
@@ -1742,8 +1755,10 @@ void FUN_0040d360(int param_1, int param_2)
  * Render_Game_World (graphics.cpp). Types 0x65/0x67 (exhaust) are rendered
  * as pixel dots in FUN_0040bb60's sprite_idx >= 30000 branch.
  */
-void FUN_004075f0(int buffer, int stride)
+static void FUN_004075f0(Framebuffer *framebuffer)
 {
+    int buffer = (int)(uintptr_t)framebuffer->pixels;
+    int stride = framebuffer->stride;
     if (g_EntityCount <= 0) return;
 
     int count = g_EntityCount;
@@ -1807,7 +1822,7 @@ void FUN_004075f0(int buffer, int stride)
 }
 
 /* ===== FUN_004076d0 - Viewport setup + render effects (004076D0) ===== */
-void FUN_004076d0(int buffer, int stride)
+void FUN_004076d0(Framebuffer *framebuffer)
 {
     DAT_004806dc = 0;
     DAT_004806e0 = 0;
@@ -1818,6 +1833,6 @@ void FUN_004076d0(int buffer, int stride)
     DAT_004806e8 = 0;
     DAT_004806ec = 0;
 
-    FUN_004075f0(buffer, stride);
-    FUN_0040d100(buffer, stride);
+    FUN_004075f0(framebuffer);
+    FUN_0040d100(framebuffer);
 }

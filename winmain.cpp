@@ -63,12 +63,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
             hMouseEvent = NULL;
         }
 
-        /* Release DirectDraw (matches original WndProc) */
-        if (lpDD != NULL) {
-            Release_DirectDraw_Surfaces();
-            lpDD->Release();
-            lpDD = NULL;
-        }
+        RenderBackend_Shutdown();
 
         /* Clean up FMOD */
         Cleanup_Sound();
@@ -153,19 +148,7 @@ int Handle_Init_Error(HWND hWnd, unsigned char errorCode)
 {
     const char *lpText;
 
-    /* Release DirectDraw objects if they exist */
-    if (lpDD != NULL) {
-        if (lpDDS_Primary != NULL) {
-            lpDDS_Primary->Release();
-            lpDDS_Primary = NULL;
-        }
-        if (lpDDS_Offscreen != NULL) {
-            lpDDS_Offscreen->Release();
-            lpDDS_Offscreen = NULL;
-        }
-        lpDD->Release();
-        lpDD = NULL;
-    }
+    RenderBackend_Shutdown();
 
     switch (errorCode) {
     case 0:
@@ -286,44 +269,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
     Apply_Display_Settings();
 
-    /* 5. DirectDraw Create */
-    LOG("[INIT] DirectDrawCreate...\n");
-    iVar1 = DirectDrawCreate(NULL, &lpDD, NULL);
-    LOG("[INIT] DirectDrawCreate returned 0x%08X\n", iVar1);
-    if (iVar1 != 0) {
-        /* DDraw create failed - cleanup if partially created */
-        if (lpDD != NULL) {
-            Release_DirectDraw_Surfaces();
-            lpDD->Release();
-            lpDD = NULL;
-        }
+    /* 5. Initialize the selected presentation backend. */
+    LOG("[INIT] Initializing %s renderer...\n", RenderBackend_Name());
+    iVar1 = RenderBackend_Initialize(hWnd);
+    if (iVar1 == 0) {
+        RenderBackend_Shutdown();
         MessageBoxA(hWnd, STR_ERR_DDRAW_INSTALL, STR_TITLE, MB_ICONERROR);
         DestroyWindow(hWnd);
         timeEndPeriod(1);
         return 0;
     }
 
-    /* 6. Set Cooperative Level
-     * Original: DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN
-     * COMPAT:   DDSCL_NORMAL for windowed mode on modern Windows */
-    iVar1 = lpDD->SetCooperativeLevel(hWnd, DDSCL_NORMAL);
-    LOG("[INIT] SetCooperativeLevel returned 0x%08X\n", iVar1);
-    if (iVar1 == 0) {
-        /* 7. Init DirectInput */
-        LOG("[INIT] Init_DirectInput...\n");
-        iVar1 = Init_DirectInput();
-        LOG("[INIT] Init_DirectInput returned %d\n", iVar1);
-        if (iVar1 != 0) {
-            /* Success - zero surface pointers, enter main loop */
-            lpDDS_Primary   = NULL;
-            lpDDS_Offscreen = NULL;
-            lpDDS_Back      = NULL;
-            goto MAIN_LOOP;
-        }
-        uVar3 = 3;  /* DirectInput error */
-    } else {
-        uVar3 = 0;  /* SetCooperativeLevel error */
+    /* 6. Init DirectInput */
+    LOG("[INIT] Init_DirectInput...\n");
+    iVar1 = Init_DirectInput();
+    LOG("[INIT] Init_DirectInput returned %d\n", iVar1);
+    if (iVar1 != 0) {
+        goto MAIN_LOOP;
     }
+    uVar3 = 3;
 
     /* Error path - Handle_Init_Error always returns 0, so we exit */
     iVar1 = Handle_Init_Error(hWnd, uVar3);

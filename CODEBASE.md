@@ -19,12 +19,28 @@ winmain.cpp
   -> initialization and asset/config loading
   -> menu or match state
   -> input, simulation, entity callbacks, effects
-  -> software rendering into the DirectDraw framebuffer
+  -> software rendering into a backend-neutral RGB565 framebuffer
+  -> platform presentation through the selected render backend
   -> audio through the dynamically loaded FMOD library
 ```
 
 The project deliberately remains 32-bit because original pointer sizes,
 structure strides, overflow, and x87 behavior are part of the reconstruction.
+
+## Rendering Boundary
+
+The recovered renderer composes each frame into a 640x480 RGB565
+`Framebuffer`. World, effects, particles, HUD, fog, and menu entry points share
+that typed buffer and a single active `Viewport` record. Lifted renderer bodies
+may still create local integer views where preserving original 32-bit pointer
+arithmetic matters; those views no longer leak through subsystem call sites.
+
+`RenderBackend` owns platform presentation. The current DirectDraw backend is
+fully contained in `gfx_ddraw.cpp`: device initialization, surface lifecycle,
+surface restoration, RGB565-to-ARGB conversion, aspect-ratio scaling, and the
+final window blit. Simulation and software rendering code do not access
+DirectDraw objects. A future SDL backend can consume the same `Framebuffer`
+without changing gameplay rendering.
 
 ## Source Map
 
@@ -39,7 +55,9 @@ structure strides, overflow, and x87 behavior are part of the reconstruction.
 | `entity_callbacks.cpp` | Recovered original-address callbacks for weapons/effects |
 | `binary_compat.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
 | `effects.cpp` | Explosions, particles, lighting, terrain effects |
-| `graphics.cpp` | DirectDraw setup, framebuffer rendering, primitives, sprites |
+| `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
+| `render_backend.cpp` | Active presentation-backend interface and dispatch |
+| `gfx_ddraw.cpp` | DirectDraw device, surfaces, RGB conversion, scaling, presentation |
 | `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
 | `assets.cpp` | Font and image asset loading |
 | `level.cpp` | `.lev` loading and swap/height-map data |
@@ -52,7 +70,7 @@ structure strides, overflow, and x87 behavior are part of the reconstruction.
 | `utils.cpp` | Optional debug logging |
 | `tou.h` | Aggregate include retained while source files migrate to narrower headers |
 | `types.h` | Shared recovered structures |
-| `gfx.h` | Graphics, assets, viewport, effects, and HUD declarations |
+| `gfx.h` | Graphics, assets, typed framebuffer/viewport, effects, and HUD declarations |
 | `input.h` | DirectInput and keyboard/mouse declarations |
 | `sound.h` | FMOD-facing audio declarations |
 | `level.h` | Level data, loading, and GG generator declarations |
