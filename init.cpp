@@ -3711,7 +3711,10 @@ void FUN_0042a470(void)
                         FUN_004644af(g_MenuStrings[awardBufIdx],
                             (const unsigned char *)"%s (Player %d)",
                             awardName, playerNum);
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 2, 0, 0x31, 0, 0xff);
+                    /* Small font keeps two-digit 64-player labels inside the
+                     * 640-pixel logical canvas. Headers retain the original
+                     * larger presentation. */
+                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x31, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -3728,7 +3731,7 @@ void FUN_0042a470(void)
                         FUN_004644af(g_MenuStrings[awardBufIdx],
                             (const unsigned char *)"%s (Team %d)",
                             awardName, teamNum);
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 2, 0, 0x32, 0, 0xff);
+                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x32, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
