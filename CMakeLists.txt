@@ -118,6 +118,11 @@ target_link_libraries(TOU PRIVATE
 set_target_properties(TOU PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
+foreach(TOU_CONFIG DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(TOU PROPERTIES
+        "RUNTIME_OUTPUT_DIRECTORY_${TOU_CONFIG}" "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+endforeach()
 
 if(APPLE)
     set_target_properties(TOU PROPERTIES
