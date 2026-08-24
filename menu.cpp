@@ -57,9 +57,9 @@ int Menu_Init_And_Loop(void)
         Assign_Water_Tile_Colors();
 
         /* Set up menu display sub-state */
-        g_SubState = 0;
+        g_SubState = GAMEPLAY_ACTIVE;
         if (g_SubState2 == 0) {
-            g_SubState   = 4;   /* MENU_DISPLAY */
+            g_SubState   = GAMEPLAY_LEVEL_PREVIEW;
             g_NeedsRedraw = 1;
         }
 
@@ -94,7 +94,7 @@ int Load_Level_Resources(void)
     DAT_00489d7c[0] = '\0'; /* clear error buffer */
 
     /* Random mirror: g_ConfigBlob[1] enables X-flip randomization */
-    if (g_ConfigBlob[1] == 1) {
+    if (g_GameConfig.values.level_flags[0] == 1) {
         DAT_004892e4 = (char)(rand() & 1);
     }
 
@@ -105,7 +105,7 @@ int Load_Level_Resources(void)
 
     if (DAT_0048764a == '\0') {
         /* Local mode: look up level from indirection table */
-        int *levelOrder = (int *)&g_ConfigBlob[4]; /* DAT_00481f5c */
+        int *levelOrder = g_GameConfig.values.level_order;
         levelIdx = levelOrder[DAT_0048693c & 0xFF];
 
         /* Bounds check against available levels */
@@ -123,7 +123,7 @@ int Load_Level_Resources(void)
 
             /* Compute random map dimensions based on size preset g_ConfigBlob[2] */
             int gg_w, gg_h;
-            char sizePreset = (char)g_ConfigBlob[2];
+            char sizePreset = (char)g_GameConfig.values.level_flags[1];
             if (sizePreset == 0) {
                 gg_w = rand() % 800 + 300;
                 gg_h = rand() % 800 + 300;
@@ -195,7 +195,7 @@ gg_level_ready:
 
     /* Load ship types from config blob (0=Peru..8=Dest, 9=random) */
     for (int st = 0; st < DAT_00489240 && st < 80; st++) {
-        DAT_0048236e[st] = g_ConfigBlob[0x416 + st];
+        DAT_0048236e[st] = g_GameConfig.values.player_ship[st];
     }
 
     /* Mark human/CPU flags and team assignments for all players */
@@ -203,7 +203,7 @@ gg_level_ready:
         for (int i = 0; i < DAT_00489240; i++) {
             PlayerData *player = Player_Get(i);
             player->human_controlled = (i < DAT_00489244) ? 1 : 0;
-            player->team = g_ConfigBlob[0x3C6 + i];
+            player->team = g_GameConfig.values.player_team[i];
         }
     }
 
@@ -676,13 +676,8 @@ after_team:
     DAT_00483824 = (unsigned int)DAT_00483860[0x107] * (DAT_00483748 & 0xFF) * 0x17;
     DAT_00483828 = DAT_00483824 / 3;
 
-    /* NOTE: Do NOT override DAT_00483828 from config blob here.
-     * In the original, FUN_0041a8c0 calls Load_Options_Config (blob reload)
-     * but does NOT call Sync_Config_From_Blob, so the computed gravity value
-     * persists.  Our FUN_0041a8c0 does Sync_To → Save → Load → Sync_From
-     * which round-trips the value correctly.
-     * DAT_00483828 provides upward buoyancy for f2c particles (bubbles)
-     * and gravity for entity/projectile physics. */
+    /* DAT_00483828 is the named alias for this value in the canonical config
+     * record. It provides bubble buoyancy and entity/projectile gravity. */
 
     /* Stat scaling applied */
 }
@@ -968,12 +963,8 @@ next_cell:
 
 /* ===== Globals for ship/player system ===== */
 int           DAT_004877f8[4] = {0};   /* active player index table */
-char          DAT_00483738 = 0;        /* game mode */
-short         DAT_0048373a = 3;        /* initial lives (default 3) */
-int           DAT_00483830 = 100;      /* starting health */
 void         *DAT_0048780c = NULL;     /* ship stats table */
 unsigned char DAT_0048236e[PLAYER_STORAGE_CAPACITY] = {0}; /* ship type per player */
-char          DAT_0048378e[9] = {0};   /* ship-taken flags */
 void         *DAT_00489eac[4] = {0};   /* per-player visibility buffers */
 int           DAT_00487788[4] = {0};   /* per-player stat counters */
 
@@ -989,15 +980,7 @@ int DAT_00481d30 = 0xA0;
 int DAT_00481d34 = 0xA0;
 
 /* ===== Entity spawning globals ===== */
-char          DAT_00483737 = 0;       /* trooper difficulty (0=none,1-3=density) */
-char          DAT_00483736 = 0;       /* debris difficulty */
-char          DAT_00483735 = 0;       /* team base placement mode */
-char          DAT_00483734 = 0;       /* critter spawn enable flag */
-char          DAT_0048373c = 0;       /* team mode flag */
-char          DAT_0048372c = 0;       /* ambient particle spawn mode (0=3x, 1=1x, 2=off) */
 unsigned char DAT_00483962 = 0;       /* team base probability % */
-unsigned char DAT_00483754[4] = {0, 0, 1, 1}; /* entity enable flags [2]=walls, [3]=projectiles */
-int           DAT_00483758 = 0;       /* entity density config packed */
 
 int           DAT_00489270 = 0;       /* wall segment count */
 int           DAT_004892d4 = 0;       /* spawn point count */
@@ -1013,19 +996,8 @@ void         *DAT_00489e80 = NULL;    /* wall segment array */
 
 /* ===== Init function globals ===== */
 /* Difficulty / Team / Config (from options.cfg config blob at 0x48372x-0x48375x) */
-char          DAT_00483740 = 0;       /* difficulty setting 1 (round time index, 0-13) */
-char          DAT_0048373f = 0;       /* difficulty setting 2 (0-7) */
-int           DAT_00483748 = 0x14141414; /* stat scaling packed (each byte = 20 = 1x) */
-int           DAT_0048374c = 0x14;    /* speed scaling packed (low byte = 20 = 1x) */
-int           DAT_00483750 = 0;       /* misc config packed */
-char          DAT_0048372a = 0;       /* team count setting */
-char          DAT_0048372b = 0;       /* team mode setting */
-char          DAT_00483729 = 0;       /* game type setting */
 int           DAT_004892a8 = 0;       /* difficulty constant 1 (round tick limit) */
 int           DAT_004892ac = 0;       /* difficulty constant 2 */
-char          DAT_00483836 = 0;       /* team mode flag (0=teams, 2=no-teams) */
-int           DAT_00483824 = 0;       /* game damage scaling constant */
-int           DAT_00483828 = 0;       /* game damage scaling constant / 3 */
 
 /* Turret placement */
 int           DAT_00489280 = 0;       /* turret array capacity */
@@ -1836,7 +1808,7 @@ int FUN_004249c0(void)
          * buffer) at player_offset + 0x2c, NOT from stats_buf[6]. At load
          * time this is 0 (calloc-zeroed), so team color = DAT_00483838[0]. */
         {
-            unsigned char colorIdx = g_ConfigBlob[0x466 + ship_idx];
+            unsigned char colorIdx = g_GameConfig.values.player_color[ship_idx];
             unsigned short palColor = ((unsigned short *)DAT_00481f4c)[colorIdx];
             int cr = (unsigned char)(((palColor >> 10) & 0x1F) << 3);
             int cg = (unsigned char)(((palColor >> 5) & 0x1F) << 3);

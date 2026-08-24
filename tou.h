@@ -10,6 +10,7 @@
 #include "entity_callbacks.h"
 
 #include "types.h"
+#include "config.h"
 #include "entity.h"
 #include "gfx.h"
 #include "input.h"

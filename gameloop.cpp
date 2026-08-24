@@ -11,7 +11,7 @@
 /* ===== Globals defined in this module ===== */
 char          g_MouseButtons = 0;     /* 004877BE */
 unsigned char g_ProcessInput = 0;     /* 00489295 */
-unsigned char g_SubState     = 0;     /* 00489296 */
+GameplaySubState g_SubState = GAMEPLAY_ACTIVE; /* 00489296 */
 unsigned char g_NeedsRedraw  = 0;     /* 00489297 */
 unsigned char g_SurfaceReady = 0;     /* 00489298 */
 unsigned char g_SubState2    = 0;     /* 00489299 */
@@ -25,9 +25,7 @@ DWORD        DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
 unsigned int DAT_00489eec = 0;       /* Last pressed key scan code */
 
 /* Gameplay tick timing and counters */
-short DAT_00483746 = 60;             /* tick rate: ticks per second (default 60 → ~16.7ms/tick) */
 char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
-char  DAT_0048373e = 0;              /* activation guard flag */
 
 /* Pause menu state (unused — original binary has no visible pause menu selection) */
 
@@ -112,19 +110,19 @@ void Game_State_Manager(void)
     HRESULT mouse_hr;
     HRESULT keyboard_hr;
 
-    switch (g_GameState & 0xFF) {
-    case 0x01: /* Gameplay rendering */
+    switch (g_GameState) {
+    case GAME_STATE_RENDER_GAMEPLAY:
         FUN_00425fe0();
         return;
 
-    case 0x02: /* Return to menu */
+    case GAME_STATE_RETURN_TO_MENU:
         g_SubState2 = 0;
         Stop_All_Sounds();
         Free_Game_Resources();
         Handle_Menu_State();
         return;
 
-    case 0x03: /* Init gameplay - DirectDraw setup */
+    case GAME_STATE_INIT_GAMEPLAY:
         if (DAT_00487640[1] != 5) {
             DAT_00487640[1] = 5;
             g_DisplayWidth  = 640; /* Mode 5 = 640x480 */
@@ -135,7 +133,7 @@ void Game_State_Manager(void)
                 RenderBackend_Shutdown();
                 MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
                 DestroyWindow(hWnd_Main);
-                g_GameState = 0xFE;
+                GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
             }
         }
@@ -155,9 +153,9 @@ void Game_State_Manager(void)
 
         /* Create game view surface */
         if (FUN_0042fc40()) {
-            g_GameState = 0x01; /* Enter gameplay render */
+            GameState_Transition(GAME_STATE_RENDER_GAMEPLAY);
         } else {
-            g_GameState = 0xFE; /* Error -> shutdown */
+            GameState_Transition(GAME_STATE_SHUTDOWN);
         }
 
         /* COMPAT: Ensure window has foreground/focus after DDraw operations.
@@ -188,30 +186,30 @@ void Game_State_Manager(void)
         FUN_00425fe0();
         return;
 
-    case 0x04: /* Quick restart */
+    case GAME_STATE_QUICK_RESTART:
         FUN_0042fc10();
         FUN_0041a8c0();
         Handle_Menu_State();
         return;
 
-    case 0x05: /* Game over - return to menu with level reload */
+    case GAME_STATE_GAME_OVER:
         g_SubState2 = 0;
         Stop_All_Sounds();
         Free_Game_Resources();
         FUN_0041d740();
-        g_GameState = 3;
+        GameState_Transition(GAME_STATE_INIT_GAMEPLAY);
         return;
 
-    case 0x06: /* Error restart */
+    case GAME_STATE_ERROR_RESTART:
         g_SubState2 = 0;
         Stop_All_Sounds();
         Free_Game_Resources();
         FUN_0041d740();
         DAT_004877a4 = 0;
-        g_GameState = 3;
+        GameState_Transition(GAME_STATE_INIT_GAMEPLAY);
         return;
 
-    case 0x96: /* Intro init */
+    case GAME_STATE_INTRO_INIT:
         if (DAT_00487640[1] != 5) {
             DAT_00487640[1] = 5;
             g_DisplayHeight = 480;
@@ -222,7 +220,7 @@ void Game_State_Manager(void)
                 RenderBackend_Shutdown();
                 MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
                 DestroyWindow(hWnd_Main);
-                g_GameState = 0xFE;
+                GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
             }
         }
@@ -232,34 +230,34 @@ void Game_State_Manager(void)
         g_FrameTimer  = timeGetTime();
         DAT_004892b8  = timeGetTime();
         g_IntroSplashIndex = 0;
-        g_GameState   = 0x97;
+        GameState_Transition(GAME_STATE_INTRO_RUN);
         DAT_004877a4  = 0x97;
         Load_Background_To_Buffer(1);
         FUN_0040e130();
         FUN_0045d7d0();
         /* Fall through to case 0x97 */
 
-    case 0x97: /* Intro running */
+    case GAME_STATE_INTRO_RUN:
         Intro_Sequence();
         return;
 
-    case 0x98: /* New game - reload sprites, reset palette, init session */
+    case GAME_STATE_NEW_GAME:
         DAT_004877a4 = 0x98;
-        g_GameState = 3;
+        GameState_Transition(GAME_STATE_INIT_GAMEPLAY);
         /* Reset team palette[3] from gold (0x7FF0) back to gray (0x6739).
          * It gets set to gold in FUN_0042d8b0 before sprites load;
          * starting a new game resets it to the default gray team color. */
         DAT_00483838[3] = 0x6739;
         iVar2 = Init_New_Game();
         if (iVar2 != 1) {
-            g_GameState = 0xFE;
+            GameState_Transition(GAME_STATE_SHUTDOWN);
         }
         return;
 
-    case 0xFE: /* Shutdown */
+    case GAME_STATE_SHUTDOWN:
         Cleanup_Sound();
         PostMessageA(hWnd_Main, WM_DESTROY, 0, 0);
-        g_GameState = 0xFF;
+        GameState_Transition(GAME_STATE_STOPPED);
         return;
 
     default:
@@ -350,11 +348,10 @@ static void Gameplay_Tick(void)
         if (DAT_004892a5 != 0) {
             DAT_004892a5++;
             /* After 40 ticks of round-end countdown, trigger level transition.
-             * Original at 0x00461776: when DAT_004892a5 > 0x28, sets round phase
-             * to 0x65 (natural end). We set g_SubState = 101 which the existing
-             * handler at line 615 processes (stores winner, tallies scores). */
+             * Original at 0x00461776: when DAT_004892a5 > 0x28, enter the
+             * natural match-complete state that stores the winner and scores. */
             if (DAT_004892a5 > 0x28) {
-                g_SubState = 101;
+                g_SubState = GAMEPLAY_MATCH_COMPLETE;
             }
         }
         if (DAT_004892a5 == 0 && DAT_004892a4 != 0 && DAT_0048373e == 0) {
@@ -500,23 +497,23 @@ void Game_Update_Render(void)
         /* State 4: Level preview / stats screen.
          * First level (counter == 0): skip straight to gameplay.
          * Subsequent levels: show stats overlay, wait for Enter/F10. */
-        if (g_SubState == 4) {
+        if (g_SubState == GAMEPLAY_LEVEL_PREVIEW) {
             if ((unsigned char)DAT_0048693c == 0) {
                 /* First level — no stats to show, start immediately */
-                g_SubState = 0;
+                g_SubState = GAMEPLAY_ACTIVE;
                 g_NeedsRedraw = 2;
                 g_TimerStart = timeGetTime();
                 g_TimerAux = 0;
                 g_FrameTimer = timeGetTime();
             } else {
                 if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
-                    g_SubState = 100;
-                    *(unsigned char *)&DAT_0048693c = g_ConfigBlob[0];
+                    g_SubState = GAMEPLAY_LEVEL_ADVANCE;
+                    *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
                 }
                 if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     DAT_00489ee8 = now_input + 500;
                     DAT_00489eec = 0x1C;
-                    g_SubState = 0;
+                    g_SubState = GAMEPLAY_ACTIVE;
                     g_NeedsRedraw = 2;
                     g_TimerStart = timeGetTime();
                     g_TimerAux = 0;
@@ -527,18 +524,18 @@ void Game_Update_Render(void)
 
         /* State 2: ESC pause menu — F10/Enter/ESC.
          * Sprite 0x37 panel: "F10 Exit to menu / Enter Next level / Esc Back to the game" */
-        if (g_SubState == 2) {
+        if (g_SubState == GAMEPLAY_EXIT_MENU) {
             /* F10 (scan 0x44): exit to menu */
             if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
-                *(unsigned char *)&DAT_0048693c = g_ConfigBlob[0];
-                g_SubState = 100;
+                *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
+                g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
             }
             /* Enter (scan 0x1C): next level */
             if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = 0x1C;
-                g_SubState = 100;
+                g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
                 g_NeedsRedraw = 1;
             }
@@ -546,10 +543,11 @@ void Game_Update_Render(void)
 
         /* P key (configurable) — toggle pause.
          * Only when g_SubState < 2 (not during ESC-menu or transitions). */
-        if (g_SubState < 2) {
+        if (g_SubState < GAMEPLAY_EXIT_MENU) {
             unsigned char pause_key = DAT_004837ba;
             if ((g_KeyboardState[pause_key] & 0x80) != 0 && now_input >= DAT_00489ee8) {
-                g_SubState = (g_SubState == 0) ? 1 : 0;
+                g_SubState = (g_SubState == GAMEPLAY_ACTIVE)
+                    ? GAMEPLAY_PAUSED : GAMEPLAY_ACTIVE;
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = (unsigned int)pause_key;
                 g_NeedsRedraw = 1;
@@ -561,9 +559,11 @@ void Game_Update_Render(void)
 
         /* ESC (scan 0x01) — toggle between active (0) and ESC menu (2).
          * Excluded from states 3 and 4. */
-        if (g_SubState != 3 && g_SubState != 4) {
+        if (g_SubState != GAMEPLAY_ROUND_COMPLETE &&
+            g_SubState != GAMEPLAY_LEVEL_PREVIEW) {
             if ((g_KeyboardState[0x01] & 0x80) != 0 && now_input >= DAT_00489ee8) {
-                g_SubState = -(g_SubState != 2) & 2;
+                g_SubState = (g_SubState != GAMEPLAY_EXIT_MENU)
+                    ? GAMEPLAY_EXIT_MENU : GAMEPLAY_ACTIVE;
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = 0x01;
                 g_NeedsRedraw = 1;
@@ -575,7 +575,7 @@ void Game_Update_Render(void)
 
         /* F12 (scan 0x58): immediate exit */
         if (g_KeyboardState[0x58] & 0x80) {
-            g_GameState = 0xFE;
+            GameState_Transition(GAME_STATE_SHUTDOWN);
             return;
         }
     }
@@ -584,23 +584,24 @@ void Game_Update_Render(void)
     /* Original at 0x00461a10 / 0x00461a2d in Game_Update_Render.
      * Substate 3 is checked FIRST so it processes from the previous frame
      * (after the stats overlay had a chance to render). */
-    if (g_SubState == 3) {
-        g_SubState = 0;
-        if ((unsigned char)DAT_0048693c >= g_ConfigBlob[0]) {
+    if (g_SubState == GAMEPLAY_ROUND_COMPLETE) {
+        g_SubState = GAMEPLAY_ACTIVE;
+        if ((unsigned char)DAT_0048693c >= g_GameConfig.values.active_level_count) {
             /* All rounds completed → game over / scoreboard path */
-            g_GameState = 5;
+            GameState_Transition(GAME_STATE_GAME_OVER);
         } else {
             /* More rounds to play → reload menu with next level */
-            g_GameState = 2;
+            GameState_Transition(GAME_STATE_RETURN_TO_MENU);
         }
         return;
     }
 
-    /* Substate 100 = skip level, substate 101 = natural round end.
-     * Both set g_SubState = 3, increment level slot, and fall through
+    /* Level advance and natural match completion both enter round-complete,
+     * increment the level slot, and fall through
      * to rendering so the stats overlay displays for one frame. */
-    if (g_SubState == 100 || g_SubState == 101) {
-        if (g_SubState == 100) {
+    if (g_SubState == GAMEPLAY_LEVEL_ADVANCE ||
+        g_SubState == GAMEPLAY_MATCH_COMPLETE) {
+        if (g_SubState == GAMEPLAY_LEVEL_ADVANCE) {
             /* Level skip: clear victory flag */
             DAT_004892a4 = 0;
             DAT_00487640[0] = 0;
@@ -616,7 +617,7 @@ void Game_Update_Render(void)
         DAT_004892a5 = 0;
 
         /* Advance to next level slot */
-        g_SubState = 3;
+        g_SubState = GAMEPLAY_ROUND_COMPLETE;
         (*(unsigned char *)&DAT_0048693c)++;
 
         /* Preserve the completed round's live counters for the post-match pages.
@@ -649,11 +650,11 @@ void Game_Update_Render(void)
 
     /* ---- Game logic update ---- */
     switch (g_SubState) {
-    case 0:   /* Active gameplay */
+    case GAMEPLAY_ACTIVE:
         Gameplay_Tick();
         break;
 
-    case 4:   /* Level preview / waiting for Enter */
+    case GAMEPLAY_LEVEL_PREVIEW:
         /* Update timing but don't run simulation */
         {
             DWORD now = timeGetTime();
@@ -692,7 +693,8 @@ void Handle_Menu_State(void)
 {
     int result = Menu_Init_And_Loop();
     /* -(result != 1) & 6 → if result==1: 0, else: 6 */
-    g_GameState = (result != 1) ? 6 : 0;
+    GameState_Transition(result != 1
+        ? GAME_STATE_ERROR_RESTART : GAME_STATE_GAMEPLAY);
 }
 
 /* ===== Init_New_Game (004228A0) ===== */

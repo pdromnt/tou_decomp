@@ -18,7 +18,5 @@ extern int                   DAT_004877e8;
 extern char                  g_DirectInputMouseXSeen;
 
 /* ===== Configurable Key Scan Codes (from config blob) ===== */
-extern unsigned char         DAT_004837ba;       /* Pause key scan code */
-extern unsigned char         DAT_004837bb;       /* Camera cycle key scan code */
 
 #endif /* TOU_INPUT_H */

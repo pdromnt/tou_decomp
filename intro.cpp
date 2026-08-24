@@ -254,7 +254,7 @@ void Intro_Sequence(void)
         /* Clear intro particles/entities so they don't bleed into menu */
         g_ParticleCount = 0;  /* particle count */
         g_EntityCount = 0;  /* entity count */
-        g_GameState = 0x98;
+        GameState_Transition(GAME_STATE_NEW_GAME);
         Pause_Audio_Streams();
         return;
     }
@@ -291,7 +291,7 @@ void Intro_Sequence(void)
             /* Splash 2 done: Move to new game state */
             g_ParticleCount = 0;  /* clear particles */
             g_EntityCount = 0;  /* clear entities */
-            g_GameState = 0x98;
+            GameState_Transition(GAME_STATE_NEW_GAME);
         }
         g_IntroSplashIndex++;
     }

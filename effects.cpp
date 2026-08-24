@@ -20,8 +20,6 @@ int DAT_0048926c = 0;     /* explosion count */
 int DAT_00489264 = 0;     /* misc effect count */
 int g_DebrisItemCount = 0;  /* was DAT_00489268 */
 int DAT_00487808 = 0;     /* active player viewport count */
-unsigned short DAT_0048384e = 0;  /* laser pixel color A */
-unsigned short DAT_00483850 = 0;  /* laser pixel color B */
 
 /* ===== FUN_004257e0 - Angle calculation (atan2 to table index) ===== */
 /* Returns 11-bit angle index (0-2047) into sin/cos table.

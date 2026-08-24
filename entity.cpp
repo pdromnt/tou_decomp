@@ -21,13 +21,9 @@ int  DAT_00486d28[PLAYER_STORAGE_CAPACITY] = {0};   /* per-player building stats
 int  DAT_00486e68[PLAYER_STORAGE_CAPACITY] = {0};   /* per-player damage dealt stats */
 int  DAT_00486fa8[PLAYER_STORAGE_CAPACITY] = {0};   /* per-player distance traveled */
 int  DAT_004870e8[PLAYER_STORAGE_CAPACITY] = {0};   /* per-player explosion stats */
-char DAT_00483747 = '\0';      /* weapon auto-release mode flag */
-char DAT_00483745 = '\0';      /* detonation mode flag */
 
 /* Positional sound globals */
-char  DAT_0048371f = 1;        /* sound effects enabled flag */
 /* DAT_00487840 is DAT_00487834[3] in the original binary — aliased via tou.h */
-int   DAT_0048382c = 0;        /* game scaling constant 3 (fire rate scale) */
 
 /* Float constants for positional audio (from binary at 0x4753xx) */
 static float _DAT_004753fc = 6.6666667e-05f; /* 1.0f / 15000.0f */
@@ -39,8 +35,6 @@ void *DAT_004876b8 = 0;         /* color degradation palette LUT */
 unsigned short DAT_00481e8c = 0; /* tile explosion color accumulator */
 unsigned short DAT_00481e8e = 0; /* tile explosion count accumulator */
 /* DAT_00487880 == g_PhysicsParams (defined in memory.cpp) */
-char DAT_0048373b = '\0';       /* shared lives mode flag */
-char DAT_00483744 = '\0';       /* respawn delay mode */
 
 /* ===== AI / Pathfinding Globals ===== */
 int   DAT_00481eb4 = 0;         /* pathfinding frontier count A */
@@ -5306,12 +5300,13 @@ static void FUN_0044e1c0(int *ent)
     else if (tile == 0x18) ent[4] -= 0x8C00;
     else if (tile == 0x19) ent[4] += 0x8C00;
 
-    /* Apply velocity drag — config-based formula from original (0x0044e2c2):
-     * drag_int = 1000 - ((byte)g_ConfigBlob[0x1A10] * (byte)g_ConfigBlob[0x17F1]) / 10
+    /* Apply velocity drag — formula from original (0x0044e2c2):
+     * drag_int = 1000 - (level drag factor * config stat-scale byte 1) / 10
      * drag = drag_int * 0.001
      * Typical values: drag ≈ 0.99-0.997 (lose 0.3-1% per tick) */
     {
-        int drag_product = (unsigned char)g_ConfigBlob[0x1A10] * (unsigned char)g_ConfigBlob[0x17F1];
+        int drag_product = g_LevelPhysicsTuning.drag_factor *
+                           g_GameConfig.values.stat_scaling_bytes[1];
         int drag_int = 1000 - drag_product / 10;
         double drag = (double)drag_int * 0.001;
         ent[4] = (int)((double)ent[4] * drag);
@@ -5529,8 +5524,8 @@ heavy_collision:
             double speed = sqrt((double)squared);
 
             /* Bounce factor from config: clamped to 64 */
-            int bounce_raw = ((int)(unsigned char)g_ConfigBlob[0x1A12] *
-                              (int)(unsigned char)g_ConfigBlob[0x17F6]) / 10;
+            int bounce_raw = ((int)g_LevelPhysicsTuning.wall_bounce *
+                              (int)g_GameConfig.values.speed_scaling_bytes[2]) / 10;
             if (bounce_raw > 64) bounce_raw = 64;
 
             /* Compute reflected velocity using sin/cos LUT */
@@ -5544,8 +5539,8 @@ heavy_collision:
             ent[5] = (int)(speed * (double)cosVal * lut_scale * (double)bounce_raw);
 
             /* Compute impact damage */
-            int dmg_raw = (int)((double)(unsigned char)g_ConfigBlob[0x1A11] *
-                                (double)(unsigned char)g_ConfigBlob[0x17F5] *
+            int dmg_raw = (int)((double)g_LevelPhysicsTuning.wall_damage *
+                                (double)g_GameConfig.values.speed_scaling_bytes[1] *
                                 speed * 0.25f);
 
             if (dmg_raw > 0x45880 && (char)ent[9] == '\0') {
@@ -5657,11 +5652,11 @@ void FUN_0044b0b0(void)
 
         /* AI decision-making for non-human entities.
          * FUN_0041b010 should set +0xDD from config, but may fail if counts
-         * are stale. Safety net: read difficulty from g_ConfigBlob[0x326+i]
+         * are stale. Safety net: read the canonical per-player difficulty
          * (written by the Players menu "Computer" column, render_mode 0x1F).
          * Config value 0-4 → AI level 1-5 (config_val + 1). */
         if (i >= DAT_00489244 && player->ai_level == 0) {
-            unsigned char cfg_diff = g_ConfigBlob[0x326 + i];
+            unsigned char cfg_diff = g_GameConfig.values.player_difficulty[i];
             player->ai_level = (cfg_diff > 0) ? (unsigned char)(cfg_diff + 1) : 1;
         }
         if (player->ai_level != 0) {

@@ -22,21 +22,8 @@
 /* DAT_00487aa8 and DAT_0048781c already defined in memory.cpp */
 /* DAT_0048784c is DAT_00487834[6] in the original binary — aliased via tou.h */
 int   DAT_00487228[PLAYER_STORAGE_CAPACITY] = {0}; /* per-player pickup counter */
-char  DAT_0048372e = 0;        /* fog of war ray resolution (config 0x17D6) */
-char  DAT_0048372f = 0;        /* fog of war sub-option (config 0x17D7) */
-char  DAT_00483730 = 0;        /* fog of war wobble enable (config 0x17D8) */
-char  DAT_0048373d = 0;        /* friendly fire enabled flag */
-char  DAT_00483741 = 0;        /* difficulty sub-setting */
-char  DAT_00483742 = 0;        /* shield/energy bar enable flag (config 0x17EA) */
-char  DAT_00483743 = 0;        /* minimap/radar enable flag (config 0x17EB) */
-float DAT_00483854 = 0.0f;     /* entity density scale factor */
-float DAT_00483858 = 0.0f;     /* inverse density factor (1.0/density) */
-float DAT_0048385c = 0.0f;     /* weather/temperature threshold */
 
 /* ===== AoE / Explosion globals ===== */
-unsigned int DAT_00483840 = 0; /* fire color match R threshold */
-unsigned int DAT_00483844 = 0; /* fire color match G threshold */
-unsigned int DAT_00483848 = 0; /* fire color match B threshold */
 unsigned char DAT_00481e8f = 0; /* building collision result flag (set by FUN_004355d0) */
 
 /* ===== Turret LOS / Targeting globals ===== */

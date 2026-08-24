@@ -21,13 +21,38 @@
 extern HWND                  hWnd_Main;         /* 00489EDC */
 extern int                   g_bIsActive;       /* 00489EC4 */
 
-/* ===== Game State (winmain.cpp) ===== */
-extern unsigned char         g_GameState;       /* 004877A0 - main state machine */
+typedef enum GameState : unsigned char {
+    GAME_STATE_GAMEPLAY = 0x00,
+    GAME_STATE_RENDER_GAMEPLAY = 0x01,
+    GAME_STATE_RETURN_TO_MENU = 0x02,
+    GAME_STATE_INIT_GAMEPLAY = 0x03,
+    GAME_STATE_QUICK_RESTART = 0x04,
+    GAME_STATE_GAME_OVER = 0x05,
+    GAME_STATE_ERROR_RESTART = 0x06,
+    GAME_STATE_INTRO_INIT = 0x96,
+    GAME_STATE_INTRO_RUN = 0x97,
+    GAME_STATE_NEW_GAME = 0x98,
+    GAME_STATE_SHUTDOWN = 0xfe,
+    GAME_STATE_STOPPED = 0xff
+} GameState;
+
+typedef enum GameplaySubState : unsigned char {
+    GAMEPLAY_ACTIVE = 0,
+    GAMEPLAY_PAUSED = 1,
+    GAMEPLAY_EXIT_MENU = 2,
+    GAMEPLAY_ROUND_COMPLETE = 3,
+    GAMEPLAY_LEVEL_PREVIEW = 4,
+    GAMEPLAY_LEVEL_ADVANCE = 100,
+    GAMEPLAY_MATCH_COMPLETE = 101
+} GameplaySubState;
+
+extern GameState             g_GameState;       /* 004877A0 - main state machine */
+void GameState_Transition(GameState next_state);
 
 /* ===== Sub-State Globals (gameloop.cpp) ===== */
 extern char                  g_MouseButtons;    /* 004877BE */
 extern unsigned char         g_ProcessInput;    /* 00489295 */
-extern unsigned char         g_SubState;        /* 00489296 */
+extern GameplaySubState      g_SubState;        /* 00489296 */
 extern unsigned char         g_NeedsRedraw;     /* 00489297 */
 extern unsigned char         g_SurfaceReady;    /* 00489298 */
 extern unsigned char         g_SubState2;       /* 00489299 */
@@ -39,22 +64,13 @@ extern DWORD                 g_TimerStart;      /* 004892B0 */
 extern int                   g_TimerAux;        /* 004892B4 */
 
 /* ===== Config (init.cpp) ===== */
-extern unsigned char         g_ConfigBlob[];    /* 00481F58 - raw 6408-byte config data */
-extern unsigned char         DAT_00483720[8];   /* Sound config */
-extern unsigned short        DAT_00483820;      /* Fade target color (RGB565) */
 extern unsigned char         DAT_00487640[4];   /* Display mode */
-extern unsigned short        DAT_00483838[4];   /* Team color palette (RGB555) */
 extern DWORD                 g_FrameTimer;      /* 004877F4 */
 extern unsigned char         DAT_004877b1;
 extern unsigned char         DAT_004877a4;
 extern DWORD                 DAT_004892b8;
 extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
-extern char                  DAT_00483732;      /* config option (preserved across Load_Options_Config) */
-extern char                  DAT_0048372d;      /* fog of war mode: 0=off, 1=full, 2=simplified */
-extern char                  DAT_0048372e;      /* fog of war ray resolution */
-extern char                  DAT_0048372f;      /* fog of war sub-option */
-extern char                  DAT_00483730;      /* fog of war wobble enable */
 
 /* ===== Menu / Session (init.cpp / FUN_0042d8b0) ===== */
 extern char                **g_MenuStrings;     /* 00481D3C - 350-entry menu text table */
@@ -74,11 +90,8 @@ extern int                   DAT_004877cc;      /* scroll/hover decay counter */
 extern unsigned char         DAT_004877e5;      /* input event trigger */
 extern unsigned char         DAT_004877ec;      /* input accumulator */
 extern int                   DAT_00487824;      /* menu display state */
-extern unsigned char         DAT_00483724[4];   /* display config */
 extern unsigned char         g_WindowMode;      /* 0=windowed, 1=borderless fullscreen */
 extern int                   DAT_00487784;      /* turret count */
-extern unsigned char         DAT_00483834;      /* turret flag */
-extern unsigned char         DAT_00483835;      /* trooper flag */
 extern int                   DAT_00489e9c;      /* menu/game counter */
 
 /* ===== Menu Scrollbar (init.cpp) ===== */
@@ -89,33 +102,11 @@ extern int                   DAT_004877ac;      /* scroll item start index */
 extern int                   DAT_004877b0;      /* scroll mode */
 
 /* ===== Gameplay Tick (gameloop.cpp) ===== */
-extern short                 DAT_00483746;       /* tick rate (ticks per second, default 25) */
 extern char                  DAT_00489288;       /* sub-frame counter (0-7) */
-extern char                  DAT_0048373e;       /* activation guard flag */
 
 /* ===== Difficulty / Team Config ===== */
 extern int                   DAT_004892a8;       /* difficulty constant 1 (round length) */
 extern int                   DAT_004892ac;       /* difficulty constant 2 */
-extern char                  DAT_00483740;       /* difficulty setting 1 (from config blob, offset 0x17E8) */
-extern char                  DAT_00483741;       /* difficulty sub-setting (0x17E9) */
-extern char                  DAT_00483742;       /* shield/energy bar enable flag (0x17EA) */
-extern char                  DAT_00483743;       /* minimap/radar enable flag (0x17EB) */
-extern char                  DAT_0048373f;       /* difficulty setting 2 */
-extern int                   DAT_00483748;       /* stat scaling packed (from config blob) */
-extern int                   DAT_0048374c;       /* speed scaling packed (from config blob) */
-extern int                   DAT_00483750;       /* misc config packed */
-extern char                  DAT_00483836;       /* team mode (0=none, 2=teams) */
-extern int                   DAT_00483824;       /* game scaling constant 1 */
-extern int                   DAT_00483828;       /* game scaling constant 2 */
-extern int                   DAT_0048382c;       /* game scaling constant 3 (fire rate scale) */
-extern char                  DAT_0048372a;       /* team count setting */
-extern char                  DAT_0048372b;       /* team mode setting */
-extern char                  DAT_00483729;       /* game type setting */
-extern char                  DAT_00483731;       /* sky/fade color mode / fog of war sub-option */
-extern char                  DAT_00483739;       /* game mode preset index */
-extern float                 DAT_00483854;       /* entity density scale factor */
-extern float                 DAT_00483858;       /* inverse density factor (1.0/density) */
-extern char                  DAT_00489299;       /* sub-state 2 flag */
 
 /* ===== Debug Logging (enabled with --logging launch arg) ===== */
 extern int g_LogEnabled;
@@ -183,8 +174,6 @@ void FUN_00449040(char param);  /* visibility map (0=incremental, 1=full) */
 /* ===== Function Prototypes: init.cpp (config) ===== */
 void Load_Options_Config(void);   /* reads options.cfg → g_ConfigBlob */
 void Save_Options_Config(void);   /* writes g_ConfigBlob → options.cfg */
-void Sync_Config_From_Blob(void); /* blob → separate globals (needed at load) */
-void Sync_Config_To_Blob(void);   /* globals → blob (DEAD CODE — see refactor note in init.cpp) */
 
 /* ===== Utility functions (init.cpp) ===== */
 void FUN_004644af(char *dest, const unsigned char *format, ...);

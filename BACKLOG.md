@@ -11,10 +11,9 @@ are delivered together in one larger pull request.
 ## Current Foundation Status (v0.3)
 
 - `Entity` and `PlayerData` have verified sizes, offset assertions, and typed
-  accessors. The complete weapon/effect dispatcher now uses `PlayerData`; a
-  smaller set of legacy scanners still retains original byte-offset views.
-- The entity pool is typed. Player storage deliberately remains byte-addressed
-  until every stride-relative raw access has been migrated.
+  accessors. Player storage and the complete weapon/effect dispatcher are typed.
+- The entity and player pools are typed. A smaller set of entity callbacks
+  retains packed-width views where the original crosses nominal fields.
 - Projectile, trooper, animated-particle, and debris/item pools have verified
   record sizes and key offsets. Allocation, construction, effect spawning,
   targeting/AI, collision, rendering, death, and compaction are now typed.
@@ -24,6 +23,8 @@ are delivered together in one larger pull request.
 - The software renderer now uses typed framebuffer and viewport boundaries,
   and DirectDraw is isolated behind `RenderBackend`. SDL is the next
   architectural milestone.
+- `GameConfig` is the canonical byte-exact config record, and the main and
+  gameplay state machines use named enum values.
 
 ---
 
@@ -90,7 +91,7 @@ hud.cpp, menu.cpp
 
 ---
 
-### T1.2 — PlayerData struct (0x598 / 1432 bytes)  [IN PROGRESS]
+### T1.2 — PlayerData struct (0x598 / 1432 bytes)  [DONE]
 The earlier proposed layout was contradicted by the original machine code and
 has been discarded. Verified fields now include:
 
@@ -107,16 +108,11 @@ has been discarded. Verified fields now include:
 keyboard input, timer ticking, steering, thrust/exhaust, core player-loop state,
 and positional sound now use typed access. Unknown ranges remain opaque.
 
-The storage global deliberately remains byte-addressable while legacy routines
-still contain binary byte offsets; `Player_Get(index)` is the typed boundary.
-Changing the storage pointer itself to `PlayerData *` before all raw access is
-lifted would silently scale those offsets.
+The final raw byte-offset call sites have been lifted. The storage global is a
+`PlayerData *`, and `Player_Get(index)` is the typed boundary.
 
-**Remaining AC:**
-
-- Migrate the remaining raw player accesses cluster-by-cluster against assembly
-- Replace neutral field names only when semantics are independently established
-- Make the pool itself typed only after no byte-offset call sites remain
+Neutral names remain where semantics are not independently established; this
+is intentional and does not require a raw storage view.
 
 ---
 
@@ -160,10 +156,13 @@ collision, expiry, pickup animation, and compaction are typed.
 
 ---
 
-### T1.6 — TileType enum + accessors  [P1]
+### T1.6 — Recover TileType semantics + accessors  [INVESTIGATION / P1]
 Tilemap stores one byte per cell. Magic constants scattered everywhere.
 
-**Known values:** 0x00 empty, 0x01 solid, 0x02 water, 0x03 lava, 0x04 conveyor, 0x05 ice, 0x0E force field, 0x0F teleporter
+The earlier guessed value list was contradicted by recovered runtime code (for
+example, water checks use `0x0C`, while `0x02` is used by GG placement logic).
+Do not encode names from that list. Recover values and property-table meanings
+from the original executable before introducing the enum.
 
 **AC:**
 - `enum TileType` defined with all known values
@@ -227,9 +226,11 @@ Trig tables, ballistic LUT (`DAT_00489e90`), and vector helpers currently live i
 ### T3.1 — Bounds checks on all spawn/alloc sites  [IN PROGRESS / P0]
 Hard limits: 2500 entities, 2000 particles, 5000 fluid sources, 300 level names.
 
-The five typed runtime pools use named capacities at their spawn boundaries.
-Legacy fluid, edge-particle, decoration, and level-name arrays still need the
-same audit when their record layouts are recovered.
+The typed runtime pools use named capacities at their spawn boundaries. Level,
+GG-theme, and music discovery now stop safely at their 300-entry catalogs.
+Legacy fluid, edge-particle, decoration, wall-segment, and spawn-point arrays
+already guard their known limits but still need named constants and complete
+record-layout audits.
 
 **Key functions:** `FUN_00413720`, `FUN_00434310`, `FUN_00454b00`, `FUN_0045fc00`, `FUN_00407210`, `FUN_00406d20`
 
@@ -240,10 +241,10 @@ same audit when their record layouts are recovered.
 
 ---
 
-### T3.2 — Replace `void *` pool pointers with typed arrays  [IN PROGRESS / P1]
-The entity, projectile, trooper, particle, and debris/item globals are typed.
-`DAT_00487810` must remain byte-addressed until the remaining legacy player
-offsets are lifted; changing it early would silently scale those expressions.
+### T3.2 — Replace `void *` pool pointers with typed arrays  [DONE]
+The entity, player, projectile, trooper, particle, and debris/item globals are
+typed. Unknown auxiliary level buffers remain `void *` because they are not
+runtime record pools covered by this task.
 
 **AC:**
 - All `void *` pool pointers replaced with typed pointers
@@ -342,17 +343,19 @@ void Sprite_Blit(const SpriteFrame *frame, int x, int y,
 
 ## Theme 5: Config System
 
-### T5.1 — Replace 6408-byte blob with typed `GameConfig` struct  [P0]
-Current: `g_ConfigBlob[6408]` with aliased offsets like `DAT_0048227c = &g_ConfigBlob[0x324]`.
+### T5.1 — Replace 6408-byte blob with typed `GameConfig` struct  [DONE]
+`GameConfig` is a packed, size- and offset-asserted union. Named fields and the
+legacy byte view share the same storage, matching the original alias model.
 
-**Known fields:** display mode, sound config, key bindings, fog settings, difficulty, team mode, game type, player names, ship selections, weapon loadouts.
+**Known fields:** display mode, sound config, key bindings, fog settings,
+difficulty, team mode, game type, player colors, ship selections, and loadouts.
 
 **AC:**
-- `GameConfig` struct with all known fields
-- `Load_Options_Config()` deserializes blob -> struct
-- `Save_Options_Config()` serializes struct -> blob
-- All direct blob offset writes in menu code replaced with `config->field = value`
-- `Sync_Config_From_Blob()` kept for loading; `Sync_Config_To_Blob()` becomes the save path
+- [x] One `GameConfig` record with all currently known fields
+- [x] Existing 6408-byte saves deserialize directly without conversion
+- [x] Saves serialize that same record plus the decomp window-mode byte
+- [x] Runtime compatibility globals alias fields instead of mirroring them
+- [x] Raw offsets remain only as views for recovered descriptors/unknown fields
 
 ---
 
@@ -369,7 +372,7 @@ Once T5.1 is done, add human-readable config format.
 
 ## Theme 6: State Machine
 
-### T6.1 — Replace magic byte states with enum + transitions  [P1]
+### T6.1 — Replace magic byte states with enum + transitions  [DONE]
 Current: `g_GameState` is a byte with values 0x01, 0x02, 0x96, 0x97, 0x98, 0xFE.
 
 **AC:**
@@ -379,7 +382,7 @@ Current: `g_GameState` is a byte with values 0x01, 0x02, 0x96, 0x97, 0x98, 0xFE.
 
 ---
 
-### T6.2 — Introduce sub-state enums  [P2]
+### T6.2 — Introduce sub-state enums  [DONE]
 `g_SubState`, `g_SubState2`, and `DAT_00489299` interact non-obviously.
 
 **AC:**
@@ -600,13 +603,14 @@ Rename `FUN_004xxxxx` to semantic names after understanding each function.
 
 ## Theme 14: Bug Fixes & Cleanup
 
-### T14.1 — Fix `Sync_Config_To_Blob` dead code  [P1]
-Currently marked dead because menu writes directly into blob offsets.
+### T14.1 — Remove config synchronization bridge  [DONE]
+The original globals and the persisted record now share storage, as they did in
+the original executable. Both synchronization functions were deleted.
 
 **AC:**
-- After T5.1 (typed config), `Sync_Config_To_Blob()` becomes the canonical save path
-- Menu code never writes to raw blob offsets
-- Round-trip test: load -> modify -> save -> load produces identical config
+- [x] Load and save operate on the canonical `GameConfig`
+- [x] Menu byte views and runtime named fields cannot become stale copies
+- [ ] Runtime round-trip acceptance with an existing `options.cfg`
 
 ---
 

@@ -3,6 +3,21 @@
 
 #include "compat.h"
 
+typedef struct LevelPhysicsTuning {
+    unsigned char spawn_timer;
+    unsigned char respawn_delay;
+    unsigned char unknown_02;
+    unsigned char enabled;
+    unsigned char unknown_04;
+    unsigned char drag_factor;
+    unsigned char wall_damage;
+    unsigned char wall_bounce;
+    unsigned char unknown_08;
+    unsigned char unknown_09;
+} LevelPhysicsTuning;
+
+extern LevelPhysicsTuning g_LevelPhysicsTuning;
+
 /* ===== Level/Map counts and arrays ===== */
 extern int                   DAT_00485088;      /* total map/level count */
 extern int                   DAT_0048508c;      /* GG theme/official level count */
@@ -92,7 +107,6 @@ extern void                 *DAT_00489ea0;      /* swap/heightmap data */
 extern void                 *DAT_00487820;      /* edge/boundary navigation data */
 extern int                   DAT_00487a0c;      /* swap width */
 extern int                   DAT_00487a10;      /* swap height */
-extern unsigned short        DAT_0048384c;      /* tile fill color */
 extern unsigned short        DAT_00480700;      /* turret tile color temp */
 extern char                  DAT_0048396d;      /* generated-map flag */
 extern char                  DAT_00483960;      /* swap-file enabled flag */
@@ -104,13 +118,10 @@ extern char                  DAT_00489d7c[];     /* error string buffer (256 byt
 extern void                 *DAT_00487aa4;      /* large game state buffer */
 extern int                   DAT_00489254;      /* edge count */
 extern void                 *DAT_00489e84;      /* edge record array */
-/* Keep the storage pointer byte-addressable while legacy routines are lifted.
- * Typed access must go through Player_Get; changing this global itself to a
- * PlayerData pointer silently scales the many surviving binary byte offsets. */
-extern unsigned char        *DAT_00487810;      /* player/ship runtime record storage */
+extern PlayerData           *DAT_00487810;      /* player/ship runtime record storage */
 static inline PlayerData *Player_Get(int index)
 {
-    return reinterpret_cast<PlayerData *>(DAT_00487810 + index * sizeof(PlayerData));
+    return &DAT_00487810[index];
 }
 extern int                   DAT_00489240;      /* player count */
 extern int                   DAT_00489244;      /* active (human) player count */
@@ -126,7 +137,7 @@ extern int                   DAT_0048764b;      /* result flag (tournament) */
 /* DAT_0048227c is a macro alias into g_ConfigBlob, not a separate variable.
  * In the original binary, address 0x0048227C = 0x00481F58 + 0x324, i.e. it's
  * just a pointer into the config blob. See level.cpp comment. */
-#define DAT_0048227c (&g_ConfigBlob[0x324])
+#define DAT_0048227c (&g_GameConfig.values.player_count)
 extern void                 *DAT_00487928;      /* entity type table (0x10000 bytes) */
 
 /* ===== Function Prototypes: level.cpp ===== */
