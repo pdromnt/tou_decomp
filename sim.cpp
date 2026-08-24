@@ -1569,11 +1569,12 @@ void FUN_00454340(void)
 
                 if (g_ParticleCount < PARTICLE_CAPACITY) {
                     ParticleRecord *poff = &g_ParticlePool[g_ParticleCount];
-                    *(int *)(poff) = em_x * FIXED_SCALE + lut[em_param] * 0x0C;
-                    *(int *)(poff + 4) = em_y * FIXED_SCALE + lut[(em_param + 0x200) & 0x7FF] * 0x0C;
+                    poff->position_x = em_x * FIXED_SCALE + lut[em_param] * 0x0C;
+                    poff->position_y = em_y * FIXED_SCALE +
+                                       lut[(em_param + 0x200) & 0x7FF] * 0x0C;
                     /* Velocity: LUT * speed_mult, signed divide by 8 */
                     int vx = lut[dir] * speed_mult;
-                    *(int *)(poff + 8) = (vx + (vx >> 31 & 7)) >> 3;
+                    poff->velocity_x = (vx + (vx >> 31 & 7)) >> 3;
                     int vy = lut[(dir + 0x200) & 0x7FF] * speed_mult;
                     poff->velocity_y = (vy + (vy >> 31 & 7)) >> 3;
                     poff->sprite_index = sprite;
