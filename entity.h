@@ -13,26 +13,26 @@ extern void                 *DAT_00487ab0;      /* Math table buffer */
 extern unsigned char         DAT_00487ac0[6000]; /* 60 records × 100 bytes */
 
 /* ===== Intro particle system (memory.cpp) ===== */
-extern int                   DAT_00489248;      /* Entity count (also main entity count in gameplay) */
-extern int                   DAT_00489250;      /* Particle count */
+extern int                   g_EntityCount;      /* was DAT_00489248; active entities */
+extern int                   g_ParticleCount;    /* was DAT_00489250; active particles */
 extern int                   DAT_0048925c;      /* Misc counter / edge record count */
 extern DWORD                 DAT_004877f0;      /* Frame delta time */
 
 /* ===== Entity Rendering Counts (effects.cpp) ===== */
 extern int                   DAT_00489274;      /* static entity count (turrets) */
-extern int                   DAT_0048924c;      /* dynamic entity count (troopers) */
-extern int                   DAT_00489260;      /* projectile count */
+extern int                   g_TrooperCount;     /* was DAT_0048924c; active troopers */
+extern int                   g_ProjectileCount;  /* was DAT_00489260; active deployed objects */
 extern int                   DAT_0048926c;      /* explosion count */
 extern int                   DAT_00489264;      /* misc effect count */
-extern int                   DAT_00489268;      /* debris/particle count */
+extern int                   g_DebrisItemCount;  /* was DAT_00489268; active debris/items */
 extern int                   DAT_00487808;      /* active player viewport count */
 
 /* ===== Entity Rendering Arrays (allocated in memory.cpp) ===== */
 extern void                 *DAT_00489e98;      /* static entity array (16 bytes each) */
-extern TrooperRecord        *DAT_00487884;      /* trooper array (64 bytes each) */
-extern ProjectileRecord     *DAT_00481f28;      /* projectile array (64 bytes each) */
+extern TrooperRecord        *g_TrooperPool;      /* was DAT_00487884; 64-byte records */
+extern ProjectileRecord     *g_ProjectilePool;   /* was DAT_00481f28; 64-byte records */
 extern void                 *DAT_00487a9c;      /* explosion array (32 bytes each) */
-extern DebrisItemRecord     *DAT_00487830;      /* debris/item array (32 bytes each) */
+extern DebrisItemRecord     *g_DebrisItemPool;   /* was DAT_00487830; 32-byte records */
 extern void                 *DAT_00481f2c;      /* edge record array (32 bytes each) */
 extern void                 *DAT_00487780;      /* misc effect array (32 bytes each) */
 extern void                 *DAT_00487818;      /* projectile type table (0x140 bytes) */
@@ -54,10 +54,10 @@ extern void                 *DAT_00487abc;      /* Entity type table (0x11030 by
 
 /* ===== Explosion/Particle data buffers (memory.cpp) ===== */
 extern void                 *DAT_00481f20;      /* Explode descriptor table (160 bytes) */
-extern ParticleRecord       *DAT_00481f34;      /* Particle array (32 bytes * 2000) */
+extern ParticleRecord       *g_ParticlePool;     /* was DAT_00481f34; 2000 records */
 extern void                 *DAT_0048787c;      /* Explode pixel data (430KB) */
 extern void                 *DAT_00487aac;      /* Explosion rotation frames (~6.4MB) */
-extern Entity               *DAT_004892e8;      /* Entity pool: 2600 allocated, 2500 active cap */
+extern Entity               *g_EntityPool;       /* was DAT_004892e8; 2600 storage / 2500 active */
 extern void                 *DAT_00489230;      /* Brightness remap LUT (128KB) */
 extern void                 *DAT_004876a4[100]; /* Color palette tables */
 extern void                 *DAT_0048792c[48];  /* Blend LUT tables */

@@ -1841,7 +1841,7 @@ static void FUN_0044be20(int *ent)
     if (DAT_00487840 != 0) {
         iVar4 = 0xc000;
         do {
-            Entity *entity = &DAT_004892e8[*(int *)(iVar4 + (int)DAT_0048781c)];
+            Entity *entity = &g_EntityPool[*(int *)(iVar4 + (int)DAT_0048781c)];
             if ((Player_Get(entity->owner)->team !=
                  (char)ent[0xb]) &&
                 (entity->type == 0x18))
@@ -1864,7 +1864,7 @@ static void FUN_0044be20(int *ent)
     }
 }
 /* ===== FUN_0044ca40 — Fire_Primary (0044CA40) ===== */
-/* Creates a projectile entity in DAT_004892e8 at player's heading.
+/* Creates a projectile entity in g_EntityPool at player's heading.
  * Sets fire cooldown, subtracts energy, spawns 1-3 projectile entities
  * depending on weapon type. Plays fire sound. */
 static void FUN_0044ca40_impl(int *ent, int idx)
@@ -1920,8 +1920,8 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
     /* Spawn primary projectile (straight ahead) */
     if ((*(char *)((int)ent + 0x8D) == '\0' || *(char *)((int)ent + 0x8D) == '\x02') &&
-        DAT_00489248 < 0xA28) {
-        Entity *projectile = &DAT_004892e8[DAT_00489248];
+        g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+        Entity *projectile = &g_EntityPool[g_EntityCount];
 
         /* Position: player + 1 unit in heading direction */
         projectile->position_x = lut[heading] + ent[0];
@@ -1962,7 +1962,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         projectile->animation_frame = 0;
         projectile->counter_3c = 0;
 
-        DAT_00489248++;
+        g_EntityCount++;
 
         /* Set origin position */
         projectile->motion_x_10 = ent[0];
@@ -1987,7 +1987,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
 
     /* Spawn side projectiles (fire mode 1 or 2) */
     if ((*(char *)((int)ent + 0x8D) == '\x01' || *(char *)((int)ent + 0x8D) == '\x02') &&
-        DAT_00489248 < 0xA28) {
+        g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
 
         int shipStatOff = idx * 0x40;
         int *lut2 = (int *)DAT_00487ab0;
@@ -1995,7 +1995,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         /* Left side projectile: heading + 0x200 (perpendicular) */
         unsigned int side_angle = (heading + 0x200) & 0x7FF;
         int ship_radius = (int)(unsigned int)*(unsigned char *)(shipStatOff + 0x22 + (int)DAT_0048780c);
-        Entity *projectile = &DAT_004892e8[DAT_00489248];
+        Entity *projectile = &g_EntityPool[g_EntityCount];
 
         projectile->position_x = (ship_radius * lut2[side_angle]) / 2 + ent[0];
         projectile->position_y = (lut2[0x200 + side_angle] * ship_radius) / 2 + ent[1];
@@ -2029,7 +2029,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         projectile->animation_frame = 0;
         projectile->counter_3c = 0;
 
-        DAT_00489248++;
+        g_EntityCount++;
 
         projectile->motion_x_10 = ent[0];
         projectile->motion_y_14 = ent[1];
@@ -2039,9 +2039,9 @@ static void FUN_0044ca40_impl(int *ent, int idx)
         }
 
         /* Right side projectile: heading - 0x200 (opposite perpendicular) */
-        if (DAT_00489248 < 0xA28) {
+        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
             side_angle = (heading - 0x200) & 0x7FF;
-            projectile = &DAT_004892e8[DAT_00489248];
+            projectile = &g_EntityPool[g_EntityCount];
 
             projectile->position_x = (ship_radius * lut2[side_angle]) / 2 + ent[0];
             projectile->position_y =
@@ -2076,7 +2076,7 @@ static void FUN_0044ca40_impl(int *ent, int idx)
             projectile->animation_frame = 0;
             projectile->counter_3c = 0;
 
-            DAT_00489248++;
+            g_EntityCount++;
 
             projectile->motion_x_10 = ent[0];
             projectile->motion_y_14 = ent[1];
@@ -2105,13 +2105,13 @@ static void FUN_0044d650_impl(int *ent, int idx)
         (*(char *)((int)ent + 0xa2) != '\0'))
         return;
 
-    int count = DAT_00489248;
+    int count = g_EntityCount;
     int i;
 
     /* Type 1: 0x0B (slot +0x470) -> 0xFA */
     if ((*(int *)((int)ent + 0x470) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
-            Entity *entity = &DAT_004892e8[i];
+            Entity *entity = &g_EntityPool[i];
             if ((entity->subtype == 1) && (entity->type == 0x0b) &&
                 (entity->scratch_2c == 1) && (entity->owner == (unsigned char)idx)) {
                 entity->state_20 = 0xfa;
@@ -2121,7 +2121,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
     /* Type 2: 0x2E (slot +0x46C) -> 0xFB */
     if ((*(int *)((int)ent + 0x46c) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
-            Entity *entity = &DAT_004892e8[i];
+            Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x2e) && (entity->owner == (unsigned char)idx)) {
                 entity->state_20 = 0xfb;
             }
@@ -2130,7 +2130,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
     /* Type 3: 0x27 (slot +0x468) -> 0xFB */
     if ((*(int *)((int)ent + 0x468) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
-            Entity *entity = &DAT_004892e8[i];
+            Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x27) && (entity->scratch_2c == 1) &&
                 (entity->owner == (unsigned char)idx)) {
                 entity->state_20 = 0xfb;
@@ -2140,7 +2140,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
     /* Type 4: 0x22 (slot +0x464) -> 0xFA */
     if ((*(int *)((int)ent + 0x464) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
-            Entity *entity = &DAT_004892e8[i];
+            Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x22) && (entity->subtype != 0) &&
                 (entity->owner == (unsigned char)idx)) {
                 entity->state_20 = 0xfa;
@@ -2150,7 +2150,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
     /* Type 5: 0x28 (slot +0x474) -> 0xFA */
     if ((*(int *)((int)ent + 0x474) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
-            Entity *entity = &DAT_004892e8[i];
+            Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x28) && (entity->owner == (unsigned char)idx)) {
                 entity->state_20 = 0xfa;
             }
@@ -2159,7 +2159,7 @@ static void FUN_0044d650_impl(int *ent, int idx)
     /* Type 6: 0x29/0x2A (slot +0x478) -> 0xFA */
     if ((*(int *)((int)ent + 0x478) != 0) && (0 < count)) {
         for (i = 0; i < count; i++) {
-            Entity *entity = &DAT_004892e8[i];
+            Entity *entity = &g_EntityPool[i];
             if ((entity->type == 0x29 || entity->type == 0x2a) &&
                 (entity->owner == (unsigned char)idx)) {
                 entity->state_20 = 0xfa;
@@ -2316,11 +2316,11 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
         (*(char *)((unsigned int)*(unsigned char *)((piVar1[0] >> 0x12) + 7 +
             (int)DAT_0048782c + ((piVar1[1] >> 0x12) + 4 <<
             ((unsigned char)DAT_00487a18 & 0x1f))) * 0x20 + 4 + (int)DAT_00487928) == '\x01') &&
-        (DAT_00489248 < ENTITY_ACTIVE_CAPACITY))
+        (g_EntityCount < ENTITY_ACTIVE_CAPACITY))
     {
         int r = rand();
         int iVar5 = r % 0x280 + 0x200;
-        Entity *debris = &DAT_004892e8[DAT_00489248];
+        Entity *debris = &g_EntityPool[g_EntityCount];
 
         debris->position_x = piVar1[0] + 0x1c0000;
         debris->position_y = piVar1[1] + 0x100000;
@@ -2348,7 +2348,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
         debris->counter_3c = 0;
         debris->timer_5c = 0;
 
-        DAT_00489248++;
+        g_EntityCount++;
         debris->health_or_damage_28 = rand() % 0x3c + 0x46;
         debris->palette_value = (DAT_0048384c & 0xffff) + 30000;
     }
@@ -2383,7 +2383,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
             int angleStep = 0x800 / (int)destroyedCount;
             int angle = 0;
             while (angle < 0x800) {
-                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
+                if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) return;
 
                 unsigned int randAngle = (unsigned int)rand() & 0x7ff;
                 int signedRand = (int)randAngle;
@@ -2391,7 +2391,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
                 unsigned int uVar6 = (((signedRand + (signedRand >> 0x1f & 3)) >> 2) + angle) & 0x7ff;
                 int iVar3 = rand() % 0x28 + 10;
 
-                Entity *debris = &DAT_004892e8[DAT_00489248];
+                Entity *debris = &g_EntityPool[g_EntityCount];
 
                 int rx = rand() & 7; if (rx < 0) rx = (rx - 1 | (int)0xfffffff8) + 1;
                 debris->position_x = ((unsigned int)(rx - 4) + (unsigned int)iVar4) * FIXED_SCALE;
@@ -2424,7 +2424,7 @@ static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
                 debris->counter_3c = 0;
                 debris->timer_5c = 0;
 
-                DAT_00489248++;
+                g_EntityCount++;
                 debris->health_or_damage_28 = rand() % 0x5a + 0x5a;
                 debris->palette_value = (unsigned int)DAT_00481e8c + 30000;
 
@@ -2831,10 +2831,10 @@ static void FUN_00450080_impl(int *ent, char param_2)
     /* Spawn debris particles for each destroyed tile */
     int local_10 = 0;
     while (local_10 < local_1c) {
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
 
         unsigned int uVar9 = (unsigned int)rand();
-        Entity *spawn = &DAT_004892e8[DAT_00489248];
+        Entity *spawn = &g_EntityPool[g_EntityCount];
 
         spawn->position_x = iVar14 << 0x12;
         spawn->position_y = iVar5 << 0x12;
@@ -2877,11 +2877,11 @@ static void FUN_00450080_impl(int *ent, char param_2)
         spawn->counter_3c = 0;
         spawn->timer_5c = 0;
 
-        DAT_00489248++;
-        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 0x46 + 0x32;
-        DAT_004892e8[DAT_00489248 - 1].palette_value =
+        g_EntityCount++;
+        g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 0x46 + 0x32;
+        g_EntityPool[g_EntityCount - 1].palette_value =
             (((int)uVar10 >> 3) + ((uVar7 & 0x1f8) * 0x20 + (uVar11 & 0x3ff8)) * 4) & 0xffff;
-        DAT_004892e8[DAT_00489248 - 1].palette_value += 30000;
+        g_EntityPool[g_EntityCount - 1].palette_value += 30000;
 
         local_10++;
     }
@@ -3040,11 +3040,11 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
             if (rFreq % freq != 0) return;
 
             for (int p = 0; p < particleCount; p++) {
-                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
+                if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) return;
 
                 unsigned int angle = (unsigned int)rand() & 0x7ff;
                 int speed = rand();
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                Entity *spawn = &g_EntityPool[g_EntityCount];
 
                 *(unsigned int *)((char *)spawn + 0x00) = puVar1[0];
                 *(unsigned int *)((char *)spawn + 0x08) = puVar1[1];
@@ -3072,13 +3072,13 @@ static void FUN_00451010_impl(unsigned int *ent, char param_2, int param_3)
                 spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
 
-                DAT_00489248++;
-                DAT_004892e8[DAT_00489248 - 1].timer_5c = 6;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].timer_5c = 6;
                 int rCol = rand();
-                DAT_004892e8[DAT_00489248 - 1].scratch_65 =
+                g_EntityPool[g_EntityCount - 1].scratch_65 =
                     (char)(rCol % 0xc) + '\x14';
-                DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x12;
-                Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
+                g_EntityPool[g_EntityCount - 1].scratch_64 = 0x12;
+                Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
                 last_spawn->palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 +
                         (unsigned int)last_spawn->scratch_65 * 2) + 30000;
@@ -3187,21 +3187,21 @@ LAB_apply:
         0, 0, 0, 0, '\0', '\0', (unsigned char)param_2);
 
     /* Spawn death flash particle */
-    if (DAT_00489250 < PARTICLE_CAPACITY) {
-        int base2 = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-        *(int *)(base2 + 0x00) = ent[0];
-        *(int *)(base2 + 0x04) = ent[1];
-        *(int *)(base2 + 0x08) = 0;
-        *(int *)(base2 + 0x0c) = 0;
-        *(unsigned char *)(base2 + 0x10) = 0xb;
-        *(unsigned char *)(base2 + 0x11) = 0;
-        *(unsigned char *)(base2 + 0x12) = 0;
-        *(unsigned char *)(base2 + 0x13) = 1;
-        *(unsigned char *)(base2 + 0x14) = 0xff;
-        *(unsigned char *)(base2 + 0x15) = 0;
+    if (g_ParticleCount < PARTICLE_CAPACITY) {
+        ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+        particle->position_x = ent[0];
+        particle->position_y = ent[1];
+        particle->velocity_x = 0;
+        particle->velocity_y = 0;
+        particle->sprite_index = 0xb;
+        particle->frame_number = 0;
+        particle->frame_timer = 0;
+        particle->flags_13 = 1;
+        particle->owner_or_flags_14 = 0xff;
+        particle->color_index = 0;
 
-        DAT_00489250++;
-        *(unsigned char *)(DAT_00489250 * 0x20 + (int)DAT_00481f34 - 0xb) = 1;
+        g_ParticleCount++;
+        particle->color_index = 1;
 
         /* Play random death sound */
         int iVar7b = ent[1];
@@ -3217,7 +3217,7 @@ LAB_apply:
     int debrisAngleSin = 0;
     int debrisAngleCos = 0x800;
     for (int i = 0; i < 0x80; i++) {
-        if (DAT_00489250 >= PARTICLE_CAPACITY) break;
+        if (g_ParticleCount >= PARTICLE_CAPACITY) break;
 
         int nextCos = debrisAngleCos + 0x40;
         int nextSin = debrisAngleSin + 0x40;
@@ -3228,22 +3228,22 @@ LAB_apply:
 
         unsigned int ptype = (unsigned int)rand() & 3;
 
-        if (DAT_00489250 < PARTICLE_CAPACITY) {
-            int base2 = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-            *(int *)(base2 + 0x00) = ent[0];
-            *(int *)(base2 + 0x04) = ent[1];
-            *(int *)(base2 + 0x08) = (rand() % 0x32) *
+        if (g_ParticleCount < PARTICLE_CAPACITY) {
+            ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+            particle->position_x = ent[0];
+            particle->position_y = ent[1];
+            particle->velocity_x = (rand() % 0x32) *
                 *(int *)((int)DAT_00487ab0 + nextSin) >> 5;
-            *(int *)(base2 + 0x0c) = (rand() % 0x32) *
+            particle->velocity_y = (rand() % 0x32) *
                 *(int *)(nextCos + (int)DAT_00487ab0) >> 5;
-            *(char *)(base2 + 0x10) = (char)ptype + '\x01';
+            particle->sprite_index = (uint8_t)(ptype + 1);
             unsigned int sub = (unsigned int)rand() & 3;
-            *(char *)(base2 + 0x11) = (char)sub;
-            *(unsigned char *)(base2 + 0x12) = 0;
-            *(unsigned char *)(base2 + 0x13) = 199;
-            *(unsigned char *)(base2 + 0x14) = (unsigned char)param_2;
-            *(unsigned char *)(base2 + 0x15) = 0;
-            DAT_00489250++;
+            particle->frame_number = (uint8_t)sub;
+            particle->frame_timer = 0;
+            particle->flags_13 = 199;
+            particle->owner_or_flags_14 = (uint8_t)param_2;
+            particle->color_index = 0;
+            g_ParticleCount++;
         }
         debrisAngleSin = nextSin;
         debrisAngleCos = nextCos;
@@ -3253,14 +3253,14 @@ LAB_apply:
     /* The original uses __ftol to get particle count from FPU — approximate with 10 */
     int fragmentCount = 10;
     for (int i = 0; i < fragmentCount; i++) {
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) return;
 
         unsigned int uVar5 = (unsigned int)rand() & 0x7ff;
         int speed = rand() % 0x46 + 10;
         unsigned int uVar6 = (unsigned int)rand() & 1;
         int iVar8 = (int)uVar6 + 0x6c;
 
-        Entity *fragment = &DAT_004892e8[DAT_00489248];
+        Entity *fragment = &g_EntityPool[g_EntityCount];
         fragment->position_x = ent[2];
         fragment->position_y = ent[3];
         fragment->velocity_x = (*(int *)((int)DAT_00487ab0 + uVar5 * 4) * speed >> 7) + ent[4];
@@ -3287,7 +3287,7 @@ LAB_apply:
         fragment->counter_3c = 0;
         fragment->timer_5c = 0;
 
-        DAT_00489248++;
+        g_EntityCount++;
         int rCol = rand();
         if (rCol % 3 == 0) {
             fragment->palette_value += 300;
@@ -3405,7 +3405,7 @@ static void FUN_0040fb70_impl(int idx)
  *
  * param idx = entity/player index
  * Entity data at DAT_00487810 + idx * 0x598
- * Particle data at DAT_004892e8 (stride 0x80, count DAT_00489248)
+ * Particle data at g_EntityPool (stride 0x80, count g_EntityCount)
  * Entity type defs at DAT_00487abc (accessed as int[])
  */
 static void FUN_00401000_impl(int idx)
@@ -3506,13 +3506,13 @@ static void FUN_00401000_impl(int idx)
     {
         local_c = 0;
         do {
-            if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+            if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
             iVar13 = rand();
             uVar8 = (iVar13 % 0x46 - 0x23 + uVar7) & 0x7ff;
             iVar13 = rand();
             iVar13 = iVar13 % 0x46 + 0x46;
             {
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                Entity *spawn = &g_EntityPool[g_EntityCount];
                 spawn->position_x = player->position_x;
                 spawn->position_y = player->position_y;
                 spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + player->velocity_x;
@@ -3546,20 +3546,20 @@ static void FUN_00401000_impl(int idx)
                 spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
             }
-            DAT_00489248++;
+            g_EntityCount++;
             iVar13 = rand();
             uVar8 = iVar13 % 100 + 0x14;
             {
                 /* Grayscale particle color: X1R5G5B5 packing (gray5 * 0x421).
                  * Renderer subtracts 30000 then decodes as X1R5G5B5→RGB565. */
                 unsigned int gray5 = uVar8 >> 3;
-                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                g_EntityPool[g_EntityCount - 1].palette_value =
                     ((gray5 << 10) | (gray5 << 5) | gray5) + 30000;
             }
             iVar13 = rand();
-            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = iVar13 % 0x32 + 0x50;
-            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
-            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
+            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = iVar13 % 0x32 + 0x50;
+            g_EntityPool[g_EntityCount - 1].motion_x_10 = player->position_x;
+            g_EntityPool[g_EntityCount - 1].motion_y_14 = player->position_y;
             local_c++;
 
         } while (local_c < 0x1e);
@@ -3576,8 +3576,8 @@ static void FUN_00401000_impl(int idx)
                 local_c = 0;
                 do {
                     unsigned int ang = uVar8 & 0x7ff;
-                    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
-                    Entity *spawn = &DAT_004892e8[DAT_00489248];
+                    if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
+                    Entity *spawn = &g_EntityPool[g_EntityCount];
                     spawn->position_x = player->position_x;
                     spawn->position_y = player->position_y;
                     spawn->velocity_x = (sincos[ang] * typeTable[0xb1] >> 6) + player->velocity_x;
@@ -3601,13 +3601,13 @@ static void FUN_00401000_impl(int idx)
                     spawn->counter_3c = 0;
                     spawn->timer_5c = 0;
                     uVar8 = ang + 0x2a;
-                    DAT_00489248++;
+                    g_EntityCount++;
                     local_c++;
 
                 } while (local_c < 3);
             }
-            else if (cVar3 == '\x02' && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+            else if (cVar3 == '\x02' && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                Entity *spawn = &g_EntityPool[g_EntityCount];
                 spawn->position_x = player->position_x;
                 spawn->position_y = player->position_y;
                 spawn->velocity_x = (sincos[uVar7] * typeTable[0xb2] >> 6) + player->velocity_x;
@@ -3630,17 +3630,17 @@ static void FUN_00401000_impl(int idx)
                 spawn->callback_address = typeTable[0x86];
                 spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
-                DAT_00489248++;
-                DAT_004892e8[DAT_00489248 - 1].counter_3c = 2;
-                piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].damage_44;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].counter_3c = 2;
+                piVar1 = (int *)&g_EntityPool[g_EntityCount - 1].damage_44;
                 *piVar1 *= 6;
 
             }
             break;
         }
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
         {
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
             spawn->position_y = player->position_y;
             spawn->velocity_x = (sincos[uVar7] * typeTable[0xb3] >> 6) + player->velocity_x;
@@ -3671,11 +3671,11 @@ static void FUN_00401000_impl(int idx)
     case 2:
     {
         if ((char)player->weapon_mark == '\0') {
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                 iVar13 = rand();
                 uVar8 = (iVar13 % 0x78 - 0x3c + uVar7) & 0x7ff;
                 iVar13 = idx * 0x40;
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                Entity *spawn = &g_EntityPool[g_EntityCount];
                 spawn->position_x = (sincos[uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_x;
                 spawn->position_y = (sincos[0x200 + uVar7] >> 1) * *(int *)(iVar13 + 0x34 + (int)DAT_0048780c) + player->position_y;
                 spawn->velocity_x = (typeTable[player->weapon_mark + 0x137] * sincos[uVar8] >> 6) + player->velocity_x;
@@ -3699,21 +3699,21 @@ static void FUN_00401000_impl(int idx)
                 spawn->callback_address = typeTable[0x10c];
                 spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
-                DAT_00489248++;
-                DAT_004892e8[DAT_00489248 - 1].timer_5c = 0x14;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].timer_5c = 0x14;
                 uVar8 = rand(); uVar8 &= 0x8000000f;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff0) + 1;
-                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                g_EntityPool[g_EntityCount - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0x140 + uVar8 * 2) + 30000;
                 iVar13 = rand();
-                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = iVar13 % 400 + 0x96;
+                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = iVar13 % 400 + 0x96;
 
             }
             break;
         }
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
         {
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
             spawn->position_y = player->position_y;
             spawn->velocity_x = (sincos[uVar7] * 0x14 >> 4) + player->velocity_x;
@@ -3737,10 +3737,10 @@ static void FUN_00401000_impl(int idx)
         {
             uVar10 = typeTable[0xa78];
 LAB_00401856:
-            DAT_004892e8[DAT_00489248].callback_address = uVar10;
-            DAT_004892e8[DAT_00489248].counter_3c = 0;
-            DAT_004892e8[DAT_00489248].timer_5c = 0;
-            DAT_00489248++;
+            g_EntityPool[g_EntityCount].callback_address = uVar10;
+            g_EntityPool[g_EntityCount].counter_3c = 0;
+            g_EntityPool[g_EntityCount].timer_5c = 0;
+            g_EntityCount++;
 
         }
         break;
@@ -3749,7 +3749,7 @@ LAB_00401856:
     /* ===== CASE 3: Trooper spawn ===== */
     case 3:
     {
-        if (DAT_0048924c >= TROOPER_CAPACITY) break;
+        if (g_TrooperCount >= TROOPER_CAPACITY) break;
         if ((char)player->weapon_mark == '\0') {
             iVar13 = rand(); iVar11 = iVar13 % 0x3c + 0x5a;
         } else {
@@ -3785,10 +3785,10 @@ LAB_00401856:
                 static_cast<long double>(DAT_0048385c) * 14.0L + 1.0L));
             local_c = 0;
             do {
-                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+                if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                 iVar13 = rand(); iVar11 = rand();
                 uVar8 = (iVar11 % 0x15e + 0x351 + player->heading) & 0x7ff;
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                Entity *spawn = &g_EntityPool[g_EntityCount];
                 spawn->position_x = player->position_x + sincos[uVar7] * -8;
                 spawn->position_y = player->position_y + sincos[0x200 + uVar7] * -8;
                 spawn->velocity_x = sincos[uVar8] * (iVar13 % 0x14) >> 3;
@@ -3807,15 +3807,15 @@ LAB_00401856:
                 spawn->animation_frame = 0; spawn->subtype = 0;
                 spawn->callback_address = typeTable[0x35ea]; spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
-                DAT_00489248++;
-                DAT_004892e8[DAT_00489248 - 1].counter_3c = 0;
-                DAT_004892e8[DAT_00489248 - 1].timer_5c = 3;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].counter_3c = 0;
+                g_EntityPool[g_EntityCount - 1].timer_5c = 3;
                 uVar8 = rand(); uVar8 &= 0x80000007;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffff8) + 1;
-                DAT_004892e8[DAT_00489248 - 1].scratch_65 = (char)uVar8 + '\x14';
-                DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x12;
+                g_EntityPool[g_EntityCount - 1].scratch_65 = (char)uVar8 + '\x14';
+                g_EntityPool[g_EntityCount - 1].scratch_64 = 0x12;
                 {
-                    Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
+                    Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
                     last_spawn->palette_value = *(unsigned short *)((int)DAT_00487aa8 +
                         (unsigned int)last_spawn->scratch_65 * 2) + 30000;
                 }
@@ -3829,7 +3829,7 @@ LAB_00401856:
     /* ===== CASE 6: Trooper dynamic spawn ===== */
     case 6:
     {
-        if (DAT_0048924c >= TROOPER_CAPACITY) break;
+        if (g_TrooperCount >= TROOPER_CAPACITY) break;
         uVar9 = player->team;
         iVar11 = rand(); iVar11 = (iVar11 % 100 + 300) * 0x200;
         uVar8 = rand(); uVar8 &= 0x80000001;
@@ -3867,7 +3867,7 @@ LAB_00401856:
                 /* Spawn teleport particles in circle around entity */
                 unsigned int angleParam = 0;
                 while (1) {
-                    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+                    if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                     uVar6 = rand(); uVar6 &= 0x8000003f;
                     if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xffffffc0) + 1;
                     unsigned int uVar15 = (unsigned int)FUN_004257e0(
@@ -3875,7 +3875,7 @@ LAB_00401856:
                         player->position_y >> 0x12, foundX, foundY);
                     iVar11 = sincos[uVar15];
                     iVar16 = sincos[0x200 + uVar15];
-                    Entity *spawn = &DAT_004892e8[DAT_00489248];
+                    Entity *spawn = &g_EntityPool[g_EntityCount];
                     spawn->position_x = player->position_x;
                     spawn->position_y = player->position_y;
                     /* 0x4031D9-0x403227: angleParam is a byte offset into the
@@ -3900,15 +3900,15 @@ LAB_00401856:
                     spawn->animation_frame = 0; spawn->subtype = 5;
                     spawn->callback_address = typeTable[0x35ea]; spawn->counter_3c = 0;
                     spawn->timer_5c = 0;
-                    DAT_00489248++;
+                    g_EntityCount++;
                     uVar6 = rand(); uVar6 &= 0x80000007;
                     if ((int)uVar6 < 0) uVar6 = (uVar6 - 1 | 0xfffffff8) + 1;
                     angleParam += 0x40;
-                    DAT_004892e8[DAT_00489248 - 1].timer_5c = (char)uVar6 + '\x04';
-                    DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0x27;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x21;
+                    g_EntityPool[g_EntityCount - 1].timer_5c = (char)uVar6 + '\x04';
+                    g_EntityPool[g_EntityCount - 1].scratch_65 = 0x27;
+                    g_EntityPool[g_EntityCount - 1].scratch_64 = 0x21;
                     {
-                        int pp2 = DAT_00489248 * 0x80 + (int)DAT_004892e8;
+                        int pp2 = g_EntityCount * 0x80 + (int)g_EntityPool;
                         *(unsigned int *)(pp2 - 0x34) = *(unsigned short *)((int)DAT_00487aa8 + (unsigned int)*(unsigned char *)(pp2 - 0x1b) * 2) + 30000;
                     }
                     if (0x1fff < (int)angleParam) break;
@@ -3983,19 +3983,21 @@ LAB_00401856:
             DAT_0048925c++;
         }
 
-        if (DAT_00489250 < PARTICLE_CAPACITY) {
-            int pp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-            *(int *)(pp) = (sincos[uVar7] * 500 >> 6) + player->position_x;
-            *(int *)(pp + 4) = (sincos[0x200 + uVar7] * 500 >> 6) + player->position_y;
-            *(int *)(pp + 8) = (sincos[uVar8] * 0x30 >> 6) + player->velocity_x;
-            *(int *)(pp + 0xc) = (sincos[0x200 + uVar8] * 0x30 >> 6) + player->velocity_y;
+        if (g_ParticleCount < PARTICLE_CAPACITY) {
+            ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+            particle->position_x = (sincos[uVar7] * 500 >> 6) + player->position_x;
+            particle->position_y = (sincos[0x200 + uVar7] * 500 >> 6) + player->position_y;
+            particle->velocity_x = (sincos[uVar8] * 0x30 >> 6) + player->velocity_x;
+            particle->velocity_y = (sincos[0x200 + uVar8] * 0x30 >> 6) + player->velocity_y;
             uVar8 = rand(); uVar8 &= 0x80000003;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-            *(char *)(pp + 0x10) = (char)uVar8 + '\x01';
-            *(unsigned char *)(pp + 0x11) = 1; *(unsigned char *)(pp + 0x12) = 2;
-            *(unsigned char *)(pp + 0x13) = 200; *(unsigned char *)(pp + 0x14) = uVar9;
-            *(unsigned char *)(pp + 0x15) = 0;
-            DAT_00489250++;
+            particle->sprite_index = (uint8_t)(uVar8 + 1);
+            particle->frame_number = 1;
+            particle->frame_timer = 2;
+            particle->flags_13 = 200;
+            particle->owner_or_flags_14 = uVar9;
+            particle->color_index = 0;
+            g_ParticleCount++;
 
         }
         break;
@@ -4014,11 +4016,11 @@ LAB_00401856:
     {
         local_c = 0;
         do {
-            if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+            if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
             uVar8 = rand(); uVar8 &= 0x800007ff;
             if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffff800) + 1;
             iVar13 = rand(); iVar13 = iVar13 % 0x32 + 0x3c;
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
             spawn->position_y = player->position_y;
             spawn->velocity_x = (sincos[uVar8] * iVar13 >> 6) + (player->velocity_x >> 1);
@@ -4035,8 +4037,8 @@ LAB_00401856:
             spawn->animation_frame = 0; spawn->subtype = 0;
             spawn->callback_address = typeTable[0x8e6]; spawn->counter_3c = 0;
             spawn->timer_5c = 0;
-            DAT_00489248++;
-            DAT_004892e8[DAT_00489248 - 1].counter_3c = 1;
+            g_EntityCount++;
+            g_EntityPool[g_EntityCount - 1].counter_3c = 1;
             local_c++;
 
         } while (local_c < 0xe);
@@ -4053,9 +4055,9 @@ LAB_00401856:
             local_c = 0;
             do {
 
-                if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+                if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                 uVar8 &= 0x7ff;
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+                Entity *spawn = &g_EntityPool[g_EntityCount];
                 spawn->position_x = player->position_x;
                 spawn->position_y = player->position_y;
                 spawn->velocity_x = sincos[uVar8] >> 1;
@@ -4076,9 +4078,9 @@ LAB_00401856:
                 spawn->subtype = player->weapon_mark;
                 spawn->callback_address = typeTable[0xd16]; spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
-                DAT_00489248++;
-                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x9c4;
-                DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 0x9c4;
+                g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
                 local_c++;
 
             } while (local_c < 3);
@@ -4086,8 +4088,8 @@ LAB_00401856:
             int sndId = (cVar3_19 == '\x02') ? 0x111 : 0x110;
             FUN_0040f9b0(sndId, player->position_x, player->position_y);
 
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                Entity *spawn = &DAT_004892e8[DAT_00489248];
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                Entity *spawn = &g_EntityPool[g_EntityCount];
                 spawn->position_x = player->position_x;
                 spawn->position_y = player->position_y;
                 spawn->velocity_x = 0; spawn->velocity_y = 0;
@@ -4106,8 +4108,8 @@ LAB_00401856:
                 spawn->subtype = player->weapon_mark;
                 spawn->callback_address = typeTable[0xd16]; spawn->counter_3c = 0;
                 spawn->timer_5c = 0;
-                DAT_00489248++;
-                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 6000;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 6000;
 
             }
         }
@@ -4122,8 +4124,8 @@ LAB_00401856:
         /* Spawn beam at heading+0x200 and heading-0x200 */
         #define SPAWN_BEAM_0x69(angleExpr) do { \
             uVar8 = (angleExpr) & 0x7ff; \
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) { \
-                Entity *spawn = &DAT_004892e8[DAT_00489248]; \
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) { \
+                Entity *spawn = &g_EntityPool[g_EntityCount]; \
                 spawn->position_x = player->position_x; \
                 spawn->position_y = player->position_y; \
                 spawn->velocity_x = (sincos[uVar8] * 0xb4 >> 6) + player->velocity_x; \
@@ -4140,40 +4142,40 @@ LAB_00401856:
                 spawn->animation_frame = 0; spawn->subtype = 5; \
                 spawn->callback_address = typeTable[0x36f6]; spawn->counter_3c = 0; \
                 spawn->timer_5c = 0; \
-                DAT_00489248++; \
-                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x32; \
+                g_EntityCount++; \
+                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 0x32; \
             } \
         } while(0)
 
         uVar8 = (player->heading + 0x200U) & 0x7ff;
         SPAWN_BEAM_0x69(player->heading + 0x200U);
-        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
             SPAWN_BEAM_0x69(player->heading - 0x200U);
         }
         if ((char)player->weapon_mark != '\0') {
             SPAWN_BEAM_0x69(player->heading + 0x180U);
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                 SPAWN_BEAM_0x69(player->heading - 0x180U);
             }
         }
         if (1 < player->weapon_mark) {
             SPAWN_BEAM_0x69(player->heading + 0x280U);
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                 SPAWN_BEAM_0x69(player->heading - 0x280U);
             }
         }
         if (2 < player->weapon_mark) {
             SPAWN_BEAM_0x69(player->heading - 0x400U);
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                 SPAWN_BEAM_0x69(player->heading - 0x380U);
-                if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                     SPAWN_BEAM_0x69(player->heading + 0x380U);
                 }
             }
         }
         if (3 < player->weapon_mark) {
             SPAWN_BEAM_0x69(player->heading - 0x300U);
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                 SPAWN_BEAM_0x69(player->heading + 0x300U);
             }
         }
@@ -4227,8 +4229,8 @@ LAB_00401856:
     /* ===== CASE 0x2b: Self-propelled projectile ===== */
     case 0x2b:
     {
-        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
             spawn->position_y = player->position_y;
             spawn->velocity_x = player->velocity_x / 2;
@@ -4245,8 +4247,8 @@ LAB_00401856:
             spawn->animation_frame = 0; spawn->subtype = 0;
             spawn->callback_address = typeTable[0x1682]; spawn->counter_3c = 0;
             spawn->timer_5c = 0;
-            DAT_00489248++;
-            piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].palette_value;
+            g_EntityCount++;
+            piVar1 = (int *)&g_EntityPool[g_EntityCount - 1].palette_value;
             *piVar1 += (unsigned int)player->team * 100;
 
         }
@@ -4258,8 +4260,8 @@ LAB_00401856:
      * callback 0x0043f990 derives it from heading field +0x2c. */
     case 0x2c:
     {
-        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
             spawn->position_y = player->position_y;
             spawn->velocity_x = 0;
@@ -4279,10 +4281,10 @@ LAB_00401856:
             spawn->subtype = player->weapon_mark;
             spawn->callback_address = typeTable[0x1708]; spawn->counter_3c = 0;
             spawn->timer_5c = 0;
-            DAT_00489248++;
-            DAT_004892e8[DAT_00489248 - 1].scratch_2c = player->heading;
-            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
-            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
+            g_EntityCount++;
+            g_EntityPool[g_EntityCount - 1].scratch_2c = player->heading;
+            g_EntityPool[g_EntityCount - 1].motion_x_10 = player->position_x;
+            g_EntityPool[g_EntityCount - 1].motion_y_14 = player->position_y;
 
         }
 
@@ -4313,8 +4315,8 @@ LAB_00401856:
      * We set velocity at spawn since direction doesn't change for lasers. */
     case 0x2d:
     {
-        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             spawn->position_x = player->position_x;
             spawn->position_y = player->position_y;
             /* Compute velocity from player heading (original callback formula) */
@@ -4338,11 +4340,11 @@ LAB_00401856:
             spawn->subtype = player->weapon_mark;
             spawn->callback_address = typeTable[0x178e]; spawn->counter_3c = 0;
             spawn->timer_5c = 0;
-            DAT_00489248++;
-            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x32;
-            DAT_004892e8[DAT_00489248 - 1].scratch_2c = player->heading;
-            DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
-            DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
+            g_EntityCount++;
+            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 0x32;
+            g_EntityPool[g_EntityCount - 1].scratch_2c = player->heading;
+            g_EntityPool[g_EntityCount - 1].motion_x_10 = player->position_x;
+            g_EntityPool[g_EntityCount - 1].motion_y_14 = player->position_y;
 
         }
         break;
@@ -4358,7 +4360,7 @@ LAB_00401856:
     /* Cases 5,8,9,0xb,0xe,0xf,0x11,0x13,0x14,0x16,0x17,0x18,0x1b-0x1f,0x22-0x2a,0x2e-0x59 */
     default:
     {
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
         unsigned int param1_byte = 0;
         unsigned int localc_byte = 0x12;
         local_8 = uVar7;
@@ -4380,7 +4382,7 @@ LAB_00401856:
         }
 
         {
-            Entity *spawn = &DAT_004892e8[DAT_00489248];
+            Entity *spawn = &g_EntityPool[g_EntityCount];
             int typeOff = local_14 * 0x86;
             unsigned char wl = player->weapon_mark;
             spawn->position_x = player->position_x;
@@ -4406,146 +4408,146 @@ LAB_00401856:
             spawn->counter_3c = 0;
             spawn->timer_5c = 0;
         }
-        DAT_00489248++;
+        g_EntityCount++;
 
         /* Sound assignment for weapon type 0 */
         if (local_14 == 0) {
             if ((char)player->weapon_mark == '\0') {
                 uVar8 = rand(); uVar8 &= 0x80000003;
                 if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffc) + 1;
-                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                g_EntityPool[g_EntityCount - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xb4 + uVar8 * 2) + 30000;
             }
             if ((char)player->weapon_mark == '\x01') {
                 iVar13 = rand();
-                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                g_EntityPool[g_EntityCount - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xcc + (iVar13 % 5) * 2) + 30000;
             }
             if ((char)player->weapon_mark == '\x02') {
                 iVar13 = rand();
-                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                g_EntityPool[g_EntityCount - 1].palette_value =
                     *(unsigned short *)((int)DAT_00487aa8 + 0xf2 + (iVar13 % 3) * 2) + 30000;
             }
         }
 
-        DAT_004892e8[DAT_00489248 - 1].motion_x_10 = player->position_x;
-        DAT_004892e8[DAT_00489248 - 1].motion_y_14 = player->position_y;
+        g_EntityPool[g_EntityCount - 1].motion_x_10 = player->position_x;
+        g_EntityPool[g_EntityCount - 1].motion_y_14 = player->position_y;
 
         /* Type-specific post-spawn */
         if (local_14 == 0x16) {
-            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0x12;
+            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 0x12;
         } else if (local_14 == 0xb) {
-            DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+            g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
             if ((char)player->weapon_mark == '\x01')
                 player->counter_470 += 1;
         } else if (local_14 == 0x2e) {
             /* Smoking Nalle is placed at the firing position. The reconstructed
              * generic projectile speed made it drift through terrain before its
              * stationary callback got a chance to run. */
-            DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
-            DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
+            g_EntityPool[g_EntityCount - 1].velocity_x = 0;
+            g_EntityPool[g_EntityCount - 1].velocity_y = 0;
             piVar1 = &player->counter_46c; *piVar1 += 1;
         } else if (local_14 == 0x11) {
-            DAT_004892e8[DAT_00489248 - 1].counter_3c = 1;
+            g_EntityPool[g_EntityCount - 1].counter_3c = 1;
             if ((char)player->weapon_mark == '\x01')
-                DAT_004892e8[DAT_00489248 - 1].state_20 = 0x1b;
+                g_EntityPool[g_EntityCount - 1].state_20 = 0x1b;
             if ((char)player->weapon_mark == '\x02')
-                DAT_004892e8[DAT_00489248 - 1].gravity_or_motion_38 = (int)0xfffffff0;
+                g_EntityPool[g_EntityCount - 1].gravity_or_motion_38 = (int)0xfffffff0;
         } else if (local_14 == 0x1d) {
-            DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0;
-            DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0;
+            g_EntityPool[g_EntityCount - 1].scratch_64 = 0;
+            g_EntityPool[g_EntityCount - 1].scratch_65 = 0;
         } else if (local_14 == 0x27) {
             player->counter_468 += 1;
-            DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+            g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
         } else {
             if (local_14 == 0x29 || local_14 == 0x2a) {
                 piVar1 = &player->counter_478; *piVar1 += 1;
             }
             if (local_14 == 0x28) {
                 player->counter_474 += 1;
-                DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
-                DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0x24;
+                g_EntityPool[g_EntityCount - 1].counter_3c = uVar7;
+                g_EntityPool[g_EntityCount - 1].scratch_30 = 0x24;
             } else if (local_14 == 0x22) {
                 if ((char)player->weapon_mark == '\0') {
-                    DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+                    g_EntityPool[g_EntityCount - 1].counter_3c = uVar7;
+                    g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
                     iVar13 = rand();
-                    DAT_004892e8[DAT_00489248 - 1].scratch_30 = iVar13 % 10 + 1;
+                    g_EntityPool[g_EntityCount - 1].scratch_30 = iVar13 % 10 + 1;
                     uVar8 = rand(); uVar8 &= 0x80000001;
                     if ((int)uVar8 < 0) uVar8 = (uVar8 - 1 | 0xfffffffe) + 1;
-                    DAT_004892e8[DAT_00489248 - 1].state_20 = (char)uVar8;
+                    g_EntityPool[g_EntityCount - 1].state_20 = (char)uVar8;
                 } else {
                     player->counter_464 += 1;
-                    DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0;
+                    g_EntityPool[g_EntityCount - 1].counter_3c = uVar7;
+                    g_EntityPool[g_EntityCount - 1].scratch_30 = 0;
                 }
             } else if (local_14 == 0x1b) {
-                DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
+                g_EntityPool[g_EntityCount - 1].counter_3c = uVar7;
             } else {
                 if (local_14 == 0x1c) {
-                    DAT_004892e8[DAT_00489248 - 1].counter_3c = uVar7;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x157c;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_30 = 0;
+                    g_EntityPool[g_EntityCount - 1].counter_3c = uVar7;
+                    g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
+                    g_EntityPool[g_EntityCount - 1].scratch_60 = 0x157c;
+                    g_EntityPool[g_EntityCount - 1].scratch_30 = 0;
                     goto LAB_00406a71;
                 }
                 if (local_14 == 0x26) {
-                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
+                    g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
                     iVar13 = rand();
-                    DAT_004892e8[DAT_00489248 - 1].counter_3c = iVar13 % 0x7fb;
+                    g_EntityPool[g_EntityCount - 1].counter_3c = iVar13 % 0x7fb;
                     if ((char)player->weapon_mark == '\0') {
-                        DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 3;
-                        DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 3;
+                        g_EntityPool[g_EntityCount - 1].velocity_x = sincos[local_8] >> 3;
+                        g_EntityPool[g_EntityCount - 1].velocity_y = sincos[0x200 + local_8] >> 3;
                     } else {
-                        DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
-                        DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
+                        g_EntityPool[g_EntityCount - 1].velocity_x = 0;
+                        g_EntityPool[g_EntityCount - 1].velocity_y = 0;
                     }
                     goto LAB_0040651d;
                 }
                 if (local_14 == 0xe) {
-                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x1130;
+                    g_EntityPool[g_EntityCount - 1].scratch_60 = 0x1130;
                     if ((char)player->weapon_mark == '\0') {
-                        DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 3;
-                        DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 3;
+                        g_EntityPool[g_EntityCount - 1].velocity_x = sincos[local_8] >> 3;
+                        g_EntityPool[g_EntityCount - 1].velocity_y = sincos[0x200 + local_8] >> 3;
                     } else {
-                        DAT_004892e8[DAT_00489248 - 1].velocity_x = 0;
-                        DAT_004892e8[DAT_00489248 - 1].velocity_y = 0;
+                        g_EntityPool[g_EntityCount - 1].velocity_x = 0;
+                        g_EntityPool[g_EntityCount - 1].velocity_y = 0;
                     }
                     goto LAB_00406a71;
                 }
                 if (local_14 == 0x23) {
-                    DAT_004892e8[DAT_00489248 - 1].velocity_x = sincos[local_8] >> 1;
-                    DAT_004892e8[DAT_00489248 - 1].velocity_y = sincos[0x200 + local_8] >> 1;
+                    g_EntityPool[g_EntityCount - 1].velocity_x = sincos[local_8] >> 1;
+                    g_EntityPool[g_EntityCount - 1].velocity_y = sincos[0x200 + local_8] >> 1;
                     goto LAB_0040651d;
                 }
                 if (local_14 == 0x1f) {
-                    DAT_004892e8[DAT_00489248 - 1].auxiliary_26 = 0xff;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_2c = 0;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x9c4;
+                    g_EntityPool[g_EntityCount - 1].auxiliary_26 = 0xff;
+                    g_EntityPool[g_EntityCount - 1].scratch_2c = 0;
+                    g_EntityPool[g_EntityCount - 1].scratch_65 = 0;
+                    g_EntityPool[g_EntityCount - 1].scratch_60 = 0x9c4;
 LAB_00406a71:
-                    piVar1 = (int *)&DAT_004892e8[DAT_00489248 - 1].palette_value;
+                    piVar1 = (int *)&g_EntityPool[g_EntityCount - 1].palette_value;
                     *piVar1 += (unsigned int)player->team * 100;
                 }
                 else if (local_14 == 0xf || local_14 == 0x18) goto LAB_00406a71;
 
                 if (local_14 == 0x18)
-                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 0x157c;
+                    g_EntityPool[g_EntityCount - 1].scratch_60 = 0x157c;
                 else if (local_14 == 0xf) {
-                    DAT_004892e8[DAT_00489248 - 1].scratch_60 = 4000;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0;
+                    g_EntityPool[g_EntityCount - 1].scratch_60 = 4000;
+                    g_EntityPool[g_EntityCount - 1].scratch_64 = 0;
                 }
                 else if (local_14 == 0x17 && (char)player->weapon_mark == '\x01')
                     /* Original 0x00406b20-0x00406b36: count was already
                      * incremented, so -0x58 addresses the new entity's +0x28. */
                     EntityCallbacks_InitNucleusMarkII(
-                        (void *)&DAT_004892e8[DAT_00489248 - 1]);
+                        (void *)&g_EntityPool[g_EntityCount - 1]);
             }
         }
 
 LAB_0040651d:
         {
-            Entity *last_spawn = &DAT_004892e8[DAT_00489248 - 1];
+            Entity *last_spawn = &g_EntityPool[g_EntityCount - 1];
 
             if (*(char *)((unsigned int)last_spawn->subtype + local_14 * 0x218 + 0x130 + (int)DAT_00487abc) == '\x01') {
                 unsigned int pIdx2 = 99;
@@ -4559,8 +4561,8 @@ LAB_0040651d:
                 else if (local_14 == 0x2e) pIdx2 = 7;
                 else if (local_14 == 0x27) pIdx2 = 8;
                 last_spawn->timer_5c = 6;
-                *(int *)((int)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = DAT_00489248 - 1;
-                DAT_004892e8[DAT_00489248 - 1].scratch_50 = DAT_00487834[pIdx2];
+                *(int *)((int)DAT_0048781c + (pIdx2 * 0x1000 + DAT_00487834[pIdx2]) * 4) = g_EntityCount - 1;
+                g_EntityPool[g_EntityCount - 1].scratch_50 = DAT_00487834[pIdx2];
 
                 DAT_00487834[pIdx2]++;
             }
@@ -4597,20 +4599,20 @@ static void FUN_0044d930_impl(int *ent)
         FUN_0040f9b0(10, ent[0], ent[1]);
     }
 
-    int i = 0, iVar3 = 0;
-    if (0 < DAT_0048924c) {
+    int i = 0;
+    if (0 < g_TrooperCount) {
         do {
-            int iVar4 = ent[0] - *(int *)(iVar3 + (int)DAT_00487884);
-            int iVar5 = ent[1] - *(int *)(iVar3 + 8 + (int)DAT_00487884);
+            TrooperRecord *trooper = &g_TrooperPool[i];
+            int iVar4 = ent[0] - trooper->position_x;
+            int iVar5 = ent[1] - trooper->position_y;
             int r = rand();
             if ((r % 0x32 == 0) && (iVar4 < 0xb40000) && (-0xb40000 < iVar4) &&
                 (iVar5 < 0xb40000) && (-0xb40000 < iVar5))
             {
-                *(char *)(iVar3 + 0x1c + (int)DAT_00487884) = (char)ent[0xb];
+                trooper->team = (unsigned char)ent[0xb];
             }
             i++;
-            iVar3 += 0x40;
-        } while (i < DAT_0048924c);
+        } while (i < g_TrooperCount);
     }
 }
 
@@ -4637,8 +4639,8 @@ static void FUN_0044d9f0_impl(int *ent)
         }
     }
 
-    for (i = 0; i < DAT_00489248; i++) {
-        Entity *entity = &DAT_004892e8[i];
+    for (i = 0; i < g_EntityCount; i++) {
+        Entity *entity = &g_EntityPool[i];
         unsigned char owner = entity->owner;
         char team;
         if (owner < 0x46) {
@@ -4666,11 +4668,11 @@ static void FUN_0044d9f0_impl(int *ent)
 /* ===== FUN_0044dbb0 — Spawn Bomb/Mine (0044DBB0) ===== */
 static void FUN_0044dbb0_impl(int *ent, int idx)
 {
-    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
+    if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) return;
 
     FUN_0040f9b0(0x12, ent[0], ent[1]);
 
-    Entity *bomb = &DAT_004892e8[DAT_00489248];
+    Entity *bomb = &g_EntityPool[g_EntityCount];
 
     bomb->position_x = ent[0];
     bomb->position_y = ent[1] + 0x100000;
@@ -4696,7 +4698,7 @@ static void FUN_0044dbb0_impl(int *ent, int idx)
     bomb->counter_3c = 0;
     bomb->timer_5c = 0;
 
-    DAT_00489248++;
+    g_EntityCount++;
     bomb->health_or_damage_28 = 600;
 }
 
@@ -4710,12 +4712,12 @@ static void FUN_0044ea70_impl(int *ent)
     FUN_0040f9b0(0x10b, ent[0], ent[1]);
 
     for (int i = 0; i < particleCount; i++) {
-        if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return;
+        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) return;
 
         unsigned int angle = rand() & 0x7ff;
         int speed = rand() % 0x28;
 
-        Entity *particle = &DAT_004892e8[DAT_00489248];
+        Entity *particle = &g_EntityPool[g_EntityCount];
 
         particle->position_x = ent[2];
         particle->position_y = ent[3];
@@ -4742,7 +4744,7 @@ static void FUN_0044ea70_impl(int *ent)
         particle->counter_3c = 0;
         particle->timer_5c = 0;
 
-        DAT_00489248++;
+        g_EntityCount++;
 
         particle->health_or_damage_28 = rand() % 0x50 + 0x32;
         int colorIdx = rand() % 0xc;
@@ -4969,21 +4971,21 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
             if (gx >= 0 && gy >= 0 && gx < (int)DAT_004879f8 && gy < (int)DAT_004879fc) {
                 if ((((unsigned char *)DAT_00487814)[gy * DAT_004879f8 + gx] & 0x08) != 0) {
                     /* Exhaust type from config byte at +0x2D:
-                     *   0 = complex emitter (DAT_004892e8, stride 0x80) — big thruster
+                     *   0 = complex emitter (g_EntityPool, stride 0x80) — big thruster
                      *   1 = fire type A (sprite 5 or 6)
                      *   2 = fire type B (sprite 3 or 4) */
                     char exhaust_type = *(char *)((int)DAT_0048780c + cfg_off + 0x2D);
 
                     if (exhaust_type == '\0') {
-                        /* Type 0: Complex emitter particles in DAT_004892e8 (stride 0x80).
+                        /* Type 0: Complex emitter particles in g_EntityPool (stride 0x80).
                          * Spawns TWO emitter entities processed by Entity_Debris_Animation.
                          * First emitter at heading+0x200, second at computed offset. */
-                        if (DAT_00489248 < 0xA28 && DAT_004892e8 != NULL) {
+                        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY && g_EntityPool != NULL) {
                             unsigned int uVar6 = (heading + 0x200) & 0x7FF;
                             unsigned int uVar7 = (heading - 0x400) & 0x7FF;
                             int r = rand();
                             unsigned int uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
-                            Entity *spawn = &DAT_004892e8[DAT_00489248];
+                            Entity *spawn = &g_EntityPool[g_EntityCount];
 
                             /* Position: slightly behind ship at reverse+side angle */
                             spawn->position_x = player->position_x + (lut[uVar6] + lut[uVar7] * 2) * 2;
@@ -5015,18 +5017,18 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                             spawn->scratch_64 = 0x72;
                             spawn->scratch_65 = 0x7F;
                             spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
-                            DAT_00489248++;
+                            g_EntityCount++;
 
                             /* Second emitter particle on the OPPOSITE side.
                              * Original uses (int)((double)heading + 1536.0) & 0x7FF
                              * = heading + 0x600 (270° offset, i.e. left side).
                              * First emitter is at heading + 0x200 (right side). */
-                            if (DAT_00489248 < 0xA28) {
+                            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                                 unsigned int uVar6b = (heading + 0x600) & 0x7FF;
                                 unsigned int uVar7b = (heading - 0x400) & 0x7FF;
                                 r = rand();
                                 uVar3 = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
-                                spawn = &DAT_004892e8[DAT_00489248];
+                                spawn = &g_EntityPool[g_EntityCount];
 
                                 spawn->position_x = player->position_x + (lut[uVar6b] + lut[uVar7b] * 2) * 2;
                                 spawn->position_y = player->position_y + (lut[(uVar6b + 0x200) & 0x7FF] + lut[(uVar7b + 0x200) & 0x7FF] * 2) * 2;
@@ -5053,26 +5055,26 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                                 spawn->scratch_64 = 0x72;
                                 spawn->scratch_65 = 0x7F;
                                 spawn->palette_value = (int)*(unsigned short *)((int)DAT_00487aa8 + 0x7F * 2) + 30000;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                         }
                     } else {
-                        /* Types 1 & 2: Simple fire particles in DAT_00481f34 (stride 0x20).
+                        /* Types 1 & 2: Simple fire particles in g_ParticlePool (stride 0x20).
                          * Type 1 uses sprite 5 or 6, Type 2 uses sprite 3 or 4. */
-                        if (DAT_00489250 < PARTICLE_CAPACITY) {
+                        if (g_ParticleCount < PARTICLE_CAPACITY) {
                             unsigned int rev = (heading - 0x400) & 0x7FF;
                             int r = rand();
                             unsigned int spread = (r % 0xA0 + 0x3B0 + heading) & 0x7FF;
 
-                            int *part = (int *)((int)DAT_00481f34 + DAT_00489250 * 0x20);
+                            ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
 
                             /* Position: behind the ship */
-                            part[0] = player->position_x + lut[rev] * 8;
-                            part[1] = player->position_y + lut[(rev + 0x200) & 0x7FF] * 8;
+                            particle->position_x = player->position_x + lut[rev] * 8;
+                            particle->position_y = player->position_y + lut[(rev + 0x200) & 0x7FF] * 8;
 
                             /* Velocity: ship velocity + random backwards spread */
-                            part[2] = (lut[spread] * 0x14 >> 5) + player->velocity_x;
-                            part[3] = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + player->velocity_y;
+                            particle->velocity_x = (lut[spread] * 0x14 >> 5) + player->velocity_x;
+                            particle->velocity_y = (lut[(spread + 0x200) & 0x7FF] * 0x14 >> 5) + player->velocity_y;
 
                             /* Sprite type depends on exhaust_type:
                              * type 1 → sprite 5 or 6, type 2 → sprite 3 or 4 */
@@ -5083,13 +5085,13 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                             } else {
                                 spr_type = (char)((r2 & 1) + 3);
                             }
-                            *(char *)((int)part + 0x10) = spr_type;
-                            *(unsigned char *)((int)part + 0x11) = 4;     /* start frame */
-                            *(unsigned char *)((int)part + 0x12) = 0;     /* sub-frame */
-                            *(unsigned char *)((int)part + 0x13) = 0xC5;  /* fire behavior */
-                            *(unsigned char *)((int)part + 0x14) = 0xFF;  /* no owner */
-                            *(unsigned char *)((int)part + 0x15) = 0;     /* color palette 0 */
-                            DAT_00489250++;
+                            particle->sprite_index = (uint8_t)spr_type;
+                            particle->frame_number = 4;
+                            particle->frame_timer = 0;
+                            particle->flags_13 = 0xC5;
+                            particle->owner_or_flags_14 = 0xFF;
+                            particle->color_index = 0;
+                            g_ParticleCount++;
                         }
                     }
                 }
@@ -5145,11 +5147,11 @@ static void FUN_0044e3b0(int *ent)
     int ex = ent[0];
     int ey = ent[1];
 
-    if (DAT_00489248 <= 0) return;
+    if (g_EntityCount <= 0) return;
 
     /* Scan entity array for type 0x0E */
-    for (int i = 0; i < DAT_00489248; i++) {
-        Entity *projectile = &DAT_004892e8[i];
+    for (int i = 0; i < g_EntityCount; i++) {
+        Entity *projectile = &g_EntityPool[i];
 
         /* Must be type 0x0E (MOVING SUCKER) */
         if (projectile->type != 0x0E) continue;
@@ -5742,7 +5744,7 @@ void FUN_0044b0b0(void)
                 if ((buttons & 0x08) && ent[0x24] == 0 &&
                     (ent[0x26] > 0x6F || ent[0x26] == (unsigned int)DAT_00483830) &&
                     *(char *)((int)ent + 0x1D) == '\0' &&
-                    DAT_00489248 < 0xA28 &&
+                    g_EntityCount < ENTITY_ACTIVE_CAPACITY &&
                     *(char *)((int)ent + 0xA2) == '\0') {
                     FUN_0044ca40_impl((int *)ent, i);
                 }

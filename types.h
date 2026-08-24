@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <type_traits>
 
 /* ===== Structures ===== */
 
@@ -24,15 +25,16 @@ static_assert(GAMEPLAY_PLAYER_CAPACITY <= PLAYER_STORAGE_CAPACITY,
  * Original 0x80-byte entity record.
  *
  * Evidence:
- * - Init_Memory_Pools stores a 0x51400-byte allocation in DAT_004892e8 at
+ * - Init_Memory_Pools stores a 0x51400-byte allocation in g_EntityPool
+ *   (original global DAT_004892e8) at
  *   0x004203b5: 2600 physical records.
  * - FUN_00413720 indexes records with `SHL index, 7` at 0x00413a65 and writes
  *   the stable fields below through 0x00413c51.
  * - Weapon callbacks reuse several auxiliary fields with type-specific
  *   meanings. Those fields intentionally keep neutral names.
  *
- * This type documents layout only for now. Runtime code continues using the
- * verified raw-access paths until each migration can be checked separately.
+ * Runtime code uses this layout directly where field width is verified.
+ * Packed-width helpers remain only for original accesses that cross fields.
  */
 typedef struct Entity {
     int32_t position_x;             /* 0x00 */
@@ -74,6 +76,8 @@ typedef struct Entity {
 } Entity;
 
 static_assert(sizeof(Entity) == 0x80, "Entity record must retain its original stride");
+static_assert(std::is_trivially_copyable<Entity>::value,
+              "Entities must remain safe for original whole-record copies");
 static_assert(offsetof(Entity, position_x) == 0x00, "Entity::position_x offset");
 static_assert(offsetof(Entity, position_y) == 0x08, "Entity::position_y offset");
 static_assert(offsetof(Entity, velocity_x) == 0x18, "Entity::velocity_x offset");
@@ -114,6 +118,8 @@ typedef struct ProjectileRecord {
 } ProjectileRecord;
 
 static_assert(sizeof(ProjectileRecord) == 0x40, "Projectile record must retain its original stride");
+static_assert(std::is_trivially_copyable<ProjectileRecord>::value,
+              "Projectile records must remain safe for original whole-record copies");
 static_assert(offsetof(ProjectileRecord, position_x) == 0x00, "ProjectileRecord::position_x offset");
 static_assert(offsetof(ProjectileRecord, aim_angle_0c) == 0x0c, "ProjectileRecord::aim offset");
 static_assert(offsetof(ProjectileRecord, health_or_state_10) == 0x10, "ProjectileRecord::health offset");
@@ -151,6 +157,8 @@ typedef struct TrooperRecord {
 } TrooperRecord;
 
 static_assert(sizeof(TrooperRecord) == 0x40, "Trooper record must retain its original stride");
+static_assert(std::is_trivially_copyable<TrooperRecord>::value,
+              "Trooper records must remain safe for original whole-record copies");
 static_assert(offsetof(TrooperRecord, position_y) == 0x08, "TrooperRecord::position_y offset");
 static_assert(offsetof(TrooperRecord, team) == 0x1c, "TrooperRecord::team offset");
 static_assert(offsetof(TrooperRecord, health_28) == 0x28, "TrooperRecord::health offset");
@@ -158,7 +166,7 @@ static_assert(offsetof(TrooperRecord, palette_2c) == 0x2c, "TrooperRecord::palet
 static_assert(offsetof(TrooperRecord, aim_angle_30) == 0x30, "TrooperRecord::aim offset");
 static_assert(offsetof(TrooperRecord, fire_cooldown_38) == 0x38, "TrooperRecord::cooldown offset");
 
-/* Animated explosion/fire particle pool at DAT_00481f34. */
+/* Animated explosion/fire particle pool (original global DAT_00481f34). */
 typedef struct ParticleRecord {
     int32_t position_x;              /* 0x00 */
     int32_t position_y;              /* 0x04 */
@@ -174,13 +182,15 @@ typedef struct ParticleRecord {
 } ParticleRecord;
 
 static_assert(sizeof(ParticleRecord) == 0x20, "Particle record must retain its original stride");
+static_assert(std::is_trivially_copyable<ParticleRecord>::value,
+              "Particle records must remain safe for original whole-record copies");
 static_assert(offsetof(ParticleRecord, velocity_x) == 0x08, "ParticleRecord::velocity offset");
 static_assert(offsetof(ParticleRecord, sprite_index) == 0x10, "ParticleRecord::sprite offset");
 static_assert(offsetof(ParticleRecord, frame_timer) == 0x12, "ParticleRecord::timer offset");
 static_assert(offsetof(ParticleRecord, owner_or_flags_14) == 0x14, "ParticleRecord::owner offset");
 static_assert(offsetof(ParticleRecord, color_index) == 0x15, "ParticleRecord::color offset");
 
-/* Menu/gameplay debris and pickup pool at DAT_00487830. */
+/* Menu/gameplay debris and pickup pool (original global DAT_00487830). */
 typedef struct DebrisItemRecord {
     int32_t position_x;              /* 0x00 */
     int32_t position_y;              /* 0x04 */
@@ -193,6 +203,8 @@ typedef struct DebrisItemRecord {
 } DebrisItemRecord;
 
 static_assert(sizeof(DebrisItemRecord) == 0x20, "Debris item record must retain its original stride");
+static_assert(std::is_trivially_copyable<DebrisItemRecord>::value,
+              "Debris records must remain safe for original whole-record copies");
 static_assert(offsetof(DebrisItemRecord, sprite_frame) == 0x08, "DebrisItemRecord::frame offset");
 static_assert(offsetof(DebrisItemRecord, type) == 0x0a, "DebrisItemRecord::type offset");
 static_assert(offsetof(DebrisItemRecord, lifetime_0c) == 0x0c, "DebrisItemRecord::lifetime offset");
@@ -299,6 +311,8 @@ typedef struct PlayerData {
 } PlayerData;
 
 static_assert(sizeof(PlayerData) == 0x598, "Player record must retain its original stride");
+static_assert(std::is_trivially_copyable<PlayerData>::value,
+              "Player records must remain safe for original whole-record copies");
 static_assert(offsetof(PlayerData, position_x) == 0x00, "PlayerData::position_x offset");
 static_assert(offsetof(PlayerData, velocity_x) == 0x10, "PlayerData::velocity_x offset");
 static_assert(offsetof(PlayerData, health) == 0x20, "PlayerData::health offset");

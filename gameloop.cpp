@@ -305,22 +305,22 @@ void FUN_0045e1f0(void)
 {
     int i;
 
-    /* Main entities (DAT_004892e8, stride 0x80): clear damage flag if health < 30000 */
-    for (i = 0; i < DAT_00489248; i++) {
-        Entity *entity = &DAT_004892e8[i];
+    /* Main entities (g_EntityPool, stride 0x80): clear damage flag if health < 30000 */
+    for (i = 0; i < g_EntityCount; i++) {
+        Entity *entity = &g_EntityPool[i];
         if (entity->palette_value < 30000 && entity->variant_24 == 1) {
             entity->variant_24 = 0;
         }
     }
 
-    /* Troopers (DAT_00487884, stride 0x40): clear hit flag */
-    for (i = 0; i < DAT_0048924c; i++) {
-        *(char *)((int)DAT_00487884 + i * 0x40 + 0x2C) = 0;
+    /* Troopers (g_TrooperPool, stride 0x40): clear hit flag */
+    for (i = 0; i < g_TrooperCount; i++) {
+        g_TrooperPool[i].palette_2c = 0;
     }
 
-    /* Projectiles (DAT_00481f28, stride 0x40): clear update flag */
-    for (i = 0; i < DAT_00489260; i++) {
-        *(char *)((int)DAT_00481f28 + i * 0x40 + 0x1E) = 0;
+    /* Projectiles (g_ProjectilePool, stride 0x40): clear update flag */
+    for (i = 0; i < g_ProjectileCount; i++) {
+        g_ProjectilePool[i].palette_or_flags_1e = 0;
     }
 
     /* Players (DAT_00487810, stride 0x598): clear per-tick flags */
@@ -462,23 +462,22 @@ static void Gameplay_Tick(void)
         /* Inline: trooper tile validation */
         {
             int i;
-            for (i = 0; i < DAT_0048924c; i++) {
-                int off = i * 0x40;
-                int base = (int)DAT_00487884;
-                *(char *)(base + off + 0x2C) = 0;
+            for (i = 0; i < g_TrooperCount; i++) {
+                TrooperRecord *trooper = &g_TrooperPool[i];
+                trooper->palette_2c = 0;
 
                 /* Check tile at trooper position */
-                int tx = *(int *)(base + off) >> 0x12;
-                int ty = *(int *)(base + off + 8) >> 0x12;
+                int tx = trooper->position_x >> 0x12;
+                int ty = trooper->position_y >> 0x12;
                 int tile_idx = *(unsigned char *)((int)DAT_0048782c +
                     (ty << (DAT_00487a18 & 0x1f)) + tx);
                 if (*(char *)((int)DAT_00487928 + tile_idx * 0x20 + 1) == '\x01') {
-                    *(char *)(base + off + 0x24) = 0;
+                    trooper->animation_state_24 = 0;
                 } else {
-                    char stale = *(char *)(base + off + 0x24);
+                    char stale = (char)trooper->animation_state_24;
                     stale++;
                     if (stale >= 6) stale = 0;
-                    *(char *)(base + off + 0x24) = stale;
+                    trooper->animation_state_24 = (uint8_t)stale;
                 }
             }
         }
@@ -779,15 +778,15 @@ void Free_Game_Resources(void)
 
     /* Reset all gameplay entity/subsystem counters so they don't carry over
      * to the next level or persist in the menu (e.g. fluid bubbles). */
-    DAT_00489248 = 0;   /* emitter/complex particle count */
-    DAT_00489250 = 0;   /* fire particle count */
+    g_EntityCount = 0;   /* emitter/complex particle count */
+    g_ParticleCount = 0;   /* fire particle count */
     DAT_00489258 = 0;   /* fluid source count */
-    DAT_00489268 = 0;   /* bullet count */
+    g_DebrisItemCount = 0;   /* bullet count */
     DAT_0048926c = 0;   /* item/pickup count */
     DAT_00489270 = 0;   /* trap/door count */
     DAT_00489274 = 0;   /* turret/static entity count */
     DAT_004892d8 = 0;   /* spawner/emitter def count */
-    DAT_0048924c = 0;   /* trooper count */
+    g_TrooperCount = 0;   /* trooper count */
     DAT_00489254 = 0;   /* edge entity count */
     DAT_004892a8 = 0;   /* round timer */
 }

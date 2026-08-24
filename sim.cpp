@@ -72,12 +72,12 @@ static unsigned short framebuffer_rgb565_to_x1r5g5b5(unsigned short color)
  * same guard. Position uses 18-bit fixed-point: tile*FIXED_SCALE = pixels<<18. */
 int FUN_00410030(void)
 {
-    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) return 0;
+    if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) return 0;
 
     int iVar1 = rand();
     /* X in tile range [9, map_w-9], shifted left by 18 fractional bits. */
     int iVar2 = (iVar1 % (DAT_004879f0 - 0x12) + 9) * FIXED_SCALE;
-    Entity *entity = &DAT_004892e8[DAT_00489248];
+    Entity *entity = &g_EntityPool[g_EntityCount];
 
     entity->position_x = iVar2;
     entity->position_y = 0x380000;
@@ -105,7 +105,7 @@ int FUN_00410030(void)
     entity->counter_3c = 0;
     entity->timer_5c = 0;
 
-    DAT_00489248++;
+    g_EntityCount++;
 
     /* Set the trailing scratch bytes after publishing the new count. */
     entity->scratch_64 = 0;
@@ -304,22 +304,23 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
          * DAT_00487814 is the coarse (16x16-tile) presence grid built each tick in
          * FUN_00460660; bit 0x08 means "inside a player's viewport this tick" —
          * off-screen tiles don't get visible fire particles. */
-        if ((DAT_00489250 < PARTICLE_CAPACITY) &&
+        if ((g_ParticleCount < PARTICLE_CAPACITY) &&
             ((*(unsigned char *)((param_1 >> 4) + (int)DAT_00487814 +
                 (param_2 >> 4) * DAT_004879f8) & 8) != 0)) {
             iVar15 = param_1 << 0x12;
-            *(int *)(DAT_00489250 * 0x20 + (int)DAT_00481f34) = iVar15;
             iVar8 = param_2 << 0x12;
-            *(int *)(DAT_00489250 * 0x20 + 4 + (int)DAT_00481f34) = iVar8;
-            *(int *)(DAT_00489250 * 0x20 + 8 + (int)DAT_00481f34) = 0;
-            *(int *)(DAT_00489250 * 0x20 + 0xc + (int)DAT_00481f34) = 0;
-            *(char *)(DAT_00489250 * 0x20 + 0x10 + (int)DAT_00481f34) = cVar13;
-            *(unsigned char *)(DAT_00489250 * 0x20 + 0x11 + (int)DAT_00481f34) = 0;
-            *(unsigned char *)(DAT_00489250 * 0x20 + 0x12 + (int)DAT_00481f34) = 0;
-            *(unsigned char *)(DAT_00489250 * 0x20 + 0x13 + (int)DAT_00481f34) = 1;
-            *(unsigned char *)(DAT_00489250 * 0x20 + 0x14 + (int)DAT_00481f34) = 0xff;
-            *(unsigned char *)(DAT_00489250 * 0x20 + 0x15 + (int)DAT_00481f34) = 0;
-            DAT_00489250 = DAT_00489250 + 1;
+            ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+            particle->position_x = iVar15;
+            particle->position_y = iVar8;
+            particle->velocity_x = 0;
+            particle->velocity_y = 0;
+            particle->sprite_index = (uint8_t)cVar13;
+            particle->frame_number = 0;
+            particle->frame_timer = 0;
+            particle->flags_13 = 1;
+            particle->owner_or_flags_14 = 0xff;
+            particle->color_index = 0;
+            g_ParticleCount = g_ParticleCount + 1;
             iVar6 = iVar15;
             iVar17 = iVar8;
 
@@ -335,7 +336,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                 if (snd_count > 3) snd_count = 0;
             }
 
-            *(unsigned char *)(DAT_00489250 * 0x20 + -0xb + (int)DAT_00481f34) = 1;
+            particle->color_index = 1;
 
             /* Maybe spawn knockback explosion */
             if (bVar1 == 0x1a) {
@@ -364,14 +365,14 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
         /* Spawn 8 debris particles radiating outward */
         param_6 = 0;
         do {
-            if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+            if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
             uVar10 = rand();
             uVar10 = uVar10 & 0x800007ff;
             if ((int)uVar10 < 0) {
                 uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
             }
             iVar6 = rand();
-            Entity *entity = &DAT_004892e8[DAT_00489248];
+            Entity *entity = &g_EntityPool[g_EntityCount];
             entity->position_x = param_1 << 0x12;
             entity->position_y = param_2 << 0x12;
             entity->velocity_x =
@@ -398,7 +399,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             entity->callback_address = *(int *)((int)DAT_00487abc + 0x00);
             entity->counter_3c = 0;
             entity->timer_5c = 0;
-            DAT_00489248 = DAT_00489248 + 1;
+            g_EntityCount = g_EntityCount + 1;
 
             /* Set lifespan and gravity on newly incremented slot's trailing fields */
             iVar6 = rand();
@@ -520,7 +521,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                             if ((int)uVar10 < 0) {
                                                 bVar18 = ((uVar10 - 1 | 0xfffffffe) == 0xffffffff);
                                             }
-                                            if ((bVar18) && (DAT_00489248 < ENTITY_ACTIVE_CAPACITY)) {
+                                            if ((bVar18) && (g_EntityCount < ENTITY_ACTIVE_CAPACITY)) {
                                                 /* Spawn wall crack entity */
                                                 uVar10 = rand();
                                                 uVar10 = uVar10 & 0x800007ff;
@@ -528,7 +529,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                     uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
                                                 }
                                                 iVar16 = rand();
-                                                Entity *entity = &DAT_004892e8[DAT_00489248];
+                                                Entity *entity = &g_EntityPool[g_EntityCount];
                                                 entity->position_x = iVar15 << 0x12;
                                                 entity->position_y = iVar8 * FIXED_SCALE;
                                                 entity->velocity_x =
@@ -555,7 +556,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                 entity->callback_address = *(int *)((int)DAT_00487abc + 0x430);
                                                 entity->counter_3c = 0;
                                                 entity->timer_5c = 0;
-                                                DAT_00489248 = DAT_00489248 + 1;
+                                                g_EntityCount = g_EntityCount + 1;
                                                 iVar16 = rand();
                                                 entity->health_or_damage_28 = iVar16 % 0x32 + 0x28;
                                                 entity->damage_44 = 0x7d000;
@@ -571,14 +572,14 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                     (iVar8 >> 4) * DAT_004879f8) & 8) != 0) &&
                                                 (local_4 = 0, local_20 != 0)) {
                                                 do {
-                                                    if (DAT_00489248 >= ENTITY_ACTIVE_CAPACITY) break;
+                                                    if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                                                     uVar10 = rand();
                                                     uVar10 = uVar10 & 0x800007ff;
                                                     if ((int)uVar10 < 0) {
                                                         uVar10 = (uVar10 - 1 | 0xfffff800) + 1;
                                                     }
                                                     iVar16 = rand();
-                                                    Entity *entity = &DAT_004892e8[DAT_00489248];
+                                                    Entity *entity = &g_EntityPool[g_EntityCount];
                                                     entity->position_x = iVar15 << 0x12;
                                                     entity->position_y = iVar8 * FIXED_SCALE;
                                                     entity->velocity_x =
@@ -605,7 +606,7 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
                                                     entity->callback_address = *(int *)((int)DAT_00487abc + 0xD160);
                                                     entity->counter_3c = 0;
                                                     entity->timer_5c = 0;
-                                                    DAT_00489248 = DAT_00489248 + 1;
+                                                    g_EntityCount = g_EntityCount + 1;
                                                     iVar16 = rand();
                                                     entity->health_or_damage_28 = iVar16 % 0x32 + 0x28;
                                                     entity->damage_44 = 0;
@@ -740,7 +741,7 @@ LAB_00436bc6:
     param_6 = 0;
     {
         float fVar3 = DEBRIS_START;
-        while ((fVar3 < debrisCount) && (DAT_00489248 < ENTITY_ACTIVE_CAPACITY)) {
+        while ((fVar3 < debrisCount) && (g_EntityCount < ENTITY_ACTIVE_CAPACITY)) {
             uVar10 = rand();
             uVar10 = uVar10 & 0x800007ff;
             if ((int)uVar10 < 0) {
@@ -754,7 +755,7 @@ LAB_00436bc6:
             iVar6 = rand();
             iVar17 = rand();
             iVar7 = (iVar6 % 6 + -3) * FIXED_SCALE + param_1 * FIXED_SCALE;
-            Entity *entity = &DAT_004892e8[DAT_00489248];
+            Entity *entity = &g_EntityPool[g_EntityCount];
             entity->position_x = iVar7;
             iVar6 = (iVar17 % 6 + -3) * FIXED_SCALE + param_2 * FIXED_SCALE;
             entity->position_y = iVar6;
@@ -781,7 +782,7 @@ LAB_00436bc6:
             entity->callback_address = *(int *)((int)DAT_00487abc + 0x430);
             entity->counter_3c = 0;
             entity->timer_5c = 0;
-            DAT_00489248 = DAT_00489248 + 1;
+            g_EntityCount = g_EntityCount + 1;
 
             iVar6 = rand();
             entity->palette_value =
@@ -801,14 +802,14 @@ LAB_00436bc6:
 }
 /* ===== FUN_004355d0 — Building/Structure Collision for Projectiles (004355D0) ===== */
 /* Checks if a System 1 projectile (by index) collides with any structure in
- * DAT_00481f28 (stride 0x40, count DAT_00489260). On hit, subtracts damage
+ * g_ProjectilePool (stride 0x40, count g_ProjectileCount). On hit, subtracts damage
  * from the structure's health and sets DAT_00481e8f = 3 (or 4 if structure
  * type == 7) as a result flag for the caller.
  * Owner byte encoding: 0x78..0x8B = teams 0..19 (byte - 0x78); anything else = 0xFB
  * (unowned / environmental). */
 void FUN_004355d0(unsigned int param_1)
 {
-    Entity *entity = &DAT_004892e8[param_1];
+    Entity *entity = &g_EntityPool[param_1];
     unsigned char bVar1 = entity->owner;
     int iVar2 = entity->position_x;
     int iVar3 = entity->position_y;
@@ -825,51 +826,53 @@ void FUN_004355d0(unsigned int param_1)
     if ((char)entity->auxiliary_26 == '\0') {
         /* Branch: byte_0x26 == 0 — check all structures regardless of team */
         iVar7 = 0;
-        if (DAT_00489260 < 1) return;
-        int *piVar6 = (int *)((int)DAT_00481f28 + 4);
+        if (g_ProjectileCount < 1) return;
         while (1) {
-            unsigned int uVar4 = *(unsigned char *)(*(int *)((unsigned int)*(unsigned char *)((int)piVar6 + 0x18) * 0x20 + (int)DAT_00487818) + (int)DAT_00489e8c) & 0xfffffffe;
-            if (piVar6[3] >= 0 &&
-                (int)(piVar6[-1] + uVar4 * (unsigned int)(-0x20000)) < iVar2 &&
-                iVar2 < (int)(piVar6[-1] + uVar4 * 0x20000) &&
-                (int)(*piVar6 + uVar4 * (unsigned int)(-0x20000)) < iVar3 &&
-                iVar3 < (int)(*piVar6 + uVar4 * 0x20000)) {
+            ProjectileRecord *structure = &g_ProjectilePool[iVar7];
+            int sprite_index = *(int *)((unsigned int)structure->type * 0x20 +
+                                        (int)DAT_00487818);
+            unsigned int uVar4 = *(unsigned char *)((int)DAT_00489e8c + sprite_index) &
+                                 0xfffffffe;
+            if (structure->health_or_state_10 >= 0 &&
+                (int)(structure->position_x + uVar4 * (unsigned int)(-0x20000)) < iVar2 &&
+                iVar2 < (int)(structure->position_x + uVar4 * 0x20000) &&
+                (int)(structure->position_y + uVar4 * (unsigned int)(-0x20000)) < iVar3 &&
+                iVar3 < (int)(structure->position_y + uVar4 * 0x20000)) {
                 break;
             }
             iVar7++;
-            piVar6 = (int *)((int)piVar6 + 0x40);
-            if (DAT_00489260 <= iVar7) return;
+            if (g_ProjectileCount <= iVar7) return;
         }
         DAT_00481e8f = 3;
-        iVar7 = iVar7 * 0x40;
-        if (*(char *)(iVar7 + 0x1c + (int)DAT_00481f28) == '\x07') {
+        ProjectileRecord *structure = &g_ProjectilePool[iVar7];
+        if ((char)structure->type == '\x07') {
             DAT_00481e8f = 4;
         }
-        if (team == *(unsigned char *)(iVar7 + 0x1d + (int)DAT_00481f28)) {
+        if (team == structure->team) {
             return; /* Same team as structure — no damage */
         }
     } else {
         /* Branch: byte_0x26 != 0 — check structures, skip same-team */
         iVar7 = 0;
-        if (DAT_00489260 < 1) return;
-        int *piVar6 = (int *)((int)DAT_00481f28 + 0x10);
+        if (g_ProjectileCount < 1) return;
         while (1) {
-            unsigned int uVar4 = *(unsigned char *)(*(int *)((unsigned int)*(unsigned char *)((int)piVar6 + 0xC) * 0x20 + (int)DAT_00487818) + (int)DAT_00489e8c) & 0xfffffffe;
-            if (*piVar6 >= 0 &&
-                team != *(unsigned char *)((int)piVar6 + 0xd) &&
-                (int)(piVar6[-4] + uVar4 * (unsigned int)(-0x20000)) < iVar2 &&
-                iVar2 < (int)(piVar6[-4] + uVar4 * 0x20000) &&
-                (int)(piVar6[-3] + uVar4 * (unsigned int)(-0x20000)) < iVar3 &&
-                iVar3 < (int)(piVar6[-3] + uVar4 * 0x20000)) {
+            ProjectileRecord *structure = &g_ProjectilePool[iVar7];
+            int sprite_index = *(int *)((unsigned int)structure->type * 0x20 +
+                                        (int)DAT_00487818);
+            unsigned int uVar4 = *(unsigned char *)((int)DAT_00489e8c + sprite_index) &
+                                 0xfffffffe;
+            if (structure->health_or_state_10 >= 0 && team != structure->team &&
+                (int)(structure->position_x + uVar4 * (unsigned int)(-0x20000)) < iVar2 &&
+                iVar2 < (int)(structure->position_x + uVar4 * 0x20000) &&
+                (int)(structure->position_y + uVar4 * (unsigned int)(-0x20000)) < iVar3 &&
+                iVar3 < (int)(structure->position_y + uVar4 * 0x20000)) {
                 break;
             }
             iVar7++;
-            piVar6 = (int *)((int)piVar6 + 0x40);
-            if (DAT_00489260 <= iVar7) return;
+            if (g_ProjectileCount <= iVar7) return;
         }
         DAT_00481e8f = 3;
-        iVar7 = iVar7 * 0x40;
-        if (*(char *)(iVar7 + 0x1c + (int)DAT_00481f28) == '\x07') {
+        if ((char)g_ProjectilePool[iVar7].type == '\x07') {
             DAT_00481e8f = 4;
         }
     }
@@ -877,8 +880,8 @@ void FUN_004355d0(unsigned int param_1)
     /* Apply damage and set damaged flag.
      * Projectile +0x44 (piVar5[0x11]) is the damage value; structure +0x10 is its
      * health. Structure +0x1e=1 is consumed by FUN_00458010 (shield animation). */
-    *(int *)(iVar7 + 0x10 + (int)DAT_00481f28) -= entity->damage_44;
-    *(unsigned char *)(iVar7 + 0x1e + (int)DAT_00481f28) = 1;   /* set damaged flag */
+    g_ProjectilePool[iVar7].health_or_state_10 -= entity->damage_44;
+    g_ProjectilePool[iVar7].palette_or_flags_1e = 1;
 }
 
 /* ===== FUN_00451e70 — Building/Structure Damage from Fire Particles (00451E70) ===== */
@@ -903,13 +906,12 @@ struct FireDamageCategory {
 static bool apply_fire_particle_damage_category(
     int particle_index, int damage, const FireDamageCategory &category)
 {
-    int *particle = (int *)((int)DAT_00481f34 + particle_index * 0x20);
-    unsigned char particle_owner =
-        *(unsigned char *)((int)particle + 0x14);
+    const ParticleRecord *particle = &g_ParticlePool[particle_index];
+    unsigned char particle_owner = particle->owner_or_flags_14;
     int *links = (int *)DAT_0048781c + category.link_offset;
 
     for (int i = 0; i < DAT_00487834[category.count_index]; ++i) {
-        Entity *entity = &DAT_004892e8[links[i]];
+        Entity *entity = &g_EntityPool[links[i]];
         signed char state = (signed char)entity->state_20;
         if (!((entity->timer_5c == 0 || entity->owner != particle_owner) &&
               state != -6 &&
@@ -917,10 +919,10 @@ static bool apply_fire_particle_damage_category(
             continue;
         }
 
-        if (!(particle[0] - category.x_radius < entity->position_x &&
-              entity->position_x < particle[0] + category.x_radius &&
-              particle[1] - category.y_above < entity->position_y &&
-              entity->position_y < particle[1] + category.y_below)) {
+        if (!(particle->position_x - category.x_radius < entity->position_x &&
+              entity->position_x < particle->position_x + category.x_radius &&
+              particle->position_y - category.y_above < entity->position_y &&
+              entity->position_y < particle->position_y + category.y_below)) {
             continue;
         }
 
@@ -972,8 +974,8 @@ void FUN_00451e70(int param_1, int param_2)
 void FUN_0045d7d0(void)
 {
     g_FrameIndex = 2;              /* Intro starts showing frame 2 */
-    DAT_00489248 = 0;              /* Entity count */
-    DAT_00489250 = 0;              /* Particle count */
+    g_EntityCount = 0;              /* Entity count */
+    g_ParticleCount = 0;              /* Particle count */
     DAT_0048925c = 0;              /* Misc counter */
     g_FrameTimer = timeGetTime();  /* Frame time reference */
     DAT_004892b8 = timeGetTime();  /* Intro start timestamp for duration checks */
@@ -1118,7 +1120,7 @@ post_timer:
 void FUN_004609e0(void)
 {
     int team_off;
-    int i, off;
+    int i;
     unsigned char team;
 
     if (DAT_00487aa4 == NULL) return;
@@ -1129,11 +1131,10 @@ void FUN_004609e0(void)
         *(int *)((int)DAT_00487aa4 + team_off + 0x100C) = 0;     /* projectile count */
     }
 
-    /* Bin troopers by team (DAT_00487884, stride 0x40, team byte at +0x1C) */
-    if (DAT_0048924c > 0) {
-        off = 0;
-        for (i = 0; i < DAT_0048924c; i++) {
-            team = *(unsigned char *)((int)DAT_00487884 + off + 0x1C);
+    /* Bin troopers by team (g_TrooperPool, stride 0x40, team byte at +0x1C) */
+    if (g_TrooperCount > 0) {
+        for (i = 0; i < g_TrooperCount; i++) {
+            team = g_TrooperPool[i].team;
             if (team < 4) {
                 int tbase = (unsigned int)team * 0x4000;
                 int *count_ptr = (int *)((int)DAT_00487aa4 + tbase + 0x08);
@@ -1141,15 +1142,13 @@ void FUN_004609e0(void)
                     (*count_ptr + (unsigned int)team * 0x1000) * 4) = i;
                 (*count_ptr)++;
             }
-            off += 0x40;
         }
     }
 
-    /* Bin projectiles by team (DAT_00481f28, stride 0x40, team byte at +0x1D) */
-    if (DAT_00489260 > 0) {
-        off = 0;
-        for (i = 0; i < DAT_00489260; i++) {
-            team = *(unsigned char *)((int)DAT_00481f28 + off + 0x1D);
+    /* Bin projectiles by team (g_ProjectilePool, stride 0x40, team byte at +0x1D) */
+    if (g_ProjectileCount > 0) {
+        for (i = 0; i < g_ProjectileCount; i++) {
+            team = g_ProjectilePool[i].team;
             if (team < 4) {
                 int tbase = (unsigned int)team * 0x4000;
                 int *count_ptr = (int *)((int)DAT_00487aa4 + tbase + 0x100C);
@@ -1157,7 +1156,6 @@ void FUN_004609e0(void)
                     (*count_ptr + (unsigned int)team * 0x1000) * 4) = i;
                 (*count_ptr)++;
             }
-            off += 0x40;
         }
     }
 }
@@ -1240,9 +1238,9 @@ void FUN_00460660(void)
     }
 
     /* Phase 4: Mark entities with bit 0x02 (3x3 coarse cells, collidable type only) */
-    if (DAT_00489248 > 0) {
-        for (i = 0; i < DAT_00489248; i++) {
-            Entity *entity = &DAT_004892e8[i];
+    if (g_EntityCount > 0) {
+        for (i = 0; i < g_EntityCount; i++) {
+            Entity *entity = &g_EntityPool[i];
             /* Check if entity type is collidable: entity_type_table[type][subtype].byte_0x130 == 1 */
             unsigned char etype = entity->type;
             unsigned char esub = entity->subtype;
@@ -1263,11 +1261,11 @@ void FUN_00460660(void)
     }
 
     /* Phase 5: Mark troopers with bit 0x04 (3x3 coarse cells) */
-    if (DAT_0048924c > 0) {
-        int toff = 0;
-        for (i = 0; i < DAT_0048924c; i++) {
-            int cx = (*(int *)((int)DAT_00487884 + toff) >> 0x16) - 1;
-            int cy = (*(int *)((int)DAT_00487884 + toff + 8) >> 0x16) - 1;
+    if (g_TrooperCount > 0) {
+        for (i = 0; i < g_TrooperCount; i++) {
+            const TrooperRecord *trooper = &g_TrooperPool[i];
+            int cx = (trooper->position_x >> 0x16) - 1;
+            int cy = (trooper->position_y >> 0x16) - 1;
             for (dy = 0; dy < 3; dy++) {
                 for (dx = 0; dx < 3; dx++) {
                     int gx = cx + dx;
@@ -1277,16 +1275,15 @@ void FUN_00460660(void)
                     }
                 }
             }
-            toff += 0x40;
         }
     }
 
     /* Phase 6: Mark projectiles with bit 0x10 (3x3 coarse cells) */
-    if (DAT_00489260 > 0) {
-        int proj_off = 0;
-        for (i = 0; i < DAT_00489260; i++) {
-            int cx = (*(int *)((int)DAT_00481f28 + proj_off) >> 0x16) - 1;
-            int cy = (*(int *)((int)DAT_00481f28 + proj_off + 4) >> 0x16) - 1;
+    if (g_ProjectileCount > 0) {
+        for (i = 0; i < g_ProjectileCount; i++) {
+            const ProjectileRecord *projectile = &g_ProjectilePool[i];
+            int cx = (projectile->position_x >> 0x16) - 1;
+            int cy = (projectile->position_y >> 0x16) - 1;
             for (dy = 0; dy < 3; dy++) {
                 for (dx = 0; dx < 3; dx++) {
                     int gx = cx + dx;
@@ -1296,7 +1293,6 @@ void FUN_00460660(void)
                     }
                 }
             }
-            proj_off += 0x40;
         }
     }
 }
@@ -1383,7 +1379,7 @@ void FUN_00413720(void)
     if (DAT_00483734 != '\0') {
         int rnd = rand() & 0x7FF;
         /* Threshold from float-to-int conversion — simplified to a reasonable constant */
-        if (rnd < 2 && DAT_0048924c < TROOPER_CAPACITY) {
+        if (rnd < 2 && g_TrooperCount < TROOPER_CAPACITY) {
             int cx = rand() % ((int)DAT_004879f0 - 4) + 2;
             int cy = rand() % ((int)DAT_004879f4 - 4) + 2;
             unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (cy << shift) + cx);
@@ -1412,7 +1408,7 @@ void FUN_00413720(void)
             }
             if (threshold < 1) threshold = 1;
 
-            if (DAT_00489268 < DEBRIS_ITEM_CAPACITY && (rand() % threshold == 0)) {
+            if (g_DebrisItemCount < DEBRIS_ITEM_CAPACITY && (rand() % threshold == 0)) {
                 int tx = rand() % ((int)DAT_004879f0 - 4) + 2;
                 int ty = rand() % ((int)DAT_004879f4 - 4) + 2;
                 unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (ty << shift) + tx);
@@ -1438,13 +1434,13 @@ void FUN_00413720(void)
             spawn_count *= 3;
         }
         for (int j = 0; j < spawn_count; j++) {
-            if (DAT_00489248 > 0x9C3) break;
+            if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
             int px = rand() % ((int)DAT_004879f0 - 4) + 2;
             int py = rand() % ((int)DAT_004879f4 - 4) + 2;
             /* Must be in viewport and underwater tile */
             if ((*(unsigned char *)((int)DAT_00487814 + (px >> 4) + (py >> 4) * DAT_004879f8) & 0x08) &&
                 *(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + (py << shift) + px) * 0x20 + 4 + (int)DAT_00487928) == '\x01') {
-                Entity *entity = &DAT_004892e8[DAT_00489248];
+                Entity *entity = &g_EntityPool[g_EntityCount];
                 entity->position_x = px * FIXED_SCALE;
                 entity->position_y = py * FIXED_SCALE;
                 entity->velocity_x = 0;
@@ -1468,7 +1464,7 @@ void FUN_00413720(void)
                 entity->callback_address = *(int *)((int)DAT_00487abc + 0xD378);
                 entity->counter_3c = 0;
                 entity->timer_5c = 0;
-                DAT_00489248++;
+                g_EntityCount++;
                 entity->health_or_damage_28 = 100;
             }
         }
@@ -1483,7 +1479,7 @@ void FUN_00413720(void)
  * Emitter layout: +0x00 X(int), +0x04 Y(int), +0x08 param(int),
  *   +0x0C type(byte), +0x0D sub_type(byte), +0x0E freq(byte).
  * Type 0: Fire emitter — spawns fire/smoke particles in DAT_00481f2c
- * Type 1: Flame emitter — spawns flame particles in DAT_00481f34
+ * Type 1: Flame emitter — spawns flame particles in g_ParticlePool
  * Type 2: Turret spawner — creates new turret entries
  * Type 3: Timed emitter — countdown fire emitter, removes when done
  * Emitters self-remove when their source tile is destroyed (type 0/1 only). */
@@ -1550,8 +1546,8 @@ void FUN_00454340(void)
         }
 
         case 1: {
-            /* Flame emitter: create flame particles in DAT_00481f34. */
-            if (DAT_00489250 < PARTICLE_CAPACITY && rand() % 6 == 0) {
+            /* Flame emitter: create flame particles in g_ParticlePool. */
+            if (g_ParticleCount < PARTICLE_CAPACITY && rand() % 6 == 0) {
                 unsigned int dir = ((unsigned int)((rand() & 0x7F) - 0x40) +
                                    (unsigned int)em_param) & 0x7FF;
                 char sprite;
@@ -1571,22 +1567,22 @@ void FUN_00454340(void)
                     speed_mult = 4;
                 }
 
-                if (DAT_00489250 < PARTICLE_CAPACITY) {
-                    int poff = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                if (g_ParticleCount < PARTICLE_CAPACITY) {
+                    ParticleRecord *poff = &g_ParticlePool[g_ParticleCount];
                     *(int *)(poff) = em_x * FIXED_SCALE + lut[em_param] * 0x0C;
                     *(int *)(poff + 4) = em_y * FIXED_SCALE + lut[(em_param + 0x200) & 0x7FF] * 0x0C;
                     /* Velocity: LUT * speed_mult, signed divide by 8 */
                     int vx = lut[dir] * speed_mult;
                     *(int *)(poff + 8) = (vx + (vx >> 31 & 7)) >> 3;
                     int vy = lut[(dir + 0x200) & 0x7FF] * speed_mult;
-                    *(int *)(poff + 0x0C) = (vy + (vy >> 31 & 7)) >> 3;
-                    *(char *)(poff + 0x10) = sprite;
-                    *(unsigned char *)(poff + 0x11) = 0;
-                    *(unsigned char *)(poff + 0x12) = 0;
-                    *(unsigned char *)(poff + 0x13) = 200;  /* behavior: flame type */
-                    *(unsigned char *)(poff + 0x14) = 0xFF;
-                    *(unsigned char *)(poff + 0x15) = 0;
-                    DAT_00489250++;
+                    poff->velocity_y = (vy + (vy >> 31 & 7)) >> 3;
+                    poff->sprite_index = sprite;
+                    poff->frame_number = 0;
+                    poff->frame_timer = 0;
+                    poff->flags_13 = 200;  /* behavior: flame type */
+                    poff->owner_or_flags_14 = 0xFF;
+                    poff->color_index = 0;
+                    g_ParticleCount++;
                 }
             }
             break;
@@ -1697,7 +1693,7 @@ void FUN_00454340(void)
     }
 }
 /* ===== FUN_00434310 — Entity_Debris_Animation (00434310) ===== */
-/* Processes all entities in DAT_004892e8 (stride 0x80, count DAT_00489248).
+/* Processes all entities in g_EntityPool (stride 0x80, count g_EntityCount).
  * Recovered callbacks dispatch by their original guest address at +0x34. Types
  * whose callbacks have not been lifted yet continue through the legacy inline
  * fallback below:
@@ -1711,8 +1707,8 @@ void FUN_00434310(void)
     int shift = (unsigned char)DAT_00487a18 & 0x1F;
     int i = 0;
 
-    while (i < DAT_00489248) {
-        Entity *entity = &DAT_004892e8[i];
+    while (i < g_EntityCount) {
+        Entity *entity = &g_EntityPool[i];
         int ebase = (int)entity;
         unsigned char ent_type = entity->type;
         unsigned char ent_state = entity->state_20;
@@ -1886,12 +1882,12 @@ void FUN_00434310(void)
                 if ((step & 1) != 0 &&
                     (*(unsigned char *)((beam_x >> 0x16) + (int)DAT_00487814 +
                      (beam_y >> 0x16) * DAT_004879f8) & 8) != 0) {
-                    for (int dot = 0; dot < 2 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; dot++) {
+                    for (int dot = 0; dot < 2 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dot++) {
                         int dir = dot == 0
                             ? (beam_dir + ((rand() & 0x7FF) >> 3)) & 0x7FF
                             : (beam_dir - (rand() & 0xFF)) & 0x7FF;
                         int speed = dot == 0 ? 2 : 7;
-                        Entity *tp = &DAT_004892e8[DAT_00489248];
+                        Entity *tp = &g_EntityPool[g_EntityCount];
                         memset((void *)tp, 0, 0x80);
                         tp->position_x = beam_x; tp->previous_x = beam_x;
                         tp->position_y = beam_y; tp->previous_y = beam_y;
@@ -1907,7 +1903,7 @@ void FUN_00434310(void)
                         tp->scratch_64 = 0x52;
                         if (DAT_00487aa8 != NULL)
                             tp->palette_value = (int)((unsigned short *)DAT_00487aa8)[0x5E] + 30000;
-                        DAT_00489248++;
+                        g_EntityCount++;
                     }
                 }
 
@@ -2020,8 +2016,8 @@ void FUN_00434310(void)
                     int koff = (kty * (int)DAT_004879f8) + (int)DAT_00487814;
                     unsigned char kbyte = *(unsigned char *)(koff + ktx);
                     if (kbyte & 0x08) { /* solid tile */
-                        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                            Entity *tp = &DAT_004892e8[DAT_00489248];
+                        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                            Entity *tp = &g_EntityPool[g_EntityCount];
                             tp->position_x = kx;
                             tp->position_y = ky;
                             tp->velocity_x = entity->velocity_x >> 6;
@@ -2041,13 +2037,13 @@ void FUN_00434310(void)
                             int *tt = (int *)DAT_00487abc;
                             tp->callback_address = tt[0x35EA]; /* callback from config */
                             tp->damage_44 = tt[0x361B]; /* damage from config */
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].timer_5c = 1; /* +0x5C */
-                            DAT_004892e8[DAT_00489248 - 1].scratch_65 = 0x9F; /* +0x65 palette hi */
-                            DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x93; /* +0x64 palette lo */
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].timer_5c = 1; /* +0x5C */
+                            g_EntityPool[g_EntityCount - 1].scratch_65 = 0x9F; /* +0x65 palette hi */
+                            g_EntityPool[g_EntityCount - 1].scratch_64 = 0x93; /* +0x64 palette lo */
                             if (DAT_00487aa8 != NULL) {
                                 unsigned short pal = ((unsigned short *)DAT_00487aa8)[0x9F];
-                                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                g_EntityPool[g_EntityCount - 1].palette_value =
                                     (unsigned int)pal + 0x7530; /* +0x4C color */
                             }
                         }
@@ -2198,9 +2194,9 @@ void FUN_00434310(void)
                     int *tt = (int *)DAT_00487abc;
                     int ring_heading = rand() & 0x7FF; /* random start angle */
                     for (int rdi = 0; rdi < 0x800; rdi += 0xAA) {
-                        if (DAT_00489248 >= 0x9C4) break;
+                        if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                         int h = (rdi + ring_heading) & 0x7FF;
-                        Entity *ep = &DAT_004892e8[DAT_00489248];
+                        Entity *ep = &g_EntityPool[g_EntityCount];
                         ep->position_x = nc_x;
                         ep->position_y = nc_y;
                         /* Velocity: sincos * 5/4 = (val*5) << 4 >> 6 */
@@ -2226,12 +2222,12 @@ void FUN_00434310(void)
                         ep->callback_address = tt[0]; /* callback */
                         ep->counter_3c = 0;
                         ep->timer_5c = 0;
-                        DAT_00489248++;
+                        g_EntityCount++;
                         /* Ring entities: white color */
-                        DAT_004892e8[DAT_00489248 - 1].palette_value =
+                        g_EntityPool[g_EntityCount - 1].palette_value =
                             (unsigned int)0xFFFF + 0x7530;
                         /* Lifespan = 0: entities die on wall hit (original sets +0x28 = 0) */
-                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 0;
+                        g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 0;
                     }
                     /* Flash particle — from Ghidra 0x432FCC.
                      * Only spawns if entity position is on solid tile.
@@ -2241,19 +2237,19 @@ void FUN_00434310(void)
                         int nc_ty = nc_y >> 0x16;
                         int nc_tile_off = nc_ty * *(int *)((int)DAT_00487928 + 0x04 + 0) + nc_tx; /* approximate */
                         /* Always spawn flash for simplicity (original gates on solid tile) */
-                        if (DAT_00489250 < PARTICLE_CAPACITY) {
-                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(fp + 0x00) = nc_x;
-                            *(int *)(fp + 0x04) = nc_y;
-                            *(int *)(fp + 0x08) = 0;
-                            *(int *)(fp + 0x0C) = 0;
-                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 1) + 3;
-                            *(unsigned char *)(fp + 0x11) = 0;
-                            *(unsigned char *)(fp + 0x12) = 0;
-                            *(unsigned char *)(fp + 0x13) = 1;
-                            *(unsigned char *)(fp + 0x14) = 0xFF;
-                            *(unsigned char *)(fp + 0x15) = 0; /* fire */
-                            DAT_00489250++;
+                        if (g_ParticleCount < PARTICLE_CAPACITY) {
+                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                            fp->position_x = nc_x;
+                            fp->position_y = nc_y;
+                            fp->velocity_x = 0;
+                            fp->velocity_y = 0;
+                            fp->sprite_index = (unsigned char)(rand() & 1) + 3;
+                            fp->frame_number = 0;
+                            fp->frame_timer = 0;
+                            fp->flags_13 = 1;
+                            fp->owner_or_flags_14 = 0xFF;
+                            fp->color_index = 0; /* fire */
+                            g_ParticleCount++;
                         }
                     }
                     FUN_0040f9b0(0x65 + (rand() % 7), nc_x, nc_y);
@@ -2295,9 +2291,9 @@ void FUN_00434310(void)
                             int *sc = (int *)DAT_00487ab0;
                             int *tt = (int *)DAT_00487abc;
                             for (int rdi = 0; rdi < 0x2000; rdi += 0x40) {
-                                if (DAT_00489248 >= 0x9C4) break;
+                                if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
                                 int h_idx = rdi >> 2; /* byte offset to entry index */
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 int sv = sc[h_idx];
                                 int cv = sc[h_idx + 0x200];
                                 ep->position_x = lm_x + sv * 0x10;
@@ -2322,8 +2318,8 @@ void FUN_00434310(void)
                                 ep->callback_address = tt[0xD7A8 / 4];
                                 ep->counter_3c = 0;
                                 ep->timer_5c = 4;
-                                DAT_00489248++;
-                                Entity *spawned = &DAT_004892e8[DAT_00489248 - 1];
+                                g_EntityCount++;
+                                Entity *spawned = &g_EntityPool[g_EntityCount - 1];
                                 spawned->scratch_65 = 0x1E;
                                 spawned->scratch_64 = 0x12;
                                 if (DAT_00487aa8 != NULL)
@@ -2333,19 +2329,19 @@ void FUN_00434310(void)
                             }
                         }
                         /* Flash particle for all modes */
-                        if (DAT_00489250 < PARTICLE_CAPACITY) {
-                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(fp + 0x00) = lm_x;
-                            *(int *)(fp + 0x04) = lm_y;
-                            *(int *)(fp + 0x08) = 0;
-                            *(int *)(fp + 0x0C) = 0;
-                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() % 3) + 0x11;
-                            *(unsigned char *)(fp + 0x11) = 0;
-                            *(unsigned char *)(fp + 0x12) = 0;
-                            *(unsigned char *)(fp + 0x13) = 1;
-                            *(unsigned char *)(fp + 0x14) = 0xFF;
-                            *(unsigned char *)(fp + 0x15) = 0;
-                            DAT_00489250++;
+                        if (g_ParticleCount < PARTICLE_CAPACITY) {
+                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                            fp->position_x = lm_x;
+                            fp->position_y = lm_y;
+                            fp->velocity_x = 0;
+                            fp->velocity_y = 0;
+                            fp->sprite_index = (unsigned char)(rand() % 3) + 0x11;
+                            fp->frame_number = 0;
+                            fp->frame_timer = 0;
+                            fp->flags_13 = 1;
+                            fp->owner_or_flags_14 = 0xFF;
+                            fp->color_index = 0;
+                            g_ParticleCount++;
                         }
                         FUN_0040f9b0(0x65 + (rand() % 7), lm_x, lm_y);
                         should_remove = 1;
@@ -2515,17 +2511,17 @@ void FUN_00434310(void)
                     int dy = entity->position_y;
                     unsigned char ms_o = entity->owner;
                     FUN_00437cf0(dx, dy, 150, ms_o, -1);
-                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                        int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(fp + 0x00) = dx; *(int *)(fp + 0x04) = dy;
-                        *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                        *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 13;
-                        *(unsigned char *)(fp + 0x11) = 0;
-                        *(unsigned char *)(fp + 0x12) = 0;
-                        *(unsigned char *)(fp + 0x13) = 0;
-                        *(unsigned char *)(fp + 0x14) = 0xFF;
-                        *(unsigned char *)(fp + 0x15) = 1; /* warm fire */
-                        DAT_00489250++;
+                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                        ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                        fp->position_x = dx; fp->position_y = dy;
+                        fp->velocity_x = 0; fp->velocity_y = 0;
+                        fp->sprite_index = (unsigned char)(rand() & 3) + 13;
+                        fp->frame_number = 0;
+                        fp->frame_timer = 0;
+                        fp->flags_13 = 0;
+                        fp->owner_or_flags_14 = 0xFF;
+                        fp->color_index = 1; /* warm fire */
+                        g_ParticleCount++;
                     }
                     FUN_0040f9b0(0x65 + (rand() % 7), dx, dy);
                     should_remove = 1; break;
@@ -2541,17 +2537,17 @@ void FUN_00434310(void)
                         int dy = entity->position_y;
                         unsigned char ms_o = entity->owner;
                         FUN_00437cf0(dx, dy, 150, ms_o, -1);
-                        if (DAT_00489250 < PARTICLE_CAPACITY) {
-                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(fp + 0x00) = dx; *(int *)(fp + 0x04) = dy;
-                            *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 13;
-                            *(unsigned char *)(fp + 0x11) = 0;
-                            *(unsigned char *)(fp + 0x12) = 0;
-                            *(unsigned char *)(fp + 0x13) = 0;
-                            *(unsigned char *)(fp + 0x14) = 0xFF;
-                            *(unsigned char *)(fp + 0x15) = 1; /* warm fire */
-                            DAT_00489250++;
+                        if (g_ParticleCount < PARTICLE_CAPACITY) {
+                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                            fp->position_x = dx; fp->position_y = dy;
+                            fp->velocity_x = 0; fp->velocity_y = 0;
+                            fp->sprite_index = (unsigned char)(rand() & 3) + 13;
+                            fp->frame_number = 0;
+                            fp->frame_timer = 0;
+                            fp->flags_13 = 0;
+                            fp->owner_or_flags_14 = 0xFF;
+                            fp->color_index = 1; /* warm fire */
+                            g_ParticleCount++;
                         }
                         FUN_0040f9b0(0x65 + (rand() % 7), dx, dy);
                         should_remove = 1; break;
@@ -2685,12 +2681,12 @@ void FUN_00434310(void)
                     bool trail_visible = DAT_00487814 != NULL && coarse_x >= 0 &&
                         coarse_y >= 0 && coarse_x < coarse_w && coarse_y < coarse_h &&
                         ((((unsigned char *)DAT_00487814)[coarse_x + coarse_y * coarse_w] & 8u) != 0u);
-                    if (trail_tick > 2 && trail_visible && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                    if (trail_tick > 2 && trail_visible && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                         entity->scratch_30 = 0;
                         int trail_heading = (entity->counter_3c - 0x400) & 0x7FF;
                         int *sc = (int *)DAT_00487ab0;
                         int *tt = (int *)DAT_00487abc;
-                        Entity *trail = &DAT_004892e8[DAT_00489248];
+                        Entity *trail = &g_EntityPool[g_EntityCount];
                         trail->position_x = tou_binary::add_wrap_i32(
                             entity->position_x, tou_binary::add_wrap_i32(sc[trail_heading], sc[trail_heading]));
                         trail->position_y = tou_binary::add_wrap_i32(
@@ -2720,8 +2716,8 @@ void FUN_00434310(void)
                         trail->palette_value = tt[0xD89C / 4];
                         trail->animation_frame = 0;
                         trail->timer_5c = 0;
-                        DAT_00489248++;
-                        Entity *spawned_trail = &DAT_004892e8[DAT_00489248 - 1];
+                        g_EntityCount++;
+                        Entity *spawned_trail = &g_EntityPool[g_EntityCount - 1];
                         spawned_trail->timer_5c = 1;
                         spawned_trail->scratch_64 = 0x12;
                         spawned_trail->scratch_65 = 0x1C;
@@ -2735,12 +2731,12 @@ void FUN_00434310(void)
                 if (ms_found_enemy && ms_best_dist <= 22500) {
                     int bc = entity->scratch_2c;
                     bc++;
-                    if (bc > 10 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                    if (bc > 10 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                         bc = 0;
                         int heading = entity->counter_3c;
                         int *sc = (int *)DAT_00487ab0;
                         int *tt = (int *)DAT_00487abc;
-                        Entity *bp = &DAT_004892e8[DAT_00489248];
+                        Entity *bp = &g_EntityPool[g_EntityCount];
                         bp->position_x = entity->position_x;
                         bp->position_y = entity->position_y;
                         bp->previous_x = entity->position_x;
@@ -2768,8 +2764,8 @@ void FUN_00434310(void)
                         bp->callback_address = tt[0]; /* callback */
                         bp->counter_3c = 0;
                         bp->timer_5c = 0;
-                        DAT_00489248++;
-                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 60;
+                        g_EntityCount++;
+                        g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 60;
                     }
                     entity->scratch_2c = bc;
                 } /* end bullet firing gate */
@@ -2973,10 +2969,10 @@ void FUN_00434310(void)
                     if (rc_sub == 0 && rc_cnt > 0x50) {
                         entity->counter_3c = 0;
                         /* 14/15 launches succeed in the original. */
-                        if (rand() % 15 < 14 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                        if (rand() % 15 < 14 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                             int dir = (rand() & 0xFF) + 0x380;
                             int spd = rand() % 90 + 25;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             int x = entity->previous_x - FIXED_SCALE;
                             int y = entity->previous_y - 0x340000;
                             memset((void *)ep, 0, 0x80);
@@ -2991,18 +2987,18 @@ void FUN_00434310(void)
                             ep->damage_44 = tt[0xDEB8 / 4];
                             ep->palette_value = tt[0xDEE8 / 4];
                             ep->callback_address = tt[0xDDF0 / 4];
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 50 + 90;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 50 + 90;
                             unsigned char color_span = *(unsigned char *)((int)DAT_00487abc + 0xDF14);
                             if (color_span != 0)
-                                DAT_004892e8[DAT_00489248 - 1].palette_value += rand() % color_span;
+                                g_EntityPool[g_EntityCount - 1].palette_value += rand() % color_span;
                         }
                     } else if (rc_sub == 1 && rc_cnt > 0x19) {
                         entity->counter_3c = 0;
-                        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                             unsigned char stage = entity->state_20;
                             int xoff = (3 - ((unsigned int)stage >> 2)) << 0x12;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             int x = entity->previous_x + xoff;
                             int y = entity->previous_y - 0x1C0000;
                             memset((void *)ep, 0, 0x80);
@@ -3016,8 +3012,8 @@ void FUN_00434310(void)
                             ep->callback_address = tt[0xE008 / 4];
                             ep->counter_3c = 0x400;
                             ep->scratch_2c = 1;
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 200 + 200;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 200 + 200;
                             entity->state_20 = (unsigned char)(stage + 1);
                         }
                     }
@@ -3031,15 +3027,15 @@ void FUN_00434310(void)
                         /* Timer expired: small explosion + die */
                         int ex = entity->position_x;
                         int ey = entity->position_y;
-                        if (DAT_00489250 < PARTICLE_CAPACITY) {
-                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(fp + 0x00) = ex; *(int *)(fp + 0x04) = ey;
-                            *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 3;
-                            *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
-                            *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
-                            *(unsigned char *)(fp + 0x15) = 0;
-                            DAT_00489250++;
+                        if (g_ParticleCount < PARTICLE_CAPACITY) {
+                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                            fp->position_x = ex; fp->position_y = ey;
+                            fp->velocity_x = 0; fp->velocity_y = 0;
+                            fp->sprite_index = (unsigned char)(rand() & 3) + 3;
+                            fp->frame_number = 0; fp->frame_timer = 0;
+                            fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
+                            fp->color_index = 0;
+                            g_ParticleCount++;
                         }
                         FUN_0040f9b0(0x65 + (rand() % 7), ex, ey);
                         should_remove = 1;
@@ -3051,14 +3047,14 @@ void FUN_00434310(void)
                         if (et_delay < 0) { entity->counter_3c = et_delay + 1; break; }
                     }
                     /* Spray one flechette upward */
-                    if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                    if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                         int *sc = (int *)DAT_00487ab0;
                         int h = (rand() & 0xFF) + 0x380;
                         /* Skip heading near straight down (0x3F8 to 0x408) */
                         if (h >= 0x3F8 && h <= 0x408) break;
                         h &= 0x7FF;
                         int spd = (rand() % 60) + 20;
-                        Entity *ep = &DAT_004892e8[DAT_00489248];
+                        Entity *ep = &g_EntityPool[g_EntityCount];
                         ep->position_x = entity->position_x;
                         ep->position_y = entity->position_y;
                         ep->previous_x = entity->position_x;
@@ -3081,8 +3077,8 @@ void FUN_00434310(void)
                         ep->callback_address = ((int *)DAT_00487abc)[0];
                         ep->counter_3c = 0;
                         ep->timer_5c = 0;
-                        DAT_00489248++;
-                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 40; /* short lifespan */
+                        g_EntityCount++;
+                        g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 40; /* short lifespan */
                         /* Yellow/fire palette */
                         if (DAT_00487aa8 != NULL) {
                             int ci = rand() % 10;
@@ -3090,7 +3086,7 @@ void FUN_00434310(void)
                             unsigned short r5 = (pal >> 10) & 0x1F;
                             unsigned short g5 = (pal >> 5) & 0x1F;
                             unsigned short b5 = pal & 0x1F;
-                            DAT_004892e8[DAT_00489248 - 1].palette_value =
+                            g_EntityPool[g_EntityCount - 1].palette_value =
                                 (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                         }
                     }
@@ -3127,10 +3123,10 @@ void FUN_00434310(void)
                     unsigned char own = entity->owner;
                     if (sub == 0 && count > 0x50) {
                         entity->counter_3c = 0;
-                        if (rand() % 15 < 14 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                        if (rand() % 15 < 14 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                             int dir = (rand() & 0xFF) + 0x380;
                             int speed = rand() % 90 + 25;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             int x = entity->previous_x - FIXED_SCALE;
                             int y = entity->previous_y - 0x340000;
                             memset((void *)ep, 0, 0x80);
@@ -3145,16 +3141,16 @@ void FUN_00434310(void)
                             ep->damage_44 = tt[0xDEB8 / 4];
                             ep->palette_value = tt[0xDEE8 / 4];
                             ep->callback_address = tt[0xDDF0 / 4];
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 50 + 90;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 50 + 90;
                         }
                     } else if (sub == 1 && count > 0x19) {
                         entity->counter_3c = 0;
-                        if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                        if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                             unsigned char stage = entity->state_20;
                             int x = entity->previous_x + ((3 - ((unsigned int)stage >> 2)) << 0x12);
                             int y = entity->previous_y - 0x1C0000;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = x; ep->previous_x = x;
                             ep->position_y = y; ep->previous_y = y;
@@ -3166,8 +3162,8 @@ void FUN_00434310(void)
                             ep->callback_address = tt[0xE008 / 4];
                             ep->counter_3c = 0x400;
                             ep->scratch_2c = 1;
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 200 + 200;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 200 + 200;
                             entity->state_20 = (unsigned char)(stage + 1);
                         }
                     }
@@ -3182,15 +3178,15 @@ void FUN_00434310(void)
                         /* Timer expired: small explosion + die */
                         int ex = entity->position_x;
                         int ey = entity->position_y;
-                        if (DAT_00489250 < PARTICLE_CAPACITY) {
-                            int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(fp + 0x00) = ex; *(int *)(fp + 0x04) = ey;
-                            *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                            *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 3) + 3;
-                            *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
-                            *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
-                            *(unsigned char *)(fp + 0x15) = 0;
-                            DAT_00489250++;
+                        if (g_ParticleCount < PARTICLE_CAPACITY) {
+                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                            fp->position_x = ex; fp->position_y = ey;
+                            fp->velocity_x = 0; fp->velocity_y = 0;
+                            fp->sprite_index = (unsigned char)(rand() & 3) + 3;
+                            fp->frame_number = 0; fp->frame_timer = 0;
+                            fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
+                            fp->color_index = 0;
+                            g_ParticleCount++;
                         }
                         FUN_0040f9b0(0x65 + (rand() % 7), ex, ey);
                         should_remove = 1;
@@ -3198,7 +3194,7 @@ void FUN_00434310(void)
                     }
                     /* Constant shrapnel spray (every 2 ticks) while deployed */
                     unsigned char rc_sub = entity->subtype;
-                    if (rc_sub == 0 && (rc_life & 1) == 0 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                    if (rc_sub == 0 && (rc_life & 1) == 0 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                         int *sc = (int *)DAT_00487ab0;
                         int sh = (rand() & 0xFF) + 0x380;
                         if (!(sh >= 0x3F8 && sh <= 0x408)) {
@@ -3206,7 +3202,7 @@ void FUN_00434310(void)
                             int ss = (rand() % 40) + 10;
                             int sx = entity->position_x - FIXED_SCALE;
                             int sy = entity->position_y - 0x340000;
-                            Entity *sp = &DAT_004892e8[DAT_00489248];
+                            Entity *sp = &g_EntityPool[g_EntityCount];
                             sp->position_x = sx; sp->position_y = sy;
                             sp->previous_x = sx; sp->previous_y = sy;
                             sp->velocity_x = (sc[sh] * ss) >> 6;
@@ -3221,10 +3217,10 @@ void FUN_00434310(void)
                             sp->animation_frame = 0; sp->subtype = 0;
                             sp->callback_address = 0; sp->counter_3c = 0;
                             sp->timer_5c = 0;
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 25;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 25;
                             /* Fixed yellow: RGB565 yellow = (31<<11)|(63<<5)|0 = 0xFFE0 */
-                            DAT_004892e8[DAT_00489248 - 1].palette_value =
+                            g_EntityPool[g_EntityCount - 1].palette_value =
                                 (unsigned int)0xFFE0 + 30000;
                         }
                     }
@@ -3233,7 +3229,7 @@ void FUN_00434310(void)
                     rc_cnt++;
                     entity->counter_3c = rc_cnt;
                     int rc_threshold = (rc_sub >= 2) ? 0xC8 : 0x50; /* mode 3 waits longer */
-                    if (rc_cnt > rc_threshold && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                    if (rc_cnt > rc_threshold && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                         entity->counter_3c = 0;
                         unsigned char rc_sub = entity->subtype;
                         int rc_h = (rand() & 0xFF) + 0x380;
@@ -3245,7 +3241,7 @@ void FUN_00434310(void)
                         if (rc_sub == 0) {
                             /* Mode 1: colored ball (type 0x6A) + flash particle spray */
                             int rc_spd = (rand() % 90) + 25;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             ep->position_x = rc_x; ep->position_y = rc_y;
                             ep->previous_x = rc_x; ep->previous_y = rc_y;
                             ep->velocity_x = (sc[rc_h] * rc_spd) >> 6;
@@ -3265,20 +3261,20 @@ void FUN_00434310(void)
                             ep->callback_address = ((int *)DAT_00487abc)[0];
                             ep->counter_3c = 0;
                             ep->timer_5c = 0;
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 1200; /* long lifespan */
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 1200; /* long lifespan */
                             /* Random bright color from full palette range */
                             if (DAT_00487aa8 != NULL) {
                                 int ci = rand() % 128;
                                 unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
-                                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                g_EntityPool[g_EntityCount - 1].palette_value =
                                     (unsigned int)pal + 0x7530;
                             }
                             /* Shrapnel spray is now constant (above), not per-ball */
                         } else if (rc_sub == 1) {
                             /* Mode 2: spawn wavy firework (type 0x22, +0x40=0). */
                             int rc_spd = (rand() % 60) + 30;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = rc_x; ep->position_y = rc_y;
                             ep->previous_x = rc_x; ep->previous_y = rc_y;
@@ -3293,18 +3289,18 @@ void FUN_00434310(void)
                             ep->gravity_or_motion_38 = ((int *)DAT_00487abc)[0x24];
                             ep->callback_address = ((int *)DAT_00487abc)[0];
                             ep->damage_44 = ((int *)DAT_00487abc)[0x33];
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 600;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 600;
                             if (DAT_00487aa8 != NULL) {
                                 int ci = rand() % 32 + 20;
                                 unsigned short pal = ((unsigned short *)DAT_00487aa8)[ci];
-                                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                g_EntityPool[g_EntityCount - 1].palette_value =
                                     (unsigned int)pal + 0x7530;
                             }
                         } else {
                             /* Mode 3 (sub_type 2): "magic fireworks" — from Ghidra 0x447102.
                              * Type 0x22, state 0xC8, +0x40=2, heading 0x400, lifespan ~115. */
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             memset((void *)ep, 0, 0x80);
                             ep->position_x = rc_x; ep->position_y = rc_y;
                             ep->previous_x = rc_x; ep->previous_y = rc_y;
@@ -3332,7 +3328,7 @@ void FUN_00434310(void)
                                 ep->palette_value += (int)team * 100;
                             }
                             ep->scratch_60 = 50; /* short fuse — explode soon after launch */
-                            DAT_00489248++;
+                            g_EntityCount++;
                         }
                         FUN_0040f9b0(0x11C, entity->position_x, entity->position_y);
                     }
@@ -3345,16 +3341,16 @@ void FUN_00434310(void)
                 * animation.  Frame 11 is the payload frame; frame 20 removes it. */
                 unsigned char nalle_state = entity->state_20;
                 if (nalle_state == 0xFA) {
-                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                        int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(fp + 0x00) = entity->position_x;
-                        *(int *)(fp + 0x04) = entity->position_y;
-                        *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                        *(unsigned char *)(fp + 0x10) = (unsigned char)(3 + (rand() & 1));
-                        *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
-                        *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
-                        *(unsigned char *)(fp + 0x15) = 0;
-                        DAT_00489250++;
+                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                        ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                        fp->position_x = entity->position_x;
+                        fp->position_y = entity->position_y;
+                        fp->velocity_x = 0; fp->velocity_y = 0;
+                        fp->sprite_index = (unsigned char)(3 + (rand() & 1));
+                        fp->frame_number = 0; fp->frame_timer = 0;
+                        fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
+                        fp->color_index = 0;
+                        g_ParticleCount++;
                     }
                     should_remove = 1;
                 } else if (nalle_state == 0xFB) {
@@ -3373,24 +3369,24 @@ void FUN_00434310(void)
                             if (entity->subtype == 1) {
                                 FUN_0040f9b0(0x65 + rand() % 7, nx, ny);
                                 /* The armed Nalle throws 48 mixed flame sprites. */
-                                for (int n = 0; n < 48 && DAT_00489250 < PARTICLE_CAPACITY; n++) {
-                                    int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                                for (int n = 0; n < 48 && g_ParticleCount < PARTICLE_CAPACITY; n++) {
+                                    ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
                                     int dir = (n * 0x800 / 48 + 0xA8) & 0x7FF;
                                     int spd = rand() % 50;
                                     int kind = rand() & 3;
-                                    *(int *)(fp + 0x00) = nx; *(int *)(fp + 0x04) = ny;
-                                    *(int *)(fp + 0x08) = ((int *)DAT_00487ab0)[dir] * spd >> 7;
-                                    *(int *)(fp + 0x0C) = ((int *)DAT_00487ab0)[dir + 0x200] * spd >> 7;
-                                    *(unsigned char *)(fp + 0x10) = (unsigned char)(
+                                    fp->position_x = nx; fp->position_y = ny;
+                                    fp->velocity_x = ((int *)DAT_00487ab0)[dir] * spd >> 7;
+                                    fp->velocity_y = ((int *)DAT_00487ab0)[dir + 0x200] * spd >> 7;
+                                    fp->sprite_index = (unsigned char)(
                                         kind == 0 ? 13 + (rand() & 3) :
                                         kind == 1 ? 1 + (rand() & 1) :
                                         kind == 2 ? 17 + rand() % 3 : 7 + (rand() & 3));
-                                    *(unsigned char *)(fp + 0x11) = (unsigned char)(rand() % 12);
-                                    *(unsigned char *)(fp + 0x12) = 0;
-                                    *(unsigned char *)(fp + 0x13) = 0xCD;
-                                    *(unsigned char *)(fp + 0x14) = own;
-                                    *(unsigned char *)(fp + 0x15) = 1;
-                                    DAT_00489250++;
+                                    fp->frame_number = (unsigned char)(rand() % 12);
+                                    fp->frame_timer = 0;
+                                    fp->flags_13 = 0xCD;
+                                    fp->owner_or_flags_14 = own;
+                                    fp->color_index = 1;
+                                    g_ParticleCount++;
                                 }
                                 FUN_00437cf0(nx, ny, 600, own, 500);
                             } else {
@@ -3445,36 +3441,36 @@ void FUN_00434310(void)
                     int *sc = (int *)DAT_00487ab0;
                     int pos_scale = mode == 0 ? 0x10E : 0x190;
                     int vel_scale = mode == 0 ? 0x19 : 0x30;
-                    for (int fi = 0; fi < 4 && DAT_00489250 < PARTICLE_CAPACITY; fi++) {
+                    for (int fi = 0; fi < 4 && g_ParticleCount < PARTICLE_CAPACITY; fi++) {
                         int dir = (phase + (fi + 1) * 0x200) & 0x7FF;
-                        int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(fp + 0x00) = entity->position_x + (sc[dir] * pos_scale >> 6);
-                        *(int *)(fp + 0x04) = entity->position_y + (sc[dir + 0x200] * pos_scale >> 6);
-                        *(int *)(fp + 0x08) = sc[dir] * vel_scale >> 6;
-                        *(int *)(fp + 0x0C) = sc[dir + 0x200] * vel_scale >> 6;
-                        *(unsigned char *)(fp + 0x10) = (unsigned char)((rand() & 1) - 2 * mode + 5);
-                        *(unsigned char *)(fp + 0x11) = 4;
-                        *(unsigned char *)(fp + 0x12) = 2;
-                        *(unsigned char *)(fp + 0x13) = 0xC8;
-                        *(unsigned char *)(fp + 0x14) = entity->owner;
-                        *(unsigned char *)(fp + 0x15) = 0;
-                        DAT_00489250++;
+                        ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                        fp->position_x = entity->position_x + (sc[dir] * pos_scale >> 6);
+                        fp->position_y = entity->position_y + (sc[dir + 0x200] * pos_scale >> 6);
+                        fp->velocity_x = sc[dir] * vel_scale >> 6;
+                        fp->velocity_y = sc[dir + 0x200] * vel_scale >> 6;
+                        fp->sprite_index = (unsigned char)((rand() & 1) - 2 * mode + 5);
+                        fp->frame_number = 4;
+                        fp->frame_timer = 2;
+                        fp->flags_13 = 0xC8;
+                        fp->owner_or_flags_14 = entity->owner;
+                        fp->color_index = 0;
+                        g_ParticleCount++;
                     }
                 }
                 age++;
                 entity->health_or_damage_28 = age;
                 if (age >= 400) entity->scratch_2c -= 8;
                 if (age == 450) {
-                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                        int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(fp + 0x00) = entity->position_x;
-                        *(int *)(fp + 0x04) = entity->position_y;
-                        *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                        *(unsigned char *)(fp + 0x10) = (unsigned char)(7 + (rand() & 3));
-                        *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
-                        *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
-                        *(unsigned char *)(fp + 0x15) = 1;
-                        DAT_00489250++;
+                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                        ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                        fp->position_x = entity->position_x;
+                        fp->position_y = entity->position_y;
+                        fp->velocity_x = 0; fp->velocity_y = 0;
+                        fp->sprite_index = (unsigned char)(7 + (rand() & 3));
+                        fp->frame_number = 0; fp->frame_timer = 0;
+                        fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
+                        fp->color_index = 1;
+                        g_ParticleCount++;
                     }
                     should_remove = 1;
                 }
@@ -3849,8 +3845,8 @@ void FUN_00434310(void)
             int proj_y = entity->position_y;
             int proj_damage = entity->damage_44;
             unsigned char proj_team = entity->owner;
-            int eb = (int)DAT_004892e8;
-            for (int ei = 0; ei < DAT_00489248; ei++) {
+            int eb = (int)g_EntityPool;
+            for (int ei = 0; ei < g_EntityCount; ei++) {
                 if (ei == i) continue;
                 int tbase = ei * 0x80 + eb;
                 unsigned char t_type = *(unsigned char *)(tbase + 0x21);
@@ -3961,7 +3957,7 @@ void FUN_00434310(void)
         /* === Trail particles during flight (per-type) ===
          * Several weapon types emit visible particles during flight.
          * All use the same entity spawning pattern: allocate 0x80-byte
-         * record in DAT_004892e8, set position/velocity/type/palette. */
+         * record in g_EntityPool, set position/velocity/type/palette. */
         if (!should_remove && is_projectile && !is_debris) {
             int trail_type = -1;     /* particle entity type to spawn */
             int trail_vel_div = 22;  /* velocity divisor */
@@ -3995,19 +3991,19 @@ void FUN_00434310(void)
             case 0x23: /* GAMMA BOOM — no trail */
                 break;
             case 0x11: /* Normal Fireball / Firestorm — short fire trail */
-                if (DAT_00489250 < PARTICLE_CAPACITY) {
-                    int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                    *(int *)(fp + 0x00) = entity->previous_x;  /* prev pos for trail behind */
-                    *(int *)(fp + 0x04) = entity->previous_y;
-                    *(int *)(fp + 0x08) = 0;
-                    *(int *)(fp + 0x0c) = 0;
-                    *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() & 1) + 1;
-                    *(unsigned char *)(fp + 0x11) = 1;
-                    *(unsigned char *)(fp + 0x12) = 3;   /* faster palette step = shorter life */
-                    *(unsigned char *)(fp + 0x13) = 0x50; /* short lifespan */
-                    *(unsigned char *)(fp + 0x14) = entity->owner;
-                    *(unsigned char *)(fp + 0x15) = 0;
-                    DAT_00489250++;
+                if (g_ParticleCount < PARTICLE_CAPACITY) {
+                    ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                    fp->position_x = entity->previous_x;  /* prev pos for trail behind */
+                    fp->position_y = entity->previous_y;
+                    fp->velocity_x = 0;
+                    fp->velocity_y = 0;
+                    fp->sprite_index = (unsigned char)(rand() & 1) + 1;
+                    fp->frame_number = 1;
+                    fp->frame_timer = 3;   /* faster palette step = shorter life */
+                    fp->flags_13 = 0x50; /* short lifespan */
+                    fp->owner_or_flags_14 = entity->owner;
+                    fp->color_index = 0;
+                    g_ParticleCount++;
                 }
                 break;
             case 0x22: { /* WAVY FIREWORKS / type 0x22 trail particles.
@@ -4022,7 +4018,7 @@ void FUN_00434310(void)
                     if (divisor < 1) divisor = 1;
                     wf_spawn_trail = (rand() % divisor) == 0;
                 }
-                if (wf_spawn_trail && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                if (wf_spawn_trail && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                     int *wf_sc = (int *)DAT_00487ab0;
                     int wf_h;
                     int wf_spd;
@@ -4033,7 +4029,7 @@ void FUN_00434310(void)
                         wf_h = rand() & 0x7FF;
                         wf_spd = (rand() % 15) + 2;
                     }
-                    Entity *ep = &DAT_004892e8[DAT_00489248];
+                    Entity *ep = &g_EntityPool[g_EntityCount];
                     int trail_x = *(int *)(ebase + (wf_trail_sub >= 2 ? 0x00 : 0x04));
                     int trail_y = *(int *)(ebase + (wf_trail_sub >= 2 ? 0x08 : 0x0C));
                     ep->position_x = trail_x;
@@ -4062,14 +4058,14 @@ void FUN_00434310(void)
                     ep->callback_address = ((int *)DAT_00487abc)[0xD7A8 / 4];
                     ep->counter_3c = 0;
                     ep->timer_5c = wf_trail_sub >= 2 ? 4 : 0;
-                    DAT_00489248++;
+                    g_EntityCount++;
                     if (wf_trail_sub < 2)
-                        DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 20;
+                        g_EntityPool[g_EntityCount - 1].health_or_damage_28 = 20;
                     unsigned char pidx = (unsigned char)(rand() % 12 + 20);
-                    DAT_004892e8[DAT_00489248 - 1].scratch_65 = pidx;
-                    DAT_004892e8[DAT_00489248 - 1].scratch_64 = 0x12;
+                    g_EntityPool[g_EntityCount - 1].scratch_65 = pidx;
+                    g_EntityPool[g_EntityCount - 1].scratch_64 = 0x12;
                     if (DAT_00487aa8 != NULL)
-                        DAT_004892e8[DAT_00489248 - 1].palette_value =
+                        g_EntityPool[g_EntityCount - 1].palette_value =
                             (unsigned int)((unsigned short *)DAT_00487aa8)[pidx] + 0x7530;
                 }
                 break;
@@ -4079,8 +4075,8 @@ void FUN_00434310(void)
             }
 
             if (trail_type >= 0 && (trail_chance <= 1 || (rand() % trail_chance) == 0)) {
-                for (int tc = 0; tc < trail_count && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; tc++) {
-                    Entity *tp = &DAT_004892e8[DAT_00489248];
+                for (int tc = 0; tc < trail_count && g_EntityCount < ENTITY_ACTIVE_CAPACITY; tc++) {
+                    Entity *tp = &g_EntityPool[g_EntityCount];
                     memset((void *)tp, 0, 0x80);
 
                     /* Position: same as parent entity */
@@ -4114,7 +4110,7 @@ void FUN_00434310(void)
                     /* Gravity */
                     tp->gravity_or_motion_38 = trail_grav;
 
-                    DAT_00489248++;
+                    g_EntityCount++;
                 }
             }
         }
@@ -4129,22 +4125,22 @@ void FUN_00434310(void)
 
             case 0x0F: { /* BONE CRUSHER — anti-infantry mine.
                 * Embeds in ground on wall hit (vel=0). Kills enemy troopers on contact.
-                * Simple proximity check vs trooper array (DAT_00487884, stride 0x40). */
-                if (DAT_0048924c > 0) {
+                * Simple proximity check vs trooper array (g_TrooperPool, stride 0x40). */
+                if (g_TrooperCount > 0) {
                     unsigned char own = entity->owner;
                     int mx = entity->position_x;
                     int my = entity->position_y;
-                    for (int v = 0; v < DAT_0048924c; v++) {
-                        int toff = v * 0x40;
-                        unsigned char t_team = *(unsigned char *)(toff + 0x1C + (int)DAT_00487884);
+                    for (int v = 0; v < g_TrooperCount; v++) {
+                        TrooperRecord *trooper = &g_TrooperPool[v];
+                        unsigned char t_team = trooper->team;
                         if (t_team == own || t_team == 0xFF) continue;
-                        int tx = *(int *)(toff + (int)DAT_00487884);
-                        int ty = *(int *)(toff + 8 + (int)DAT_00487884);
+                        int tx = trooper->position_x;
+                        int ty = trooper->position_y;
                         int dx = mx - tx; if (dx < 0) dx = -dx;
                         int dy = my - ty; if (dy < 0) dy = -dy;
                         if (dx < 0x80000 && dy < 0x80000) {
                             /* Kill the trooper */
-                            *(int *)(toff + 0x10 + (int)DAT_00487884) = 0;
+                            trooper->velocity_x = 0;
                             should_remove = 1;
                             break;
                         }
@@ -4159,21 +4155,21 @@ void FUN_00434310(void)
                 if (ent_state == 0xC2) {
                     int timer = entity->health_or_damage_28;
                     /* Spawn spark particle during countdown */
-                    if (DAT_00489250 < PARTICLE_CAPACITY && (rand() & 3) == 0) {
-                        int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(pbase + 0x00) = entity->position_x;
-                        *(int *)(pbase + 0x04) = entity->position_y;
+                    if (g_ParticleCount < PARTICLE_CAPACITY && (rand() & 3) == 0) {
+                        ParticleRecord *pbase = &g_ParticlePool[g_ParticleCount];
+                        pbase->position_x = entity->position_x;
+                        pbase->position_y = entity->position_y;
                         int dir = rand() & 0x7FF;
                         int spd = rand() % 60 + 30;
-                        *(int *)(pbase + 0x08) = (*(int *)((int)DAT_00487ab0 + dir * 4) * spd) >> 7;
-                        *(int *)(pbase + 0x0C) = (*(int *)((int)DAT_00487ab0 + 0x800 + dir * 4) * spd) >> 7;
-                        *(unsigned char *)(pbase + 0x10) = 1;
-                        *(unsigned char *)(pbase + 0x11) = 0;
-                        *(unsigned char *)(pbase + 0x12) = 2;
-                        *(unsigned char *)(pbase + 0x13) = 0xC8;
-                        *(unsigned char *)(pbase + 0x14) = entity->owner;
-                        *(unsigned char *)(pbase + 0x15) = 0;
-                        DAT_00489250++;
+                        pbase->velocity_x = (*(int *)((int)DAT_00487ab0 + dir * 4) * spd) >> 7;
+                        pbase->velocity_y = (*(int *)((int)DAT_00487ab0 + 0x800 + dir * 4) * spd) >> 7;
+                        pbase->sprite_index = 1;
+                        pbase->frame_number = 0;
+                        pbase->frame_timer = 2;
+                        pbase->flags_13 = 0xC8;
+                        pbase->owner_or_flags_14 = entity->owner;
+                        pbase->color_index = 0;
+                        g_ParticleCount++;
                     }
                     if (timer <= 1) {
                         /* Detonate */
@@ -4238,19 +4234,19 @@ void FUN_00434310(void)
                     /* Spawn fire/flash particles */
                     {
                         int fc = (rand() & 1) + 3; /* 3-4 flash particles */
-                        for (int f = 0; f < fc && DAT_00489250 < PARTICLE_CAPACITY; f++) {
-                            int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(pbase + 0x00) = det_x;
-                            *(int *)(pbase + 0x04) = det_y;
-                            *(int *)(pbase + 0x08) = ((rand() & 0xFFFF) - 0x8000) * 4;
-                            *(int *)(pbase + 0x0C) = ((rand() & 0xFFFF) - 0x8000) * 4;
-                            *(unsigned char *)(pbase + 0x10) = (rand() & 3) + 1;
-                            *(unsigned char *)(pbase + 0x11) = 0;
-                            *(unsigned char *)(pbase + 0x12) = 2;
-                            *(unsigned char *)(pbase + 0x13) = 0xC8;
-                            *(unsigned char *)(pbase + 0x14) = own;
-                            *(unsigned char *)(pbase + 0x15) = 0;
-                            DAT_00489250++;
+                        for (int f = 0; f < fc && g_ParticleCount < PARTICLE_CAPACITY; f++) {
+                            ParticleRecord *pbase = &g_ParticlePool[g_ParticleCount];
+                            pbase->position_x = det_x;
+                            pbase->position_y = det_y;
+                            pbase->velocity_x = ((rand() & 0xFFFF) - 0x8000) * 4;
+                            pbase->velocity_y = ((rand() & 0xFFFF) - 0x8000) * 4;
+                            pbase->sprite_index = (rand() & 3) + 1;
+                            pbase->frame_number = 0;
+                            pbase->frame_timer = 2;
+                            pbase->flags_13 = 0xC8;
+                            pbase->owner_or_flags_14 = own;
+                            pbase->color_index = 0;
+                            g_ParticleCount++;
                         }
                     }
                     should_remove = 1;
@@ -4333,10 +4329,10 @@ void FUN_00434310(void)
                         if (count1 < 1) count1 = 1;
                         if (count1 > base_count) count1 = base_count;
                         int angle_step = 0x0445C000 / (count1 > 0 ? count1 : 1);
-                        for (int dp = 0; dp < count1 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; dp++) {
+                        for (int dp = 0; dp < count1 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dp++) {
                             unsigned int dir = rand() & 0x7FF;
                             int spd = rand() % 70;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             ep->position_x = det_x;
                             ep->position_y = det_y;
                             ep->velocity_x = (sc[dir] * spd >> 6) + (det_vx >> 5);
@@ -4357,18 +4353,18 @@ void FUN_00434310(void)
                             ep->callback_address = tt[0];
                             ep->counter_3c = 0;
                             ep->timer_5c = 0;
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 90;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 90;
                             {
                                 int ci = rand() % 10;
                                 unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
                                 unsigned short r5 = (pal >> 10) & 0x1F;
                                 unsigned short g5 = (pal >> 5) & 0x1F;
                                 unsigned short b5 = pal & 0x1F;
-                                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                g_EntityPool[g_EntityCount - 1].palette_value =
                                     (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                             }
-                            DAT_004892e8[DAT_00489248 - 1].damage_44 = angle_step;
+                            g_EntityPool[g_EntityCount - 1].damage_44 = angle_step;
                         }
                     }
 
@@ -4377,10 +4373,10 @@ void FUN_00434310(void)
                         int count2 = (int)((float)DAT_0048385c * (float)(base_count * 2));
                         if (count2 < 1) count2 = 1;
                         if (count2 > base_count * 2) count2 = base_count * 2;
-                        for (int mp = 0; mp < count2 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; mp++) {
+                        for (int mp = 0; mp < count2 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; mp++) {
                             unsigned int dir = rand() & 0x7FF;
                             int spd = rand() % 70;
-                            Entity *ep = &DAT_004892e8[DAT_00489248];
+                            Entity *ep = &g_EntityPool[g_EntityCount];
                             ep->position_x = det_x;
                             ep->position_y = det_y;
                             ep->velocity_x = (sc[dir] * spd >> 6) + (det_vx >> 5);
@@ -4403,35 +4399,35 @@ void FUN_00434310(void)
                             ep->callback_address = tt[0x3458];
                             ep->counter_3c = 0;
                             ep->timer_5c = 0;
-                            DAT_00489248++;
-                            DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 90;
+                            g_EntityCount++;
+                            g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 90;
                             {
                                 int ci = rand() % 10;
                                 unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
                                 unsigned short r5 = (pal >> 10) & 0x1F;
                                 unsigned short g5 = (pal >> 5) & 0x1F;
                                 unsigned short b5 = pal & 0x1F;
-                                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                g_EntityPool[g_EntityCount - 1].palette_value =
                                     (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                             }
-                            DAT_004892e8[DAT_00489248 - 1].damage_44 = 0;
+                            g_EntityPool[g_EntityCount - 1].damage_44 = 0;
                         }
                     }
 
                     /* Flash particle */
-                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                        int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(fp + 0x00) = det_x;
-                        *(int *)(fp + 0x04) = det_y;
-                        *(int *)(fp + 0x08) = 0;
-                        *(int *)(fp + 0x0C) = 0;
-                        *(unsigned char *)(fp + 0x10) = 0;
-                        *(unsigned char *)(fp + 0x11) = 0;
-                        *(unsigned char *)(fp + 0x12) = 0;
-                        *(unsigned char *)(fp + 0x13) = 1;
-                        *(unsigned char *)(fp + 0x14) = 0xFF;
-                        *(unsigned char *)(fp + 0x15) = 1;
-                        DAT_00489250++;
+                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                        ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                        fp->position_x = det_x;
+                        fp->position_y = det_y;
+                        fp->velocity_x = 0;
+                        fp->velocity_y = 0;
+                        fp->sprite_index = 0;
+                        fp->frame_number = 0;
+                        fp->frame_timer = 0;
+                        fp->flags_13 = 1;
+                        fp->owner_or_flags_14 = 0xFF;
+                        fp->color_index = 1;
+                        g_ParticleCount++;
                     }
                     should_remove = 1;
                 }
@@ -4576,19 +4572,19 @@ void FUN_00434310(void)
                         case 0x00: /* Basic bullet — tile damage + flash particle */
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
                                          0, 0, 0, 0, 0, '\0', owner);
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(pbase + 0x00) = prev_x;
-                                *(int *)(pbase + 0x04) = prev_y;
-                                *(int *)(pbase + 0x08) = 0;
-                                *(int *)(pbase + 0x0C) = 0;
-                                *(unsigned char *)(pbase + 0x10) = 1;
-                                *(unsigned char *)(pbase + 0x11) = 0;
-                                *(unsigned char *)(pbase + 0x12) = 2;
-                                *(unsigned char *)(pbase + 0x13) = 0xC8;
-                                *(unsigned char *)(pbase + 0x14) = owner;
-                                *(unsigned char *)(pbase + 0x15) = 0;
-                                DAT_00489250++;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *pbase = &g_ParticlePool[g_ParticleCount];
+                                pbase->position_x = prev_x;
+                                pbase->position_y = prev_y;
+                                pbase->velocity_x = 0;
+                                pbase->velocity_y = 0;
+                                pbase->sprite_index = 1;
+                                pbase->frame_number = 0;
+                                pbase->frame_timer = 2;
+                                pbase->flags_13 = 0xC8;
+                                pbase->owner_or_flags_14 = owner;
+                                pbase->color_index = 0;
+                                g_ParticleCount++;
                             }
                             break;
                         case 0x12: /* Pipebomb — flash + sound 0x11 */
@@ -4637,11 +4633,11 @@ void FUN_00434310(void)
                                 int cl_vx = entity->velocity_x;
                                 int cl_vy = entity->velocity_y;
                                 unsigned int impact_angle = (unsigned int)FUN_004257e0(0, 0, cl_vx, cl_vy);
-                            for (int cd = 0; cd < 12 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; cd++) {
+                            for (int cd = 0; cd < 12 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; cd++) {
                                 /* Bias angle toward impact direction with spread +/- 0x200 (~90 degrees) */
                                 unsigned int cdir = (impact_angle + (rand() % 0x400 - 0x200)) & 0x7FF;
                                 int cspd = rand() % 200 + 100;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = cl_x;
                                 ep->position_y = cl_y;
                                 ep->velocity_x = (sc[cdir] * cspd) >> 7;
@@ -4664,14 +4660,14 @@ void FUN_00434310(void)
                                 ep->callback_address = *(int *)((int)DAT_00487abc + 0xD160);
                                 ep->counter_3c = 0;
                                 ep->timer_5c = 0;
-                                DAT_00489248++;
-                                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 50 + 40;
+                                g_EntityCount++;
+                                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 50 + 40;
                                 /* Ground-colored: sample pixel at impact point */
-                                DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                g_EntityPool[g_EntityCount - 1].palette_value =
                                     framebuffer_rgb565_to_x1r5g5b5(
                                         *(unsigned short *)((int)DAT_00481f50 +
                                             ((ty << ((unsigned char)DAT_00487a18 & 0x1f)) + tx) * 2)) + 30000;
-                                DAT_004892e8[DAT_00489248 - 1].damage_44 = 0;
+                                g_EntityPool[g_EntityCount - 1].damage_44 = 0;
                             }
                             } /* end impact_angle scope */
                             FUN_00437cf0(cl_x, cl_y, 200, owner, 800);
@@ -4686,38 +4682,38 @@ void FUN_00434310(void)
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
                                          0, 0, 0, 0, 0, '\0', owner);
                             /* White star — same as Kicker (type 0x0C) */
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(fp + 0x00) = prev_x;
-                                *(int *)(fp + 0x04) = prev_y;
-                                *(int *)(fp + 0x08) = 0;
-                                *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) = 0x0C;
-                                *(unsigned char *)(fp + 0x11) = 0;
-                                *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 1;
-                                *(unsigned char *)(fp + 0x14) = 0x9F;
-                                *(unsigned char *)(fp + 0x15) = 2; /* group 2 = blue/white */
-                                DAT_00489250++;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                fp->position_x = prev_x;
+                                fp->position_y = prev_y;
+                                fp->velocity_x = 0;
+                                fp->velocity_y = 0;
+                                fp->sprite_index = 0x0C;
+                                fp->frame_number = 0;
+                                fp->frame_timer = 0;
+                                fp->flags_13 = 1;
+                                fp->owner_or_flags_14 = 0x9F;
+                                fp->color_index = 2; /* group 2 = blue/white */
+                                g_ParticleCount++;
                             }
                             FUN_0040f9b0(0x1E, prev_x, prev_y); /* sound 0x1E from Ghidra */
                             break;
                         case 0x09: /* KICKER — crater + white star on wall hit, NO bounce. */
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
                                          0, 0, 0, 0, 0, '\0', owner);
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(fp + 0x00) = prev_x;
-                                *(int *)(fp + 0x04) = prev_y;
-                                *(int *)(fp + 0x08) = 0;
-                                *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) = 0x0C;
-                                *(unsigned char *)(fp + 0x11) = 0;
-                                *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 1;
-                                *(unsigned char *)(fp + 0x14) = 0x9F;
-                                *(unsigned char *)(fp + 0x15) = 2; /* group 2 = blue/white */
-                                DAT_00489250++;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                fp->position_x = prev_x;
+                                fp->position_y = prev_y;
+                                fp->velocity_x = 0;
+                                fp->velocity_y = 0;
+                                fp->sprite_index = 0x0C;
+                                fp->frame_number = 0;
+                                fp->frame_timer = 0;
+                                fp->flags_13 = 1;
+                                fp->owner_or_flags_14 = 0x9F;
+                                fp->color_index = 2; /* group 2 = blue/white */
+                                g_ParticleCount++;
                             }
                             FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
                             break;
@@ -5031,10 +5027,10 @@ void FUN_00434310(void)
                             FUN_00437cf0(prev_x, prev_y, 150, owner, 255);
                             /* Fire debris burst */
                             int *km_sc = (int *)DAT_00487ab0;
-                            for (int dp = 0; dp < 8 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; dp++) {
+                            for (int dp = 0; dp < 8 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dp++) {
                                 unsigned int dir = rand() & 0x7FF;
                                 int spd = rand() % 60;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = prev_x;
                                 ep->position_y = prev_y;
                                 ep->velocity_x = (km_sc[dir] * spd) >> 6;
@@ -5055,15 +5051,15 @@ void FUN_00434310(void)
                                 ep->callback_address = ((int *)DAT_00487abc)[0];
                                 ep->counter_3c = 0;
                                 ep->timer_5c = 0;
-                                DAT_00489248++;
-                                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 60 + 40;
+                                g_EntityCount++;
+                                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 60 + 40;
                                 {
                                     int ci = rand() % 10;
                                     unsigned short pal = *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2);
                                     unsigned short r5 = (pal >> 10) & 0x1F;
                                     unsigned short g5 = (pal >> 5) & 0x1F;
                                     unsigned short b5 = pal & 0x1F;
-                                    DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                    g_EntityPool[g_EntityCount - 1].palette_value =
                                         (unsigned int)((r5 << 11) | (g5 << 6) | b5) + 30000;
                                 }
                             }
@@ -5133,10 +5129,10 @@ void FUN_00434310(void)
                                 if (count1 < 1) count1 = 1;
                                 if (count1 > 40) count1 = 40;
                                 int angle_step = 0x0445C000 / count1;
-                                for (int dp = 0; dp < count1 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; dp++) {
+                                for (int dp = 0; dp < count1 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dp++) {
                                     unsigned int dir = rand() & 0x7FF;
                                     int spd = rand() % 80;
-                                    Entity *ep = &DAT_004892e8[DAT_00489248];
+                                    Entity *ep = &g_EntityPool[g_EntityCount];
                                     ep->position_x = mb_effect_x;
                                     ep->position_y = mb_effect_y;
                                     ep->velocity_x = (sc[dir] * spd >> 6) + (mb_vx >> 5);
@@ -5157,14 +5153,14 @@ void FUN_00434310(void)
                                     ep->callback_address = tt[0];
                                     ep->counter_3c = 0;
                                     ep->timer_5c = 0;
-                                    DAT_00489248++;
-                                    DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 120;
+                                    g_EntityCount++;
+                                    g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 120;
                                     {
                                         int ci = rand() % 10;
-                                        DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                        g_EntityPool[g_EntityCount - 1].palette_value =
                                             *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2) + 30000;
                                     }
-                                    DAT_004892e8[DAT_00489248 - 1].damage_44 = angle_step;
+                                    g_EntityPool[g_EntityCount - 1].damage_44 = angle_step;
                                 }
                             }
 
@@ -5173,10 +5169,10 @@ void FUN_00434310(void)
                                 int count2 = (int)((float)DAT_0048385c * 150.0f);
                                 if (count2 < 1) count2 = 1;
                                 if (count2 > 80) count2 = 80;
-                                for (int mp = 0; mp < count2 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; mp++) {
+                                for (int mp = 0; mp < count2 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; mp++) {
                                     unsigned int dir = rand() & 0x7FF;
                                     int spd = rand() % 80;
-                                    Entity *ep = &DAT_004892e8[DAT_00489248];
+                                    Entity *ep = &g_EntityPool[g_EntityCount];
                                     ep->position_x = mb_effect_x;
                                     ep->position_y = mb_effect_y;
                                     ep->velocity_x = (sc[dir] * spd >> 6) + (mb_vx >> 5);
@@ -5199,36 +5195,36 @@ void FUN_00434310(void)
                                     ep->callback_address = tt[0x3458];
                                     ep->counter_3c = 0;
                                     ep->timer_5c = 0;
-                                    DAT_00489248++;
-                                    DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 120;
+                                    g_EntityCount++;
+                                    g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 120;
                                     {
                                         int ci = rand() % 10;
-                                        DAT_004892e8[DAT_00489248 - 1].palette_value =
+                                        g_EntityPool[g_EntityCount - 1].palette_value =
                                             *(unsigned short *)((int)DAT_00487aa8 + (246 + ci) * 2) + 30000;
                                     }
-                                    DAT_004892e8[DAT_00489248 - 1].damage_44 = 0;
+                                    g_EntityPool[g_EntityCount - 1].damage_44 = 0;
                                 }
                             }
 
                             /* Flash particle + sound */
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
                                 int flash_y = mb_y;
                                 if (DAT_00481f20 != NULL) {
                                     int sprite_height = *(unsigned char *)((int)DAT_00481f20 + 5) & 0xFE;
                                     flash_y += 0x140000 - sprite_height * 0x20000;
                                 }
-                                *(int *)(fp + 0x00) = mb_x;
-                                *(int *)(fp + 0x04) = flash_y;
-                                *(int *)(fp + 0x08) = 0;
-                                *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) = 0;
-                                *(unsigned char *)(fp + 0x11) = 0;
-                                *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 1;
-                                *(unsigned char *)(fp + 0x14) = 0xFF;
-                                *(unsigned char *)(fp + 0x15) = 1; /* group 1 = fire (MEGABOMB) */
-                                DAT_00489250++;
+                                fp->position_x = mb_x;
+                                fp->position_y = flash_y;
+                                fp->velocity_x = 0;
+                                fp->velocity_y = 0;
+                                fp->sprite_index = 0;
+                                fp->frame_number = 0;
+                                fp->frame_timer = 0;
+                                fp->flags_13 = 1;
+                                fp->owner_or_flags_14 = 0xFF;
+                                fp->color_index = 1; /* group 1 = fire (MEGABOMB) */
+                                g_ParticleCount++;
                             }
                             FUN_0040f9b0(0x65 + (rand() % 7), mb_x, mb_y);
                             break;
@@ -5255,19 +5251,19 @@ void FUN_00434310(void)
                                 /* WAVY FIREWORKS mode 1 wall hit. The terminal path
                                  * is silent and emits one small flash; 0x4443ED is
                                  * its flight-trail spawn, not an impact explosion. */
-                                if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                    int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                    *(int *)(fp + 0x00) = prev_x;
-                                    *(int *)(fp + 0x04) = prev_y;
-                                    *(int *)(fp + 0x08) = 0;
-                                    *(int *)(fp + 0x0C) = 0;
-                                    *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() % 2) + 1;
-                                    *(unsigned char *)(fp + 0x11) = 0;
-                                    *(unsigned char *)(fp + 0x12) = 0;
-                                    *(unsigned char *)(fp + 0x13) = 1;
-                                    *(unsigned char *)(fp + 0x14) = 0xFF;
-                                    *(unsigned char *)(fp + 0x15) = 0; /* fire */
-                                    DAT_00489250++;
+                                if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                    ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                    fp->position_x = prev_x;
+                                    fp->position_y = prev_y;
+                                    fp->velocity_x = 0;
+                                    fp->velocity_y = 0;
+                                    fp->sprite_index = (unsigned char)(rand() % 2) + 1;
+                                    fp->frame_number = 0;
+                                    fp->frame_timer = 0;
+                                    fp->flags_13 = 1;
+                                    fp->owner_or_flags_14 = 0xFF;
+                                    fp->color_index = 0; /* fire */
+                                    g_ParticleCount++;
                                 }
                                 /* Firework dies on wall hit */
                                 break;
@@ -5281,10 +5277,10 @@ void FUN_00434310(void)
                                 if (wc_sub == 2) {
                                     int *sc22 = (int *)DAT_00487ab0;
                                     int *tt22 = (int *)DAT_00487abc;
-                                    for (int angle = 0; angle < 0x800 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; angle += 0x100) {
+                                    for (int angle = 0; angle < 0x800 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; angle += 0x100) {
                                         int dir = (angle + rand() % 0x100) & 0x7FF;
                                         int speed = rand() % 0x14 + 2;
-                                        Entity *bp = &DAT_004892e8[DAT_00489248];
+                                        Entity *bp = &g_EntityPool[g_EntityCount];
                                         memset((void *)bp, 0, 0x80);
                                         bp->position_x = prev_x;
                                         bp->position_y = prev_y;
@@ -5299,28 +5295,28 @@ void FUN_00434310(void)
                                         bp->damage_44 = tt22[0xDEB4 / 4];
                                         bp->palette_value = tt22[0xDEE4 / 4];
                                         bp->callback_address = tt22[0xDDF0 / 4];
-                                        DAT_00489248++;
-                                        Entity *spawned = &DAT_004892e8[DAT_00489248 - 1];
+                                        g_EntityCount++;
+                                        Entity *spawned = &g_EntityPool[g_EntityCount - 1];
                                         unsigned char anim_mod = *(unsigned char *)((int)DAT_00487abc + 0xDF14);
                                         spawned->scratch_48 = anim_mod ? rand() % anim_mod : 0;
                                         spawned->health_or_damage_28 = 0x50;
                                     }
                                 }
-                                if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                    int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                    *(int *)(fp + 0x00) = prev_x;
-                                    *(int *)(fp + 0x04) = prev_y;
-                                    *(int *)(fp + 0x08) = 0;
-                                    *(int *)(fp + 0x0C) = 0;
-                                    *(unsigned char *)(fp + 0x10) =
+                                if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                    ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                    fp->position_x = prev_x;
+                                    fp->position_y = prev_y;
+                                    fp->velocity_x = 0;
+                                    fp->velocity_y = 0;
+                                    fp->sprite_index =
                                         wc_sub >= 2 ? (unsigned char)(rand() % 4 + 0x0D)
                                                      : (unsigned char)(rand() % 2 + 1);
-                                    *(unsigned char *)(fp + 0x11) = 0;
-                                    *(unsigned char *)(fp + 0x12) = 0;
-                                    *(unsigned char *)(fp + 0x13) = 0;
-                                    *(unsigned char *)(fp + 0x14) = 0xFF;
-                                    *(unsigned char *)(fp + 0x15) = 0;
-                                    DAT_00489250++;
+                                    fp->frame_number = 0;
+                                    fp->frame_timer = 0;
+                                    fp->flags_13 = 0;
+                                    fp->owner_or_flags_14 = 0xFF;
+                                    fp->color_index = 0;
+                                    g_ParticleCount++;
                                 }
                                 int snd = (wc_sub == 3) ? 0x112 : 0x114;
                                 FUN_0040f9b0(snd, prev_x, prev_y);
@@ -5341,10 +5337,10 @@ void FUN_00434310(void)
                             int *tt = (int *)DAT_00487abc;
                             FUN_004357b0(tx, ty, 9, stored_tile, is_water,
                                          gx, gy, prev_x, prev_y, '\0', '\0', owner);
-                            for (int n = 0; n < 5 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; n++) {
+                            for (int n = 0; n < 5 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; n++) {
                                 int dir = rand() & 0x7FF;
                                 int spd = rand() % 100 + 30;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 memset((void *)ep, 0, 0x80);
                                 ep->position_x = gx; ep->previous_x = gx;
                                 ep->position_y = gy; ep->previous_y = gy;
@@ -5356,13 +5352,13 @@ void FUN_00434310(void)
                                 ep->damage_44 = tt[0x245C / 4];
                                 ep->palette_value = tt[0x248C / 4];
                                 ep->callback_address = tt[0x2398 / 4];
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
-                            for (int n = 0; n < 16 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; n++) {
+                            for (int n = 0; n < 16 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; n++) {
                                 int dir = rand() & 0x7FF;
                                 int spd = rand() % 100 + 30;
                                 int sub = rand() % 3;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 memset((void *)ep, 0, 0x80);
                                 ep->position_x = gx; ep->previous_x = gx;
                                 ep->position_y = gy; ep->previous_y = gy;
@@ -5375,17 +5371,17 @@ void FUN_00434310(void)
                                 ep->damage_44 = tt[(0x2DC + sub * 4) / 4];
                                 ep->palette_value = tt[(0x30C + sub * 4) / 4];
                                 ep->callback_address = tt[0x218 / 4];
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(fp + 0x00) = gx; *(int *)(fp + 0x04) = gy;
-                                *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) = 0x0B;
-                                *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
-                                *(unsigned char *)(fp + 0x15) = 1;
-                                DAT_00489250++;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                fp->position_x = gx; fp->position_y = gy;
+                                fp->velocity_x = 0; fp->velocity_y = 0;
+                                fp->sprite_index = 0x0B;
+                                fp->frame_number = 0; fp->frame_timer = 0;
+                                fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
+                                fp->color_index = 1;
+                                g_ParticleCount++;
                             }
                             FUN_0040f9b0(0x65 + rand() % 7, gx, gy);
                             FUN_00437cf0(gx, gy, 400, owner, 0);
@@ -5417,8 +5413,8 @@ void FUN_00434310(void)
                             unsigned char own = entity->owner;
                             int pvx = entity->velocity_x;
                             int pvy = entity->velocity_y;
-                            for (int s = 0; s < 10 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; s++) {
-                                Entity *tp = &DAT_004892e8[DAT_00489248];
+                            for (int s = 0; s < 10 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; s++) {
+                                Entity *tp = &g_EntityPool[g_EntityCount];
                                 memset((void *)tp, 0, 0x80);
                                 tp->position_x = parent_x;
                                 tp->previous_x = parent_x;
@@ -5442,7 +5438,7 @@ void FUN_00434310(void)
                                 tp->variant_24 = (unsigned short)(rand() % 5);
                                 tp->gravity_or_motion_38 = 4;
                                 tp->damage_44 = entity->damage_44 / 5; /* split damage */
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                             break;
                         }
@@ -5485,10 +5481,10 @@ void FUN_00434310(void)
                             int split_damage = 0x9C4000 / count;
                             int *sc = (int *)DAT_00487ab0;
                             int *tt = (int *)DAT_00487abc;
-                            for (int n = 0; n < count && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; n++) {
+                            for (int n = 0; n < count && g_EntityCount < ENTITY_ACTIVE_CAPACITY; n++) {
                                 int dir = (base_dir + rand() % 120 - 60) & 0x7FF;
                                 int spd = rand() % 48 + 100;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 memset((void *)ep, 0, 0x80);
                                 ep->position_x = entity->position_x;
                                 ep->previous_x = entity->position_x;
@@ -5504,19 +5500,19 @@ void FUN_00434310(void)
                                 ep->palette_value = tt[0xDEEC / 4];
                                 ep->callback_address = tt[0xDDF0 / 4];
                                 ep->damage_44 = split_damage;
-                                DAT_00489248++;
-                                DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = rand() % 100 + 80;
+                                g_EntityCount++;
+                                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 80;
                             }
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(fp + 0x00) = entity->position_x;
-                                *(int *)(fp + 0x04) = entity->position_y;
-                                *(int *)(fp + 0x08) = 0; *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) = (unsigned char)(13 + (rand() & 3));
-                                *(unsigned char *)(fp + 0x11) = 0; *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 0; *(unsigned char *)(fp + 0x14) = 0xFF;
-                                *(unsigned char *)(fp + 0x15) = 1;
-                                DAT_00489250++;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                fp->position_x = entity->position_x;
+                                fp->position_y = entity->position_y;
+                                fp->velocity_x = 0; fp->velocity_y = 0;
+                                fp->sprite_index = (unsigned char)(13 + (rand() & 3));
+                                fp->frame_number = 0; fp->frame_timer = 0;
+                                fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
+                                fp->color_index = 1;
+                                g_ParticleCount++;
                             }
                             FUN_00437cf0(entity->position_x, entity->position_y, 100, owner, -1);
                             FUN_0040f9b0(0x65 + rand() % 7, entity->position_x, entity->position_y);
@@ -5602,23 +5598,23 @@ void FUN_00434310(void)
                             break;
                         }
 
-                        /* Spawn flash particles into DAT_00481f34 (0x20-byte records,
-                         * counter DAT_00489250, max 2000 entries) */
-                        for (int ep = 0; ep < flash_count && DAT_00489250 < PARTICLE_CAPACITY; ep++) {
-                            int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                            *(int *)(pbase + 0x00) = prev_x;
-                            *(int *)(pbase + 0x04) = prev_y;
+                        /* Spawn flash particles into g_ParticlePool (0x20-byte records,
+                         * counter g_ParticleCount, max 2000 entries) */
+                        for (int ep = 0; ep < flash_count && g_ParticleCount < PARTICLE_CAPACITY; ep++) {
+                            ParticleRecord *pbase = &g_ParticlePool[g_ParticleCount];
+                            pbase->position_x = prev_x;
+                            pbase->position_y = prev_y;
                             int dir = rand() & 0x7FF;
                             int spd = rand() % 50 + 20;
-                            *(int *)(pbase + 0x08) = (*(int *)((int)DAT_00487ab0 + dir * 4) * spd) >> 7;
-                            *(int *)(pbase + 0x0C) = (*(int *)((int)DAT_00487ab0 + 0x800 + dir * 4) * spd) >> 7;
-                            *(unsigned char *)(pbase + 0x10) = (unsigned char)((rand() & 1) + 1);
-                            *(unsigned char *)(pbase + 0x11) = 0;
-                            *(unsigned char *)(pbase + 0x12) = 2;
-                            *(unsigned char *)(pbase + 0x13) = 0xC8;
-                            *(unsigned char *)(pbase + 0x14) = owner;
-                            *(unsigned char *)(pbase + 0x15) = 0;
-                            DAT_00489250++;
+                            pbase->velocity_x = (*(int *)((int)DAT_00487ab0 + dir * 4) * spd) >> 7;
+                            pbase->velocity_y = (*(int *)((int)DAT_00487ab0 + 0x800 + dir * 4) * spd) >> 7;
+                            pbase->sprite_index = (unsigned char)((rand() & 1) + 1);
+                            pbase->frame_number = 0;
+                            pbase->frame_timer = 2;
+                            pbase->flags_13 = 0xC8;
+                            pbase->owner_or_flags_14 = owner;
+                            pbase->color_index = 0;
+                            g_ParticleCount++;
                         }
                     }
 
@@ -5821,19 +5817,19 @@ void FUN_00434310(void)
                             entity->state_20 = 0xFA;
                         } else if (ent_type == 0x1B) {
                             /* Original 0x44416A contact explosion. */
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(fp + 0x00) = entity->position_x;
-                                *(int *)(fp + 0x04) = entity->position_y;
-                                *(int *)(fp + 0x08) = 0;
-                                *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) = (unsigned char)(rand() % 4) + 0x0D;
-                                *(unsigned char *)(fp + 0x11) = 0;
-                                *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 0;
-                                *(unsigned char *)(fp + 0x14) = 0xFF;
-                                *(unsigned char *)(fp + 0x15) = 0;
-                                DAT_00489250++;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                fp->position_x = entity->position_x;
+                                fp->position_y = entity->position_y;
+                                fp->velocity_x = 0;
+                                fp->velocity_y = 0;
+                                fp->sprite_index = (unsigned char)(rand() % 4) + 0x0D;
+                                fp->frame_number = 0;
+                                fp->frame_timer = 0;
+                                fp->flags_13 = 0;
+                                fp->owner_or_flags_14 = 0xFF;
+                                fp->color_index = 0;
+                                g_ParticleCount++;
                             }
                             FUN_0040f9b0(0x65 + (rand() % 7),
                                          entity->position_x, entity->position_y);
@@ -5846,21 +5842,21 @@ void FUN_00434310(void)
                                 FUN_0040f9b0(0x114, entity->position_x, entity->position_y);
                             else if (fw_sub == 3)
                                 FUN_0040f9b0(0x112, entity->position_x, entity->position_y);
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int fp = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                                *(int *)(fp + 0x00) = entity->position_x;
-                                *(int *)(fp + 0x04) = entity->position_y;
-                                *(int *)(fp + 0x08) = 0;
-                                *(int *)(fp + 0x0C) = 0;
-                                *(unsigned char *)(fp + 0x10) =
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
+                                fp->position_x = entity->position_x;
+                                fp->position_y = entity->position_y;
+                                fp->velocity_x = 0;
+                                fp->velocity_y = 0;
+                                fp->sprite_index =
                                     fw_sub >= 2 ? (unsigned char)(rand() % 4 + 0x0D)
                                                 : (unsigned char)(rand() % 2 + 1);
-                                *(unsigned char *)(fp + 0x11) = 0;
-                                *(unsigned char *)(fp + 0x12) = 0;
-                                *(unsigned char *)(fp + 0x13) = 0;
-                                *(unsigned char *)(fp + 0x14) = 0xFF;
-                                *(unsigned char *)(fp + 0x15) = 0;
-                                DAT_00489250++;
+                                fp->frame_number = 0;
+                                fp->frame_timer = 0;
+                                fp->flags_13 = 0;
+                                fp->owner_or_flags_14 = 0xFF;
+                                fp->color_index = 0;
+                                g_ParticleCount++;
                             }
                             should_remove = 1;
                         } else {
@@ -5874,20 +5870,20 @@ void FUN_00434310(void)
 
         /* PERSUADERTRON (type 0x0A): convert enemy troopers to shooter's team.
          * Each tick, scan nearby troopers. On proximity hit, change team. */
-        if (ent_type == 0x0A && !should_remove && DAT_0048924c > 0) {
+        if (ent_type == 0x0A && !should_remove && g_TrooperCount > 0) {
             unsigned char shooter_team = entity->owner;
             int ex = entity->position_x;
             int ey = entity->position_y;
-            for (int v = 0; v < DAT_0048924c; v++) {
-                int toff = v * 0x40;
-                unsigned char t_team = *(unsigned char *)(toff + 0x1C + (int)DAT_00487884);
+            for (int v = 0; v < g_TrooperCount; v++) {
+                TrooperRecord *trooper = &g_TrooperPool[v];
+                unsigned char t_team = trooper->team;
                 if (t_team != shooter_team && t_team != 0xFF) {
-                    int tx = *(int *)(toff + (int)DAT_00487884);
-                    int ty = *(int *)(toff + 8 + (int)DAT_00487884);
+                    int tx = trooper->position_x;
+                    int ty = trooper->position_y;
                     int dx = (ex - tx) >> 0x12;
                     int dy = (ey - ty) >> 0x12;
                     if (dx * dx + dy * dy < 400) {
-                        *(unsigned char *)(toff + 0x1C + (int)DAT_00487884) = shooter_team;
+                        trooper->team = shooter_team;
                         should_remove = 1;
                     }
                 }
@@ -6062,7 +6058,7 @@ void FUN_00434310(void)
 
 }
 /* ===== FUN_004527e0 — Update_Projectiles (004527E0) ===== */
-/* Updates particles in DAT_00481f34 (stride 0x20, DAT_00489250 count).
+/* Updates particles in g_ParticlePool (stride 0x20, g_ParticleCount count).
  * Each particle has: +0x00 pos_x, +0x04 pos_y, +0x08 vel_x, +0x0C vel_y,
  * +0x10 type, +0x11 frame, +0x12 sub_frame, +0x13 behavior, +0x14 owner, +0x15 color.
  * Moves particles, advances animation, handles wall collision/ricochet,
@@ -6077,8 +6073,8 @@ void FUN_004527e0(void)
 {
     int i = 0;
 
-    while (i < DAT_00489250) {
-        ParticleRecord *part = &DAT_00481f34[i];
+    while (i < g_ParticleCount) {
+        ParticleRecord *part = &g_ParticlePool[i];
         int old_x = part->position_x;
         int old_y = part->position_y;
 
@@ -6141,8 +6137,8 @@ void FUN_004527e0(void)
             /* Entity proximity deflection — scan entity array directly for type 0x0E
              * (MOVING SUCKER). Original used tracking list which goes stale. */
             if (DAT_00489288 == '\0') {
-                for (int ei = 0; ei < DAT_00489248; ei++) {
-                    Entity *entity = &DAT_004892e8[ei];
+                for (int ei = 0; ei < g_EntityCount; ei++) {
+                    Entity *entity = &g_EntityPool[ei];
                     if (entity->type != 0x0E) continue;
                     unsigned char ent_owner = entity->owner;
                     unsigned char ent_team = Player_Get(ent_owner)->team;
@@ -6362,9 +6358,9 @@ void FUN_004527e0(void)
                         ((part->position_y >> 0x12) << ((unsigned char)DAT_00487a18 & 0x1F)) +
                         (part->position_x >> 0x12));
                     if (*(char *)((unsigned int)tile2 * 0x20 + 10 + (int)DAT_00487928) == '\x01') {
-                        if (DAT_00489260 > 0) {
-                            for (int t = 0; t < DAT_00489260; t++) {
-                                ProjectileRecord *turret = &DAT_00481f28[t];
+                        if (g_ProjectileCount > 0) {
+                            for (int t = 0; t < g_ProjectileCount; t++) {
+                                ProjectileRecord *turret = &g_ProjectilePool[t];
                                 unsigned char turret_team = turret->team;
                                 if (owner_team != (unsigned int)turret_team) {
                                     int desc_base2 = (int)DAT_00481f20 + (unsigned int)part->sprite_index * 8;
@@ -6392,9 +6388,9 @@ void FUN_004527e0(void)
                 }
 
                 /* Vehicle/trooper collision (grid_byte bit 2) */
-                if ((grid_byte & 4) == 4 && DAT_0048924c > 0) {
-                    for (int v = 0; v < DAT_0048924c; v++) {
-                        TrooperRecord *vehicle = &DAT_00487884[v];
+                if ((grid_byte & 4) == 4 && g_TrooperCount > 0) {
+                    for (int v = 0; v < g_TrooperCount; v++) {
+                        TrooperRecord *vehicle = &g_TrooperPool[v];
                         unsigned char veh_team = vehicle->team;
                         if (owner_team != (unsigned int)veh_team) {
                             int desc_base3 = (int)DAT_00481f20 + (unsigned int)part->sprite_index * 8;
@@ -6430,8 +6426,8 @@ check_end_frame:
 remove_particle:
         /* The original copies only the active 0x00..0x15 fields, rather than
          * blindly copying the opaque tail of the record. */
-        DAT_00489250--;
-        const ParticleRecord *last = &DAT_00481f34[DAT_00489250];
+        g_ParticleCount--;
+        const ParticleRecord *last = &g_ParticlePool[g_ParticleCount];
         part->position_x = last->position_x;
         part->position_y = last->position_y;
         part->velocity_x = last->velocity_x;
@@ -6442,7 +6438,7 @@ remove_particle:
         part->flags_13 = last->flags_13;
         part->owner_or_flags_14 = last->owner_or_flags_14;
         part->color_index = last->color_index;
-        if (i >= DAT_00489250) break;
+        if (i >= g_ParticleCount) break;
         /* Don't increment i — re-check swapped-in entry */
     }
 }
@@ -6634,113 +6630,113 @@ static int FUN_00459dd0(int sx, int sy, int tx, int ty, float speed_factor, char
 }
 
 /* ===== FUN_00454b00 — Update_Turrets (00454B00) ===== */
-/* Main turret update loop. Processes all troopers/turrets in DAT_00487884
- * (stride 0x40, count DAT_0048924c). Handles patrol movement, step-up/down,
+/* Main turret update loop. Processes all troopers/turrets in g_TrooperPool
+ * (stride 0x40, count g_TrooperCount). Handles patrol movement, step-up/down,
  * gravity, boundary clamping, wall collision, aiming, firing, and fluid damage. */
 void FUN_00454b00(void)
 {
     int i = 0;
-    if (DAT_0048924c <= 0) return;
+    if (g_TrooperCount <= 0) return;
 
     do {
-        int *t = (int *)((int)DAT_00487884 + i * 0x40);
-        int saved_x = *t;
-        int saved_y = t[2];
+        TrooperRecord *trooper = &g_TrooperPool[i];
+        int saved_x = trooper->position_x;
+        int saved_y = trooper->position_y;
 
         /* Determine if this is a mobile turret (type 1) */
-        char turret_type = *(char *)((int)t + 0x25);
+        char turret_type = (char)trooper->kind_25;
         int is_mobile = (turret_type != '\0' && turret_type != '\x02') ? 1 : 0;
 
         /* Set patrol velocity if movement_mode == 0 */
-        if (*(char *)((int)t + 0x2d) == '\0') {
-            t[4] = (int)*(char *)((int)t + 0x1d) * t[8];
+        if ((char)trooper->movement_mode_2d == '\0') {
+            trooper->velocity_x = (int)trooper->patrol_direction * trooper->movement_speed;
         }
 
         /* Step-up helper */
-        FUN_00455a20(t);
+        FUN_00455a20(reinterpret_cast<int *>(trooper));
 
         /* Validation / step-down */
-        unsigned int val_result = FUN_00455b50(t);
+        unsigned int val_result = FUN_00455b50(reinterpret_cast<int *>(trooper));
 
         /* If validation OK and tile ahead is non-walkable: reverse and bounce */
         if ((char)val_result == '\0') {
             int shift = (unsigned char)DAT_00487a18 & 0x1f;
-            int ty_tile = t[2] >> 0x12;
-            int edge_tile = (t[4] + *t >> 0x12) + (ty_tile << shift);
+            int ty_tile = trooper->position_y >> 0x12;
+            int edge_tile = (trooper->velocity_x + trooper->position_x >> 0x12) + (ty_tile << shift);
             unsigned char tile_val = *(unsigned char *)((int)DAT_0048782c + edge_tile);
             if (*(char *)((unsigned int)tile_val * 0x20 + 1 + (int)DAT_00487928) == '\0') {
-                *(char *)((int)t + 0x39) = 0x32; /* bounce cooldown = 50 */
-                *(char *)((int)t + 0x1d) = -*(char *)((int)t + 0x1d);
-                t[4] = -(t[4] >> 1); /* halve and reverse velocity */
+                trooper->bounce_cooldown_39 = 0x32; /* bounce cooldown = 50 */
+                trooper->patrol_direction = -trooper->patrol_direction;
+                trooper->velocity_x = -(trooper->velocity_x >> 1); /* halve and reverse velocity */
             }
         }
 
         /* Save previous positions */
-        int vel_y = t[5];
-        t[1] = *t;     /* prev_x = pos_x */
-        t[3] = t[2];   /* prev_y = pos_y */
+        int vel_y = trooper->velocity_y;
+        trooper->previous_x = trooper->position_x;     /* prev_x = pos_x */
+        trooper->previous_y = trooper->position_y;   /* prev_y = pos_y */
 
         /* Apply gravity */
-        t[5] = vel_y + 0x2000;
+        trooper->velocity_y = vel_y + 0x2000;
 
         /* Jump logic for non-mobile turrets */
         if (!is_mobile) {
-            if (turret_type == '\0' && t[5] > 0x96000) {
+            if (turret_type == '\0' && trooper->velocity_y > 0x96000) {
                 if (rand() % 0x14 == 0) {
-                    t[6] = t[6] | 1; /* set ground flag */
+                    trooper->movement_flags = trooper->movement_flags | 1; /* set ground flag */
                 }
-            } else if (turret_type == '\x02' && t[5] > 0x70800) {
+            } else if (turret_type == '\x02' && trooper->velocity_y > 0x70800) {
                 if (rand() % 5 == 0) {
-                    t[6] = t[6] | 1;
+                    trooper->movement_flags = trooper->movement_flags | 1;
                 }
             }
         }
 
         /* Decrement bounce cooldown */
-        if (*(char *)((int)t + 0x39) != '\0') {
-            *(char *)((int)t + 0x39) = *(char *)((int)t + 0x39) - 1;
+        if ((char)trooper->bounce_cooldown_39 != '\0') {
+            trooper->bounce_cooldown_39 = (uint8_t)(trooper->bounce_cooldown_39 - 1);
         }
 
         /* Apply drag to vel_y */
-        unsigned int flags = (unsigned int)t[6];
+        unsigned int flags = (unsigned int)trooper->movement_flags;
         double drag_factor;
         if ((flags & 1) == 1) {
             drag_factor = 0.96;  /* in air */
         } else {
             drag_factor = 0.99;  /* on ground */
         }
-        int dragged_vy = (int)((double)t[5] * drag_factor);
-        t[5] = dragged_vy;
+        int dragged_vy = (int)((double)trooper->velocity_y * drag_factor);
+        trooper->velocity_y = dragged_vy;
 
         /* Position integration */
-        int new_y = t[2] + dragged_vy;
-        int new_x = *t + t[4];
-        t[2] = new_y;
-        *t = new_x;
+        int new_y = trooper->position_y + dragged_vy;
+        int new_x = trooper->position_x + trooper->velocity_x;
+        trooper->position_y = new_y;
+        trooper->position_x = new_x;
 
         /* Boundary clamping */
         if (new_x < 0xc0000) {
-            *t = 0xc0000;
+            trooper->position_x = 0xc0000;
         } else {
             int max_x = ((int)DAT_004879f0 - 4) * FIXED_SCALE;
             if (new_x > max_x) {
-                *t = max_x;
+                trooper->position_x = max_x;
             }
         }
 
         if (new_y < 0xc0000) {
-            t[2] = 0xc0000;
+            trooper->position_y = 0xc0000;
         } else {
             int max_y = ((int)DAT_004879f4 - 4) * FIXED_SCALE;
             if (new_y > max_y) {
-                t[2] = max_y;
+                trooper->position_y = max_y;
             }
         }
 
         /* Post-move wall collision check */
         int shift = (unsigned char)DAT_00487a18 & 0x1f;
-        int tile_y_idx = t[2] >> 0x12;
-        int tile_x_idx = *t >> 0x12;
+        int tile_y_idx = trooper->position_y >> 0x12;
+        int tile_x_idx = trooper->position_x >> 0x12;
         int tilemap_off = (tile_y_idx << shift) + tile_x_idx;
         unsigned char cur_tile = *(unsigned char *)((int)DAT_0048782c + tilemap_off);
         char tile_walk = *(char *)((unsigned int)cur_tile * 0x20 + 1 + (int)DAT_00487928);
@@ -6749,57 +6745,57 @@ void FUN_00454b00(void)
             /* Hit wall */
             if (is_mobile) {
                 if (dragged_vy > 0x96000) {
-                    t[10] = (int)0xfa0a1f01; /* kill turret (large negative health) */
+                    trooper->health_28 = (int)0xfa0a1f01; /* kill turret (large negative health) */
                 }
             } else {
                 if (dragged_vy > 0x7d000) {
-                    t[10] = (int)0xfa0a1f01;
+                    trooper->health_28 = (int)0xfa0a1f01;
                 }
             }
             /* Restore Y, zero velocity */
-            t[6] = (int)(flags & 0xfffffffe);
-            t[2] = t[3]; /* restore prev_y */
-            t[4] = 0;
-            t[5] = 0;
-            *(char *)((int)t + 0x2d) = 0;
+            trooper->movement_flags = (int)(flags & 0xfffffffe);
+            trooper->position_y = trooper->previous_y; /* restore prev_y */
+            trooper->velocity_x = 0;
+            trooper->velocity_y = 0;
+            trooper->movement_mode_2d = 0;
         }
 
         /* === Aiming logic === */
         if (is_mobile) {
             /* Mobile turret (type 1) aiming */
-            int ty_tile2 = t[2] >> 0x12;
-            int tx_tile2 = *t >> 0x12;
+            int ty_tile2 = trooper->position_y >> 0x12;
+            int tx_tile2 = trooper->position_x >> 0x12;
             int center_tile = (ty_tile2 << shift) + tx_tile2;
 
             /* Check if tile below center is walkable (on ground) */
             unsigned char below_tile = *(unsigned char *)((int)DAT_0048782c + center_tile + DAT_00487a00);
             if (*(char *)((unsigned int)below_tile * 0x20 + 1 + (int)DAT_00487928) == '\x01') {
                 /* On ground: aim based on movement mode */
-                char move_mode = *(char *)((int)t + 0x2d);
+                char move_mode = (char)trooper->movement_mode_2d;
                 if (move_mode == '\0') {
                     /* Patrol: aim at saved position */
-                    t[0xc] = FUN_004257e0(saved_x, saved_y, *t, t[2]);
+                    trooper->aim_angle_30 = FUN_004257e0(saved_x, saved_y, trooper->position_x, trooper->position_y);
                 } else if (move_mode == '\x01') {
                     /* CW spin */
-                    unsigned int new_angle = t[0xc] + 0x30;
-                    t[0xc] = new_angle & 0x7ff;
+                    unsigned int new_angle = trooper->aim_angle_30 + 0x30;
+                    trooper->aim_angle_30 = new_angle & 0x7ff;
                 } else {
                     /* CCW spin */
-                    unsigned int new_angle = t[0xc] - 0x30;
-                    t[0xc] = new_angle & 0x7ff;
+                    unsigned int new_angle = trooper->aim_angle_30 - 0x30;
+                    trooper->aim_angle_30 = new_angle & 0x7ff;
                 }
             } else {
                 /* In air: complex ledge-scanning aim adjustment */
-                char patrol_dir = *(char *)((int)t + 0x1d);
+                char patrol_dir = trooper->patrol_direction;
                 char cVar15 = '\0';
                 int aim_target = 0;
 
                 if (patrol_dir == '\x01') {
-                    t[0xc] = 0x200; /* face right */
+                    trooper->aim_angle_30 = 0x200; /* face right */
                     cVar15 = (char)-12; /* 0xF4 */
                 }
                 if (patrol_dir == (char)-1) {
-                    t[0xc] = 0x600; /* face left */
+                    trooper->aim_angle_30 = 0x600; /* face left */
                     cVar15 = '\f';  /* 12 */
                 }
 
@@ -6807,11 +6803,11 @@ void FUN_00454b00(void)
                 int edge_idx = (int)patrol_dir + tx_tile2 + (ty_tile2 << shift);
 
                 /* Decay aim_rate towards 0 */
-                if (t[0xd] > 0) {
-                    t[0xd] -= 0x10;
+                if (trooper->aim_rate_34 > 0) {
+                    trooper->aim_rate_34 -= 0x10;
                 }
-                if (t[0xd] < 0) {
-                    t[0xd] += 0x10;
+                if (trooper->aim_rate_34 < 0) {
+                    trooper->aim_rate_34 += 0x10;
                 }
 
                 /* Scan tiles below edge to determine aim adjustment */
@@ -6856,52 +6852,52 @@ void FUN_00454b00(void)
                 }
 
                 /* Slew aim_rate towards target */
-                if (t[0xd] < aim_target) {
-                    t[0xd] += 0x30;
+                if (trooper->aim_rate_34 < aim_target) {
+                    trooper->aim_rate_34 += 0x30;
                 }
-                if (aim_target < t[0xd]) {
-                    t[0xd] -= 0x30;
+                if (aim_target < trooper->aim_rate_34) {
+                    trooper->aim_rate_34 -= 0x30;
                 }
 
                 /* Apply aim_rate to aim_angle */
-                t[0xc] = (t[0xc] + t[0xd]) & 0x7ff;
+                trooper->aim_angle_30 = (trooper->aim_angle_30 + trooper->aim_rate_34) & 0x7ff;
             }
         } else {
             /* Non-mobile turret: random chance to jump */
             int rval = rand();
-            if (rval % 500 == 0 && *(unsigned char *)(t + 7) > 10) {
+            if (rval % 500 == 0 && trooper->team > 10) {
                 /* Check if tile below is non-walkable (on ground) */
-                int ty_t = t[2] >> 0x12;
-                int tx_t = *t >> 0x12;
+                int ty_t = trooper->position_y >> 0x12;
+                int tx_t = trooper->position_x >> 0x12;
                 int below_idx = (ty_t << shift) + tx_t + DAT_00487a00;
                 unsigned char btile = *(unsigned char *)((int)DAT_0048782c + below_idx);
                 if (*(char *)((unsigned int)btile * 0x20 + 1 + (int)DAT_00487928) == '\0') {
-                    t[5] = -0x44c00; /* jump */
-                    t[6] = t[6] & (int)0xfffffffe;
+                    trooper->velocity_y = -0x44c00; /* jump */
+                    trooper->movement_flags = trooper->movement_flags & (int)0xfffffffe;
                 }
             }
         }
 
         /* === Fire cooldown / targeting === */
-        if ((char)t[0xe] != '\0') {
+        if ((char)trooper->fire_cooldown_38 != '\0') {
             /* Decrement fire cooldown */
-            *(char *)(t + 0xe) = (char)t[0xe] - 1;
+            trooper->fire_cooldown_38 = (char)trooper->fire_cooldown_38 - 1;
         } else {
             /* Cooldown reached 0: try to fire */
-            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY && (char)t[7] != (char)-1) {
+            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY && (char)trooper->team != (char)-1) {
                 int tgt_x = 0;
                 int tgt_y = 0;
                 int found_target = 0;
 
-                if ((char)t[7] == (char)-2) {
+                if ((char)trooper->team == (char)-2) {
                     /* Team 0xFE: random angle, skip targeting */
                     found_target = 1;
                 } else {
                     /* Search players in range */
-                    int range_x_hi = *t + 0x3200000;
-                    int range_x_lo = *t - 0x3200000;
-                    int range_y_hi = t[2] + 0x3200000;
-                    int range_y_lo = t[2] - 0x3200000;
+                    int range_x_hi = trooper->position_x + 0x3200000;
+                    int range_x_lo = trooper->position_x - 0x3200000;
+                    int range_y_hi = trooper->position_y + 0x3200000;
+                    int range_y_lo = trooper->position_y - 0x3200000;
                     unsigned int candidate_count = 0;
                     int candidate_indices[1024];
                     int candidate_dists[1024];
@@ -6911,24 +6907,24 @@ void FUN_00454b00(void)
                         for (int p = 0; p < DAT_00489240; p++) {
                             PlayerData *player = Player_Get(p);
                             /* Skip dead or same-team players */
-                            if (player->state_24 == 0 && player->team != (uint8_t)t[7]) {
+                            if (player->state_24 == 0 && player->team != trooper->team) {
                                 int px = player->position_x;
                                 int py = player->position_y;
 
                                 if (px < range_x_hi && range_x_lo < px &&
                                     py < range_y_hi && range_y_lo < py) {
-                                    int dx = (px - *t) >> 0x12;
-                                    int dy = (py - t[2]) >> 0x12;
+                                    int dx = (px - trooper->position_x) >> 0x12;
+                                    int dy = (py - trooper->position_y) >> 0x12;
                                     int dist_sq = dx * dx + dy * dy;
 
                                     if (dist_sq < 40000) {
                                         /* Full Bresenham LOS check from turret to player */
                                         int can_fire = 0;
 
-                                        if (*(char *)((int)t + 0x25) == '\x02') {
+                                        if ((char)trooper->kind_25 == '\x02') {
                                             can_fire = 1; /* floor turret always fires */
                                         } else {
-                                            can_fire = check_line_of_sight(*t, t[2], px, py);
+                                            can_fire = check_line_of_sight(trooper->position_x, trooper->position_y, px, py);
                                         }
 
                                         if (can_fire && candidate_count < 1024) {
@@ -6952,10 +6948,10 @@ void FUN_00454b00(void)
                         }
                     }
 
-                    /* Phase 2: search buildings/projectiles (DAT_00481f28 via spatial grid).
+                    /* Phase 2: search buildings/projectiles (g_ProjectilePool via spatial grid).
                      * For each enemy team, scan the projectile bucket in DAT_00487aa4. */
-                    if (!found_target && DAT_00487aa4 != NULL && DAT_00481f28 != NULL) {
-                        unsigned char own_team2 = (unsigned char)t[7];
+                    if (!found_target && DAT_00487aa4 != NULL && g_ProjectilePool != NULL) {
+                        unsigned char own_team2 = trooper->team;
                         for (int ti = 0; ti < 4 && !found_target; ti++) {
                             if ((unsigned char)ti == own_team2) continue;
                             int grid_base = (int)DAT_00487aa4 + ti * 0x4000;
@@ -6963,13 +6959,14 @@ void FUN_00454b00(void)
                             int *proj_indices = (int *)(grid_base + 0x1010);
                             for (int pi2 = 0; pi2 < proj_count && pi2 < 500; pi2++) {
                                 int pidx2 = proj_indices[pi2];
-                                int pbase2 = (int)DAT_00481f28 + pidx2 * 0x40;
-                                int ppx = *(int *)(pbase2 + 0x00);
-                                int ppy = *(int *)(pbase2 + 0x04);
+                                if (pidx2 < 0 || pidx2 >= g_ProjectileCount) continue;
+                                const ProjectileRecord *target = &g_ProjectilePool[pidx2];
+                                int ppx = target->position_x;
+                                int ppy = target->position_y;
                                 if (ppx < range_x_hi && range_x_lo < ppx &&
                                     ppy < range_y_hi && range_y_lo < ppy) {
-                                    int ddx = (ppx - *t) >> 0x12;
-                                    int ddy = (ppy - t[2]) >> 0x12;
+                                    int ddx = (ppx - trooper->position_x) >> 0x12;
+                                    int ddy = (ppy - trooper->position_y) >> 0x12;
                                     int dd = ddx * ddx + ddy * ddy;
                                     if (dd < 40000 && dd > 0) {
                                         tgt_x = ppx; tgt_y = ppy;
@@ -6980,10 +6977,10 @@ void FUN_00454b00(void)
                         }
                     }
 
-                    /* Phase 3: search other troopers/vehicles (DAT_00487884 via spatial grid).
+                    /* Phase 3: search other troopers/vehicles (g_TrooperPool via spatial grid).
                      * Enemy troopers are binned at grid offset +0x08 (count) / +0x0C (indices). */
-                    if (!found_target && DAT_00487aa4 != NULL && DAT_00487884 != NULL) {
-                        unsigned char own_team3 = (unsigned char)t[7];
+                    if (!found_target && DAT_00487aa4 != NULL && g_TrooperPool != NULL) {
+                        unsigned char own_team3 = trooper->team;
                         for (int ti2 = 0; ti2 < 4 && !found_target; ti2++) {
                             if ((unsigned char)ti2 == own_team3) continue;
                             int grid_base2 = (int)DAT_00487aa4 + ti2 * 0x4000;
@@ -6991,13 +6988,14 @@ void FUN_00454b00(void)
                             int *troop_indices = (int *)(grid_base2 + 0x0C);
                             for (int tri = 0; tri < troop_count && tri < 500; tri++) {
                                 int tidx2 = troop_indices[tri];
-                                int tbase3 = (int)DAT_00487884 + tidx2 * 0x40;
-                                int ttx = *(int *)(tbase3 + 0x00);
-                                int tty = *(int *)(tbase3 + 0x08);
+                                if (tidx2 < 0 || tidx2 >= g_TrooperCount) continue;
+                                const TrooperRecord *target = &g_TrooperPool[tidx2];
+                                int ttx = target->position_x;
+                                int tty = target->position_y;
                                 if (ttx < range_x_hi && range_x_lo < ttx &&
                                     tty < range_y_hi && range_y_lo < tty) {
-                                    int ddx = (ttx - *t) >> 0x12;
-                                    int ddy = (tty - t[2]) >> 0x12;
+                                    int ddx = (ttx - trooper->position_x) >> 0x12;
+                                    int ddy = (tty - trooper->position_y) >> 0x12;
                                     int dd = ddx * ddx + ddy * ddy;
                                     if (dd < 40000 && dd > 0) {
                                         tgt_x = ttx; tgt_y = tty;
@@ -7014,13 +7012,13 @@ void FUN_00454b00(void)
                     int fire_angle;
                     float speed_sqrt = (float)__builtin_sqrt(0.7142857142857143);
 
-                    if ((char)t[7] == (char)-2) {
+                    if ((char)trooper->team == (char)-2) {
                         /* Random angle */
                         fire_angle = rand() & 0x7ff;
                     } else {
-                        fire_angle = FUN_00459dd0(*t, t[2] - 0x100000, tgt_x, tgt_y,
+                        fire_angle = FUN_00459dd0(trooper->position_x, trooper->position_y - 0x100000, tgt_x, tgt_y,
                                                  speed_sqrt,
-                                                 *(char *)((int)t + 0x25) != '\0');
+                                                 (char)trooper->kind_25 != '\0');
                     }
 
                     if (fire_angle != 0x801) {
@@ -7032,22 +7030,22 @@ void FUN_00454b00(void)
                          * subtype 0 = infantry → type 0x00, sub 2
                          * subtype 1 = cars/heavy → type 0x01 (DUMBFIRE), sub 1
                          * subtype 2 = aerial    → type 0x00, sub 2 */
-                        char stype = *(char *)((int)t + 0x25);
+                        char stype = (char)trooper->kind_25;
                         int proj_type = (stype == 1) ? 0x01 : 0x00;
                         int proj_subtype = (stype == 1) ? 1 : 2;
 
                         /* Owner byte */
                         char owner;
-                        if ((char)t[7] == (char)-2) {
+                        if ((char)trooper->team == (char)-2) {
                             owner = (char)-2;
                         } else {
-                            owner = (char)t[7] + 0x50;
+                            owner = (char)trooper->team + 0x50;
                         }
 
-                        /* Create projectile entity in DAT_004892e8 */
-                        Entity *projectile = &DAT_004892e8[DAT_00489248];
-                        projectile->position_x = *t;
-                        projectile->position_y = t[2] - 0x100000;
+                        /* Create projectile entity in g_EntityPool */
+                        Entity *projectile = &g_EntityPool[g_EntityCount];
+                        projectile->position_x = trooper->position_x;
+                        projectile->position_y = trooper->position_y - 0x100000;
 
                         /* Original 0x00455653-0x00455699 always launches along
                          * the ballistic angle returned above. The reconstructed
@@ -7064,8 +7062,8 @@ void FUN_00454b00(void)
                             projectile->velocity_y = 0;
                         }
 
-                        projectile->previous_x = *t;
-                        projectile->previous_y = t[2] - 0x100000;
+                        projectile->previous_x = trooper->position_x;
+                        projectile->previous_y = trooper->position_y - 0x100000;
                         projectile->motion_x_10 = 0;
                         projectile->motion_y_14 = 0;
                         projectile->type = (unsigned char)proj_type;
@@ -7089,11 +7087,11 @@ void FUN_00454b00(void)
                         projectile->counter_3c = 0;
                         projectile->timer_5c = 0;
 
-                        DAT_00489248++;
+                        g_EntityCount++;
 
                         /* Set projectile lifetime and damage based on type */
                         if (proj_type == 0) {
-                            if (*(char *)((int)t + 0x25) == '\x02') {
+                            if ((char)trooper->kind_25 == '\x02') {
                                 /* Floor turret: extended lifetime */
                                 int rnd = rand();
                                 unsigned int life_val = rnd % 0x50 + 0x28;
@@ -7122,8 +7120,8 @@ void FUN_00454b00(void)
                         projectile->gravity_or_motion_38 = 6;
 
                         /* Store turret position as projectile origin */
-                        projectile->motion_x_10 = *t;
-                        projectile->motion_y_14 = t[2];
+                        projectile->motion_x_10 = trooper->position_x;
+                        projectile->motion_y_14 = trooper->position_y;
 
                         /* No one-shot firing sound here in the original. Cars'
                          * continuous engine audio is managed by their own path. */
@@ -7131,36 +7129,36 @@ void FUN_00454b00(void)
                 }
 
                 /* Set fire cooldown based on turret type */
-                if (*(unsigned char *)(t + 7) < 0x14) {
-                    char ttype2 = *(char *)((int)t + 0x25);
+                if (trooper->team < 0x14) {
+                    char ttype2 = (char)trooper->kind_25;
                     if (ttype2 == '\0') {
-                        *(unsigned char *)(t + 0xe) = 0x14;  /* 20 ticks */
+                        trooper->fire_cooldown_38 = 0x14;  /* 20 ticks */
                     }
                     if (ttype2 == '\x02') {
-                        *(unsigned char *)(t + 0xe) = 100;   /* 100 ticks */
+                        trooper->fire_cooldown_38 = 100;   /* 100 ticks */
                     }
                     if (ttype2 == '\x01') {
-                        *(unsigned char *)(t + 0xe) = 0x96;  /* 150 ticks */
+                        trooper->fire_cooldown_38 = 0x96;  /* 150 ticks */
                     }
-                } else if (*(unsigned char *)(t + 7) == 0xfe) {
-                    *(unsigned char *)(t + 0xe) = 3;         /* 3 ticks */
+                } else if (trooper->team == 0xfe) {
+                    trooper->fire_cooldown_38 = 3;         /* 3 ticks */
                 }
             }
         }
 
         /* Fluid damage: check if current tile is underwater */
         {
-            int tile_y2 = t[2] >> 0x12;
-            int tile_x2 = *t >> 0x12;
+            int tile_y2 = trooper->position_y >> 0x12;
+            int tile_x2 = trooper->position_x >> 0x12;
             int tile_off2 = (tile_y2 << shift) + tile_x2;
             unsigned char fluid_tile = *(unsigned char *)((int)DAT_0048782c + tile_off2);
             if (*(char *)((unsigned int)fluid_tile * 0x20 + 4 + (int)DAT_00487928) == '\x01') {
-                t[10] -= 0x1400; /* fluid damage */
+                trooper->health_28 -= 0x1400; /* fluid damage */
             }
         }
 
         i++;
-    } while (i < DAT_0048924c);
+    } while (i < g_TrooperCount);
 }
 /* ===== FUN_004599f0 — LOS Angle Calculation (004599F0) ===== */
 /* Computes firing angle from (src_x,src_y) to (dst_x,dst_y).
@@ -7315,7 +7313,7 @@ char FUN_00459c70(int src_x, int src_y, int dst_x, int dst_y,
  * Updates the weapon's target angle at weapon index weap_idx. Returns 0 or 1. */
 int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 {
-    int base = weap_idx * 0x40;
+    ProjectileRecord *weapon = &g_ProjectilePool[weap_idx];
 
     /* Predict target position at lead time mult1 using the original 32-bit
      * arithmetic and wraparound behavior. */
@@ -7324,8 +7322,7 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 
     /* Compute angle to predicted position 1 */
     DAT_00481f08 = FUN_004599f0(
-        *(int *)(base + (int)DAT_00481f28),
-        *(int *)(base + 4 + (int)DAT_00481f28),
+        weapon->position_x, weapon->position_y,
         DAT_00481ee4, DAT_00481ee8,
         (int)(unsigned char)DAT_00481ed8, range_sqrt, DAT_00481ed0);
     DAT_00481f00 = DAT_00481f10;
@@ -7336,8 +7333,7 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 
     /* Compute angle to predicted position 2 */
     DAT_00481f0c = FUN_004599f0(
-        *(int *)(base + (int)DAT_00481f28),
-        *(int *)(base + 4 + (int)DAT_00481f28),
+        weapon->position_x, weapon->position_y,
         DAT_00481eec, DAT_00481ef0,
         (int)(unsigned char)DAT_00481ed8, range_sqrt, DAT_00481ed0);
 
@@ -7367,17 +7363,17 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 
     if (err2 <= err1) {
         /* Second prediction is better */
-        *(int *)(base + 0xc + (int)DAT_00481f28) = DAT_00481f0c;
+        weapon->aim_angle_0c = DAT_00481f0c;
         return 1;
     }
 
     /* First prediction is better */
-    *(int *)(base + 0xc + (int)DAT_00481f28) = DAT_00481f08;
+    weapon->aim_angle_0c = DAT_00481f08;
     return 0;
 }
 
 /* ===== FUN_00458010 — Turret_Targeting_LOS (00458010) ===== */
-/* Processes deployed weapons in DAT_00481f28 (stride 0x40, count DAT_00489260).
+/* Processes deployed weapons in g_ProjectilePool (stride 0x40, count g_ProjectileCount).
  * Full implementation: shield regen, target acquisition (player LOS + spatial grid),
  * aim slewing, predictive aim, projectile spawning, muzzle flash particles.
  * Weapon record layout (stride 0x40): +0x00 x, +0x04 y, +0x08 current_aim,
@@ -7388,28 +7384,29 @@ int FUN_00459e90(int mult1, int mult2, int weap_idx, float range_sqrt)
 void FUN_00458010(void)
 {
     int i = 0;
-    if (DAT_00489260 <= 0) return;
+    if (g_ProjectileCount <= 0) return;
 
     do {
         int off = i * 0x40;
-        unsigned char type = *(unsigned char *)(off + 0x1c + (int)DAT_00481f28);
+        ProjectileRecord *projectile = &g_ProjectilePool[i];
+        unsigned char type = projectile->type;
 
         /* Weapon type 7 = team shield/generator; no aim/fire logic. */
         if (type == 7) {
             /* === Shield type: regen health, compute animation frame === */
-            int health = *(int *)(off + 0x10 + (int)DAT_00481f28);
+            int health = projectile->health_or_state_10;
             if (health > 0) {
-                *(int *)(off + 0x10 + (int)DAT_00481f28) = health + 8000;
-                int max_health = *(int *)(off + 0x14 + (int)DAT_00481f28);
-                if (*(int *)(off + 0x10 + (int)DAT_00481f28) > max_health)
-                    *(int *)(off + 0x10 + (int)DAT_00481f28) = max_health;
+                projectile->health_or_state_10 = health + 8000;
+                int max_health = projectile->limit_or_reload_14;
+                if (projectile->health_or_state_10 > max_health)
+                    projectile->health_or_state_10 = max_health;
             }
-            int max_hp = *(int *)(off + 0x14 + (int)DAT_00481f28);
-            int frame = 0x5f - (*(int *)(off + 0x10 + (int)DAT_00481f28) * 0x5f) / max_hp;
+            int max_hp = projectile->limit_or_reload_14;
+            int frame = 0x5f - (projectile->health_or_state_10 * 0x5f) / max_hp;
             frame = frame / 10;
             if (frame > 9) frame = 9;
             if (frame < 0) frame = 0;
-            *(int *)(off + 8 + (int)DAT_00481f28) = frame;
+            projectile->visual_or_heading_08 = frame;
         }
         else {
             /* === Non-shield weapon types === */
@@ -7423,25 +7420,25 @@ void FUN_00458010(void)
             int range_sq_thresh = range_cfg * range_cfg * 4;
 
             /* Reload countdown */
-            int reload = *(int *)(off + 0x14 + (int)DAT_00481f28);
+            int reload = projectile->limit_or_reload_14;
             if (reload > 0) {
-                *(int *)(off + 0x14 + (int)DAT_00481f28) = reload - 1;
+                projectile->limit_or_reload_14 = reload - 1;
             }
             /* Health overflow protection */
-            if (*(int *)(off + 0x10 + (int)DAT_00481f28) > 1000000000) {
-                *(int *)(off + 0x10 + (int)DAT_00481f28) = 2000000000;
+            if (projectile->health_or_state_10 > 1000000000) {
+                projectile->health_or_state_10 = 2000000000;
             }
 
             /* Set the real projectile gravity used by the original solver. */
-            DAT_00481ed0 = -(int)((unsigned int)(*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x06')) & DAT_00483828;
+            DAT_00481ed0 = -(int)((unsigned int)((char)projectile->type != '\x06')) & DAT_00483828;
 
             /* Increment animation counter */
-            char *anim_ctr = (char *)(off + 0x23 + (int)DAT_00481f28);
+            char *anim_ctr = reinterpret_cast<char *>(&projectile->animation_counter_23);
             *anim_ctr = *anim_ctr + 1;
 
             /* Every 10 ticks: re-run target acquisition (too expensive to run each tick). */
-            if (*(unsigned char *)(off + 0x23 + (int)DAT_00481f28) > 10) {
-                *(unsigned char *)(off + 0x23 + (int)DAT_00481f28) = 0;
+            if (projectile->animation_counter_23 > 10) {
+                projectile->animation_counter_23 = 0;
 
                 /* ---- Target acquisition: scan players ---- */
                 int best_dist = 2000000000;
@@ -7453,11 +7450,11 @@ void FUN_00458010(void)
                     do {
                         PlayerData *player = Player_Get(p);
                         /* Skip same-team players and dead/inactive players */
-                        if (*(char *)(off + 0x1d + (int)DAT_00481f28) != (char)player->team &&
+                        if ((char)projectile->team != (char)player->team &&
                             player->state_24 == 0) {
 
-                            int src_x = *(int *)(off + (int)DAT_00481f28);
-                            int src_y = *(int *)(off + 4 + (int)DAT_00481f28);
+                            int src_x = projectile->position_x;
+                            int src_y = projectile->position_y;
                             int tgt_x = player->position_x;
                             int tgt_y = player->position_y;
                             int ddx = (src_x - tgt_x) >> 0x12;
@@ -7490,7 +7487,7 @@ next_player:
 
                     if (best_target_idx != 0xfa) {
                         /* Found a player target */
-                        *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrt((double)best_dist);
+                        projectile->target_distance_18 = (int)sqrt((double)best_dist);
 
                         PlayerData *target = Player_Get(best_target_idx);
                         DAT_00481edc = target->position_x;
@@ -7498,17 +7495,17 @@ next_player:
                         DAT_00481ef4 = target->velocity_x;
                         DAT_00481ef8 = target->velocity_y;
                         DAT_00481ed8 = (char)best_side;
-                        *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 1;
+                        projectile->target_kind_21 = 1;
 
                         int aim_angle = FUN_004599f0(
-                            *(int *)(off + (int)DAT_00481f28),
-                            *(int *)(off + 4 + (int)DAT_00481f28),
+                            projectile->position_x,
+                            projectile->position_y,
                             DAT_00481edc, DAT_00481ee0,
                             (int)(unsigned char)DAT_00481ed8, fRange, DAT_00481ed0);
-                        *(int *)(off + 0xc + (int)DAT_00481f28) = aim_angle;
+                        projectile->aim_angle_0c = aim_angle;
 
                         /* Predictive aim for non-type-3 weapons on low arc. */
-                        if (*(char *)(off + 0x1c + (int)DAT_00481f28) != '\x03' && DAT_00481ed8 == 0) {
+                        if ((char)projectile->type != '\x03' && DAT_00481ed8 == 0) {
                             if ((int)DAT_00481ed0 < 0x50) {
                                 DAT_00481efc = (int)((DAT_00481f10 + (DAT_00481f10 >> 31 & 7)) >> 3);
                             } else {
@@ -7529,22 +7526,22 @@ next_player:
                 }
 
                 /* No player target found - check tracking state */
-                char tracking = *(char *)(off + 0x21 + (int)DAT_00481f28);
+                char tracking = (char)projectile->target_kind_21;
                 if (tracking == '\0' || tracking == '\x01') {
-                    *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
+                    projectile->aim_angle_0c = 0x801;
                 }
 
-                if (*(char *)(off + 0x1c + (int)DAT_00481f28) == '\x02') {
+                if ((char)projectile->type == '\x02') {
                     /* Type 2: always reset to no-target */
-                    *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
-                    *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 0;
+                    projectile->aim_angle_0c = 0x801;
+                    projectile->target_kind_21 = 0;
                 }
                 else {
                     /* ---- Spatial grid target search (every 4 sweeps) ---- */
-                    char *sweep = (char *)(off + 0x22 + (int)DAT_00481f28);
+                    char *sweep = reinterpret_cast<char *>(&projectile->sweep_counter_22);
                     *sweep = *sweep + 1;
-                    if (*(unsigned char *)(off + 0x22 + (int)DAT_00481f28) > 3) {
-                        *(unsigned char *)(off + 0x22 + (int)DAT_00481f28) = 0;
+                    if (projectile->sweep_counter_22 > 3) {
+                        projectile->sweep_counter_22 = 0;
 
                         int grid_best = 0xfa;
                         best_dist = 2000000000;
@@ -7556,17 +7553,21 @@ next_player:
                         int grid_offset = 0x1010;   /* start at team bucket 0, entry list */
 
                         do {
-                            if (team_idx != (unsigned int)*(unsigned char *)(off + 0x1d + (int)DAT_00481f28)) {
+                            if (team_idx != (unsigned int)projectile->team) {
                                 int bucket_count = *(int *)(grid_offset - 4 + (int)DAT_00487aa4);
                                 if (bucket_count > 0) {
                                     int entry_off = grid_offset;
                                     for (int j = 0; j < bucket_count; j++) {
                                         int proj_idx = *(int *)(entry_off + (int)DAT_00487aa4);
-                                        int proj_base = proj_idx * 0x40;
-                                        int src_x = *(int *)(off + (int)DAT_00481f28);
-                                        int src_y = *(int *)(off + 4 + (int)DAT_00481f28);
-                                        int tgt_x = *(int *)(proj_base + (int)DAT_00481f28);
-                                        int tgt_y = *(int *)(proj_base + 4 + (int)DAT_00481f28);
+                                        if (proj_idx < 0 || proj_idx >= g_ProjectileCount) {
+                                            entry_off += 4;
+                                            continue;
+                                        }
+                                        const ProjectileRecord *candidate = &g_ProjectilePool[proj_idx];
+                                        int src_x = projectile->position_x;
+                                        int src_y = projectile->position_y;
+                                        int tgt_x = candidate->position_x;
+                                        int tgt_y = candidate->position_y;
                                         int ddx = (src_x - tgt_x) >> 0x12;
                                         int ddy = (src_y - tgt_y) >> 0x12;
                                         int dist = ddx * ddx + ddy * ddy;
@@ -7597,22 +7598,22 @@ next_grid_entry:
                         } while (grid_offset < 0x11010);
 
                         if (grid_best == 0xfa) {
-                            *(int *)(off + 0xc + (int)DAT_00481f28) = 0x801;
-                            *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 0;
+                            projectile->aim_angle_0c = 0x801;
+                            projectile->target_kind_21 = 0;
                         }
                         else {
-                            *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrt((double)best_dist);
-                            DAT_00481edc = *(int *)(grid_best * 0x40 + (int)DAT_00481f28);
-                            DAT_00481ee0 = *(int *)(grid_best * 0x40 + (int)DAT_00481f28 + 4);
-                            *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 2;
+                            projectile->target_distance_18 = (int)sqrt((double)best_dist);
+                            DAT_00481edc = g_ProjectilePool[grid_best].position_x;
+                            DAT_00481ee0 = g_ProjectilePool[grid_best].position_y;
+                            projectile->target_kind_21 = 2;
                             DAT_00481ed8 = (char)best_side;
 
                             int aim_angle = FUN_004599f0(
-                                *(int *)(off + (int)DAT_00481f28),
-                                *(int *)(off + 4 + (int)DAT_00481f28),
+                                projectile->position_x,
+                                projectile->position_y,
                                 DAT_00481edc, DAT_00481ee0,
                                 (int)best_side, fRange, DAT_00481ed0);
-                            *(int *)(off + 0xc + (int)DAT_00481f28) = aim_angle;
+                            projectile->aim_angle_0c = aim_angle;
                         }
                     }
                 }
@@ -7621,9 +7622,9 @@ next_grid_entry:
 aim_slew:
             /* === Aim slewing: rotate current_aim toward target_aim === */
             {
-                int target_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
+                int target_aim = projectile->aim_angle_0c;
                 if (target_aim != 0x801) {
-                    int *aim_ptr = (int *)(off + 8 + (int)DAT_00481f28);
+                    int *aim_ptr = &projectile->visual_or_heading_08;
                     int cur = *aim_ptr;
                     bool bVar22 = false;
                     if (target_aim != cur) {
@@ -7659,20 +7660,20 @@ aim_slew:
                         }
 
                         /* Clamp: if we overshot, snap to target */
-                        int new_aim = *(int *)(off + 8 + (int)DAT_00481f28);
-                        int new_target = *(int *)(off + 0xc + (int)DAT_00481f28);
+                        int new_aim = projectile->visual_or_heading_08;
+                        int new_target = projectile->aim_angle_0c;
                         if ((new_target < new_aim && bVar22) ||
                             (new_aim < new_target && !bVar22)) {
-                            *(int *)(off + 8 + (int)DAT_00481f28) = new_target;
+                            projectile->visual_or_heading_08 = new_target;
                         }
                     }
                     /* Wrap to 0-2047 */
-                    *(unsigned int *)(off + 8 + (int)DAT_00481f28) =
-                        *(unsigned int *)(off + 8 + (int)DAT_00481f28) & 0x7ff;
+                    projectile->visual_or_heading_08 = (int32_t)(
+                        (uint32_t)projectile->visual_or_heading_08 & 0x7ffu);
 
                     /* === Fire condition check === */
-                    int cur_aim = *(int *)(off + 8 + (int)DAT_00481f28);
-                    int tgt_aim = *(int *)(off + 0xc + (int)DAT_00481f28);
+                    int cur_aim = projectile->visual_or_heading_08;
+                    int tgt_aim = projectile->aim_angle_0c;
                     int diff_fwd2, diff_rev2;
                     if (tgt_aim < cur_aim) {
                         diff_fwd2 = cur_aim - tgt_aim;
@@ -7689,20 +7690,20 @@ aim_slew:
                         diff_fwd2 = 0x800 - diff_fwd2;
                     }
 
-                    unsigned char wtype = *(unsigned char *)(off + 0x1c + (int)DAT_00481f28);
+                    unsigned char wtype = projectile->type;
                     int wtype_base = (unsigned int)wtype * 0x20 + (int)DAT_00487818;
                     unsigned int aim_tol = (unsigned int)*(unsigned char *)(wtype_base + 0x18);
-                    int half_dist = (unsigned int)(*(int *)(off + 0x18 + (int)DAT_00481f28) >> 1);
+                    int half_dist = (unsigned int)(projectile->target_distance_18 >> 1);
 
                     if ((unsigned int)half_dist < *(unsigned int *)(wtype_base + 8) &&
-                        *(int *)(off + 0x14 + (int)DAT_00481f28) == 0 &&
+                        projectile->limit_or_reload_14 == 0 &&
                         (((diff_rev2 < (int)aim_tol || diff_fwd2 < (int)aim_tol) &&
-                          *(char *)(off + 0x21 + (int)DAT_00481f28) == '\x01') ||
-                         (diff_rev2 == 0 && *(char *)(off + 0x21 + (int)DAT_00481f28) == '\x02')))
+                          (char)projectile->target_kind_21 == '\x01') ||
+                         (diff_rev2 == 0 && (char)projectile->target_kind_21 == '\x02')))
                     {
                         /* --- Compute muzzle offset from sin/cos LUT --- */
                         int *math_lut = (int *)DAT_00487ab0;
-                        int aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                        int aim = projectile->visual_or_heading_08;
                         int cos_val = math_lut[aim];
                         int sin_val = math_lut[aim + 0x200]; /* +0x800 bytes / 4 = +0x200 ints */
                         int muzzle_dx = cos_val * 2;
@@ -7712,12 +7713,12 @@ aim_slew:
                         int *ent_types = (int *)DAT_00487abc;
 
                         if (wtype == 0 || wtype == 1) {
-                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 3;
-                            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                                int e = DAT_00489248 * 0x80;
-                                int eb = (int)DAT_004892e8;
-                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28) + muzzle_dx;
-                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28) + muzzle_dy;
+                            projectile->scratch_1f = 3;
+                            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                                int e = g_EntityCount * 0x80;
+                                int eb = (int)g_EntityPool;
+                                *(int *)(e + eb) = projectile->position_x + muzzle_dx;
+                                *(int *)(e + 8 + eb) = projectile->position_y + muzzle_dy;
                                 /* Velocity: scale by fRange * 2.3 (double at 0x4757f0) to match
                                  * ballistic trajectory computed by FUN_004599f0/FUN_00459c70. */
                                 *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
@@ -7730,7 +7731,7 @@ aim_slew:
                                 *(unsigned short *)(e + 0x24 + eb) = 0;
                                 *(unsigned char *)(e + 0x20 + eb) = 0;
                                 *(unsigned char *)(e + 0x26 + eb) = 5;
-                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(char *)(e + 0x22 + eb) = (char)projectile->team + 'x';
                                 *(int *)(e + 0x28 + eb) = 0;
                                 *(int *)(e + 0x38 + eb) = 6;
                                 *(int *)(e + 0x44 + eb) = ent_types[0x35] << 1;
@@ -7740,27 +7741,27 @@ aim_slew:
                                 *(unsigned char *)(e + 0x40 + eb) = 4;
                                 *(int *)(e + 0x34 + eb) = ent_types[0];
                                 *(int *)(e + 0x3c + eb) = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                         }
                         else if (wtype == 5) {
                             /* Double-barrel: alternate left/right barrel */
-                            unsigned char *barrel = (unsigned char *)(off + 0x20 + (int)DAT_00481f28);
+                            unsigned char *barrel = &projectile->state_20;
                             unsigned int barrel_aim;
                             if (*barrel == '\0') {
                                 *barrel = 1;
-                                barrel_aim = (*(int *)(off + 8 + (int)DAT_00481f28) + 0x200) & 0x7ff;
+                                barrel_aim = (projectile->visual_or_heading_08 + 0x200) & 0x7ff;
                             } else {
                                 *barrel = 0;
-                                barrel_aim = (*(int *)(off + 8 + (int)DAT_00481f28) - 0x200) & 0x7ff;
+                                barrel_aim = (projectile->visual_or_heading_08 - 0x200) & 0x7ff;
                             }
-                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 5;
-                            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                                int e = DAT_00489248 * 0x80;
-                                int eb = (int)DAT_004892e8;
-                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28) +
+                            projectile->scratch_1f = 5;
+                            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                                int e = g_EntityCount * 0x80;
+                                int eb = (int)g_EntityPool;
+                                *(int *)(e + eb) = projectile->position_x +
                                     math_lut[barrel_aim] * 2 + muzzle_dx;
-                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28) +
+                                *(int *)(e + 8 + eb) = projectile->position_y +
                                     math_lut[barrel_aim + 0x200] * 2 + muzzle_dy;
                                 *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
@@ -7772,7 +7773,7 @@ aim_slew:
                                 *(unsigned short *)(e + 0x24 + eb) = 0;
                                 *(unsigned char *)(e + 0x20 + eb) = 0;
                                 *(unsigned char *)(e + 0x26 + eb) = 5;
-                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(char *)(e + 0x22 + eb) = (char)projectile->team + 'x';
                                 *(int *)(e + 0x28 + eb) = 0;
                                 *(int *)(e + 0x38 + eb) = 6;
                                 *(int *)(e + 0x44 + eb) = ent_types[0x34] << 1;
@@ -7782,16 +7783,16 @@ aim_slew:
                                 *(unsigned char *)(e + 0x40 + eb) = 3;
                                 *(int *)(e + 0x34 + eb) = ent_types[0];
                                 *(int *)(e + 0x3c + eb) = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                         }
                         else if (wtype == 3) {
-                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 0x14;
-                            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                                int e = DAT_00489248 * 0x80;
-                                int eb = (int)DAT_004892e8;
-                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
-                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
+                            projectile->scratch_1f = 0x14;
+                            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                                int e = g_EntityCount * 0x80;
+                                int eb = (int)g_EntityPool;
+                                *(int *)(e + eb) = projectile->position_x;
+                                *(int *)(e + 8 + eb) = projectile->position_y;
                                 *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
@@ -7802,7 +7803,7 @@ aim_slew:
                                 *(unsigned short *)(e + 0x24 + eb) = 0;
                                 *(unsigned char *)(e + 0x20 + eb) = 0;
                                 *(unsigned char *)(e + 0x26 + eb) = 5;
-                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(char *)(e + 0x22 + eb) = (char)projectile->team + 'x';
                                 *(int *)(e + 0x28 + eb) = 0;
                                 *(int *)(e + 0x38 + eb) = 6;
                                 *(int *)(e + 0x44 + eb) = ent_types[0xb9] << 1;
@@ -7812,16 +7813,16 @@ aim_slew:
                                 *(unsigned char *)(e + 0x40 + eb) = 2;
                                 *(int *)(e + 0x34 + eb) = ent_types[0x86];
                                 *(int *)(e + 0x3c + eb) = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                         }
                         else if (wtype == 4) {
-                            *(unsigned char *)(off + 0x1f + (int)DAT_00481f28) = 0x32;
-                            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                                int e = DAT_00489248 * 0x80;
-                                int eb = (int)DAT_004892e8;
-                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
-                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
+                            projectile->scratch_1f = 0x32;
+                            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                                int e = g_EntityCount * 0x80;
+                                int eb = (int)g_EntityPool;
+                                *(int *)(e + eb) = projectile->position_x;
+                                *(int *)(e + 8 + eb) = projectile->position_y;
                                 *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
@@ -7832,7 +7833,7 @@ aim_slew:
                                 *(unsigned short *)(e + 0x24 + eb) = 0;
                                 *(unsigned char *)(e + 0x20 + eb) = 0;
                                 *(unsigned char *)(e + 0x26 + eb) = 5;
-                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(char *)(e + 0x22 + eb) = (char)projectile->team + 'x';
                                 *(int *)(e + 0x28 + eb) = 0;
                                 *(int *)(e + 0x38 + eb) = 6;
                                 *(int *)(e + 0x44 + eb) = ent_types[0x918] << 1;
@@ -7842,15 +7843,15 @@ aim_slew:
                                 *(unsigned char *)(e + 0x40 + eb) = 1;
                                 *(int *)(e + 0x34 + eb) = ent_types[0x8e6];
                                 *(int *)(e + 0x3c + eb) = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                         }
                         else if (wtype == 2) {
-                            if (DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
-                                int e = DAT_00489248 * 0x80;
-                                int eb = (int)DAT_004892e8;
-                                *(int *)(e + eb) = *(int *)(off + (int)DAT_00481f28);
-                                *(int *)(e + 8 + eb) = *(int *)(off + 4 + (int)DAT_00481f28);
+                            if (g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
+                                int e = g_EntityCount * 0x80;
+                                int eb = (int)g_EntityPool;
+                                *(int *)(e + eb) = projectile->position_x;
+                                *(int *)(e + 8 + eb) = projectile->position_y;
                                 *(int *)(e + 0x18 + eb) = (int)((double)cos_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x1c + eb) = (int)((double)sin_val * (double)fRange * 2.3);
                                 *(int *)(e + 0x10 + eb) = *(int *)(e + eb);
@@ -7861,7 +7862,7 @@ aim_slew:
                                 *(unsigned short *)(e + 0x24 + eb) = 0;
                                 *(unsigned char *)(e + 0x20 + eb) = 0;
                                 *(unsigned char *)(e + 0x26 + eb) = 5;
-                                *(char *)(e + 0x22 + eb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
+                                *(char *)(e + 0x22 + eb) = (char)projectile->team + 'x';
                                 *(int *)(e + 0x28 + eb) = 0;
                                 *(int *)(e + 0x38 + eb) = 6;
                                 *(int *)(e + 0x44 + eb) = ent_types[0xa23] << 1;
@@ -7871,63 +7872,62 @@ aim_slew:
                                 *(unsigned char *)(e + 0x40 + eb) = 0;
                                 *(int *)(e + 0x34 + eb) = ent_types[0x9f2];
                                 *(int *)(e + 0x3c + eb) = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                         }
-                        else if (wtype == 6 && DAT_00489250 < PARTICLE_CAPACITY) {
+                        else if (wtype == 6 && g_ParticleCount < PARTICLE_CAPACITY) {
                             /* Flamethrower: spawn flame particle */
-                            int fire_aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                            int fire_aim = projectile->visual_or_heading_08;
                             int rnd = rand();
                             unsigned int flame_dir = (rnd % 0x78 - 0x3c + fire_aim) & 0x7ff;
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                int p = DAT_00489250 * 0x20;
-                                int pb = (int)DAT_00481f34;
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
                                 int *mlut = (int *)DAT_00487ab0;
-                                *(int *)(p + pb) = (mlut[fire_aim] * 0x226 >> 6) +
-                                    *(int *)(off + (int)DAT_00481f28);
-                                *(int *)(p + 4 + pb) = (mlut[fire_aim + 0x200] * 0x226 >> 6) +
-                                    *(int *)(off + 4 + (int)DAT_00481f28);
-                                *(int *)(p + 8 + pb) = mlut[flame_dir];
-                                *(int *)(p + 0xc + pb) = mlut[flame_dir + 0x200];
+                                particle->position_x = (mlut[fire_aim] * 0x226 >> 6) +
+                                                       projectile->position_x;
+                                particle->position_y = (mlut[fire_aim + 0x200] * 0x226 >> 6) +
+                                                       projectile->position_y;
+                                particle->velocity_x = mlut[flame_dir];
+                                particle->velocity_y = mlut[flame_dir + 0x200];
                                 unsigned int rnd2 = rand();
                                 rnd2 = rnd2 & 0x80000001;
                                 if ((int)rnd2 < 0) rnd2 = (rnd2 - 1 | 0xfffffffe) + 1;
-                                *(char *)(p + 0x10 + pb) = (char)rnd2 + 3;
-                                *(unsigned char *)(p + 0x11 + pb) = 1;
-                                *(unsigned char *)(p + 0x12 + pb) = 0;
-                                *(unsigned char *)(p + 0x13 + pb) = 0xcd;
-                                *(char *)(p + 0x14 + pb) = *(char *)(off + 0x1d + (int)DAT_00481f28) + 'x';
-                                *(unsigned char *)(p + 0x15 + pb) = 0;
-                                DAT_00489250++;
+                                particle->sprite_index = (uint8_t)(rnd2 + 3);
+                                particle->frame_number = 1;
+                                particle->frame_timer = 0;
+                                particle->flags_13 = 0xcd;
+                                particle->owner_or_flags_14 = (uint8_t)(projectile->team + 'x');
+                                particle->color_index = 0;
+                                g_ParticleCount++;
                             }
                         }
 
                         /* Set reload cooldown from weapon type table */
-                        *(int *)(off + 0x14 + (int)DAT_00481f28) =
-                            *(int *)((unsigned int)*(unsigned char *)(off + 0x1c + (int)DAT_00481f28) * 0x20 + 4 + (int)DAT_00487818);
+                        projectile->limit_or_reload_14 =
+                            *(int *)((unsigned int)projectile->type * 0x20 + 4 + (int)DAT_00487818);
                     }
                 }
             }
 
             /* === Muzzle flash / smoke particle spawning === */
             {
-                char cooldown = *(char *)(off + 0x1f + (int)DAT_00481f28);
+                char cooldown = (char)projectile->scratch_1f;
                 if (cooldown != '\0') {
                     if (cooldown != (char)-1) {
-                        *(char *)(off + 0x1f + (int)DAT_00481f28) = cooldown - 1;
+                        projectile->scratch_1f = (uint8_t)(cooldown - 1);
                     }
                     /* Only spawn particles if weapon is within viewport (bit 3 of coarse grid) */
-                    int wx = *(int *)(off + (int)DAT_00481f28) >> 0x16;
-                    int wy = *(int *)(off + 4 + (int)DAT_00481f28) >> 0x16;
+                    int wx = projectile->position_x >> 0x16;
+                    int wy = projectile->position_y >> 0x16;
                     if ((*(unsigned char *)(wx + (int)DAT_00487814 + wy * DAT_004879f8) & 8) != 0) {
-                        char wt = *(char *)(off + 0x1c + (int)DAT_00481f28);
+                        char wt = (char)projectile->type;
                         if (wt == '\x06') {
                             goto spawn_smoke;
                         }
 
                         /* Fire muzzle flash particle */
                         if (DAT_0048925c < 0x5dc) {
-                            int base2 = off + (int)DAT_00481f28;
+                            int base2 = (int)projectile;
                             int rnd = rand();
                             unsigned int flash_dir = (rnd % 100 - 0x32 + *(int *)(base2 + 8)) & 0x7ff;
                             unsigned int sprite_type;
@@ -7964,36 +7964,35 @@ aim_slew:
                         else if (wt == '\x06') {
 spawn_smoke:
                             /* Smoke/flame particle for type 6 */
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
                                 unsigned int rnd = rand();
                                 rnd = rnd & 0x80000003;
                                 int is_zero = (rnd == 0);
                                 if ((int)rnd < 0) is_zero = ((rnd - 1 | 0xfffffffc) == 0xffffffff);
                                 if (is_zero) {
-                                    int fire_aim = *(int *)(off + 8 + (int)DAT_00481f28);
+                                    int fire_aim = projectile->visual_or_heading_08;
                                     int *mlut = (int *)DAT_00487ab0;
                                     int rnd2 = rand();
                                     unsigned int smoke_dir = (rnd2 % 0x78 - 0x3c + fire_aim) & 0x7ff;
-                                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                        int p = DAT_00489250 * 0x20;
-                                        int pb = (int)DAT_00481f34;
-                                        *(int *)(p + pb) = (mlut[fire_aim] * 0x28a >> 7) +
-                                            *(int *)(off + (int)DAT_00481f28);
-                                        *(int *)(p + 4 + pb) = (mlut[fire_aim + 0x200] * 0x28a >> 7) +
-                                            *(int *)(off + 4 + (int)DAT_00481f28);
-                                        *(int *)(p + 8 + pb) = mlut[smoke_dir] >> 2;
-                                        *(int *)(p + 0xc + pb) = (mlut[smoke_dir + 0x200] >> 2) - 0x200;
+                                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                        ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+                                        particle->position_x = (mlut[fire_aim] * 0x28a >> 7) +
+                                                               projectile->position_x;
+                                        particle->position_y = (mlut[fire_aim + 0x200] * 0x28a >> 7) +
+                                                               projectile->position_y;
+                                        particle->velocity_x = mlut[smoke_dir] >> 2;
+                                        particle->velocity_y = (mlut[smoke_dir + 0x200] >> 2) - 0x200;
                                         unsigned int rnd3 = rand();
                                         rnd3 = rnd3 & 0x80000001;
                                         if ((int)rnd3 < 0) rnd3 = (rnd3 - 1 | 0xfffffffe) + 1;
-                                        *(char *)(p + 0x10 + pb) = (char)rnd3 + 5;
+                                        particle->sprite_index = (uint8_t)(rnd3 + 5);
                                         int rnd4 = rand();
-                                        *(char *)(p + 0x11 + pb) = (char)(rnd4 % 6);
-                                        *(unsigned char *)(p + 0x12 + pb) = 2;
-                                        *(unsigned char *)(p + 0x13 + pb) = 0;
-                                        *(unsigned char *)(p + 0x14 + pb) = 0xff;
-                                        *(unsigned char *)(p + 0x15 + pb) = 0;
-                                        DAT_00489250++;
+                                        particle->frame_number = (uint8_t)(rnd4 % 6);
+                                        particle->frame_timer = 2;
+                                        particle->flags_13 = 0;
+                                        particle->owner_or_flags_14 = 0xff;
+                                        particle->color_index = 0;
+                                        g_ParticleCount++;
                                     }
                                 }
                             }
@@ -8004,7 +8003,7 @@ spawn_smoke:
         }
 
         i++;
-    } while (i < DAT_00489260);
+    } while (i < g_ProjectileCount);
 }
 
 /* ===== FUN_00453cd0 — Particle_Physics_Damage (00453CD0) ===== */
@@ -8060,8 +8059,8 @@ void FUN_00453cd0(void)
             }
 
             /* Particle deflection from MOVING SUCKER — scan entity array directly */
-            for (int ei = 0; ei < DAT_00489248; ei++) {
-                Entity *entity = &DAT_004892e8[ei];
+            for (int ei = 0; ei < g_EntityCount; ei++) {
+                Entity *entity = &g_EntityPool[ei];
                 if (entity->type != 0x0E) continue;
                 unsigned char ent_owner = entity->owner;
                 char ent_team = static_cast<char>(Player_Get(ent_owner)->team);
@@ -8243,14 +8242,14 @@ void FUN_00453cd0(void)
     } while (idx < DAT_0048925c);
 }
 /* ===== FUN_00455d50 — Bullet_Collision_Detect (00455D50) ===== */
-/* Checks debris items (DAT_00487830, stride 0x20, DAT_00489268 count) against
+/* Checks debris items (g_DebrisItemPool, stride 0x20, g_DebrisItemCount count) against
  * players for AABB collision. On hit, applies health effects (heal/damage)
  * based on item type. Items expire when their lifetime counter reaches 0. */
 void FUN_00455d50(void)
 {
     int i = 0;
-    while (i < DAT_00489268) {
-        DebrisItemRecord *item = &DAT_00487830[i];
+    while (i < g_DebrisItemCount) {
+        DebrisItemRecord *item = &g_DebrisItemPool[i];
 
         /* Advance animation */
         item->motion_variant++;
@@ -8322,11 +8321,11 @@ void FUN_00455d50(void)
                             int *bt_sc = (int *)DAT_00487ab0;
                             int *bt_tt = (int *)DAT_00487abc;
                             /* 16 bullets in a ring */
-                            for (int bt = 0; bt < 16 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; bt++) {
+                            for (int bt = 0; bt < 16 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; bt++) {
                                 int bt_ang = bt * 0x80; /* 0x2000/16 = 0x80 per step (index into sincos) */
                                 int bt_rand = rand() % 3;
                                 int bt_spd = (rand() % 3) + 5;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = item_x; ep->previous_x = item_x;
                                 ep->position_y = item_y; ep->previous_y = item_y;
                                 ep->motion_x_10 = 0; ep->motion_y_14 = 0;
@@ -8347,11 +8346,11 @@ void FUN_00455d50(void)
                                 ep->palette_value = bt_tt[(0x30C + bt_rand * 4) / 4];
                                 ep->animation_frame = 0;
                                 ep->timer_5c = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                             }
                             /* Flash particle */
-                            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                                ParticleRecord *flash = &DAT_00481f34[DAT_00489250];
+                            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                                ParticleRecord *flash = &g_ParticlePool[g_ParticleCount];
                                 flash->position_x = item_x;
                                 flash->position_y = item_y;
                                 flash->velocity_x = 0;
@@ -8362,13 +8361,13 @@ void FUN_00455d50(void)
                                 flash->flags_13 = 1;
                                 flash->owner_or_flags_14 = 0xFF;
                                 flash->color_index = 0;
-                                DAT_00489250++;
+                                g_ParticleCount++;
                             }
                             /* 75 shrapnel pieces */
-                            for (int sh = 0; sh < 75 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; sh++) {
+                            for (int sh = 0; sh < 75 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; sh++) {
                                 unsigned int sh_ang = rand() & 0x7FF;
                                 int sh_spd = rand() % 50;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = item_x; ep->previous_x = item_x;
                                 ep->position_y = item_y; ep->previous_y = item_y;
                                 ep->motion_x_10 = 0; ep->motion_y_14 = 0;
@@ -8387,9 +8386,9 @@ void FUN_00455d50(void)
                                 ep->damage_44 = bt_tt[0xD86C/4];
                                 ep->scratch_48 = 0;
                                 ep->animation_frame = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                                 /* Post-increment trailing writes */
-                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                Entity *ep2 = &g_EntityPool[g_EntityCount - 1];
                                 ep2->timer_5c = 6; /* +0x5C */
                                 unsigned char sh_pal = (unsigned char)((rand() % 12) + 0x14);
                                 ep2->scratch_65 = sh_pal; /* +0x65 */
@@ -8403,9 +8402,9 @@ void FUN_00455d50(void)
                              * Original jump table case 2. */
                             int *dr_sc = (int *)DAT_00487ab0;
                             int *dr_tt = (int *)DAT_00487abc;
-                            for (int dr = 0; dr < 32 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; dr++) {
+                            for (int dr = 0; dr < 32 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dr++) {
                                 int dr_ang = dr * 0x40; /* 0x800/32 = 0x40 per step */
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = item_x; ep->previous_x = item_x;
                                 ep->position_y = item_y; ep->previous_y = item_y;
                                 ep->motion_x_10 = 0; ep->motion_y_14 = 0;
@@ -8426,9 +8425,9 @@ void FUN_00455d50(void)
                                 ep->palette_value = dr_tt[0xFC/4];
                                 ep->animation_frame = 0;
                                 ep->timer_5c = 0;
-                                DAT_00489248++;
+                                g_EntityCount++;
                                 /* Post-increment trailing writes */
-                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                Entity *ep2 = &g_EntityPool[g_EntityCount - 1];
                                 unsigned short *pal_dr = (unsigned short *)DAT_00487aa8;
                                 if (pal_dr) ep2->palette_value = (unsigned int)pal_dr[7] + 30000; /* +0x4C */
                                 ep2->health_or_damage_28 = (rand() & 7) + 0x96; /* +0x28: lifespan 150-157 */
@@ -8440,9 +8439,9 @@ void FUN_00455d50(void)
                             int *ms_sc = (int *)DAT_00487ab0;
                             int *ms_tt = (int *)DAT_00487abc;
                             unsigned char plr_team = player->team;
-                            for (int ms = 0; ms < 4 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; ms++) {
+                            for (int ms = 0; ms < 4 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; ms++) {
                                 int ms_ang = (ms * 0x200 + 0x100) & 0x7FF;
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = item_x; ep->previous_x = item_x;
                                 ep->position_y = item_y; ep->previous_y = item_y;
                                 ep->motion_x_10 = 0; ep->motion_y_14 = 0;
@@ -8463,15 +8462,15 @@ void FUN_00455d50(void)
                                 ep->palette_value = ms_tt[0x3B94/4];
                                 ep->animation_frame = 0;
                                 ep->timer_5c = 0x20;
-                                DAT_00489248++;
+                                g_EntityCount++;
                                 /* Post-increment trailing writes */
-                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                Entity *ep2 = &g_EntityPool[g_EntityCount - 1];
                                 ep2->counter_3c = ms_ang; /* +0x3C: heading */
                                 ep2->scratch_2c = 0x0A; /* +0x2C: fire rate */
                                 ep2->scratch_60 = 0x157C; /* +0x60: lifetime 5500 */
                                 ep2->palette_value += (int)plr_team * 100; /* +0x4C: team sprite */
                                 /* Register in tracking list (category 5 = miniships) */
-                                *(int *)((int)DAT_0048781c + (5 * 0x1000 + DAT_00487834[5]) * 4) = DAT_00489248 - 1;
+                                *(int *)((int)DAT_0048781c + (5 * 0x1000 + DAT_00487834[5]) * 4) = g_EntityCount - 1;
                                 ep2->scratch_50 = DAT_00487834[5]; /* +0x50: tracking slot */
                                 DAT_00487834[5]++;
                             }
@@ -8481,8 +8480,8 @@ void FUN_00455d50(void)
                              * Original jump table case 4. Type 0x1F, zero initial velocity. */
                             int *in_tt = (int *)DAT_00487abc;
                             unsigned char plr_team = player->team;
-                            for (int in = 0; in < 6 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY; in++) {
-                                Entity *ep = &DAT_004892e8[DAT_00489248];
+                            for (int in = 0; in < 6 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; in++) {
+                                Entity *ep = &g_EntityPool[g_EntityCount];
                                 ep->position_x = item_x; ep->previous_x = item_x;
                                 ep->position_y = item_y; ep->previous_y = item_y;
                                 ep->motion_x_10 = 0; ep->motion_y_14 = 0;
@@ -8502,16 +8501,16 @@ void FUN_00455d50(void)
                                 ep->palette_value = in_tt[0x41DC/4];
                                 ep->animation_frame = 0;
                                 ep->timer_5c = 0x20; /* spawn immunity (team check bypass) */
-                                DAT_00489248++;
+                                g_EntityCount++;
                                 /* Post-increment trailing writes */
-                                Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
+                                Entity *ep2 = &g_EntityPool[g_EntityCount - 1];
                                 ep2->auxiliary_26 = 0xFF; /* +0x26 (redundant) */
                                 ep2->scratch_2c = 0; /* +0x2C */
                                 ep2->scratch_65 = 0; /* +0x65 */
                                 ep2->palette_value += (int)plr_team * 100; /* +0x4C: team sprite */
                                 ep2->scratch_60 = 0x9C4; /* +0x60: lifetime 2500 */
                                 /* Register in tracking list (category 4 = insects) */
-                                *(int *)((int)DAT_0048781c + (4 * 0x1000 + DAT_00487834[4]) * 4) = DAT_00489248 - 1;
+                                *(int *)((int)DAT_0048781c + (4 * 0x1000 + DAT_00487834[4]) * 4) = g_EntityCount - 1;
                                 ep2->scratch_50 = DAT_00487834[4]; /* +0x50: tracking slot */
                                 DAT_00487834[4]++;
                             }
@@ -8551,9 +8550,9 @@ void FUN_00455d50(void)
         item->lifetime_0c--;
         if (item->lifetime_0c < 0) {
             /* Remove by swapping with last */
-            DAT_00489268--;
-            *item = DAT_00487830[DAT_00489268];
-            if (i >= DAT_00489268) break;
+            g_DebrisItemCount--;
+            *item = g_DebrisItemPool[g_DebrisItemCount];
+            if (i >= g_DebrisItemCount) break;
             continue;
         }
         i++;
@@ -9594,14 +9593,14 @@ void FUN_004533d0(void)
             /* Spawn debris when elevator compresses downward */
             if (x_vel < 0 && type != 2) {
                 int gap = *(int *)(wbase + off + 0xC) - x_vel;
-                if (gap > 120000 && DAT_00489248 < ENTITY_ACTIVE_CAPACITY) {
+                if (gap > 120000 && g_EntityCount < ENTITY_ACTIVE_CAPACITY) {
                     int particles = gap / 5000;
                     if (particles > 0) particles = rand() % particles;
 
                     unsigned int angle = rand() & 0xFF;
 
-                    int eidx = DAT_00489248;
-                    int ebase = (int)DAT_004892e8;
+                    int eidx = g_EntityCount;
+                    int ebase = (int)g_EntityPool;
                     int wx = *(int *)(wbase + off);
                     int wy = *(int *)(wbase + off + 4);
 
@@ -9630,8 +9629,8 @@ void FUN_004533d0(void)
                     *(int *)(ebase + eidx * 0x80 + 0x34) = *(int *)((int)DAT_00487abc + 0xD160);
                     *(int *)(ebase + eidx * 0x80 + 0x3C) = 0;
                     *(unsigned char *)(ebase + eidx * 0x80 + 0x5C) = 0;
-                    DAT_00489248++;
-                    *(int *)(ebase + DAT_00489248 * 0x80 - 0x58) = rand() % 60 + 40;
+                    g_EntityCount++;
+                    *(int *)(ebase + g_EntityCount * 0x80 - 0x58) = rand() % 60 + 40;
                     /* DAT_0048384c is RGB565 in our decomp. Convert to X1R5G5B5
                      * before adding 30000, so the renderer's X1R5G5B5→RGB565
                      * conversion produces the correct water color. */
@@ -9641,7 +9640,7 @@ void FUN_004533d0(void)
                         unsigned short wg = (wc >> 6) & 0x1F; /* 6-bit green → 5-bit */
                         unsigned short wb = wc & 0x1F;
                         unsigned short x1r5 = (wr << 10) | (wg << 5) | wb;
-                        *(unsigned int *)(ebase + DAT_00489248 * 0x80 - 0x34) =
+                        *(unsigned int *)(ebase + g_EntityCount * 0x80 - 0x34) =
                             (unsigned int)x1r5 + 30000;
                     }
                 }
@@ -9991,20 +9990,19 @@ void FUN_0045fc00(void)
             }
 
             /* Random particle spawn (1/32 chance) */
-            if ((rand() & 0x1F) == 0 && DAT_00489250 < PARTICLE_CAPACITY) {
-                int pidx = DAT_00489250;
-                int pbase = (int)DAT_00481f34;
-                *(int *)(pbase + pidx*0x20) = x << 0x12;
-                *(int *)(pbase + pidx*0x20 + 4) = (y + 4) * FIXED_SCALE;
-                *(int *)(pbase + pidx*0x20 + 8) = (50 - rand() % 100) * 0x200;
-                *(int *)(pbase + pidx*0x20 + 0xC) = (-150 - rand() % 140) * 0x200;
-                *(char *)(pbase + pidx*0x20 + 0x10) = (char)(rand() % 6 + 1);
-                *(char *)(pbase + pidx*0x20 + 0x11) = 0;
-                *(char *)(pbase + pidx*0x20 + 0x12) = 0;
-                *(char *)(pbase + pidx*0x20 + 0x13) = (char)0xC9;
-                *(char *)(pbase + pidx*0x20 + 0x14) = (char)0xFF;
-                *(char *)(pbase + pidx*0x20 + 0x15) = 0;
-                DAT_00489250++;
+            if ((rand() & 0x1F) == 0 && g_ParticleCount < PARTICLE_CAPACITY) {
+                ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+                particle->position_x = x << 0x12;
+                particle->position_y = (y + 4) * FIXED_SCALE;
+                particle->velocity_x = (50 - rand() % 100) * 0x200;
+                particle->velocity_y = (-150 - rand() % 140) * 0x200;
+                particle->sprite_index = (uint8_t)(rand() % 6 + 1);
+                particle->frame_number = 0;
+                particle->frame_timer = 0;
+                particle->flags_13 = 0xC9;
+                particle->owner_or_flags_14 = 0xFF;
+                particle->color_index = 0;
+                g_ParticleCount++;
             }
 
             /* Source exhaustion check */
@@ -10145,11 +10143,11 @@ void FUN_0045e2c0(void)
     int *lut = (int *)DAT_00487ab0;
     int shift = (unsigned char)DAT_00487a18 & 0x1F;
 
-    /* ===== Loop 1: Process dead troopers (DAT_00487884, stride 0x40) ===== */
+    /* ===== Loop 1: Process dead troopers (g_TrooperPool, stride 0x40) ===== */
     i = 0;
-    while (i < DAT_0048924c) {
-        int base = (int)DAT_00487884 + i * 0x40;
-        int health = *(int *)(base + 0x28);
+    while (i < g_TrooperCount) {
+        TrooperRecord *trooper = &g_TrooperPool[i];
+        int health = trooper->health_28;
 
         if (health >= 1) {
             i++;
@@ -10160,12 +10158,12 @@ void FUN_0045e2c0(void)
         if (health != -1000000) {
             /* Spawn 8 debris entities in 8 evenly-spaced directions */
             int angle_off = 0;  /* byte offset into LUT, increments by 0x400 (= 256 entries = 45°) */
-            for (j = 0; j < 8 && DAT_00489248 <= 0x9C3; j++) {
-                Entity *debris = &DAT_004892e8[DAT_00489248];
+            for (j = 0; j < 8 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; j++) {
+                Entity *debris = &g_EntityPool[g_EntityCount];
 
                 /* Position = trooper position */
-                debris->position_x = *(int *)(base + 0x00);
-                debris->position_y = *(int *)(base + 0x08);
+                debris->position_x = trooper->position_x;
+                debris->position_y = trooper->position_y;
 
                 /* Velocity: random speed (shift 0-3) in this direction */
                 unsigned int rnd = rand() & 3;
@@ -10174,8 +10172,8 @@ void FUN_0045e2c0(void)
                 debris->velocity_y = (*(int *)((int)DAT_00487ab0 + angle_off + 0x800) << (rnd & 0x1F)) >> 6;
 
                 /* Copy position to prev_position */
-                debris->previous_x = *(int *)(base + 0x00);
-                debris->previous_y = *(int *)(base + 0x08);
+                debris->previous_x = trooper->position_x;
+                debris->previous_y = trooper->position_y;
 
                 /* Zero acceleration */
                 debris->motion_x_10 = 0;
@@ -10200,7 +10198,7 @@ void FUN_0045e2c0(void)
                 debris->counter_3c = 0;
                 debris->timer_5c = 0;
 
-                DAT_00489248++;
+                g_EntityCount++;
 
                 /* Set lifetime: random 150-249 ticks */
                 debris->health_or_damage_28 = rand() % 100 + 0x96;
@@ -10214,26 +10212,26 @@ void FUN_0045e2c0(void)
             }
 
             /* Check death visibility flag at trooper +0x25 */
-            if (*(char *)(base + 0x25) == '\x01') {
+            if ((char)trooper->kind_25 == '\x01') {
                 /* Visible death: check if in viewport */
-                int vx = *(int *)(base + 0x00) >> 0x16;
-                int vy = *(int *)(base + 0x08) >> 0x16;
+                int vx = trooper->position_x >> 0x16;
+                int vy = trooper->position_y >> 0x16;
                 if ((*(unsigned char *)((int)DAT_00487814 + vx + vy * DAT_004879f8) & 8) != 0) {
                     /* In viewport: spawn visible debris fragments (16 pieces) */
                     int frag_off = 0;
-                    for (j = 0; j < 16 && DAT_00489248 <= 0x9C3; j++) {
-                        Entity *fragment = &DAT_004892e8[DAT_00489248];
+                    for (j = 0; j < 16 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; j++) {
+                        Entity *fragment = &g_EntityPool[g_EntityCount];
                         unsigned int rnd_angle = rand() & 0x7FF;
                         int speed = rand() % 30 + 20;
                         unsigned int rnd_type = rand() & 1;
                         int etype = rnd_type + 0x6C;  /* entity type 108 or 109 */
 
-                        fragment->position_x = *(int *)(base + 0x00);
-                        fragment->position_y = *(int *)(base + 0x08);
+                        fragment->position_x = trooper->position_x;
+                        fragment->position_y = trooper->position_y;
                         fragment->velocity_x = *(int *)((int)DAT_00487ab0 + rnd_angle * 4) * speed >> 6;
                         fragment->velocity_y = *(int *)((int)DAT_00487ab0 + 0x800 + rnd_angle * 4) * speed >> 6;
-                        fragment->previous_x = *(int *)(base + 0x00);
-                        fragment->previous_y = *(int *)(base + 0x08);
+                        fragment->previous_x = trooper->position_x;
+                        fragment->previous_y = trooper->position_y;
                         fragment->motion_x_10 = 0;
                         fragment->motion_y_14 = 0;
                         fragment->type = (unsigned char)etype;
@@ -10258,10 +10256,10 @@ void FUN_0045e2c0(void)
                         fragment->counter_3c = 0;
                         fragment->timer_5c = 0;
 
-                        DAT_00489248++;
+                        g_EntityCount++;
 
                         /* Team-colored sprite offset */
-                        unsigned char team = *(unsigned char *)(base + 0x1C);
+                        unsigned char team = trooper->team;
                         if ((rand() & 1) == 0 && team < 4) {
                             fragment->palette_value += (unsigned int)team * 100;
                         } else {
@@ -10279,64 +10277,63 @@ void FUN_0045e2c0(void)
                     }
 
                     /* Spawn explosion particle */
-                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                        int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(pbase + 0x00) = *(int *)(base + 0x00);
-                        *(int *)(pbase + 0x04) = *(int *)(base + 0x08);
-                        *(int *)(pbase + 0x08) = 0;
-                        *(int *)(pbase + 0x0C) = 0;
+                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                        ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+                        particle->position_x = trooper->position_x;
+                        particle->position_y = trooper->position_y;
+                        particle->velocity_x = 0;
+                        particle->velocity_y = 0;
                         unsigned int rnd = rand() & 3;
-                        *(char *)(pbase + 0x10) = (char)rnd + 0x0D;
-                        *(unsigned char *)(pbase + 0x11) = 0;
-                        *(unsigned char *)(pbase + 0x12) = 0;
-                        *(unsigned char *)(pbase + 0x13) = 0;
-                        *(unsigned char *)(pbase + 0x14) = 0xFF;
-                        *(unsigned char *)(pbase + 0x15) = 0;
-                        DAT_00489250++;
-                        *(unsigned char *)((int)DAT_00481f34 + DAT_00489250 * 0x20 - 0x0B) = 1;
+                        particle->sprite_index = (uint8_t)(rnd + 0x0D);
+                        particle->frame_number = 0;
+                        particle->frame_timer = 0;
+                        particle->flags_13 = 0;
+                        particle->owner_or_flags_14 = 0xFF;
+                        particle->color_index = 0;
+                        g_ParticleCount++;
+                        particle->color_index = 1;
                     }
 
                     /* Explosion knockback: push nearby players */
-                    unsigned char team = *(unsigned char *)(base + 0x1C);
+                    unsigned char team = trooper->team;
                     int knock_pal = (team < 4) ? ((int)team + 0x50) : 0xFF;
-                    FUN_00437cf0(*(int *)(base + 0x00), *(int *)(base + 0x08), 100, knock_pal, -1);
+                    FUN_00437cf0(trooper->position_x, trooper->position_y, 100, knock_pal, -1);
                 }
 
                 /* Play visible death sound (random 0x65-0x6B) */
                 int snd = rand() % 7 + 0x65;
-                FUN_0040f9b0(snd, *(int *)(base + 0x00), *(int *)(base + 0x08));
+                FUN_0040f9b0(snd, trooper->position_x, trooper->position_y);
             }
             else {
                 /* Invisible death sound (random 0x71-0x74) */
                 unsigned int rnd = rand() & 3;
                 int snd = rnd + 0x71;
-                FUN_0040f9b0(snd, *(int *)(base + 0x00), *(int *)(base + 0x08));
+                FUN_0040f9b0(snd, trooper->position_x, trooper->position_y);
             }
         }
 
         /* ---- Swap-with-last removal ---- */
-        DAT_0048924c--;
-        int last_base = DAT_0048924c * 0x40 + (int)DAT_00487884;
-        if (i < DAT_0048924c) {
+        g_TrooperCount--;
+        if (i < g_TrooperCount) {
             /* Save current flags field bits 1-31 */
-            int cur_flags = *(int *)(base + 0x18);
+            int cur_flags = trooper->movement_flags;
             /* Copy entire last entry over current */
-            memcpy((void *)base, (void *)last_base, 0x40);
+            *trooper = g_TrooperPool[g_TrooperCount];
             /* Restore bits 1-31 from current, only bit 0 from last */
-            *(int *)(base + 0x18) = (*(int *)(base + 0x18) & 1) | (cur_flags & ~1);
+            trooper->movement_flags = (trooper->movement_flags & 1) | (cur_flags & ~1);
         }
         /* Don't increment i — re-check the swapped-in entry */
     }
 
-    /* ===== Loop 2: Process dead destructibles (DAT_00481f28, stride 0x40) ===== */
+    /* ===== Loop 2: Process dead destructibles (g_ProjectilePool, stride 0x40) ===== */
     /* Destructible struct (0x40 bytes):
      * +0x00: x (int), +0x04: y (int), +0x08: (int), +0x0C: (int)
      * +0x10: health (int), +0x14: (int), +0x18: sprite_type (int)
      * +0x1C: type (byte), +0x1D: team (byte), +0x1E-+0x23: misc bytes */
     i = 0;
-    while (i < DAT_00489260) {
-        int base = (int)DAT_00481f28 + i * 0x40;
-        int health = *(int *)(base + 0x10);
+    while (i < g_ProjectileCount) {
+        ProjectileRecord *destructible = &g_ProjectilePool[i];
+        int health = destructible->health_or_state_10;
 
         if (health >= 1) {
             i++;
@@ -10344,32 +10341,32 @@ void FUN_0045e2c0(void)
         }
 
         /* Destructible is dead */
-        int dest_x = *(int *)(base + 0x00);
-        int dest_y = *(int *)(base + 0x04);
+        int dest_x = destructible->position_x;
+        int dest_y = destructible->position_y;
 
         /* Check if in viewport — spawn explosion particle if visible */
         int vx = dest_x >> 0x16;
         int vy = dest_y >> 0x16;
         if ((*(unsigned char *)((int)DAT_00487814 + vx + vy * DAT_004879f8) & 8) != 0 &&
-            DAT_00489250 < PARTICLE_CAPACITY) {
-            int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-            *(int *)(pbase + 0x00) = dest_x;
-            *(int *)(pbase + 0x04) = dest_y;
-            *(int *)(pbase + 0x08) = 0;
-            *(int *)(pbase + 0x0C) = 0;
+            g_ParticleCount < PARTICLE_CAPACITY) {
+            ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+            particle->position_x = dest_x;
+            particle->position_y = dest_y;
+            particle->velocity_x = 0;
+            particle->velocity_y = 0;
             unsigned int rnd = rand() & 3;
-            *(char *)(pbase + 0x10) = (char)rnd + 0x0D;
-            *(unsigned char *)(pbase + 0x11) = 0;
-            *(unsigned char *)(pbase + 0x12) = 0;
-            *(unsigned char *)(pbase + 0x13) = 0;
-            *(unsigned char *)(pbase + 0x14) = 0xFF;
-            *(unsigned char *)(pbase + 0x15) = 0;
-            DAT_00489250++;
-            *(unsigned char *)((int)DAT_00481f34 + DAT_00489250 * 0x20 - 0x0B) = 1;
+            particle->sprite_index = (uint8_t)(rnd + 0x0D);
+            particle->frame_number = 0;
+            particle->frame_timer = 0;
+            particle->flags_13 = 0;
+            particle->owner_or_flags_14 = 0xFF;
+            particle->color_index = 0;
+            g_ParticleCount++;
+            particle->color_index = 1;
         }
 
         /* Explosion knockback */
-        unsigned char dest_team = *(unsigned char *)(base + 0x1D);
+        unsigned char dest_team = destructible->team;
         FUN_00437cf0(dest_x, dest_y, 0x96,
                      (int)dest_team + 0x78, 0x14);
 
@@ -10378,7 +10375,7 @@ void FUN_0045e2c0(void)
         FUN_0040f9b0(snd_rnd % 7 + 0x65, dest_x, dest_y);
 
         /* ---- Special handling: Team Base destruction (type == 7) ---- */
-        if (*(char *)(base + 0x1C) == '\x07') {
+        if ((char)destructible->type == '\x07') {
             unsigned int base_team = (unsigned int)dest_team;
             if (base_team >= 4) base_team = 3;
 
@@ -10398,20 +10395,20 @@ void FUN_0045e2c0(void)
             FUN_004357b0(dest_x >> 0x12, dest_y >> 0x12, 9, 0, '\0', 0, 0, 0, 0, '\0', '\0', 0);
 
             /* Spawn base explosion particle */
-            if (DAT_00489250 < PARTICLE_CAPACITY) {
-                int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                *(int *)(pbase + 0x00) = dest_x;
-                *(int *)(pbase + 0x04) = dest_y;
-                *(int *)(pbase + 0x08) = 0;
-                *(int *)(pbase + 0x0C) = 0;
-                *(unsigned char *)(pbase + 0x10) = 0x0B;
-                *(unsigned char *)(pbase + 0x11) = 0;
-                *(unsigned char *)(pbase + 0x12) = 0;
-                *(unsigned char *)(pbase + 0x13) = 1;
-                *(unsigned char *)(pbase + 0x14) = 0xFF;
-                *(unsigned char *)(pbase + 0x15) = 0;
-                DAT_00489250++;
-                *(unsigned char *)((int)DAT_00481f34 + DAT_00489250 * 0x20 - 0x0B) = 1;
+            if (g_ParticleCount < PARTICLE_CAPACITY) {
+                ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+                particle->position_x = dest_x;
+                particle->position_y = dest_y;
+                particle->velocity_x = 0;
+                particle->velocity_y = 0;
+                particle->sprite_index = 0x0B;
+                particle->frame_number = 0;
+                particle->frame_timer = 0;
+                particle->flags_13 = 1;
+                particle->owner_or_flags_14 = 0xFF;
+                particle->color_index = 0;
+                g_ParticleCount++;
+                particle->color_index = 1;
 
                 snd_rnd = rand();
                 FUN_0040f9b0(snd_rnd % 7 + 0x65, dest_x, dest_y);
@@ -10424,7 +10421,7 @@ void FUN_0045e2c0(void)
                 int cos_off = 0x800;
                 int sin_off = 0;
                 int pk;
-                for (pk = 0; pk < 128 && DAT_00489250 < PARTICLE_CAPACITY; pk++) {
+                for (pk = 0; pk < 128 && g_ParticleCount < PARTICLE_CAPACITY; pk++) {
                     int next_cos = cos_off + 0x40;
                     int next_sin = sin_off + 0x40;
                     if (next_cos > 0x27FF) {
@@ -10432,22 +10429,24 @@ void FUN_0045e2c0(void)
                         next_sin -= 0x2000;
                     }
                     unsigned int rnd_color = rand() & 3;
-                    if (DAT_00489250 < PARTICLE_CAPACITY) {
-                        int pbase = DAT_00489250 * 0x20 + (int)DAT_00481f34;
-                        *(int *)(pbase + 0x00) = dest_x;
-                        *(int *)(pbase + 0x04) = dest_y;
+                    if (g_ParticleCount < PARTICLE_CAPACITY) {
+                        ParticleRecord *particle = &g_ParticlePool[g_ParticleCount];
+                        particle->position_x = dest_x;
+                        particle->position_y = dest_y;
                         int vel_rnd = rand();
-                        *(int *)(pbase + 0x08) = (vel_rnd % 50) * *(int *)((int)DAT_00487ab0 + next_sin) >> 5;
+                        particle->velocity_x = (vel_rnd % 50) *
+                            *(int *)((int)DAT_00487ab0 + next_sin) >> 5;
                         vel_rnd = rand();
-                        *(int *)(pbase + 0x0C) = (vel_rnd % 50) * *(int *)((int)DAT_00487ab0 + next_cos) >> 5;
-                        *(char *)(pbase + 0x10) = (char)rnd_color + 1;
+                        particle->velocity_y = (vel_rnd % 50) *
+                            *(int *)((int)DAT_00487ab0 + next_cos) >> 5;
+                        particle->sprite_index = (uint8_t)(rnd_color + 1);
                         unsigned int rnd2 = rand() & 3;
-                        *(char *)(pbase + 0x11) = (char)rnd2;
-                        *(unsigned char *)(pbase + 0x12) = 0;
-                        *(unsigned char *)(pbase + 0x13) = 199;
-                        *(char *)(pbase + 0x14) = *(char *)(base + 0x1D) + 0x78;
-                        *(unsigned char *)(pbase + 0x15) = 0;
-                        DAT_00489250++;
+                        particle->frame_number = (uint8_t)rnd2;
+                        particle->frame_timer = 0;
+                        particle->flags_13 = 199;
+                        particle->owner_or_flags_14 = (uint8_t)(destructible->team + 0x78);
+                        particle->color_index = 0;
+                        g_ParticleCount++;
                     }
                     cos_off = next_cos;
                     sin_off = next_sin;
@@ -10457,7 +10456,7 @@ void FUN_0045e2c0(void)
 
         /* ---- Tile destruction: modify tilemap under destructible's sprite ---- */
         {
-            unsigned char sprite_type_byte = *(unsigned char *)(base + 0x18);
+            unsigned char sprite_type_byte = (uint8_t)destructible->target_distance_18;
             int sprite_idx = *(int *)((unsigned int)sprite_type_byte * 0x20 + (int)DAT_00487818);
             int pixel_offset = *(int *)((int)DAT_00489234 + sprite_idx * 4);
             unsigned int spr_w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + sprite_idx);
@@ -10502,19 +10501,19 @@ void FUN_0045e2c0(void)
 
         /* ---- Cross-destructible tile clearing (nearby destructibles share damage zone) ---- */
         {
-            unsigned char spr_type_byte = *(unsigned char *)(base + 0x18);
+            unsigned char spr_type_byte = (uint8_t)destructible->target_distance_18;
             int spr_idx_self = *(int *)((unsigned int)spr_type_byte * 0x20 + (int)DAT_00487818);
             unsigned int self_w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + spr_idx_self) & 0xFFFFFFFE;
             unsigned int self_h = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + spr_idx_self) & 0xFFFFFFFE;
-            int self_x = *(int *)(base + 0x00);
-            int self_y = *(int *)(base + 0x04);
+            int self_x = destructible->position_x;
+            int self_y = destructible->position_y;
 
             int k;
-            for (k = 0; k < DAT_00489260; k++) {
+            for (k = 0; k < g_ProjectileCount; k++) {
                 if (k == i) continue;
-                int other_base = (int)DAT_00481f28 + k * 0x40;
-                int other_x = *(int *)(other_base + 0x00);
-                int other_y = *(int *)(other_base + 0x04);
+                const ProjectileRecord *other = &g_ProjectilePool[k];
+                int other_x = other->position_x;
+                int other_y = other->position_y;
 
                 /* AABB proximity check */
                 int min_x = self_x - (int)(self_w * 0x20000) - 0x280000;
@@ -10526,7 +10525,7 @@ void FUN_0045e2c0(void)
                     other_x >= max_x || other_y >= max_y) continue;
 
                 /* Nearby: apply softer tile destruction on neighbor's footprint */
-                unsigned char other_spr_byte = *(unsigned char *)(other_base + 0x18);
+                unsigned char other_spr_byte = (uint8_t)other->target_distance_18;
                 int other_spr_idx = *(int *)((unsigned int)other_spr_byte * 0x20 + (int)DAT_00487818);
                 int other_pix = *(int *)((int)DAT_00489234 + other_spr_idx * 4);
                 unsigned int other_w = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + other_spr_idx);
@@ -10560,10 +10559,9 @@ void FUN_0045e2c0(void)
         }
 
         /* ---- Swap-with-last removal ---- */
-        DAT_00489260--;
-        if (i < DAT_00489260) {
-            int last_base = DAT_00489260 * 0x40 + (int)DAT_00481f28;
-            memcpy((void *)base, (void *)last_base, 0x40);
+        g_ProjectileCount--;
+        if (i < g_ProjectileCount) {
+            *destructible = g_ProjectilePool[g_ProjectileCount];
         }
         /* Don't increment i — re-check swapped-in entry */
     }
