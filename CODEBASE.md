@@ -145,7 +145,7 @@ fields a universal semantic name until every relevant callback has been traced.
 In particular, offsets `+0x54` and `+0x5C` are byte-sized fields, while `+0x34`
 stores a 32-bit guest callback address rather than a native C++ function pointer.
 
-The entity pool is typed as `Entity *DAT_004892e8`. Completed migrations cover
+The entity pool is typed as `Entity *g_EntityPool`. Completed migrations cover
 the main renderer and update body, callback dispatch, gameplay firing, pickup
 rewards, ship exhaust, ambient/level spawns, and the major scanners and
 constructors. Constructors still write only fields written by recovered code;
@@ -153,10 +153,15 @@ do not zero a whole record as cleanup. Deliberate packed-width views inside an
 already selected record remain raw where a typed field would change the
 original access width.
 
-The projectile, trooper, particle, and debris/item foundation currently covers
-allocation, construction, rendering, primary particle collision/expiry, and
-pickup animation/expiry. Their subtype-specific AI and effect spawn sites are
-the next routine-by-routine migration boundary.
+The projectile, trooper, particle, and debris/item pools are typed end-to-end:
+allocation, construction, effect spawning, spatial binning, targeting/AI,
+collision, rendering, death, expiry, and compaction. Their primary globals are
+`g_ProjectilePool`, `g_TrooperPool`, `g_ParticlePool`, and
+`g_DebrisItemPool`; declaration comments retain the original global names.
+
+Packed-width helpers remain inside an already selected typed record only where
+the original reads or writes across a nominal field boundary. Splitting those
+operations into independent field assignments can change behavior.
 
 ## Config Ownership
 
