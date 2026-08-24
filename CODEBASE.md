@@ -87,6 +87,7 @@ do not access SDL renderer objects directly.
 | `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
 | `docs/LEVEL_PALETTE.json` | Machine-readable attribute colors and placement-marker families |
 | `tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
+| `makelev/` | Native level library, CLI/compiler, SDL3 attribute painter, fixtures, and golden tests |
 | `docs/SPRITE_FORMAT.md` | Recovered `.gfx` frame stream and pixel encodings |
 | `docs/SHIP_FORMAT.md` | Recovered `.SHP` metadata, stats, and sprite-frame layout |
 

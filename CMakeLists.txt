@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(TunnelsOfUnderworld LANGUAGES C CXX)
 
 include(FetchContent)
+include(CTest)
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 FetchContent_Declare(
@@ -65,6 +66,8 @@ FetchContent_Declare(
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(SDL3_mixer)
+
+add_subdirectory(makelev)
 
 set(TOU_SOURCES
     main.cpp

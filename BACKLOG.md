@@ -169,17 +169,19 @@ legacy tools. Build a native replacement instead of embedding them.
 
 ### M3.2 — Shared `tou_level` library and CLI  [P0]
 
-- Parse, validate, and write normal/GG level projects without game globals.
-- Import visual JPEG, attribute TGA, optional parallax, and documented config.
-- Replace COLPICK marker lookup with a named palette/schema.
-- Produce structural comparison reports against original converter fixtures.
-- Load generated levels in both the original game and decomp.
+- [x] Parse, validate, and write normal/GG level projects without game globals.
+- [x] Import visual JPEG, attribute TGA, optional parallax, and documented config.
+- [x] Replace COLPICK marker lookup with a named palette/schema.
+- [x] Produce structural comparison reports against original converter fixtures.
+- [ ] Load newly authored generated levels in both the original game and decomp.
 
 ### M3.3 — Visual editor MVP  [P1]
 
-- New/open/save project and export `.lev`.
-- Visual and attribute layers with overlay/opacity controls.
-- Terrain/placement palette replacing COLPICK.
+- [ ] New/open/save project and export `.lev`. (Open, save, and export work;
+  project creation and file dialogs remain.)
+- [x] Visual and attribute layers with overlay/opacity controls.
+- [ ] Terrain/placement palette replacing COLPICK. (The named terrain painter
+  works; placement authoring remains.)
 - Select, move, configure, and delete spawn points, turrets, gates, repairs,
   mines, signs, water, and every understood record.
 - Edit metadata, physics, water, civilians, bombing, ambience, parallax, and GG.
