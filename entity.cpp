@@ -3782,10 +3782,9 @@ LAB_00401856:
         if ((*(unsigned char *)((*(int *)(iVar12 + (int)DAT_00487810) >> 0x16) +
              (int)DAT_00487814 + (*(int *)(iVar12 + 4 + (int)DAT_00487810) >> 0x16) * DAT_004879f8) & 8) != 0)
         {
-            /* Particle count from float (DAT_004892d0).
-             * Original does ftol of a float computation. If 0, no particles. */
-            int ftol_count = (int)DAT_004892d0;
-            if (ftol_count < 4) ftol_count = 4;  /* ensure visible trail */
+            /* 0x402CCA-0x402CE7: x87_ftol(DAT_0048385c * 14.0f + 1.0f). */
+            int ftol_count = static_cast<int>(tou_binary::x87_ftol(
+                static_cast<long double>(DAT_0048385c) * 14.0L + 1.0L));
             local_c = 0;
             do {
                 if (0x9c3 < DAT_00489248) break;
@@ -3881,9 +3880,14 @@ LAB_00401856:
                     Entity *spawn = &DAT_004892e8[DAT_00489248];
                     spawn->position_x = *(int *)(iVar12 + (int)DAT_00487810);
                     spawn->position_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
-                    /* Cloud of particles — random direction + slight bias toward destination */
-                    spawn->velocity_x = ((int)(sincos[angleParam] * (int)uVar6) >> 8) + (iVar11 >> 3);
-                    spawn->velocity_y = ((int)(sincos[0x200 + angleParam] * (int)uVar6) >> 8) + (iVar16 >> 3);
+                    /* 0x4031D9-0x403227: angleParam is a byte offset into the
+                     * int32 sin/cos table. The destination bias is deliberately
+                     * much stronger than the radial component. */
+                    const unsigned int radialAngle = angleParam >> 2;
+                    spawn->velocity_x =
+                        (sincos[radialAngle] * (int)uVar6 >> 10) + (iVar11 >> 1);
+                    spawn->velocity_y =
+                        (sincos[0x200 + radialAngle] * (int)uVar6 >> 10) + (iVar16 >> 1);
                     spawn->previous_x = *(int *)(iVar12 + (int)DAT_00487810);
                     spawn->previous_y = *(int *)(iVar12 + 4 + (int)DAT_00487810);
                     spawn->motion_x_10 = 0; spawn->motion_y_14 = 0;

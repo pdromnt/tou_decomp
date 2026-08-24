@@ -2401,6 +2401,23 @@ void callback_trail_00430480(int entity_index)
         tou_binary::store_i32(entity, 0x1c,
             tou_binary::load_i32(entity, 0x1c) + tou_binary::load_i32(entity, 0x38) * DAT_00483828);
     }
+    if (tou_binary::load_u8(entity, 0x40) == 5u) {
+        /* 0x430534-0x4305A1: Teleport particles damp their directed
+         * velocity, then jitter independently around the departure point. */
+        static const double kTeleportParticleDamping = 0.985;
+        tou_binary::store_i32(entity, 0x18, static_cast<int32_t>(tou_binary::x87_ftol(
+            static_cast<long double>(tou_binary::load_i32(entity, 0x18)) *
+            static_cast<long double>(kTeleportParticleDamping))));
+        tou_binary::store_i32(entity, 0x1c, static_cast<int32_t>(tou_binary::x87_ftol(
+            static_cast<long double>(tou_binary::load_i32(entity, 0x1c)) *
+            static_cast<long double>(kTeleportParticleDamping))));
+        tou_binary::store_i32(entity, 0x00,
+            tou_binary::add_wrap_i32(tou_binary::load_i32(entity, 0x00),
+                (128 - static_cast<int>(game_rand() & 0xffu)) * 0x1000));
+        tou_binary::store_i32(entity, 0x08,
+            tou_binary::add_wrap_i32(tou_binary::load_i32(entity, 0x08),
+                (128 - static_cast<int>(game_rand() & 0xffu)) * 0x1000));
+    }
     const int32_t x = tou_binary::load_i32(entity, 0x00);
     const int32_t y = tou_binary::load_i32(entity, 0x08);
     if (x < 0 || y < 0 || tou_binary::sar_i32(x, 0x12) >= static_cast<int>(DAT_004879f0) ||
