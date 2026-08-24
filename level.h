@@ -115,7 +115,7 @@ extern int                   DAT_0048693c;      /* current level index (low byte
 extern unsigned char         g_TeamWins[4];     /* per-team accumulated round wins */
 extern char                  DAT_004892e4;      /* random mirror flag */
 extern char                  DAT_004892e5;      /* difficulty flag (ship select) */
-extern char                  DAT_00489d7c[];     /* error string buffer (256 bytes) */
+extern char                  DAT_00489d7c[256];  /* error string buffer */
 extern void                 *DAT_00487aa4;      /* large game state buffer */
 extern int                   DAT_00489254;      /* edge count */
 extern void                 *DAT_00489e84;      /* edge record array */

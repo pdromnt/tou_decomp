@@ -75,7 +75,7 @@ int Load_SWP_Sky(const char *level_name)
     FILE *f;
     int w, h;
 
-    sprintf(path, "swap/%s.SWP", level_name);
+    snprintf(path, sizeof(path), "swap/%s.SWP", level_name);
     f = fopen(path, "rb");
     if (!f) {
         return 0;
@@ -341,10 +341,11 @@ int Load_Level_File(const char *level_name)
     int result;
 
     /* Build path: levels\<name>.lev */
-    sprintf(path, "levels/%s.lev", level_name);
+    snprintf(path, sizeof(path), "levels/%s.lev", level_name);
     f = fopen(path, "rb");
     if (!f) {
-        sprintf(DAT_00489d7c, "Level \"%s\" not found!", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" not found!", level_name);
         LOG("[LEVEL] ERROR: %s\n", DAT_00489d7c);
         return 0;
     }
@@ -355,7 +356,8 @@ int Load_Level_File(const char *level_name)
     fseek(f, 0, SEEK_SET);
 
     if (file_size < 0x22 + 0x39c) {
-        sprintf(DAT_00489d7c, "Level \"%s\" is too small!", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" is too small!", level_name);
         fclose(f);
         return 0;
     }
@@ -363,7 +365,8 @@ int Load_Level_File(const char *level_name)
     /* Read entire file into memory */
     file_buf = (unsigned char *)Mem_Alloc(file_size);
     if (!file_buf) {
-        sprintf(DAT_00489d7c, "Not enough memory for level \"%s\"!", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Not enough memory for level \"%s\"!", level_name);
         fclose(f);
         return 0;
     }
@@ -371,14 +374,16 @@ int Load_Level_File(const char *level_name)
     if (fread(file_buf, 1, (size_t)file_size, f) != (size_t)file_size) {
         fclose(f);
         Mem_Free(file_buf);
-        sprintf(DAT_00489d7c, "Level \"%s\" could not be read completely.", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" could not be read completely.", level_name);
         return 0;
     }
     fclose(f);
 
     /* Verify magic header (19 bytes) */
     if (memcmp(file_buf, LEV_MAGIC, LEV_MAGIC_LEN) != 0) {
-        sprintf(DAT_00489d7c, "Level \"%s\" is wrong version or not a TOU level.", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" is wrong version or not a TOU level.", level_name);
         Mem_Free(file_buf);
         return 0;
     }
@@ -391,7 +396,8 @@ int Load_Level_File(const char *level_name)
     /* Validate offsets are within file bounds */
     if (jpeg_offset < 0x22 || entity_offset < jpeg_offset ||
         entity_offset >= file_size) {
-        sprintf(DAT_00489d7c, "Level \"%s\" has invalid section offsets.", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" has invalid section offsets.", level_name);
         Mem_Free(file_buf);
         return 0;
     }
@@ -412,7 +418,8 @@ int Load_Level_File(const char *level_name)
 
     if (!result) {
         if (DAT_00489d7c[0] == '\0') {
-            sprintf(DAT_00489d7c, "Could not load level \"%s\"", level_name);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "Could not load level \"%s\"", level_name);
         }
     }
 
@@ -455,7 +462,8 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
 
     rgb24 = (unsigned char *)Load_JPEG_From_Memory(jpeg_data, jpeg_len, &img_w, &img_h);
     if (!rgb24) {
-        sprintf(DAT_00489d7c, "Failed to decode level background JPEG");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Failed to decode level background JPEG");
         return 0;
     }
 
@@ -485,7 +493,8 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     /* Layout: [stride*height*2 bytes RGB565] [stride*height*1 byte tilemap] */
     combined_buf = (unsigned char *)Mem_Alloc(stride * map_h * 3);
     if (!combined_buf) {
-        sprintf(DAT_00489d7c, "Not enough memory for level background");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Not enough memory for level background");
         stbi_image_free(rgb24);
         return 0;
     }

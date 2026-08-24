@@ -2462,14 +2462,15 @@ void FUN_00425fe0(void)
     }
 }
 
-/* ===== FUN_004644af - sprintf-like string formatter (004644AF) ===== */
+/* ===== FUN_004644af - bounded string formatter (004644AF) ===== */
 #include <stdarg.h>
-void FUN_004644af(char *dest, const unsigned char *format, ...)
+void FUN_004644af_bounded(char *dest, size_t capacity,
+                          const unsigned char *format, ...)
 {
-    if (!dest || !format) return;
+    if (!dest || capacity == 0 || !format) return;
     va_list args;
     va_start(args, format);
-    vsprintf(dest, (const char *)format, args);
+    vsnprintf(dest, capacity, (const char *)format, args);
     va_end(args);
 }
 
@@ -3461,7 +3462,7 @@ void FUN_0042a470(void)
         FUN_0042fc90(CFG_ADDR(0x481f58));
         FUN_0042fcf0();
         if (g_MenuStrings && g_MenuStrings[0x71])
-            FUN_004644af(g_MenuStrings[0x71],
+            FUN_004644af_bounded(g_MenuStrings[0x71], 50,
                 (const unsigned char *)"You have %d levels and %d GG themes",
                 DAT_0048508c, DAT_00486484);
         FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
@@ -3546,15 +3547,15 @@ void FUN_0042a470(void)
         /* Result text based on match outcome */
         if (g_MenuStrings && g_MenuStrings[0x65]) {
             if (DAT_00487640[3] == 3) {
-                FUN_004644af(g_MenuStrings[0x65],
+                FUN_004644af_bounded(g_MenuStrings[0x65], 50,
                     (const unsigned char *)"Draw!");
             } else if (DAT_00487640[3] == 2) {
-                FUN_004644af(g_MenuStrings[0x65],
+                FUN_004644af_bounded(g_MenuStrings[0x65], 50,
                     (const unsigned char *)"Team %d and team %d win with a draw!",
                     (int)(unsigned char)DAT_00487644[0] + 1,
                     (int)(unsigned char)DAT_00487644[1] + 1);
             } else {
-                FUN_004644af(g_MenuStrings[0x65],
+                FUN_004644af_bounded(g_MenuStrings[0x65], 50,
                     (const unsigned char *)"Team %d wins!",
                     (int)(unsigned char)DAT_00487644[0] + 1);
             }
@@ -3571,19 +3572,19 @@ void FUN_0042a470(void)
 
                 /* Column 1: Wins (from DAT_0048693c bytes 1-3) */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af(g_MenuStrings[strIdx],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
                         (const unsigned char *)"%d", (int)teamWins);
                 FUN_00430200(0xb1, rowY, strIdx, color, 0, 0, 0, 0, 0xff);
 
                 /* Column 2: Frags (from DAT_00486944) */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af(g_MenuStrings[strIdx + 1],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], 50,
                         (const unsigned char *)"%d", DAT_00486944[team]);
                 FUN_00430200(0x12d, rowY, strIdx + 1, color, 0, 0, 0, 0, 0xff);
 
                 /* Column 3: Deaths (from DAT_00486954) */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 2])
-                    FUN_004644af(g_MenuStrings[strIdx + 2],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], 50,
                         (const unsigned char *)"%d", DAT_00486954[team]);
                 FUN_00430200(0x1b4, rowY, strIdx + 2, color, 0, 0, 0, 0, 0xff);
 
@@ -3593,7 +3594,7 @@ void FUN_0042a470(void)
 
             /* "Debris killed: %d" — strIdx = 0x7A after loop */
             if (g_MenuStrings && g_MenuStrings[strIdx])
-                FUN_004644af(g_MenuStrings[strIdx],
+                FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
                     (const unsigned char *)"Debris killed: %d", DAT_00486964);
             FUN_00430200(0x28, 0x136, strIdx, 1, 2, 0, 0, 0, 0xff);
 
@@ -3604,7 +3605,7 @@ void FUN_0042a470(void)
                 int minutes = (int)((totalSec % 3600) / 60);
                 int seconds = (int)(totalSec % 60);
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af(g_MenuStrings[strIdx + 1],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], 50,
                         (const unsigned char *)"Game elapsed: %d hours, %d minutes, %d seconds",
                         hours, minutes, seconds);
             }
@@ -3671,7 +3672,7 @@ void FUN_0042a470(void)
                     char *awardName = (char *)&DAT_00487368[1 + a * 0x20];
                     int playerNum = (int)(unsigned char)DAT_004874c9[a] + 1;
                     if (g_MenuStrings && g_MenuStrings[awardBufIdx])
-                        FUN_004644af(g_MenuStrings[awardBufIdx],
+                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], 50,
                             (const unsigned char *)"%s (Player %d)",
                             awardName, playerNum);
                     /* Small font keeps two-digit 64-player labels inside the
@@ -3691,7 +3692,7 @@ void FUN_0042a470(void)
                     char *awardName = (char *)&DAT_004874d4[1 + a * 0x20];
                     int teamNum = (int)(unsigned char)DAT_00487635[a] + 1;
                     if (g_MenuStrings && g_MenuStrings[awardBufIdx])
-                        FUN_004644af(g_MenuStrings[awardBufIdx],
+                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], 50,
                             (const unsigned char *)"%s (Team %d)",
                             awardName, teamNum);
                     FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x32, 0, 0xff);
@@ -4655,7 +4656,7 @@ void FUN_00426650(void)
 
             /* Column 1: Player number (render_mode 0x1A = display text, non-clickable) */
             if (g_MenuStrings && g_MenuStrings[strIdx + (int)i])
-                sprintf(g_MenuStrings[strIdx + (int)i], "%d", pidx + 1);
+                snprintf(g_MenuStrings[strIdx + (int)i], 50, "%d", pidx + 1);
             FUN_00430200(0x3C, yPos, strIdx + (int)i, 2, 2, 0, 0x1A, 0, 0xff);
 
             /* Column 2: Color swatch (render_mode 0x1B, clickable=1) */
@@ -4748,7 +4749,8 @@ void FUN_00426650(void)
             for (unsigned int row = 0; row < maxVisible; row++) {
                 /* Column 1: Player number */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af(g_MenuStrings[strIdx], (const unsigned char *)"%d", playerNum);
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
+                                         (const unsigned char *)"%d", playerNum);
                 FUN_00430200(0x3C, yPos, strIdx, 1, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 2: Ship type+1 (read from player data offset 0x2C) */
@@ -4756,18 +4758,21 @@ void FUN_00426650(void)
                 if (DAT_00487810)
                     shipVal = Player_Get(playerDataOff / 0x598)->team;
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af(g_MenuStrings[strIdx + 1], (const unsigned char *)"%d", shipVal + 1);
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], 50,
+                                         (const unsigned char *)"%d", shipVal + 1);
                 FUN_00430200(0xAA, yPos, strIdx + 1, shipVal + 6, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 3: Kills */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 2])
-                    FUN_004644af(g_MenuStrings[strIdx + 2], (const unsigned char *)"%d",
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], 50,
+                                         (const unsigned char *)"%d",
                                  DAT_00486968[scrollOff + (int)row]);
                 FUN_00430200(0x118, yPos, strIdx + 2, 1, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 4: Deaths */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 3])
-                    FUN_004644af(g_MenuStrings[strIdx + 3], (const unsigned char *)"%d",
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 3], 50,
+                                         (const unsigned char *)"%d",
                                  DAT_00486aa8[scrollOff + (int)row]);
                 FUN_00430200(0x17C, yPos, strIdx + 3, 1, 0, 0, 0x1A, 0, 0xFF);
 
@@ -4823,7 +4828,8 @@ void FUN_00426650(void)
             for (unsigned int row = 0; row < maxVisible; row++) {
                 /* Player number label */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af(g_MenuStrings[strIdx], (const unsigned char *)"%d", playerNum);
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], 50,
+                                         (const unsigned char *)"%d", playerNum);
                 FUN_00430200(0x14, yPos, strIdx, 2, 2, 0, 0x1A, 0, 0xFF);
                 strIdx++;
 

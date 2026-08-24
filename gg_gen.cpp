@@ -1290,7 +1290,7 @@ int FUN_00416320(void)
     int tile_slot = 0;
     char name[64];
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "s%d", i + 1);
+        snprintf(name, sizeof(name), "s%d", i + 1);
         int next_slot = tile_slot + 1;
         int result = FUN_004153b0(name, tile_slot);
         if (result == 0) break;
@@ -1309,7 +1309,7 @@ int FUN_00416320(void)
     DAT_0048088c = (char)tile_slot;
     for (int i = 0; i < 255; i++) {
         int prev_slot = tile_slot;
-        sprintf(name, "sd%d", i + 1);
+        snprintf(name, sizeof(name), "sd%d", i + 1);
         tile_slot = prev_slot + 1;
         int result = FUN_004153b0(name, prev_slot);
         if (result == 0) break;
@@ -1429,7 +1429,7 @@ int FUN_00416320(void)
     int creature_slot = t2_slot + 3;
     DAT_004808b4 = creature_slot;
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "d%d", i + 1);
+        snprintf(name, sizeof(name), "d%d", i + 1);
         int prev = creature_slot;
         creature_slot = prev + 1;
         result = FUN_004153b0(name, prev);
@@ -1445,7 +1445,7 @@ int FUN_00416320(void)
     DAT_004808c8 = 0;
     DAT_004808c4 = creature_slot;
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "x%d", i + 1);
+        snprintf(name, sizeof(name), "x%d", i + 1);
         int prev = creature_slot;
         creature_slot = prev + 1;
         result = FUN_004153b0(name, prev);
@@ -1461,7 +1461,7 @@ int FUN_00416320(void)
     DAT_004808b0 = 0;
     DAT_004808ac = creature_slot;
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "p%d", i + 1);
+        snprintf(name, sizeof(name), "p%d", i + 1);
         result = FUN_004153b0(name, creature_slot);
         if (result == 0) break;
         if (result == -1) {
@@ -2684,7 +2684,7 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
 
             if (DAT_00481b44[sign_idx] == '\x02') {
                 /* SIGNA type: replace Markov name with random number */
-                sprintf(gen_name, "%d", rand());
+                snprintf(gen_name, sizeof(gen_name), "%d", rand());
             }
 
             /* Copy sign name string (16 bytes per entry) */
@@ -2877,7 +2877,8 @@ int FUN_004143e0(int width, int height)
     LOG("[GG] FUN_004143e0: width=%d height=%d, themes=%d\n", width, height, DAT_00486484);
 
     if (DAT_00486484 == 0) {
-        sprintf(DAT_00489d7c, "GG Error : No GG themes!");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "GG Error : No GG themes!");
         return 0;
     }
 
@@ -2940,13 +2941,19 @@ int FUN_004143e0(int width, int height)
     int result = FUN_00416320();
     if (result == 0) {
         if (DAT_004808d0 == 3)
-            sprintf(DAT_00489d7c, "GG Error : Wrong type JPG or not found in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Wrong type JPG or not found in \"%s\"", DAT_00480740);
         if (DAT_004808d0 == 1)
-            sprintf(DAT_00489d7c, "GG Error : Wrong type TGA in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Wrong type TGA in \"%s\"", DAT_00480740);
         if (DAT_004808d0 == 2)
-            sprintf(DAT_00489d7c, "GG Error : Could not find or access important TGA in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Could not find or access important TGA in \"%s\"",
+                     DAT_00480740);
         if (DAT_004808d0 == 4)
-            sprintf(DAT_00489d7c, "GG Error : Graphics take too much memory in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Graphics take too much memory in \"%s\"",
+                     DAT_00480740);
         return 0;
     }
 

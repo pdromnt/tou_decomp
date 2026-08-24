@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "types.h"
 
@@ -166,7 +167,14 @@ void Load_Options_Config(void);   /* reads options.cfg → g_ConfigBlob */
 void Save_Options_Config(void);   /* writes g_ConfigBlob → options.cfg */
 
 /* ===== Utility functions (init.cpp) ===== */
-void FUN_004644af(char *dest, const unsigned char *format, ...);
+void FUN_004644af_bounded(char *dest, size_t capacity,
+                          const unsigned char *format, ...);
+template <size_t N, typename... Args>
+inline void FUN_004644af(char (&dest)[N], const unsigned char *format,
+                         Args... args)
+{
+    snprintf(dest, N, reinterpret_cast<const char *>(format), args...);
+}
 void FUN_00425840(void);
 void FUN_004265e0(int index);
 

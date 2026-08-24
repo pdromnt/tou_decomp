@@ -567,7 +567,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
             const char *key_name = "???";
             if (g_KeyNameTable && g_KeyNameTable[DAT_004837ba])
                 key_name = g_KeyNameTable[DAT_004837ba];
-            sprintf(pause_msg, "Game Paused. Press \"%s\" to continue.", key_name);
+            snprintf(pause_msg, sizeof(pause_msg),
+                     "Game Paused. Press \"%s\" to continue.", key_name);
             Draw_Text_To_Buffer(pause_msg, 3, 2,
                 buffer + (DAT_0048923c - 0x1e) * stride + 8,
                 stride, 0, DAT_00489238 - 0x10, 0);
@@ -1029,10 +1030,10 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 } else if (item->render_mode == 0x0E || item->render_mode == 0x13 ||
                            item->render_mode == 0x14 || item->render_mode == 0x15 ||
                            item->render_mode == 0x16 || item->render_mode == 0x34) {
-                    sprintf(valBuf, "%d %%", val);
+                    snprintf(valBuf, sizeof(valBuf), "%d %%", val);
                     str = valBuf;
                 } else {
-                    sprintf(valBuf, "%d", val);
+                    snprintf(valBuf, sizeof(valBuf), "%d", val);
                     str = valBuf;
                 }
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
@@ -1044,10 +1045,10 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 int modeIdx = cfgPtr ? (int)*cfgPtr : 0;
                 if (modeIdx >= 0 && modeIdx < g_NumDisplayModes &&
                     g_ModeWidths[modeIdx] > 0) {
-                    sprintf(valBuf, "%d x %d",
-                            g_ModeWidths[modeIdx], g_ModeHeights[modeIdx]);
+                    snprintf(valBuf, sizeof(valBuf), "%d x %d",
+                             g_ModeWidths[modeIdx], g_ModeHeights[modeIdx]);
                 } else {
-                    sprintf(valBuf, "%d x %d", 640, 480);
+                    snprintf(valBuf, sizeof(valBuf), "%d x %d", 640, 480);
                 }
                 str = valBuf;
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
@@ -1087,13 +1088,13 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                     DAT_00485090[levelIdx] != NULL) {
                     const char *name = (const char *)DAT_00485090[levelIdx];
                     if (DAT_00485ea0[levelIdx] == '\x02') {
-                        sprintf(valBuf, "GG: %s", name);
+                        snprintf(valBuf, sizeof(valBuf), "GG: %s", name);
                         str = valBuf;
                     } else {
                         str = name;
                     }
                 } else {
-                    sprintf(valBuf, "<%d>", levelIdx);
+                    snprintf(valBuf, sizeof(valBuf), "<%d>", levelIdx);
                     str = valBuf;
                 }
                 /* Center text at x=320 by calculating pixel width */
@@ -1136,7 +1137,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             /* Team number: sprintf + team-colored text */
             case 0x1C: {
                 int teamVal = cfgPtr ? (int)*cfgPtr : 0;
-                sprintf(valBuf, "%d", teamVal);
+                snprintf(valBuf, sizeof(valBuf), "%d", teamVal);
                 str = valBuf;
                 /* Use team color palette (6=team0, 7=team1, 8=team2) */
                 item->color_style = teamVal + 6;
