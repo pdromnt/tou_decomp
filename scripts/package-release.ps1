@@ -73,6 +73,17 @@ if ($isMacPackage) {
         -not (Test-Path -LiteralPath $bundleRoot -PathType Container)) {
         throw "macOS executable is not inside an app bundle: $resolvedExecutable"
     }
+    $resourcesRoot = Join-Path $bundleRoot "Contents/Resources"
+    foreach ($relativePath in $requiredDirectories) {
+        $bundledPath = Join-Path $resourcesRoot $relativePath
+        if (-not (Test-Path -LiteralPath $bundledPath -PathType Container)) {
+            throw "Required macOS bundle input is missing: $bundledPath"
+        }
+    }
+    $bundledIcon = Join-Path $resourcesRoot "icon.icns"
+    if (-not (Test-Path -LiteralPath $bundledIcon -PathType Leaf)) {
+        throw "Required macOS bundle icon is missing: $bundledIcon"
+    }
     Copy-Item -LiteralPath $bundleRoot -Destination $packageRoot -Recurse
 } else {
     Copy-Item -LiteralPath $resolvedExecutable -Destination (Join-Path $packageRoot $executableName)

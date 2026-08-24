@@ -127,6 +127,16 @@ jobs:
             macos-arm64) file "$executable" | grep -q 'arm64' ;;
           esac
 
+      - name: Verify macOS app bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          test -f stage/TOU.app/Contents/Info.plist
+          test -f stage/TOU.app/Contents/Resources/icon.icns
+          for directory in data ggstuff help levels music sfx ships swap; do
+            test -d "stage/TOU.app/Contents/Resources/$directory"
+          done
+
       - name: Verify Windows executable architecture
         if: runner.os == 'Windows'
         shell: pwsh

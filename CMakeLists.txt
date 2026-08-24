@@ -85,6 +85,13 @@ set(TOU_SOURCES
     stb_image.c
 )
 
+if(APPLE)
+    set_source_files_properties(icon.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    list(APPEND TOU_SOURCES icon.icns)
+endif()
+
 if(WIN32)
     enable_language(RC)
     list(APPEND TOU_SOURCES tou.rc)
@@ -128,6 +135,7 @@ if(APPLE)
     set_target_properties(TOU PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "Tunnels of Underworld"
         MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou"
+        MACOSX_BUNDLE_ICON_FILE "icon.icns"
         MACOSX_BUNDLE_BUNDLE_VERSION "0.4"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "0.4"
     )

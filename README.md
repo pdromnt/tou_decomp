@@ -37,6 +37,11 @@ extract it completely. Run `TOU.exe` on Windows, `TOU` on Linux, or
 assets. The game creates `options.cfg` beside the assets; on macOS it lives in
 `TOU.app/Contents/Resources`.
 
+The original default controls were designed for a Windows keyboard and are
+awkward on a MacBook. macOS players should open **Options → Controls** and
+remap them after the first launch; Right Option and Right Command are practical
+choices for the primary action keys.
+
 The decomp supports windowed and fullscreen modes and identifies itself as
 `Tunnels of Underworld - RE/Decompiled - v0.4` so it cannot be confused with
 the original executable.

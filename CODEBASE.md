@@ -229,7 +229,8 @@ which creates one archive per platform and architecture.
 
 Windows release packages are ZIP files. Linux and macOS packages are `.tar.gz`
 archives so executable permissions survive extraction. macOS is packaged as a
-native `TOU.app` bundle with all runtime assets under `Contents/Resources`.
+native `TOU.app` bundle with its icon and all runtime assets under
+`Contents/Resources`.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it
