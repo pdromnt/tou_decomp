@@ -565,7 +565,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
              * Original: "Game Paused. Press \"[KEY]\" to continue." + "TOU v1.0" */
             char pause_msg[100];
             const char *key_name = "???";
-            if (g_KeyNameTable && DAT_004837ba < 256 && g_KeyNameTable[DAT_004837ba])
+            if (g_KeyNameTable && g_KeyNameTable[DAT_004837ba])
                 key_name = g_KeyNameTable[DAT_004837ba];
             sprintf(pause_msg, "Game Paused. Press \"%s\" to continue.", key_name);
             Draw_Text_To_Buffer(pause_msg, 3, 2,

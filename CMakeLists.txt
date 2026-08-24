@@ -98,7 +98,15 @@ if(MSVC)
     target_compile_definitions(TOU PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(TOU PRIVATE /W4 /WX)
 else()
-    target_compile_options(TOU PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    # The original MSVC build uses signed plain char. ARM targets commonly
+    # default to unsigned char, which changes recovered byte-state semantics.
+    target_compile_options(TOU PRIVATE
+        -fsigned-char
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Werror
+    )
 endif()
 target_link_libraries(TOU PRIVATE
     SDL3::SDL3
