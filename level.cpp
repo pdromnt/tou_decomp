@@ -81,8 +81,11 @@ int Load_SWP_Sky(const char *level_name)
         return 0;
     }
 
-    fread(&w, 4, 1, f);
-    fread(&h, 4, 1, f);
+    if (fread(&w, sizeof(w), 1, f) != 1 ||
+        fread(&h, sizeof(h), 1, f) != 1) {
+        fclose(f);
+        return 0;
+    }
 
     if (w <= 0 || h <= 0 || w > 4096 || h > 4096) {
         LOG("[LEVEL] SWP sky invalid dimensions: %dx%d\n", w, h);
@@ -101,7 +104,12 @@ int Load_SWP_Sky(const char *level_name)
         return 0;
     }
 
-    fread(DAT_00489ea0, 1, size, f);
+    if (fread(DAT_00489ea0, 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        Mem_Free(DAT_00489ea0);
+        DAT_00489ea0 = NULL;
+        return 0;
+    }
     fclose(f);
 
     /* Convert RGB555 (X1R5G5B5) → RGB565 (R5G6B5).
@@ -360,7 +368,12 @@ int Load_Level_File(const char *level_name)
         return 0;
     }
 
-    fread(file_buf, 1, file_size, f);
+    if (fread(file_buf, 1, (size_t)file_size, f) != (size_t)file_size) {
+        fclose(f);
+        Mem_Free(file_buf);
+        sprintf(DAT_00489d7c, "Level \"%s\" could not be read completely.", level_name);
+        return 0;
+    }
     fclose(f);
 
     /* Verify magic header (19 bytes) */

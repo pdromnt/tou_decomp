@@ -225,8 +225,8 @@ void FUN_004152e0(const void *src_rgb24, int tile_idx, int height, int width)
 /* Returns: 1=success, 0=not found, -1=too large */
 int FUN_004153b0(const char *filename, int tile_idx)
 {
-    char path[256];
-    sprintf(path, "ggstuff//%s//%s.tga", DAT_00480740, filename);
+    char path[1024];
+    snprintf(path, sizeof(path), "ggstuff/%s/%s.tga", DAT_00480740, filename);
 
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -282,7 +282,12 @@ int FUN_004153b0(const char *filename, int tile_idx)
         fseek(f, cm_len, SEEK_CUR);
     }
 
-    fread(pixels, 1, data_size, f);
+    if (fread(pixels, 1, (size_t)data_size, f) != (size_t)data_size) {
+        free(pixels);
+        fclose(f);
+        DAT_004808d0 = 1;
+        return 0;
+    }
     fclose(f);
 
     /* Convert BGR(A) to RGB and store in DAT_00481cf8 (shared temp buffer).
@@ -340,8 +345,8 @@ int FUN_00415a60(void)
     DAT_00480718 = 0;
 
     /* Build path: ggstuff//<theme>//info.txt */
-    char path[256];
-    sprintf(path, "ggstuff//%s//info.txt", DAT_00480740);
+    char path[1024];
+    snprintf(path, sizeof(path), "ggstuff/%s/info.txt", DAT_00480740);
 
     FILE *f = fopen(path, "r");
     if (!f) {
@@ -1317,8 +1322,8 @@ int FUN_00416320(void)
 
     /* Load main tile JPEG (t1.jpg) */
     DAT_00480898 = 0;
-    char path[256];
-    sprintf(path, "ggstuff//%s//t1.jpg", DAT_00480740);
+    char path[1024];
+    snprintf(path, sizeof(path), "ggstuff/%s/t1.jpg", DAT_00480740);
 
     DAT_00480894 = tile_slot;
     void *jpeg_data = Load_JPEG_Asset(path, &g_ImageWidth, &g_ImageHeight);
@@ -1369,7 +1374,7 @@ int FUN_00416320(void)
 
     /* Load extra tile JPEGs (px1.jpg, ex1.jpg) */
     DAT_004808a8 = 0;
-    sprintf(path, "ggstuff//%s//px1.jpg", DAT_00480740);
+    snprintf(path, sizeof(path), "ggstuff/%s/px1.jpg", DAT_00480740);
     DAT_004808a4 = t2_slot;
     jpeg_data = Load_JPEG_Asset(path, &g_ImageWidth, &g_ImageHeight);
     if (jpeg_data) {
@@ -1389,7 +1394,7 @@ int FUN_00416320(void)
 
     /* Load landscape tile (ex1.jpg) */
     DAT_004808a0 = 0;
-    sprintf(path, "ggstuff//%s//ex1.jpg", DAT_00480740);
+    snprintf(path, sizeof(path), "ggstuff/%s/ex1.jpg", DAT_00480740);
     DAT_0048089c = t2_slot + 1;
     jpeg_data = Load_JPEG_Asset(path, &g_ImageWidth, &g_ImageHeight);
     if (jpeg_data) {

@@ -1484,21 +1484,36 @@ int FUN_00423150(void)
     unsigned char type_byte;
     while (fread(&type_byte, 1, 1, f) == 1) {
         unsigned short sprite_index;
-        fread(&sprite_index, 1, 2, f);
+        if (fread(&sprite_index, 1, 2, f) != 2) {
+            fclose(f);
+            return 0;
+        }
 
         /* Skip 12 bytes */
-        fread((unsigned char *)DAT_00481cf8, 1, 12, f);
+        if (fread((unsigned char *)DAT_00481cf8, 1, 12, f) != 12) {
+            fclose(f);
+            return 0;
+        }
 
         unsigned short spr_w, spr_h;
-        fread(&spr_w, 1, 2, f);
-        fread(&spr_h, 1, 2, f);
+        if (fread(&spr_w, 1, 2, f) != 2 || fread(&spr_h, 1, 2, f) != 2) {
+            fclose(f);
+            return 0;
+        }
 
         /* Skip 2 bytes */
-        fread((unsigned char *)DAT_00481cf8, 1, 2, f);
+        if (fread((unsigned char *)DAT_00481cf8, 1, 2, f) != 2) {
+            fclose(f);
+            return 0;
+        }
 
         /* Read RGB24 pixel data into temp buffer */
         int pixel_count = (int)spr_w * (int)spr_h;
-        fread((unsigned char *)DAT_00481cf8, 1, pixel_count * 3, f);
+        size_t pixel_bytes = (size_t)pixel_count * 3;
+        if (fread((unsigned char *)DAT_00481cf8, 1, pixel_bytes, f) != pixel_bytes) {
+            fclose(f);
+            return 0;
+        }
 
         /* Store dimensions */
         ((unsigned char *)DAT_00489e8c)[sprite_index] = (unsigned char)spr_w;
@@ -1587,11 +1602,17 @@ static int FUN_004254b0(void)
     while (offset < 0x11030) {
         /* 6 animation frame data blocks, 20 bytes each, at type+4 */
         for (int a = 0; a < 6; a++) {
-            fread(base + offset + 4 + a * 0x14, 1, 0x14, f);
+            if (fread(base + offset + 4 + a * 0x14, 1, 0x14, f) != 0x14) {
+                fclose(f);
+                return 0;
+            }
         }
 
         /* 7-byte header */
-        fread(tmp, 1, 7, f);
+        if (fread(tmp, 1, 7, f) != 7) {
+            fclose(f);
+            return 0;
+        }
         base[offset + 0x7C] = tmp[0];
         base[offset + 0x7D] = tmp[1];
         *(int *)(base + offset + 0x80) = (int)tmp[3] * (int)tmp[3] * 100;
@@ -1600,7 +1621,10 @@ static int FUN_004254b0(void)
 
         /* 6 animation property blocks, 16 bytes each */
         for (int a = 0; a < 6; a++) {
-            fread(tmp, 1, 16, f);
+            if (fread(tmp, 1, 16, f) != 16) {
+                fclose(f);
+                return 0;
+            }
             int anim_base = offset + 0xAC + a * 4;
 
             *(int *)(base + offset + 0x88 + a * 4) = (int)tmp[0] - 0x80;
@@ -1642,7 +1666,10 @@ int FUN_004252d0(void)
         LOG("[LOAD] ERROR: Could not open data/Pal.col\n");
         return 0;
     }
-    fread(buf, 1, 0x300, f);
+    if (fread(buf, 1, 0x300, f) != 0x300) {
+        fclose(f);
+        return 0;
+    }
     fclose(f);
 
     {
@@ -1665,7 +1692,10 @@ int FUN_004252d0(void)
         LOG("[LOAD] ERROR: Could not open data/SHIPAL.COL\n");
         return 0;
     }
-    fread(buf, 1, 0x300, f);
+    if (fread(buf, 1, 0x300, f) != 0x300) {
+        fclose(f);
+        return 0;
+    }
     fclose(f);
 
     {
@@ -1713,7 +1743,9 @@ int FUN_00422740(void)
     {
         FILE *f = fopen("data/taulu2.tau", "rb");
         if (f) {
-            fread(DAT_00489e90, 1, 0x82D0, f);
+            size_t bytes_read = fread(DAT_00489e90, 1, 0x82D0, f);
+            if (bytes_read != 0x82D0)
+                LOG("[LOAD] WARNING: data/taulu2.tau is truncated\n");
             fclose(f);
         }
     }
@@ -1726,11 +1758,13 @@ int FUN_00422740(void)
         if (f) {
             unsigned char buf[2];
             for (int i = 0; i < 26; i++) {
-                fread(buf, 1, 2, f);
+                if (fread(buf, 1, 2, f) != 2)
+                    break;
                 DAT_00487888[i] = (int)buf[0] * 256 + (int)buf[1];
             }
             for (int i = 0; i < 676; i++) {
-                fread(buf, 1, 2, f);
+                if (fread(buf, 1, 2, f) != 2)
+                    break;
                 DAT_004892ec[i] = (int)buf[0] * 256 + (int)buf[1];
             }
             fclose(f);

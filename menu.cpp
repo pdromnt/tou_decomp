@@ -1710,7 +1710,10 @@ int FUN_004249c0(void)
         }
 
         /* Read and validate header byte */
-        fread(&header_byte, 1, 1, f);
+        if (fread(&header_byte, 1, 1, f) != 1) {
+            fclose(f);
+            return 0;
+        }
         if (header_byte != 0) {
             LOG("[SHIP] ERROR: Invalid header byte in %s\n", path);
             fclose(f);
@@ -1722,7 +1725,10 @@ int FUN_004249c0(void)
             int j;
             char *name_dest = (char *)DAT_0048780c + stats_offset;
             for (j = 0; j < 0x1F; j++) {
-                fread(&name_dest[j], 1, 1, f);
+                if (fread(&name_dest[j], 1, 1, f) != 1) {
+                    fclose(f);
+                    return 0;
+                }
                 if (name_dest[j] == '\0') break;
             }
             name_dest[j] = '\0';
@@ -1735,7 +1741,10 @@ int FUN_004249c0(void)
         }
 
         /* Read 14 bytes of ship stats */
-        fread(stats_buf, 1, 14, f);
+        if (fread(stats_buf, 1, 14, f) != 14) {
+            fclose(f);
+            return 0;
+        }
 
         if (DAT_0048780c) {
             char *sp = (char *)DAT_0048780c + stats_offset;
@@ -1764,14 +1773,22 @@ int FUN_004249c0(void)
         int total_pixels = 0;
         for (int frame = 0; frame < 32; frame++) {
             /* 12-byte frame header (mostly padding/unused) */
-            fread(frame_header, 1, 12, f);
+            if (fread(frame_header, 1, 12, f) != 12) {
+                fclose(f);
+                return 0;
+            }
 
             /* Frame dimensions (2 bytes each, little-endian) */
-            fread(&frame_w, 2, 1, f);
-            fread(&frame_h, 2, 1, f);
+            if (fread(&frame_w, 2, 1, f) != 1 || fread(&frame_h, 2, 1, f) != 1) {
+                fclose(f);
+                return 0;
+            }
 
             /* 2 bytes padding */
-            fread(&frame_pad, 2, 1, f);
+            if (fread(&frame_pad, 2, 1, f) != 1) {
+                fclose(f);
+                return 0;
+            }
 
             /* Store dimensions in metadata area */
             *(int *)((char *)DAT_00487aac + 100000 + meta_offset) = (int)(frame_w & 0xFFFF);
@@ -1783,7 +1800,10 @@ int FUN_004249c0(void)
 
             rgb_buf = (unsigned char *)DAT_00481cf8;
             if (rgb_size > 0) {
-                fread(rgb_buf, 1, rgb_size, f);
+                if (fread(rgb_buf, 1, (size_t)rgb_size, f) != (size_t)rgb_size) {
+                    fclose(f);
+                    return 0;
+                }
             }
 
             /* Convert RGB24 → RGB565 into DAT_00487aac */
