@@ -2318,7 +2318,8 @@ void FUN_00425fe0(void)
     /* Capture only a new key press after the row was clicked.  Snapshotting
      * the state when capture begins prevents an already-held key from being
      * accepted before the user has seen the '?' prompt. */
-    if (g_InputMode == 2) {
+    const bool key_capture_active = g_InputMode == 2;
+    if (key_capture_active) {
         int selected_scan_code = 0x100;
         for (int scan_code = 0; scan_code < 0x100; scan_code++) {
             if ((g_KeyboardState[scan_code] & 0x80) != 0 &&
@@ -2357,27 +2358,31 @@ void FUN_00425fe0(void)
     /* ---- Shared click/release detection (runs for mode 0 AND mode 1) ---- */
 
     /* Primary click: Right Ctrl (0x9D) OR Left Mouse Button */
-    if (((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
+    if (!key_capture_active &&
+        ((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
         (DAT_004877bd & 1) == 0) {
         DAT_004877bc |= 1;
         DAT_004877bd |= 1;
     }
 
     /* Secondary click: Right Shift (0x36) OR Right Mouse Button */
-    if (((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
+    if (!key_capture_active &&
+        ((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
         (DAT_004877bd & 2) == 0) {
         DAT_004877bc |= 2;
         DAT_004877bd |= 2;
     }
 
     /* Middle button: scan 0x30 (B key) */
-    if ((g_KeyboardState[0x30] & 0x80) != 0 && (DAT_004877bd & 4) == 0) {
+    if (!key_capture_active && (g_KeyboardState[0x30] & 0x80) != 0 &&
+        (DAT_004877bd & 4) == 0) {
         DAT_004877bc |= 4;
         DAT_004877bd |= 4;
     }
 
     /* ESC (scan 0x01): Navigate back or center view */
-    if ((g_KeyboardState[0x01] & 0x80) != 0 && (DAT_004877bd & 8) == 0) {
+    if (!key_capture_active && (g_KeyboardState[0x01] & 0x80) != 0 &&
+        (DAT_004877bd & 8) == 0) {
         if (DAT_004877a4 == 0 &&
             (g_MouseDeltaX != 0x5000000 || g_MouseDeltaY != 0x5b80000)) {
             /* Main menu, not centered → center the viewport */
@@ -2401,7 +2406,7 @@ void FUN_00425fe0(void)
      * Marks input as processed when BOTH RCtrl and LMB are released,
      * creating a button-up signal for FUN_00426650 to apply slider deltas. */
     if ((g_KeyboardState[0x9D] & 0x80) == 0) {
-        if ((g_MouseButtons & 1) == 0) {
+        if (!key_capture_active && (g_MouseButtons & 1) == 0) {
             DAT_004877e5 = 1;
         }
         if ((g_MouseButtons & 1) == 0 && (DAT_004877bd & 1) != 0) {
