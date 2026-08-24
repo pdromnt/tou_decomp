@@ -18,6 +18,8 @@ unsigned char g_SubState2    = 0;     /* 00489299 */
 
 int  g_MouseDeltaX = 0;              /* 004877B4 */
 int  g_MouseDeltaY = 0;              /* 004877B8 */
+int  g_SpectatorCameraX = 0;
+int  g_SpectatorCameraY = 0;
 char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
 char g_DirectInputMouseXSeen = 0;     /* windowed-mode fallback guard */
@@ -493,6 +495,27 @@ void Game_Update_Render(void)
             DAT_00489ee8 = 0;
         }
         DWORD now_input = timeGetTime();
+
+        /* Complete the otherwise partial zero-human fallback as a spectator
+         * view. This camera is not inserted into the human-player table. */
+        if (DAT_00487808 == 0 && g_SubState == GAMEPLAY_ACTIVE) {
+            const int camera_step = 4 * FIXED_SCALE;
+            if ((g_KeyboardState[0xc8] & 0x80) != 0) g_SpectatorCameraY -= camera_step;
+            if ((g_KeyboardState[0xd0] & 0x80) != 0) g_SpectatorCameraY += camera_step;
+            if ((g_KeyboardState[0xcb] & 0x80) != 0) g_SpectatorCameraX -= camera_step;
+            if ((g_KeyboardState[0xcd] & 0x80) != 0) g_SpectatorCameraX += camera_step;
+
+            int min_x = (7 + 320) * FIXED_SCALE;
+            int min_y = (7 + 240) * FIXED_SCALE;
+            int max_x = ((int)DAT_004879f0 - 7 - 320) * FIXED_SCALE;
+            int max_y = ((int)DAT_004879f4 - 7 - 240) * FIXED_SCALE;
+            if (max_x < min_x) min_x = max_x = ((int)DAT_004879f0 / 2) * FIXED_SCALE;
+            if (max_y < min_y) min_y = max_y = ((int)DAT_004879f4 / 2) * FIXED_SCALE;
+            if (g_SpectatorCameraX < min_x) g_SpectatorCameraX = min_x;
+            if (g_SpectatorCameraX > max_x) g_SpectatorCameraX = max_x;
+            if (g_SpectatorCameraY < min_y) g_SpectatorCameraY = min_y;
+            if (g_SpectatorCameraY > max_y) g_SpectatorCameraY = max_y;
+        }
 
         /* State 4: Level preview / stats screen.
          * First level (counter == 0): skip straight to gameplay.

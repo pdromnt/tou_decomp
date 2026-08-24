@@ -343,8 +343,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
             vp_top  += (rand() % 6) - 3;
         }
     } else {
-        vp_left = ((int)DAT_004879f0 - vp_w) / 2;
-        vp_top  = ((int)DAT_004879f4 - vp_h) / 2;
+        vp_left = (g_SpectatorCameraX >> FIXED_SHIFT) - vp_w / 2;
+        vp_top  = (g_SpectatorCameraY >> FIXED_SHIFT) - vp_h / 2;
     }
 
     /* Clamp to 7-pixel border */

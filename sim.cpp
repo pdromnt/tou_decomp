@@ -1202,6 +1202,31 @@ void FUN_00460660(void)
                 }
             }
         }
+    } else {
+        /* Zero-human spectator view still owns visible effects. Without this
+         * bit, AI exhaust and other visibility-gated particles never spawn. */
+        int vp_w = 640 + 0x28;
+        int vp_h = 480 + 0x28;
+        int start_x = (g_SpectatorCameraX >> FIXED_SHIFT) - vp_w / 2;
+        int start_y = (g_SpectatorCameraY >> FIXED_SHIFT) - vp_h / 2;
+        if (start_x < 0) start_x = 0;
+        if (start_y < 0) start_y = 0;
+        if (start_x > (int)DAT_004879f0 - vp_w) start_x = (int)DAT_004879f0 - vp_w;
+        if (start_y > (int)DAT_004879f4 - vp_h) start_y = (int)DAT_004879f4 - vp_h;
+        if ((int)DAT_004879f0 < vp_w) { start_x = 0; vp_w = (int)DAT_004879f0; }
+        if ((int)DAT_004879f4 < vp_h) { start_y = 0; vp_h = (int)DAT_004879f4; }
+
+        int gx0 = start_x >> 4;
+        int gy0 = start_y >> 4;
+        int gx1 = (start_x + vp_w) >> 4;
+        int gy1 = (start_y + vp_h) >> 4;
+        if (gx1 >= grid_cols) gx1 = grid_cols - 1;
+        if (gy1 >= grid_rows) gy1 = grid_rows - 1;
+        for (int gy = gy0; gy <= gy1; gy++) {
+            for (int gx = gx0; gx <= gx1; gx++) {
+                grid[gy * grid_cols + gx] |= 0x08;
+            }
+        }
     }
 
     /* Phase 3: Mark player ship presence with bit 0x01 (5x5 coarse cells) */

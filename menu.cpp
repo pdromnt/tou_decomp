@@ -1263,6 +1263,10 @@ void FUN_0041b5d0(void)
 
     /* Determine layout mode */
     local_4 = idx;
+    if (idx == 0) {
+        g_SpectatorCameraX = ((int)DAT_004879f0 / 2) * FIXED_SCALE;
+        g_SpectatorCameraY = ((int)DAT_004879f4 / 2) * FIXED_SCALE;
+    }
     if (DAT_00483724[2] == 2) {
         local_4 = 4;  /* Force 4-player layout */
     }

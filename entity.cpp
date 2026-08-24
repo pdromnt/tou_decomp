@@ -30,6 +30,34 @@ static float _DAT_004753fc = 6.6666667e-05f; /* 1.0f / 15000.0f */
 static float _DAT_004753e8 = 1.0f;           /* min distance clamp */
 static double _DAT_004753e0_d = 0.4;         /* very close threshold (double in original) */
 
+/* Retail spatial audio only considers human viewports. The decomp's
+ * zero-human spectator mode uses its free camera as the listener. */
+static int Play_Spectator_Spatial_Sound(int snd, int x, int y, int vol_override)
+{
+    int dy = (g_SpectatorCameraY - y) >> FIXED_SHIFT;
+    int dx = (g_SpectatorCameraX - x) >> FIXED_SHIFT;
+    float distance = (float)(dy * dy + dx * dx) * _DAT_004753fc;
+    if (distance < _DAT_004753e8) distance = _DAT_004753e8;
+
+    int volume_source = ((vol_override & 0xff) != 0xff)
+        ? (vol_override & 0xff)
+        : (int)*(unsigned char *)((int)g_SoundTable + snd * 8 + 4);
+    int volume = (int)((float)volume_source / distance) * 8;
+    if (volume >= 0x100) volume = 0xff;
+    if (volume < 5) return -1;
+
+    int angle = FUN_004257e0(g_SpectatorCameraX, g_SpectatorCameraY, x, y);
+    int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
+    if (distance < (float)_DAT_004753e0_d) pan = 0x80;
+
+    int channel = FSOUND_PlaySoundEx(-1,
+        (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + snd * 8)), NULL, 1);
+    FSOUND_SetVolume(channel, volume);
+    FSOUND_SetPan(channel, pan);
+    FSOUND_SetPaused(channel, 0);
+    return channel;
+}
+
 /* Terrain/collision globals */
 void *DAT_004876b8 = 0;         /* color degradation palette LUT */
 unsigned short DAT_00481e8c = 0; /* tile explosion color accumulator */
@@ -251,6 +279,9 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
             /* Store channel handle for later management */
             player->sound_channel = chan;
         }
+    } else {
+        player->sound_channel =
+            Play_Spectator_Spatial_Sound(param_2, param_3, param_4, 0xff);
     }
 }
 
@@ -4804,6 +4835,8 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
             FSOUND_SetPan(chan, pan);
             FSOUND_SetPaused(chan, 0);
         }
+    } else {
+        Play_Spectator_Spatial_Sound(snd, x, y, vol_override);
     }
 }
 
