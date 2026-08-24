@@ -2,8 +2,8 @@
 #define TOU_GAMESTATE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
-#include "compat.h"
 #include "types.h"
 
 /* ===== Error Strings (matching binary string table) ===== */
@@ -52,19 +52,19 @@ extern GameplaySubState      g_SubState;        /* 00489296 */
 extern unsigned char         g_NeedsRedraw;     /* 00489297 */
 extern unsigned char         g_SurfaceReady;    /* 00489298 */
 extern unsigned char         g_SubState2;       /* 00489299 */
-extern DWORD                 DAT_00489ee8;      /* Key repeat cooldown timestamp */
+extern uint32_t              DAT_00489ee8;      /* Key repeat cooldown timestamp */
 extern unsigned int          DAT_00489eec;      /* Last pressed key scan code */
 
 /* ===== Timing (main.cpp) ===== */
-extern DWORD                 g_TimerStart;      /* 004892B0 */
+extern uint32_t              g_TimerStart;      /* 004892B0 */
 extern int                   g_TimerAux;        /* 004892B4 */
 
 /* ===== Config (init.cpp) ===== */
 extern unsigned char         DAT_00487640[4];   /* Display mode */
-extern DWORD                 g_FrameTimer;      /* 004877F4 */
+extern uint32_t              g_FrameTimer;      /* 004877F4 */
 extern unsigned char         DAT_004877b1;
 extern unsigned char         DAT_004877a4;
-extern DWORD                 DAT_004892b8;
+extern uint32_t              DAT_004892b8;
 extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 

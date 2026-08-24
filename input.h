@@ -1,8 +1,6 @@
 #ifndef TOU_INPUT_H
 #define TOU_INPUT_H
 
-#include "compat.h"
-
 /* ===== Mouse Input (gameloop.cpp) ===== */
 extern int                   g_MouseDeltaX;     /* 004877B4 */
 extern int                   g_MouseDeltaY;     /* 004877B8 */

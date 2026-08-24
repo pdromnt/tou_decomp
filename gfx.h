@@ -1,7 +1,7 @@
 #ifndef TOU_GFX_H
 #define TOU_GFX_H
 
-#include "compat.h"
+#include <stdint.h>
 #include "types.h"
 #include "render_backend.h"
 

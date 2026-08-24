@@ -124,7 +124,7 @@ int           DAT_00480718;         /* sign parsed flag */
 char          DAT_004839ee;         /* entity enable flag */
 char          DAT_004839ef;         /* creature density */
 short         DAT_004839f0;         /* treasure/pickup config (bytes) */
-DWORD         DAT_004839f4;         /* progress timer */
+uint32_t      DAT_004839f4;         /* progress timer */
 int           DAT_00480878;         /* creature spawn rate */
 int           DAT_0048087c;         /* pickup spawn rate */
 int           DAT_00480880;         /* treasure spawn rate */
@@ -647,7 +647,7 @@ void FUN_00416ad0(void)
     DAT_0048396d = 1;           /* generated-map flag */
     DAT_004839f4 = 0;
     DAT_004839ef = 10;
-    DAT_004839f4 = timeGetTime();
+    DAT_004839f4 = Platform_GetTicks();
     ((unsigned char *)&DAT_004839f0)[0] = 10;
     ((unsigned char *)&DAT_004839f0)[1] = 10;
 

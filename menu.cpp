@@ -63,7 +63,7 @@ int Menu_Init_And_Loop(void)
             g_NeedsRedraw = 1;
         }
 
-        g_TimerStart = timeGetTime();
+        g_TimerStart = Platform_GetTicks();
         g_TimerAux   = 0;
         return 1;
     }
@@ -1019,7 +1019,7 @@ static const union { unsigned int u; float f; } _water_scale_2 = { 0x37d1b717u }
 #define WATER_SCALE_2 (_water_scale_2.f)
 
 /* Ship filenames (from binary at 0x0047BE90..0x0047BEFC) */
-static const char *ship_dir = "ships\\";
+static const char *ship_dir = "ships/";
 static const char *ship_files[9] = {
     "peru.shp",  /* type 0 - DAT_0047bef0 */
     "batm.shp",  /* type 1 - DAT_0047bee4 */

@@ -100,6 +100,17 @@ void Platform_ShowError(const char *message)
                              s_PlatformWindow);
 }
 
+uint32_t Platform_GetTicks(void)
+{
+    /* Preserve the original WinMM clock's 32-bit millisecond wraparound. */
+    return (uint32_t)SDL_GetTicks();
+}
+
+void Platform_Delay(uint32_t milliseconds)
+{
+    SDL_Delay(milliseconds);
+}
+
 int Platform_GetMousePosition(int *x, int *y)
 {
     if (s_PlatformWindow == NULL || SDL_GetMouseFocus() != s_PlatformWindow)

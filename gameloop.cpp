@@ -22,7 +22,7 @@ int  g_SpectatorCameraX = 0;
 int  g_SpectatorCameraY = 0;
 char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
-DWORD        DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
+uint32_t     DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
 unsigned int DAT_00489eec = 0;       /* Last pressed key scan code */
 
 /* Gameplay tick timing and counters */
@@ -65,7 +65,7 @@ void Game_State_Manager(void)
         DAT_004877b1 = 1;
         DAT_004877bd = 0;       /* clear mouse button latch on menu entry */
         g_MouseButtons = 0;
-        g_FrameTimer = timeGetTime();
+        g_FrameTimer = Platform_GetTicks();
 
         /* Music: If coming from state 0x98 (new game after intro),
          * skip FUN_0040e130 since music is already playing from intro.
@@ -129,8 +129,8 @@ void Game_State_Manager(void)
         DAT_004877b1 = 1;
         DAT_004877bd = 0;       /* clear mouse button latch on menu entry */
         g_MouseButtons = 0;
-        g_FrameTimer  = timeGetTime();
-        DAT_004892b8  = timeGetTime();
+        g_FrameTimer  = Platform_GetTicks();
+        DAT_004892b8  = Platform_GetTicks();
         g_IntroSplashIndex = 0;
         GameState_Transition(GAME_STATE_INTRO_RUN);
         DAT_004877a4  = 0x97;
@@ -206,7 +206,7 @@ void FUN_0045e1f0(void)
 static void Gameplay_Tick(void)
 {
     unsigned int tick_interval;
-    DWORD now;
+    uint32_t now;
     int catch_up;
     int tick;
 
@@ -217,20 +217,19 @@ static void Gameplay_Tick(void)
     FUN_0045e1f0();
 
     /* Wait until at least one tick interval has elapsed.
-     * Original used a pure busy-wait (100% CPU). We use Sleep(0) which
+     * Original used a pure busy-wait (100% CPU). We use a zero-delay yield which
      * yields the current time-slice but returns as soon as the thread
-     * can run again — near-microsecond precision with timeBeginPeriod(1)
-     * active, without burning 100% CPU. Sleep(1) was too coarse even
+     * can run again without burning 100% CPU. A one-millisecond delay was too coarse even
      * with 1ms timer resolution, causing ~1-2ms timing overshoot per
      * frame that accumulated into uneven frame spacing. */
-    now = timeGetTime();
+    now = Platform_GetTicks();
     while ((now - g_TimerAux * tick_interval) - g_TimerStart < tick_interval) {
-        Sleep(0);
-        now = timeGetTime();
+        Platform_Delay(0);
+        now = Platform_GetTicks();
     }
 
     /* Calculate how many ticks to catch up (max 9) */
-    now = timeGetTime();
+    now = Platform_GetTicks();
     catch_up = (int)((now - g_TimerAux * tick_interval - g_TimerStart) / tick_interval);
     if (catch_up > 9) {
         g_TimerStart += (catch_up - 9) * tick_interval;
@@ -276,10 +275,13 @@ static void Gameplay_Tick(void)
         {
             int i;
             for (i = 0; i < DAT_00489264; i++) {
-                int base = (int)DAT_00487780 + i * 0x20;
-                *(unsigned int *)(base + 0x10) = (*(unsigned int *)(base + 0x10) + 0x10) & 0x7FF;
-                if (*(int *)(base + 0x08) > 0) (*(int *)(base + 0x08))--;
-                if (*(int *)(base + 0x0C) > 0) (*(int *)(base + 0x0C))--;
+                uint8_t *base = static_cast<uint8_t *>(DAT_00487780) + i * 0x20;
+                unsigned int *angle = reinterpret_cast<unsigned int *>(base + 0x10);
+                int *timer_a = reinterpret_cast<int *>(base + 0x08);
+                int *timer_b = reinterpret_cast<int *>(base + 0x0C);
+                *angle = (*angle + 0x10) & 0x7FF;
+                if (*timer_a > 0) (*timer_a)--;
+                if (*timer_b > 0) (*timer_b)--;
             }
         }
 
@@ -335,9 +337,9 @@ static void Gameplay_Tick(void)
                 /* Check tile at trooper position */
                 int tx = trooper->position_x >> 0x12;
                 int ty = trooper->position_y >> 0x12;
-                int tile_idx = *(unsigned char *)((int)DAT_0048782c +
-                    (ty << (DAT_00487a18 & 0x1f)) + tx);
-                if (*(char *)((int)DAT_00487928 + tile_idx * 0x20 + 1) == '\x01') {
+                int tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
+                    (ty << (DAT_00487a18 & 0x1f)) + tx];
+                if (static_cast<char *>(DAT_00487928)[tile_idx * 0x20 + 1] == '\x01') {
                     trooper->animation_state_24 = 0;
                 } else {
                     char stale = (char)trooper->animation_state_24;
@@ -382,7 +384,7 @@ void Game_Update_Render(void)
         if ((g_KeyboardState[DAT_00489eec] & 0x80) == 0) {
             DAT_00489ee8 = 0;
         }
-        DWORD now_input = timeGetTime();
+        uint32_t now_input = Platform_GetTicks();
 
         /* Complete the otherwise partial zero-human fallback as a spectator
          * view. This camera is not inserted into the human-player table. */
@@ -413,9 +415,9 @@ void Game_Update_Render(void)
                 /* First level — no stats to show, start immediately */
                 g_SubState = GAMEPLAY_ACTIVE;
                 g_NeedsRedraw = 2;
-                g_TimerStart = timeGetTime();
+                g_TimerStart = Platform_GetTicks();
                 g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+                g_FrameTimer = Platform_GetTicks();
             } else {
                 if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     g_SubState = GAMEPLAY_LEVEL_ADVANCE;
@@ -426,9 +428,9 @@ void Game_Update_Render(void)
                     DAT_00489eec = 0x1C;
                     g_SubState = GAMEPLAY_ACTIVE;
                     g_NeedsRedraw = 2;
-                    g_TimerStart = timeGetTime();
+                    g_TimerStart = Platform_GetTicks();
                     g_TimerAux = 0;
-                    g_FrameTimer = timeGetTime();
+                    g_FrameTimer = Platform_GetTicks();
                 }
             }
         }
@@ -462,9 +464,9 @@ void Game_Update_Render(void)
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = (unsigned int)pause_key;
                 g_NeedsRedraw = 1;
-                g_TimerStart = timeGetTime();
+                g_TimerStart = Platform_GetTicks();
                 g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+                g_FrameTimer = Platform_GetTicks();
             }
         }
 
@@ -478,9 +480,9 @@ void Game_Update_Render(void)
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = 0x01;
                 g_NeedsRedraw = 1;
-                g_TimerStart = timeGetTime();
+                g_TimerStart = Platform_GetTicks();
                 g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+                g_FrameTimer = Platform_GetTicks();
             }
         }
 
@@ -522,7 +524,7 @@ void Game_Update_Render(void)
             /* Increment win counter for the winning team (teams 1-4) */
             unsigned char winner = (unsigned char)DAT_004892a4;
             if (winner >= 1 && winner <= 4) {
-                ((unsigned char *)&DAT_0048693c)[winner]++;
+                g_TeamWins[winner - 1]++;
             }
         }
         DAT_004892a5 = 0;
@@ -568,7 +570,7 @@ void Game_Update_Render(void)
     case GAMEPLAY_LEVEL_PREVIEW:
         /* Update timing but don't run simulation */
         {
-            DWORD now = timeGetTime();
+            uint32_t now = Platform_GetTicks();
             DAT_004877f0 = now - g_FrameTimer;
             g_FrameTimer = now;
         }
@@ -577,7 +579,7 @@ void Game_Update_Render(void)
     default:
         /* Other states (paused, round end, etc.) - update timing */
         {
-            DWORD now = timeGetTime();
+            uint32_t now = Platform_GetTicks();
             DAT_004877f0 = now - g_FrameTimer;
             g_FrameTimer = now;
         }

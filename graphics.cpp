@@ -669,12 +669,10 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     }
 
                     /* Team names and win counts */
-                    unsigned char *slots = (unsigned char *)&DAT_0048693c;
-
                     Draw_Text_To_Buffer("Team1", 1, 6,
                         buffer + (panel_y + 0x55) * stride + panel_x + 10,
                         stride, 0, 0xFA, 0);
-                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[1]);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[0]);
                     Draw_Text_To_Buffer(text_buf, 2, 6,
                         buffer + (panel_y + 100) * stride + panel_x + 0x1E,
                         stride, 0, 0xFA, 0);
@@ -682,7 +680,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     Draw_Text_To_Buffer("Team2", 1, 7,
                         buffer + (panel_y + 0x55) * stride + panel_x + 0x5A,
                         stride, 0, 0xFA, 0);
-                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[2]);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[1]);
                     Draw_Text_To_Buffer(text_buf, 2, 7,
                         buffer + (panel_y + 100) * stride + panel_x + 0x6E,
                         stride, 0, 0xFA, 0);
@@ -690,7 +688,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     Draw_Text_To_Buffer("Team3", 1, 8,
                         buffer + (panel_y + 0x55) * stride + panel_x + 0xAF,
                         stride, 0, 0xFA, 0);
-                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[3]);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[2]);
                     Draw_Text_To_Buffer(text_buf, 2, 8,
                         buffer + (panel_y + 100) * stride + panel_x + 0xC3,
                         stride, 0, 0xFA, 0);

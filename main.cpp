@@ -7,7 +7,7 @@
 
 int       g_bIsActive = 0;     /* 00489EC4 */
 GameState g_GameState = GAME_STATE_GAMEPLAY; /* 004877A0 */
-DWORD     g_TimerStart = 0;    /* 004892B0 */
+uint32_t  g_TimerStart = 0;    /* 004892B0 */
 int       g_TimerAux = 0;      /* 004892B4 */
 
 static int g_QuitRequested = 0;
@@ -57,9 +57,9 @@ static void Handle_App_Focus(int active)
         g_SubState = GAMEPLAY_PAUSED;
         g_NeedsRedraw = 1;
         g_SurfaceReady = 2;
-        g_TimerStart = timeGetTime();
+        g_TimerStart = Platform_GetTicks();
         g_TimerAux = 0;
-        g_FrameTimer = timeGetTime();
+        g_FrameTimer = Platform_GetTicks();
     }
     if (g_SoundEnabled)
         Audio_SetMuted(1);
@@ -86,12 +86,8 @@ int main(int argc, char **argv)
     SDL_SetAppMetadata("Tunnels of Underworld", "0.4", "fi.iobox.tou");
     Early_Init_Vars();
 
-    /* The recovered fixed-step timing still uses the Windows multimedia clock. */
-    timeBeginPeriod(1);
-
     if (!Platform_CreateWindow(STR_TITLE, 640, 480)) {
         Platform_ShowError(STR_ERR_RENDER_INIT);
-        timeEndPeriod(1);
         SDL_Quit();
         return 1;
     }
@@ -104,7 +100,6 @@ int main(int argc, char **argv)
             ? STR_ERR_INIT_FILENOTFOUND : STR_ERR_INIT_NOLEVELS);
         Shutdown_Runtime();
         Platform_DestroyWindow();
-        timeEndPeriod(1);
         SDL_Quit();
         return 1;
     }
@@ -115,7 +110,6 @@ int main(int argc, char **argv)
         Platform_ShowError(STR_ERR_RENDER_INIT);
         Shutdown_Runtime();
         Platform_DestroyWindow();
-        timeEndPeriod(1);
         SDL_Quit();
         return 1;
     }
@@ -126,7 +120,7 @@ int main(int argc, char **argv)
     GameState_Transition(GAME_STATE_INTRO_INIT);
 
     while (!g_QuitRequested) {
-        DWORD event_deadline = timeGetTime() + 4;
+        uint32_t event_deadline = Platform_GetTicks() + 4;
         PlatformEvent event;
         while (Platform_PollEvent(&event)) {
             if (event.type == PLATFORM_EVENT_QUIT) {
@@ -138,7 +132,7 @@ int main(int argc, char **argv)
             } else if (event.type == PLATFORM_EVENT_MOUSE_MOTION) {
                 Handle_Mouse_Motion(event.x, event.y);
             }
-            if (g_QuitRequested || timeGetTime() >= event_deadline)
+            if (g_QuitRequested || Platform_GetTicks() >= event_deadline)
                 break;
         }
 
@@ -146,7 +140,7 @@ int main(int argc, char **argv)
             break;
 
         if (!g_bIsActive) {
-            Sleep(1);
+            Platform_Delay(1);
             continue;
         }
 
@@ -166,7 +160,6 @@ int main(int argc, char **argv)
     Save_Options_Config();
     Shutdown_Runtime();
     Platform_DestroyWindow();
-    timeEndPeriod(1);
     SDL_Quit();
     return 0;
 }

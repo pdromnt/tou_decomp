@@ -8,6 +8,33 @@ wholesale. Refactors should remain organized into behavior-neutral boundaries
 that can be compared and reverted independently, even when several boundaries
 are delivered together in one larger pull request.
 
+## Final Portability Goal
+
+The final project-wide milestone is a warning-free, behavior-preserving native
+codebase for modern desktop operating systems and architectures. Browser work
+remains explicitly out of scope until this milestone is complete.
+
+The required order is:
+
+1. Replace WinMM clocks/delays and Win32 file discovery with portable SDL
+   platform services, then remove the remaining Windows runtime includes and
+   libraries from game code.
+2. Normalize asset paths and file discovery for Unix separators and
+   case-sensitive filesystems without changing the release directory layout.
+3. Make CMake, executable resources, packaging, and CI select the correct
+   behavior per operating system.
+4. Eliminate compile warnings in maintained source and enforce the clean build
+   in CI. A suspicious recovered write must be proven and represented safely,
+   not merely silenced.
+5. Separate 32-bit guest values/addresses from native pointers and audit every
+   truncating cast, packed layout, overflow dependency, callback key, and x87
+   conversion needed for x64 and ARM64 hosts.
+6. Produce and validate native Windows and Linux builds for x64 and ARM64, plus
+   current macOS builds (including Apple Silicon).
+
+Preserving the original game's observable behavior remains mandatory across
+all targets. A successful cross-compile alone is not runtime acceptance.
+
 ## Current Foundation Status (v0.4)
 
 - `Entity` and `PlayerData` have verified sizes, offset assertions, and typed
@@ -196,7 +223,7 @@ unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 - `level.h` — map data, tilemap, .lev format
 - `entity.h` — entity arrays, behavior callbacks, AI globals
 - `gamestate.h` — state machine, timers, config
-- `compat.h` — remaining Windows timing and file-enumeration declarations
+- `platform.h` — portable window, events, timing, dialogs, and display services
 
 Keep `tou.h` as an aggregate include during transition.
 

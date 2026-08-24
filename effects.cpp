@@ -439,9 +439,9 @@ int FUN_00422fc0(void)
     unsigned char header[3];
     int pixel_offset = 0;
 
-    f = fopen("data\\explode.gfx", "rb");
+    f = fopen("data/explode.gfx", "rb");
     if (!f) {
-        LOG("[FX] Failed to open data\\explode.gfx\n");
+        LOG("[FX] Failed to open data/explode.gfx\n");
         return 0;
     }
 

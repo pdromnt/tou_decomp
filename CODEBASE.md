@@ -78,7 +78,7 @@ do not access SDL renderer objects directly.
 | `level.h` | Level data, loading, and GG generator declarations |
 | `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
 | `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
-| `compat.h` | Remaining Windows timing and file-enumeration compatibility includes |
+| `platform.h` | Portable window, events, timing, dialogs, and display services |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
 
 ## Runtime Data

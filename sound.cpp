@@ -211,7 +211,7 @@ void FUN_0040e130(void)
 
     /* Build full path: "music\" + filename */
     char path[256];
-    strcpy(path, "music\\");
+    strcpy(path, "music/");
     strcat(path, (const char *)DAT_00485fd4[trackIdx]);
 
     int musVol = ((DAT_00483720[0]) * 0xFF) / 100;

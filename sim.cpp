@@ -964,8 +964,8 @@ void FUN_0045d7d0(void)
     g_EntityCount = 0;              /* Entity count */
     g_ParticleCount = 0;              /* Particle count */
     DAT_0048925c = 0;              /* Misc counter */
-    g_FrameTimer = timeGetTime();  /* Frame time reference */
-    DAT_004892b8 = timeGetTime();  /* Intro start timestamp for duration checks */
+    g_FrameTimer = Platform_GetTicks();  /* Frame time reference */
+    DAT_004892b8 = Platform_GetTicks();  /* Intro start timestamp for duration checks */
 }
 
 /* ===== Gameplay Subsystem Stubs ===== */

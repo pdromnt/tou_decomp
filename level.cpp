@@ -47,6 +47,7 @@ char          DAT_0048396d = 0;       /* generated-map flag */
 char          DAT_00483960 = 0;       /* swap-file enabled flag */
 char         *DAT_00486938 = NULL;    /* current level name ptr */
 int           DAT_0048693c = 0;       /* current level index */
+unsigned char g_TeamWins[4] = {0};    /* recovered bytes originally adjacent to level index */
 char          DAT_004892e4 = 0;       /* random mirror flag */
 char          DAT_004892e5 = 0;       /* difficulty flag */
 char          DAT_00489d7c[256];      /* error string buffer */
@@ -65,7 +66,7 @@ static const char LEV_MAGIC[] = "TOU level file v1.4";
 #define LEV_MAGIC_LEN 19
 
 /* ===== Load_SWP_Sky (based on FUN_004213f0 partial) ===== */
-/* Loads a pre-computed sky image from swap\<name>.SWP.
+/* Loads a pre-computed sky image from swap/<name>.SWP.
  * Format: 4-byte width, 4-byte height, then width*height*2 RGB565 pixels.
  * The original generates these on first load and caches them. */
 int Load_SWP_Sky(const char *level_name)
@@ -74,14 +75,10 @@ int Load_SWP_Sky(const char *level_name)
     FILE *f;
     int w, h;
 
-    sprintf(path, "swap\\%s.SWP", level_name);
+    sprintf(path, "swap/%s.SWP", level_name);
     f = fopen(path, "rb");
     if (!f) {
-        sprintf(path, "swap/%s.SWP", level_name);
-        f = fopen(path, "rb");
-    }
-    if (!f) {
-            return 0;
+        return 0;
     }
 
     fread(&w, 4, 1, f);
@@ -336,7 +333,7 @@ int Load_Level_File(const char *level_name)
     int result;
 
     /* Build path: levels\<name>.lev */
-    sprintf(path, "levels\\%s.lev", level_name);
+    sprintf(path, "levels/%s.lev", level_name);
     f = fopen(path, "rb");
     if (!f) {
         sprintf(DAT_00489d7c, "Level \"%s\" not found!", level_name);

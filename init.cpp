@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <SDL3/SDL_filesystem.h>
 #include <math.h>
 #include <ctype.h>
 
@@ -29,10 +30,10 @@ int g_ModeHeights[16];   /* 00483C44 */
 
 /* Misc init globals */
 int          g_SoundEnabled = 0;     /* 00487649 */
-DWORD        g_FrameTimer   = 0;     /* 004877F4 */
+uint32_t     g_FrameTimer   = 0;     /* 004877F4 */
 unsigned char DAT_004877b1  = 0;
 unsigned char DAT_004877a4  = 0;
-DWORD        DAT_004892b8   = 0;
+uint32_t     DAT_004892b8   = 0;
 GameConfig g_GameConfig = {};       /* original config range 00481F58-0048385F */
 
 /* Helper for recovered menu descriptors that still store original absolute
@@ -626,6 +627,7 @@ void FUN_0041f900(void)
 {
     int *w = (int *)DAT_00487818;
     unsigned char *wb = (unsigned char *)DAT_00487818;
+    unsigned char *entity_types = static_cast<unsigned char *>(DAT_00487abc);
 
     /* Weapon type 0: basic bullet */
     w[0] = 400;
@@ -633,7 +635,7 @@ void FUN_0041f900(void)
     w[2] = 0x70;
     w[3] = 0x34bc;
     wb[0x10] = 0x18;
-    w[5] = *(int *)((int)DAT_00487abc + 0x88);
+    w[5] = *reinterpret_cast<int *>(entity_types + 0x88);
     wb[0x18] = 0x10;
 
     /* Weapon type 1: heavy shot */
@@ -642,7 +644,7 @@ void FUN_0041f900(void)
     w[10] = 0x134;
     w[11] = 13000;
     wb[0x30] = 0x20;
-    w[13] = *(int *)((int)DAT_00487abc + 0x88);
+    w[13] = *reinterpret_cast<int *>(entity_types + 0x88);
     wb[0x38] = 0x10;
 
     /* Weapon type 2: guided missile */
@@ -651,7 +653,7 @@ void FUN_0041f900(void)
     w[18] = 0x76;
     w[19] = 0x30d4;
     wb[0x50] = 0x1c;
-    w[21] = *(int *)((int)DAT_00487abc + 0x2850);
+    w[21] = *reinterpret_cast<int *>(entity_types + 0x2850);
     wb[0x58] = 0x10;
 
     /* Weapon type 3: slow homing */
@@ -660,7 +662,7 @@ void FUN_0041f900(void)
     w[26] = 0xb6;
     w[27] = 11000;
     wb[0x70] = 3;
-    w[29] = *(int *)((int)DAT_00487abc + 0x2a8);
+    w[29] = *reinterpret_cast<int *>(entity_types + 0x2a8);
     wb[0x78] = 0x60;
 
     /* Weapon type 4: spread shot */
@@ -669,7 +671,7 @@ void FUN_0041f900(void)
     w[34] = 0x8c;
     w[35] = 0x2cec;
     wb[0x90] = 0x0c;
-    w[37] = *(int *)((int)DAT_00487abc + 0x2424);
+    w[37] = *reinterpret_cast<int *>(entity_types + 0x2424);
     wb[0x98] = 0x10;
 
     /* Weapon type 5: rapid fire */
@@ -678,7 +680,7 @@ void FUN_0041f900(void)
     w[42] = 0x62;
     w[43] = 14000;
     wb[0xB0] = 0x20;
-    w[45] = *(int *)((int)DAT_00487abc + 0x88);
+    w[45] = *reinterpret_cast<int *>(entity_types + 0x88);
     wb[0xB8] = 0x10;
 
     /* Weapon type 6: laser */
@@ -723,7 +725,7 @@ void FUN_0042d8b0(void)
     g_InputMode     = 0;             /* DAT_004877e4 */
     DAT_004877e8    = 0;
     DAT_004877cc    = 0;
-    g_FrameTimer    = timeGetTime(); /* _DAT_004877f4 */
+    g_FrameTimer    = Platform_GetTicks(); /* _DAT_004877f4 */
     DAT_004877ec    = 0;
 
     /* --- Allocate game view data (0x4718 = 18200 bytes) --- */
@@ -1475,7 +1477,7 @@ static int FUN_004236f0(int sprite_index, int color_param)
  * Fills DAT_00487ab4 (pixels), DAT_00489234 (offsets), DAT_00489e8c (widths), DAT_00489e88 (heights). */
 int FUN_00423150(void)
 {
-    FILE *f = fopen("data\\all3.gfx", "rb");
+    FILE *f = fopen("data/all3.gfx", "rb");
     if (!f) return 0;
 
     int max_spr_idx = 0;
@@ -1577,7 +1579,7 @@ int FUN_00423150(void)
  * Per type: 6 x 20-byte animation frame blocks, 7-byte header, 6 x 16-byte animation property blocks. */
 static int FUN_004254b0(void)
 {
-    FILE *f = fopen("data\\loadtime.dat", "rb");
+    FILE *f = fopen("data/loadtime.dat", "rb");
     if (!f) return 0;
 
     unsigned char tmp[20];
@@ -1637,9 +1639,9 @@ int FUN_004252d0(void)
     unsigned char buf[0x300];  /* 768 bytes = 256 RGB triplets */
 
     /* --- Load pal.col → DAT_00487aa8 (particle/effect palette) --- */
-    FILE *f = fopen("data\\pal.col", "rb");
+    FILE *f = fopen("data/Pal.col", "rb");
     if (!f) {
-        LOG("[LOAD] ERROR: Could not open data\\pal.col\n");
+        LOG("[LOAD] ERROR: Could not open data/Pal.col\n");
         return 0;
     }
     fread(buf, 1, 0x300, f);
@@ -1660,9 +1662,9 @@ int FUN_004252d0(void)
         }
     }
     /* --- Load shipal.col → DAT_00481f4c (ship palette) --- */
-    f = fopen("data\\shipal.col", "rb");
+    f = fopen("data/SHIPAL.COL", "rb");
     if (!f) {
-        LOG("[LOAD] ERROR: Could not open data\\shipal.col\n");
+        LOG("[LOAD] ERROR: Could not open data/SHIPAL.COL\n");
         return 0;
     }
     fread(buf, 1, 0x300, f);
@@ -1711,7 +1713,7 @@ int FUN_00422740(void)
 
     /* Load ballistic arc lookup table from taulu2.tau */
     {
-        FILE *f = fopen("data\\taulu2.tau", "rb");
+        FILE *f = fopen("data/taulu2.tau", "rb");
         if (f) {
             fread(DAT_00489e90, 1, 0x82D0, f);
             fclose(f);
@@ -1722,7 +1724,7 @@ int FUN_00422740(void)
     /* File contains big-endian 16-bit values: 26 starting letter CDF entries,
      * then 26x26 transition matrix CDF entries. */
     {
-        FILE *f = fopen("data\\names.dat", "rb");
+        FILE *f = fopen("data/NAMES.DAT", "rb");
         if (f) {
             unsigned char buf[2];
             for (int i = 0; i < 26; i++) {
@@ -1944,18 +1946,37 @@ static void FUN_00413d40(const char *name, const char *tiledata, const char *ext
     DAT_00485088++;
 }
 
-/* ===== FUN_00413e70 — Scan Music Files by Extension (00413E70) ===== */
-/* Scans for music files matching the given pattern (e.g. "music\\*.mp3").
- * Each found file gets a 256-byte name buffer. */
-static void FUN_00413e70(const char *pattern)
+static int Path_Is_Directory(const char *directory, const char *name)
 {
-    WIN32_FIND_DATAA fd;
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return;
+    char path[512];
+    SDL_PathInfo info;
+    int written = snprintf(path, sizeof(path), "%s/%s", directory, name);
+    return written > 0 && written < (int)sizeof(path) &&
+           SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+}
 
-    do {
-        /* Skip directories */
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+static int Compare_Path_Entries(const void *left, const void *right)
+{
+    const char *const *left_name = static_cast<const char *const *>(left);
+    const char *const *right_name = static_cast<const char *const *>(right);
+    return SDL_strcasecmp(*left_name, *right_name);
+}
+
+/* ===== FUN_00413e70 — Scan Music Files by Extension (00413E70) ===== */
+/* Scans the music directory for files matching an extension pattern.
+ * Each found file gets a 256-byte name buffer. */
+static void FUN_00413e70(const char *extension_pattern)
+{
+    int count = 0;
+    char **entries = SDL_GlobDirectory("music", extension_pattern,
+                                       SDL_GLOB_CASEINSENSITIVE, &count);
+    if (entries == NULL)
+        return;
+    qsort(entries, count, sizeof(*entries), Compare_Path_Entries);
+
+    for (int i = 0; i < count; i++) {
+        if (Path_Is_Directory("music", entries[i]))
+            continue;
         if (DAT_00485fcc >= MUSIC_CATALOG_CAPACITY) {
             LOG("[MUSIC] catalog full; ignoring remaining files\n");
             break;
@@ -1965,44 +1986,45 @@ static void FUN_00413e70(const char *pattern)
         void *buf = Mem_Alloc(0x100);
         g_MemoryTracker += 0x100;
         DAT_00485fd4[DAT_00485fcc] = buf;
-        strcpy((char *)buf, fd.cFileName);
+        strcpy((char *)buf, entries[i]);
         DAT_00485fcc++;
-    } while (FindNextFileA(hFind, &fd));
+    }
 
-    FindClose(hFind);
+    SDL_free(entries);
 }
 
 /* ===== FUN_00414060 — Level File Scanner (00414060) ===== */
-/* Scans levels\ directory for .lev files and ggstuff\ for GG themes.
+/* Scans levels/ for .lev files and ggstuff/ for GG themes.
  * Returns 1 if any levels found, 0 if none. */
 int FUN_00414060(void)
 {
-    WIN32_FIND_DATAA fd;
     char pathbuf[512];
     char header[0x400];
 
     DAT_00485088 = 0;
 
-    /* Phase 1: Scan for levels\*.lev files */
-    HANDLE hFind = FindFirstFileA("levels\\*.lev", &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            /* Skip directories */
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+    /* Phase 1: Scan for level files. */
+    int level_count = 0;
+    char **level_entries = SDL_GlobDirectory("levels", "*.lev",
+                                             SDL_GLOB_CASEINSENSITIVE,
+                                             &level_count);
+    if (level_entries != NULL) {
+        qsort(level_entries, level_count, sizeof(*level_entries), Compare_Path_Entries);
+        for (int entry = 0; entry < level_count; entry++) {
+            if (Path_Is_Directory("levels", level_entries[entry]))
+                continue;
 
             /* Strip ".lev" extension to get the level title (original uses
              * MFC CFileFind::GetFileTitle which returns name without extension).
              * Load_Level_File appends ".lev" when building the file path. */
             {
                 char title[256];
-                strcpy(title, fd.cFileName);
+                strcpy(title, level_entries[entry]);
                 char *dot = strrchr(title, '.');
                 if (dot) *dot = '\0';
 
-                /* Build full path: "levels\<title>.LEV" for header validation */
-                strcpy(pathbuf, "levels\\");
-                strcat(pathbuf, title);
-                strcat(pathbuf, ".LEV");
+                /* Use the discovered filename so case-sensitive filesystems work. */
+                snprintf(pathbuf, sizeof(pathbuf), "levels/%s", level_entries[entry]);
 
                 /* Open file and read header */
                 FILE *fp = fopen(pathbuf, "rb");
@@ -2025,36 +2047,34 @@ int FUN_00414060(void)
                     }
                 }
             }
-        } while (FindNextFileA(hFind, &fd));
-        FindClose(hFind);
+        }
+        SDL_free(level_entries);
     }
 
-    /* Phase 2: Scan for ggstuff\*.* (GG theme directories) */
+    /* Phase 2: Scan for GG theme directories. */
     DAT_00486484 = 0;
-    hFind = FindFirstFileA("ggstuff\\*.*", &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            /* Only directories (skip . and ..) */
-            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
-            if (fd.cFileName[0] == '.') continue;
+    int theme_count = 0;
+    char **theme_entries = SDL_GlobDirectory("ggstuff", "*", 0, &theme_count);
+    if (theme_entries != NULL) {
+        qsort(theme_entries, theme_count, sizeof(*theme_entries), Compare_Path_Entries);
+        for (int entry = 0; entry < theme_count; entry++) {
+            if (!Path_Is_Directory("ggstuff", theme_entries[entry]))
+                continue;
+            if (theme_entries[entry][0] == '.')
+                continue;
             if (DAT_00486484 >= LEVEL_CATALOG_CAPACITY) {
                 LOG("[GG] theme catalog full; ignoring remaining directories\n");
                 break;
             }
 
-            /* Check if it's a valid GG directory (has subdirectories) */
-            char subpath[512];
-            strcpy(subpath, "ggstuff\\");
-            strcat(subpath, fd.cFileName);
-
             /* Allocate name buffer for GG theme */
             void *buf = Mem_Alloc(0x100);
             g_MemoryTracker += 0x100;
             DAT_00486488[DAT_00486484] = buf;
-            strcpy((char *)buf, fd.cFileName);
+            strcpy((char *)buf, theme_entries[entry]);
             DAT_00486484++;
-        } while (FindNextFileA(hFind, &fd));
-        FindClose(hFind);
+        }
+        SDL_free(theme_entries);
     }
 
     /* Phase 3: Process GG themes — generate levels from each theme */
@@ -2104,8 +2124,8 @@ void FUN_00413f70(void)
 
     /* SDL_mixer handles compressed music on every supported platform. The old
      * opt-in streaming gate and tracker/backend matrix no longer apply. */
-    FUN_00413e70("music\\*.ogg");
-    FUN_00413e70("music\\*.mp3");
+    FUN_00413e70("*.ogg");
+    FUN_00413e70("*.mp3");
 
     if (DAT_00485fcc != 0) {
         /* Default to random track */
@@ -2400,13 +2420,13 @@ void FUN_00425fe0(void)
     /* The original fullscreen flip chain supplied pacing. Menus still need an
      * explicit limiter independent of the gameplay fixed-step loop. */
     {
-        static DWORD lastFrame = 0;
-        DWORD end = timeGetTime();
+        static uint32_t lastFrame = 0;
+        uint32_t end = Platform_GetTicks();
         if (lastFrame != 0) {
-            DWORD elapsed = end - lastFrame;
-            if (elapsed < 16) Sleep(16 - elapsed);
+            uint32_t elapsed = end - lastFrame;
+            if (elapsed < 16) Platform_Delay(16 - elapsed);
         }
-        lastFrame = timeGetTime();
+        lastFrame = Platform_GetTicks();
     }
 }
 
@@ -2477,7 +2497,8 @@ int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
     static char weapon_name_buf[21];  /* 20 chars + null terminator */
     if (render_mode == 6 && DAT_00487abc != NULL) {
         /* string_idx = weapon index. Read name from weapon config table. */
-        char *raw_name = (char *)((int)DAT_00487abc + (int)(unsigned int)string_idx * 0x218 + 4);
+        char *raw_name = static_cast<char *>(DAT_00487abc) +
+                         (unsigned int)string_idx * 0x218 + 4;
         memcpy(weapon_name_buf, raw_name, 20);
         weapon_name_buf[20] = '\0';
         /* Trim trailing spaces */
@@ -2676,7 +2697,7 @@ static void Read_GG_Theme_Info(const char *theme_name,
     if (!theme_name || !theme_name[0]) return;
 
     char path[300];
-    int n = snprintf(path, sizeof(path), "ggstuff\\%s\\info.txt", theme_name);
+    int n = snprintf(path, sizeof(path), "ggstuff/%s/info.txt", theme_name);
     if (n <= 0 || n >= (int)sizeof(path)) return;
 
     FILE *fp = fopen(path, "r");
@@ -2788,7 +2809,7 @@ static void Update_Level_Hover_Metadata(int level_idx)
         }
         if (name && name[0]) {
             char path[300];
-            int n = snprintf(path, sizeof(path), "levels\\%s.LEV", name);
+            int n = snprintf(path, sizeof(path), "levels/%s.lev", name);
             if (n > 0 && n < (int)sizeof(path)) {
                 FILE *fp = fopen(path, "rb");
                 if (fp) {
@@ -3495,7 +3516,6 @@ void FUN_0042a470(void)
 
         /* Result text based on match outcome */
         if (g_MenuStrings && g_MenuStrings[0x65]) {
-            unsigned char *teamScores = (unsigned char *)&DAT_0048693c;
             if (DAT_00487640[3] == 3) {
                 FUN_004644af(g_MenuStrings[0x65],
                     (const unsigned char *)"Draw!");
@@ -3517,7 +3537,7 @@ void FUN_0042a470(void)
             int strIdx = 0x71;
             int rowY = 0xb9;
             for (int team = 0; team < 3; team++) {
-                unsigned char teamWins = ((unsigned char *)&DAT_0048693c)[team + 1];
+                unsigned char teamWins = g_TeamWins[team];
                 unsigned int color = (teamWins != DAT_00487648) ? 3 : 0;
 
                 /* Column 1: Wins (from DAT_0048693c bytes 1-3) */
@@ -4481,7 +4501,7 @@ void FUN_00427a70(int param_1)
 void FUN_00426650(void)
 {
     /* Update frame delta time */
-    DWORD now = timeGetTime();
+    uint32_t now = Platform_GetTicks();
     DAT_004877f0 = now - g_FrameTimer;
     g_FrameTimer = now;
     if (DAT_004877f0 > 1000) {
@@ -4835,7 +4855,7 @@ void FUN_00426650(void)
         /* Click sound: index 0x55 (85) in 300-entry sound table.
          * Previous code used 0x155 (341) which was out of bounds (300 max). */
         int snd_idx = 0x55;
-        if (*(int *)((int)g_SoundTable + snd_idx * 8) != 0) {
+        if (g_SoundTable[snd_idx].handle != 0) {
             Audio_PlaySample(g_SoundTable[snd_idx].handle, 0x80, 0x80);
         }
     }
@@ -5374,7 +5394,7 @@ void FUN_0041a8c0(void)
     /* DAT_00487640[2] = g_GameConfig.values.resolution_index; */
     *(char *)&DAT_0048693c = 0;   /* clear level index low byte */
     DAT_00487640[0] = 0;
-    DAT_004892b8 = timeGetTime();
+    DAT_004892b8 = Platform_GetTicks();
 
     /* 2. Sky/fade color switch */
     switch (DAT_00483731) {
@@ -5402,7 +5422,7 @@ void FUN_0041a8c0(void)
 
     /* 5. Clear per-team stat counters (4 entries each) */
     for (i = 0; i < 4; i++) {
-        ((unsigned char *)&DAT_0048693c)[i + 1] = 0;
+        g_TeamWins[i] = 0;
         DAT_00486944[i] = 0;
         DAT_00486954[i] = 0;
     }
@@ -5607,7 +5627,7 @@ void FUN_0041d740(void)
         unsigned char highest_score = 0;
         DAT_00487648 = 0;
         for (int i = 0; i < 3; i++) {
-            unsigned char score = ((unsigned char *)&DAT_0048693c)[i + 1];
+            unsigned char score = g_TeamWins[i];
             if (score > highest_score) {
                 highest_score = score;
                 DAT_00487648 = score;
@@ -5617,7 +5637,7 @@ void FUN_0041d740(void)
         /* --- Find all teams tied at highest score --- */
         DAT_00487640[3] = 0;  /* winning team count */
         for (int i = 0; i < 3; i++) {
-            if (((unsigned char *)&DAT_0048693c)[i + 1] == highest_score) {
+            if (g_TeamWins[i] == highest_score) {
                 DAT_00487644[DAT_00487640[3]] = (char)i;
                 DAT_00487640[3]++;
             }
@@ -5998,11 +6018,11 @@ void FUN_0041d740(void)
     else {
         /* Tournament mode */
         DAT_004877a4 = 0x1d;
-        DAT_0048764b = (((unsigned char *)&DAT_0048693c)[1] != 0) ? 2 : 1;
+        DAT_0048764b = (g_TeamWins[0] != 0) ? 2 : 1;
     }
 
     /* Record elapsed time */
-    DAT_004892bc = timeGetTime() - DAT_004892b8;
+    DAT_004892bc = Platform_GetTicks() - DAT_004892b8;
 }
 
 /* ===== Early_Init_Vars (0041EAD0) ===== */
@@ -6255,10 +6275,10 @@ void Init_Math_Tables(int *buffer, unsigned int count)
 /* Returns: 1=success, 0=file-not-found, 2=no-levels */
 int System_Init_Check(void)
 {
-    DWORD dwTime;
+    uint32_t dwTime;
     int iVar2;
 
-    dwTime = timeGetTime();
+    dwTime = Platform_GetTicks();
     srand(dwTime);  /* FUN_00464409 = srand */
 
     Init_Memory_Pools();

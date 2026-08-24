@@ -18,7 +18,7 @@ int DAT_00481f48 = 0;
 int g_EntityCount = 0;       /* was DAT_00489248 */
 int g_ParticleCount = 0;     /* was DAT_00489250 */
 int DAT_0048925c = 0;     /* Misc counter (intro) */
-DWORD DAT_004877f0 = 0;   /* Frame delta time */
+uint32_t DAT_004877f0 = 0;   /* Frame delta time */
 
 /* Memory pool pointers */
 void *DAT_00487ab4 = NULL;

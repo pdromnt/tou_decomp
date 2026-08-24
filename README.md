@@ -47,7 +47,6 @@ Requirements:
 - CMake 3.24 or newer
 - Ninja or GNU Make
 - `windres`
-- Windows WinMM development library (temporary recovered-timing dependency)
 
 The primary build statically links SDL3 and SDL_mixer and uses them for
 presentation, input, WAV effects, and Ogg Vorbis/MP3 music. Build from a 32-bit

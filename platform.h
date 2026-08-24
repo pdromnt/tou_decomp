@@ -1,6 +1,8 @@
 #ifndef TOU_PLATFORM_H
 #define TOU_PLATFORM_H
 
+#include <stdint.h>
+
 typedef enum PlatformEventType {
     PLATFORM_EVENT_NONE = 0,
     PLATFORM_EVENT_QUIT,
@@ -24,5 +26,7 @@ int   Platform_GetMousePosition(int *x, int *y);
 int   Platform_GetWindowSize(int *width, int *height);
 int   Platform_ApplyDisplaySettings(int width, int height, int fullscreen);
 void  Platform_ShowError(const char *message);
+uint32_t Platform_GetTicks(void);
+void  Platform_Delay(uint32_t milliseconds);
 
 #endif

@@ -3,8 +3,8 @@
 
 #include <stdlib.h>
 
-#include "compat.h"
 #include "fixed_point.h"
+#include "platform.h"
 #include "audio_backend.h"
 #include "binary_compat.h"
 #include "entity_callbacks.h"

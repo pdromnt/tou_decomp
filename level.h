@@ -1,7 +1,7 @@
 #ifndef TOU_LEVEL_H
 #define TOU_LEVEL_H
 
-#include "compat.h"
+#include <stdint.h>
 
 typedef struct LevelPhysicsTuning {
     unsigned char spawn_timer;
@@ -66,7 +66,7 @@ extern int           DAT_004808b0;       /* treasure count */
 extern char          DAT_004839ee;       /* entity enable flag */
 extern char          DAT_004839ef;       /* creature density */
 extern short         DAT_004839f0;       /* treasure/pickup config */
-extern DWORD         DAT_004839f4;       /* progress timer */
+extern uint32_t      DAT_004839f4;       /* progress timer */
 extern char          DAT_00481a40;       /* beach style flag */
 extern char          DAT_00481a41;       /* texture darkness */
 extern int           DAT_00481a34;       /* fixed width */
@@ -112,6 +112,7 @@ extern char                  DAT_0048396d;      /* generated-map flag */
 extern char                  DAT_00483960;      /* swap-file enabled flag */
 extern char                 *DAT_00486938;      /* current level name pointer */
 extern int                   DAT_0048693c;      /* current level index (low byte used) */
+extern unsigned char         g_TeamWins[4];     /* per-team accumulated round wins */
 extern char                  DAT_004892e4;      /* random mirror flag */
 extern char                  DAT_004892e5;      /* difficulty flag (ship select) */
 extern char                  DAT_00489d7c[];     /* error string buffer (256 bytes) */

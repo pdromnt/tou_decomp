@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TunnelsOfUnderworld LANGUAGES C CXX RC)
+project(TunnelsOfUnderworld LANGUAGES C CXX)
 
 include(FetchContent)
 
@@ -74,16 +74,20 @@ set(TOU_SOURCES
     binary_compat.cpp
     entity_callbacks.cpp
     stb_image.c
-    tou.rc
 )
 
-add_executable(TOU WIN32 ${TOU_SOURCES})
+if(WIN32)
+    enable_language(RC)
+    list(APPEND TOU_SOURCES tou.rc)
+    add_executable(TOU WIN32 ${TOU_SOURCES})
+else()
+    add_executable(TOU ${TOU_SOURCES})
+endif()
 target_compile_features(TOU PRIVATE cxx_std_11)
 target_include_directories(TOU PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(TOU PRIVATE
     SDL3::SDL3
     SDL3_mixer::SDL3_mixer-static
-    winmm
 )
 
 set_target_properties(TOU PROPERTIES

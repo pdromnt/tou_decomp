@@ -1,7 +1,7 @@
 #ifndef TOU_ENTITY_H
 #define TOU_ENTITY_H
 
-#include "compat.h"
+#include <stdint.h>
 
 /* ===== Memory (memory.cpp) ===== */
 extern int                   g_MemoryTracker;   /* 004892A0 */
@@ -16,7 +16,7 @@ extern unsigned char         DAT_00487ac0[6000]; /* 60 records × 100 bytes */
 extern int                   g_EntityCount;      /* was DAT_00489248; active entities */
 extern int                   g_ParticleCount;    /* was DAT_00489250; active particles */
 extern int                   DAT_0048925c;      /* Misc counter / edge record count */
-extern DWORD                 DAT_004877f0;      /* Frame delta time */
+extern uint32_t              DAT_004877f0;      /* Frame delta time */
 
 /* ===== Entity Rendering Counts (effects.cpp) ===== */
 extern int                   DAT_00489274;      /* static entity count (turrets) */
