@@ -140,6 +140,38 @@ static int SDLBackend_Present(const Framebuffer *framebuffer)
     return 1;
 }
 
+static int SDLBackend_ApplyDisplaySettings(int width, int height, int fullscreen)
+{
+    if (s_Window == NULL || width <= 0 || height <= 0)
+        return 0;
+
+    if (fullscreen) {
+        if (!SDL_SetWindowFullscreen(s_Window, true)) {
+            LOG("[GFX] SDL fullscreen transition failed: %s\n", SDL_GetError());
+            return 0;
+        }
+        SDL_SyncWindow(s_Window);
+    } else {
+        /* Leaving fullscreen must complete before SDL will accept a window-size
+         * request. This also replaces SDL's stale pre-fullscreen dimensions. */
+        if (!SDL_SetWindowFullscreen(s_Window, false)) {
+            LOG("[GFX] SDL windowed transition failed: %s\n", SDL_GetError());
+            return 0;
+        }
+        SDL_SyncWindow(s_Window);
+        if (!SDL_SetWindowSize(s_Window, width, height)) {
+            LOG("[GFX] SDL window resize failed: %s\n", SDL_GetError());
+            return 0;
+        }
+        SDL_SetWindowPosition(s_Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        SDL_SyncWindow(s_Window);
+    }
+
+    LOG("[GFX] SDL display mode: %dx%d %s\n", width, height,
+        fullscreen ? "fullscreen" : "windowed");
+    return 1;
+}
+
 /* The recovered game-surface calls only manage presentation-era lifetime.
  * SDL uploads the software framebuffer directly and needs no second surface. */
 static int SDLBackend_CreateGameSurface(void)
@@ -158,6 +190,7 @@ const RenderBackend g_SdlRenderBackend = {
     SDLBackend_Shutdown,
     SDLBackend_Restore,
     SDLBackend_Present,
+    SDLBackend_ApplyDisplaySettings,
     SDLBackend_CreateGameSurface,
     SDLBackend_ReleaseGameSurface
 };

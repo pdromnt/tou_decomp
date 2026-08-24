@@ -73,6 +73,14 @@ void Apply_Display_Settings(void)
     if (g_NumDisplayModes <= 0 || mode >= (unsigned int)g_NumDisplayModes)
         mode = 5;
 
+    int requested_width = g_ModeWidths[mode];
+    int requested_height = g_ModeHeights[mode];
+    if (RenderBackend_ApplyDisplaySettings(requested_width, requested_height,
+                                           g_WindowMode != 0)) {
+        InvalidateRect(hWnd_Main, NULL, TRUE);
+        return;
+    }
+
     MONITORINFO monitor = {};
     monitor.cbSize = sizeof(monitor);
     GetMonitorInfoA(MonitorFromWindow(hWnd_Main, MONITOR_DEFAULTTONEAREST), &monitor);
@@ -86,7 +94,7 @@ void Apply_Display_Settings(void)
             SWP_FRAMECHANGED | SWP_SHOWWINDOW);
     } else {
         DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-        RECT window_rect = {0, 0, g_ModeWidths[mode], g_ModeHeights[mode]};
+        RECT window_rect = {0, 0, requested_width, requested_height};
         AdjustWindowRect(&window_rect, style, FALSE);
         int width = window_rect.right - window_rect.left;
         int height = window_rect.bottom - window_rect.top;

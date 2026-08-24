@@ -28,6 +28,7 @@ typedef struct RenderBackend {
     void (*shutdown)(void);
     void (*restore)(void);
     int  (*present)(const Framebuffer *framebuffer);
+    int  (*apply_display_settings)(int width, int height, int fullscreen);
     int  (*create_game_surface)(void);
     void (*release_game_surface)(void);
 } RenderBackend;
@@ -43,6 +44,7 @@ int  RenderBackend_Configure(int width, int height);
 void RenderBackend_Shutdown(void);
 void RenderBackend_Restore(void);
 int  RenderBackend_Present(const Framebuffer *framebuffer);
+int  RenderBackend_ApplyDisplaySettings(int width, int height, int fullscreen);
 int  RenderBackend_CreateGameSurface(void);
 void RenderBackend_ReleaseGameSurface(void);
 const char *RenderBackend_Name(void);

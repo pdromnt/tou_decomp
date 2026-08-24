@@ -54,6 +54,12 @@ int RenderBackend_Present(const Framebuffer *framebuffer)
         ? s_Backend->present(framebuffer) : 0;
 }
 
+int RenderBackend_ApplyDisplaySettings(int width, int height, int fullscreen)
+{
+    return s_Backend != NULL && s_Backend->apply_display_settings != NULL
+        ? s_Backend->apply_display_settings(width, height, fullscreen) : 0;
+}
+
 int RenderBackend_CreateGameSurface(void)
 {
     return s_Backend != NULL && s_Backend->create_game_surface != NULL
