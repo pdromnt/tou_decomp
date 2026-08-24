@@ -69,7 +69,6 @@ rendering code do not access either backend's objects.
 | `sound.cpp` | Recovered music selection, sample table, and sound lifecycle |
 | `audio_backend.h` | Narrow channel/sample/music interface used by game logic |
 | `audio_sdl.cpp` | Primary SDL_mixer backend with legacy volume/pan semantics |
-| `audio_fmod.cpp` | Temporary FMOD-backed A/B adapter for the old Makefile |
 | `intro.cpp` | Intro presentation |
 | `memory.cpp` | Recovered allocation and shared-memory helpers |
 | `math.cpp` | Small math compatibility helpers |

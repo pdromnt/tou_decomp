@@ -26,8 +26,8 @@ are delivered together in one larger pull request.
   with DirectDraw retained as a command-line A/B fallback. SDL now also owns
   the window, display modes, event queue, keyboard, and mouse. The Win32 entry
   point, native dialogs/focus bridges, and DirectDraw fallback remain
-  transitional dependencies. The primary build now uses SDL_mixer for audio;
-  FMOD survives only in the old Makefile comparison path.
+  transitional dependencies. SDL_mixer now owns audio completely; FMOD and
+  its old comparison build have been removed after runtime acceptance.
 - `GameConfig` is the canonical byte-exact config record, and the main and
   gameplay state machines use named enum values.
 
@@ -399,11 +399,10 @@ Current: `g_GameState` is a byte with values 0x01, 0x02, 0x96, 0x97, 0x98, 0xFE.
 
 ## Theme 7: Sound Abstraction
 
-### T7.1 — Portable audio backend  [IN PROGRESS / P0]
+### T7.1 — Portable audio backend  [DONE]
 The primary CMake build uses statically linked SDL_mixer for WAV effects and
-Ogg Vorbis music. Recovered gameplay code passes its already-calculated volume
-and pan through `audio_backend.h`; it no longer calls FMOD directly. The old
-Makefile retains `audio_fmod.cpp` temporarily for A/B comparison.
+Ogg Vorbis/MP3 music. Recovered gameplay code passes its already-calculated volume
+and pan through `audio_backend.h`; it no longer calls FMOD directly.
 
 ```c
 typedef struct {
@@ -421,8 +420,8 @@ typedef struct {
 - [x] Primary SDL_mixer implementation in `audio_sdl.cpp`
 - [x] No FMOD symbols or DLL requirement in the primary executable/package
 - [x] Existing attenuation and direction calculations remain upstream and unchanged
-- [ ] Runtime A/B pass covers one-shot, looping, positional, music, pause, and focus behavior
-- [ ] Remove the temporary FMOD comparison backend after acceptance
+- [x] Runtime A/B pass covers one-shot, looping, positional, music, pause, and focus behavior
+- [x] Remove the temporary FMOD comparison backend after acceptance
 
 ---
 

@@ -12,22 +12,36 @@
 SoundEntry     *g_SoundTable   = NULL;   /* 00487874 */
 
 /* ===== Init_Sound_Hardware (0040DF60) ===== */
-/* Original at 0040DF60 (was mislabeled as 0040E530). The backend boundary
- * retains the recovered channel-count and legacy no-sound setting. */
+/* Original at 0040DF60 (was mislabeled as 0040E530). SDL_mixer owns device
+ * selection and channel allocation; the old backend tuning bytes are ignored. */
 int Init_Sound_Hardware(void)
 {
-    /* Max channels from DAT_00483724[0] (blob offset 0x17CC) */
-    int maxChannels = DAT_00483724[0] & 0xFF;
-    if (maxChannels == 0) maxChannels = 32;  /* safety fallback */
-
-    if (Audio_Init(maxChannels, DAT_00483720[3])) {
-        LOG("[SND] Audio backend initialized (channels=%d)\n", maxChannels);
+    if (Audio_Init()) {
+        LOG("[SND] Audio backend initialized\n");
         Load_Game_Sounds();
         return 1;
     }
 
     LOG("[SND] Audio backend initialization failed\n");
     return 0;
+}
+
+void Apply_Audio_Settings(void)
+{
+    if (!g_SoundEnabled)
+        return;
+
+    const int music_volume = ((int)g_GameConfig.values.music_volume * 255) / 100;
+    const int sfx_volume = ((int)g_GameConfig.values.sound_volume * 255) / 100;
+    Audio_SetSfxMasterVolume(g_GameConfig.values.sound_enabled ? sfx_volume : 0);
+
+    if (!g_GameConfig.values.music_enabled) {
+        Audio_StopMusic();
+    } else if (Audio_HasMusic()) {
+        Audio_SetMusicVolume(music_volume);
+    } else {
+        FUN_0040e130();
+    }
 }
 
 /* ===== Load_Sound_Sample ===== */
@@ -166,7 +180,7 @@ void Load_Game_Sounds(void)
  * Stops any playing music, then selects and plays a track:
  *   - Menu/intro states (g_GameState==3, DAT_004877a4==0x97/0x98): use MAINMENU track
  *   - In-game: pick a random track from the scanned music folder
- * Supports both streaming formats (OGG/MP3/WMA/ASF) and tracker modules (IT/XM/S3M/MOD).
+ * Supports the OGG and MP3 formats provided by the SDL_mixer build.
  */
 void FUN_0040e130(void)
 {
@@ -177,7 +191,7 @@ void FUN_0040e130(void)
     Audio_StopMusic();
 
     /* Set SFX master volume from config */
-    int sfxVol = ((DAT_00483720[1]) * 0xFF) / 100;
+    int sfxVol = DAT_0048371f ? ((DAT_00483720[1]) * 0xFF) / 100 : 0;
     Audio_SetSfxMasterVolume(sfxVol);
 
     /* Check if music is enabled and files exist */

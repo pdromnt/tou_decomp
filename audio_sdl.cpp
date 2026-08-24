@@ -26,6 +26,8 @@ static int s_MusicVolume = 255;
 static int s_MusicPaused = 0;
 static int s_Muted = 0;
 
+enum { AUDIO_CHANNEL_COUNT = 64 };
+
 static int ClampByte(int value)
 {
     if (value < 0) return 0;
@@ -42,8 +44,8 @@ static void ApplyChannelMix(SdlChannel &channel)
                        ((float)ClampByte(s_SfxMasterVolume) / 255.0f);
     MIX_SetTrackGain(channel.track, gain);
 
-    /* FMOD pans mono samples with a constant-power curve. Every bundled SFX
-     * is mono, so preserve that curve instead of SDL_mixer's linear example. */
+    /* Preserve the original engine's constant-power pan curve. Every bundled
+     * SFX is mono, so avoid SDL_mixer's linear example curve here. */
     const float position = (float)ClampByte(channel.pan) / 255.0f;
     MIX_StereoGains stereo;
     stereo.left = sqrtf(1.0f - position);
@@ -51,13 +53,8 @@ static void ApplyChannelMix(SdlChannel &channel)
     MIX_SetTrackStereo(channel.track, &stereo);
 }
 
-int Audio_Init(int max_channels, int legacy_output_type)
+int Audio_Init(void)
 {
-    if (legacy_output_type == 3)
-        return 1;
-    if (max_channels <= 0)
-        max_channels = 32;
-
     if (!MIX_Init()) {
         SDL_Log("SDL_mixer initialization failed: %s", SDL_GetError());
         return 0;
@@ -71,7 +68,7 @@ int Audio_Init(int max_channels, int legacy_output_type)
 
     s_Samples.clear();
     s_Samples.push_back((SdlSample){ NULL, false }); /* handle zero is invalid */
-    s_Channels.assign((size_t)max_channels, (SdlChannel){ NULL, 255, 128 });
+    s_Channels.assign(AUDIO_CHANNEL_COUNT, (SdlChannel){ NULL, 255, 128 });
     for (size_t i = 0; i < s_Channels.size(); i++) {
         s_Channels[i].track = MIX_CreateTrack(s_Mixer);
         if (s_Channels[i].track == NULL) {

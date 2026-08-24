@@ -31,8 +31,9 @@ typedef struct GameConfigLayout {
     uint8_t sound_enabled;                   /* 0x17c7 */
     uint8_t music_volume;                    /* 0x17c8 */
     uint8_t sound_volume;                    /* 0x17c9 */
-    uint8_t sound_flags[2];                  /* 0x17ca */
-    uint8_t display_flags;                   /* 0x17cc */
+    uint8_t legacy_streaming_enabled;        /* 0x17ca: retained for old config files */
+    uint8_t legacy_output_type;              /* 0x17cb: retained for old config files */
+    uint8_t legacy_sound_channels;           /* 0x17cc: retained for old config files */
     uint8_t resolution_index;                /* 0x17cd */
     uint8_t display_reserved;                /* 0x17ce */
     uint8_t display_detail;                  /* 0x17cf */
@@ -134,7 +135,7 @@ extern GameConfig g_GameConfig;
 #define DAT_0048371e (g_GameConfig.values.music_enabled)
 #define DAT_0048371f (g_GameConfig.values.sound_enabled)
 #define DAT_00483720 (&g_GameConfig.values.music_volume)
-#define DAT_00483724 (&g_GameConfig.values.display_flags)
+#define DAT_00483724 (&g_GameConfig.values.legacy_sound_channels)
 #define DAT_00483729 (g_GameConfig.values.game_type)
 #define DAT_0048372a (g_GameConfig.values.team_count)
 #define DAT_0048372b (g_GameConfig.values.team_mode)

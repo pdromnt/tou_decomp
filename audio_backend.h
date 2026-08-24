@@ -3,7 +3,7 @@
 
 typedef unsigned int AudioSampleHandle;
 
-int  Audio_Init(int max_channels, int legacy_output_type);
+int  Audio_Init(void);
 void Audio_Shutdown(void);
 
 AudioSampleHandle Audio_LoadSample(const char *path, int loop);

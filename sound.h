@@ -14,6 +14,7 @@ extern int                   g_SoundEnabled;    /* 00487649 */
 /* ===== Function Prototypes: sound.cpp ===== */
 int  Init_Sound_Hardware(void);
 void FUN_0040e130(void);
+void Apply_Audio_Settings(void);
 void Load_Game_Sounds(void);
 void Play_Music(void);
 void Stop_All_Sounds(void);

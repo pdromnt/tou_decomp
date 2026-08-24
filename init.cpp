@@ -1025,7 +1025,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x8D] = (char *)"Music volume";
     g_MenuStrings[0x8E] = (char *)"Effect volume";
     g_MenuStrings[0x8F] = (char *)"Base holding";
-    g_MenuStrings[0x90] = (char *)"Allow MP3 music";
     g_MenuStrings[0x91] = (char *)"Starting weapon";
     g_MenuStrings[0x92] = (char *)"Last";
     g_MenuStrings[0x93] = (char *)"Random";
@@ -1159,12 +1158,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0xFD] = (char *)"Wall bounciness";
     g_MenuStrings[0xFE] = (char *)"More misc";
     g_MenuStrings[0xFF] = (char *)"Quick help";
-    g_MenuStrings[0x100] = (char *)"Output type:  ";
-    g_MenuStrings[0x101] = (char *)"Direct Sound";
-    g_MenuStrings[0x102] = (char *)"Waveout";
-    g_MenuStrings[0x103] = (char *)"A3D";
-    g_MenuStrings[0x104] = (char *)"No sound";
-    g_MenuStrings[0x105] = (char *)"Sound driver";
     g_MenuStrings[0x106] = (char *)"LOS style";
     g_MenuStrings[0x107] = (char *)"Resolution up";
     g_MenuStrings[0x108] = (char *)"Resolution down";
@@ -1182,7 +1175,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x114] = (char *)"Some";
     g_MenuStrings[0x115] = (char *)"Normal";
     g_MenuStrings[0x116] = (char *)"Lots";
-    g_MenuStrings[0x117] = (char *)"Sound channels:  ";
     g_MenuStrings[0x118] = (char *)"Let's kill!";
     g_MenuStrings[0x119] = (char *)"Skill:";
     g_MenuStrings[0x11A] = (char *)"Mission:";
@@ -1208,8 +1200,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x12A] = (char *)"Transparent";
     g_MenuStrings[0x12B] = (char *)"Normal";
     g_MenuStrings[0x12C] = (char *)"Opaque";
-    g_MenuStrings[0x12D] = (char *)"   You must restart TOU";
-    g_MenuStrings[0x12E] = (char *)"after you change this";
     g_MenuStrings[0x12F] = (char *)"0";
     g_MenuStrings[0x130] = (char *)"1";
     g_MenuStrings[0x131] = (char *)"2";
@@ -2120,18 +2110,10 @@ void FUN_00413f70(void)
 {
     DAT_00485fcc = 0;
 
-    /* Scan for various music formats (MP3/WMA/ASF/OGG only if audio streaming enabled) */
-    if (DAT_00483720[2] != '\0') {
-        FUN_00413e70("music\\*.mp3");
-        FUN_00413e70("music\\*.wma");
-        FUN_00413e70("music\\*.asf");
-        FUN_00413e70("music\\*.ogg");
-    }
-    /* Always scan for tracker formats */
-    FUN_00413e70("music\\*.it");
-    FUN_00413e70("music\\*.xm");
-    FUN_00413e70("music\\*.s3m");
-    FUN_00413e70("music\\*.mod");
+    /* SDL_mixer handles compressed music on every supported platform. The old
+     * opt-in streaming gate and tracker/backend matrix no longer apply. */
+    FUN_00413e70("music\\*.ogg");
+    FUN_00413e70("music\\*.mp3");
 
     if (DAT_00485fcc != 0) {
         /* Default to random track */
@@ -3385,26 +3367,6 @@ void FUN_0042a470(void)
         iVar3 = FUN_00430200(0, iVar4, 0x22, 2, 2, 1, 0xe, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483721));
         FUN_0042fcf0();
-        iVar7 = FUN_0042fdf0(iVar4 + iVar3 + 10);
-        iVar7 = iVar4 + iVar3 + 0x14 + iVar7;
-        FUN_00430200(0, iVar7, 0x90, 2, 2, 2, 0, 4, 0xff);         /* label */
-        iVar4 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 1, 5, 0xff);
-        FUN_0042fc90(CFG_ADDR(0x483722));
-        FUN_0042fcf0();
-        iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 10);
-        iVar3 = iVar7 + iVar4 + 0x14 + iVar3;
-        FUN_00430200(0, iVar3, 0x100, 2, 2, 2, 0, 4, 0xff);        /* label */
-        iVar7 = FUN_00430200(0, iVar3, 0x101, 2, 2, 1, 0x27, 5, 0xff);
-        iVar3 = iVar3 + iVar7;
-        FUN_0042fc90(CFG_ADDR(0x483723));
-        FUN_0042fcf0();
-        FUN_00430200(0, iVar3, 0x117, 2, 2, 2, 0, 4, 0xff);        /* label */
-        iVar7 = FUN_00430200(0, iVar3, 0, 2, 2, 1, 5, 5, 0xff);
-        FUN_0042fc90(CFG_ADDR(0x483724));
-        FUN_0042fcf0();
-        iVar3 = iVar3 + iVar7 + 10;
-        iVar7 = FUN_00430200(0, iVar3, 0x12d, 0, 1, 0, 0, 4, 0xff); /* info line 1 */
-        FUN_00430200(0, iVar3 + iVar7, 0x12e, 0, 1, 0, 0, 4, 0xff); /* info line 2 */
         FUN_00430200(0, 0x1a4, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
         DAT_004877c9 = 1;
         g_FrameIndex = 1;
@@ -4037,6 +3999,7 @@ void FUN_0042a470(void)
                 * unused briefing/match-end page and would render that screen
                 * instead of returning to Options. */
         Reset_Config_To_Defaults();
+        Apply_Audio_Settings();
         s_ResetDefaultsNotice = 1;      /* Trigger the small confirmation text on the Options rebuild below. */
         DAT_004877a4 = 0x01;            /* Treat the rest of this frame as the Options page. */
         Build_Options_Menu_Page();
@@ -4464,6 +4427,23 @@ void FUN_00427df0(int param_1, char param_2)
     default:
         break;
     }
+
+    if (data == &g_GameConfig.values.music_enabled ||
+        data == &g_GameConfig.values.sound_enabled ||
+        data == &g_GameConfig.values.music_volume ||
+        data == &g_GameConfig.values.sound_volume) {
+        Apply_Audio_Settings();
+    }
+}
+
+static unsigned char Adjust_Percent_Value(unsigned char current, int delta)
+{
+    int value = (int)current + delta;
+    if (value > 0)
+        value %= 101;
+    else if (value < 0)
+        value += (1 - (value + 1) / 101) * 101;
+    return (unsigned char)value;
 }
 
 /* ===== FUN_00427a70 - Slider drag apply (00427A70) ===== */
@@ -4503,12 +4483,7 @@ void FUN_00427a70(int param_1)
     }
 
     case 0x0E: { /* Range 0-100 (0x65) */
-        int v = (int)*data + delta;
-        if (v > 0)
-            v = v % 0x65;
-        else if (v < 0)
-            v = v + (1 - (v + 1) / 0x65) * 0x65;
-        *data = (unsigned char)v;
+        *data = Adjust_Percent_Value(*data, delta);
         break;
     }
 
@@ -4597,6 +4572,11 @@ void FUN_00427a70(int param_1)
     default:
         break;
     }
+
+    if (data == &g_GameConfig.values.music_volume ||
+        data == &g_GameConfig.values.sound_volume) {
+        Apply_Audio_Settings();
+    }
 }
 
 /* ===== FUN_00426650 - Game/menu logic tick (00426650) ===== */
@@ -4611,6 +4591,24 @@ void FUN_00426650(void)
     g_FrameTimer = now;
     if (DAT_004877f0 > 1000) {
         DAT_004877f0 = 1000;
+    }
+
+    /* Preview audio sliders while they are being dragged instead of waiting
+     * for button release. FUN_00427a70 commits the same value afterward. */
+    if (g_InputMode == 1 && g_GameViewData &&
+        (unsigned char)DAT_004877e6 < DAT_004877a8) {
+        MenuItem *active_item = &((MenuItem *)g_GameViewData)[(unsigned char)DAT_004877e6];
+        unsigned char *active_data = (unsigned char *)(uintptr_t)active_item->extra_data;
+        if (active_data != NULL) {
+            int preview = Adjust_Percent_Value(*active_data, DAT_004877e8 >> 10);
+            if (active_data == &g_GameConfig.values.music_volume &&
+                g_GameConfig.values.music_enabled) {
+                Audio_SetMusicVolume((preview * 255) / 100);
+            } else if (active_data == &g_GameConfig.values.sound_volume) {
+                Audio_SetSfxMasterVolume(g_GameConfig.values.sound_enabled ?
+                                         (preview * 255) / 100 : 0);
+            }
+        }
     }
 
     /* Scrollbar drag interaction: when left mouse held within scrollbar track,
@@ -6159,9 +6157,9 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.sound_enabled = 1;
     g_GameConfig.values.music_volume = 0x5a;
     g_GameConfig.values.sound_volume = 0x46;
-    g_GameConfig.values.sound_flags[0] = 1;
-    g_GameConfig.values.sound_flags[1] = 0;
-    g_GameConfig.values.display_flags = 0x40;
+    g_GameConfig.values.legacy_streaming_enabled = 1;
+    g_GameConfig.values.legacy_output_type = 0;
+    g_GameConfig.values.legacy_sound_channels = 0x40;
     g_GameConfig.values.resolution_index = 5;
     g_GameConfig.values.display_reserved = 0;
     g_GameConfig.values.display_detail = 1;
@@ -6368,17 +6366,9 @@ int System_Init_Check(void)
     Init_Game_Config();
 
     g_LoadedBgIndex = (char)0xFF;
-    g_SoundEnabled = 1;
+    iVar2 = Init_Sound_Hardware();
+    g_SoundEnabled = iVar2 != 0;
 
-    /* Check sound config - byte+3: 3=NOSOUND */
-    if (DAT_00483720[3] != 3) {
-        iVar2 = Init_Sound_Hardware();
-        if (iVar2 != 0)
-            goto MainInit;
-    }
-    g_SoundEnabled = 0;
-
-MainInit:
     FUN_0041eae0();  /* Entity table init */
     FUN_0045a060();  /* Color LUT generation */
     FUN_0045b2a0();  /* Blend LUT generation */

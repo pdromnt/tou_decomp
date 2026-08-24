@@ -50,7 +50,7 @@ Requirements:
 - Windows DirectDraw and WinMM development libraries
 
 The primary build statically links SDL3 and SDL_mixer and uses them for
-presentation, input, WAV effects, and Ogg Vorbis music. Build from a 32-bit
+presentation, input, WAV effects, and Ogg Vorbis/MP3 music. Build from a 32-bit
 MinGW environment:
 
 ```powershell
@@ -61,9 +61,6 @@ cmake --build build --parallel 8
 The output is `TOU.exe`. Both SDL libraries are fetched at pinned releases and
 statically linked, so the game does not require separate SDL or FMOD DLLs. Pass
 `--directdraw` to run the legacy presentation backend for A/B comparison.
-
-The old Makefile remains temporarily available as a DirectDraw/DirectInput
-fallback while the platform migration is underway.
 
 The separate `Build` GitHub Actions workflow performs this 32-bit build for
 every push and pull request. It validates the executable architecture but never
