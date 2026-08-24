@@ -50,12 +50,7 @@ static int Play_Spectator_Spatial_Sound(int snd, int x, int y, int vol_override)
     int pan = (*(int *)((int)DAT_00487ab0 + angle * 4) >> 0xc) + 0x80;
     if (distance < (float)_DAT_004753e0_d) pan = 0x80;
 
-    int channel = FSOUND_PlaySoundEx(-1,
-        (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + snd * 8)), NULL, 1);
-    FSOUND_SetVolume(channel, volume);
-    FSOUND_SetPan(channel, pan);
-    FSOUND_SetPaused(channel, 0);
-    return channel;
+    return Audio_PlaySample(g_SoundTable[snd].handle, volume, pan);
 }
 
 /* Terrain/collision globals */
@@ -215,7 +210,7 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
     }
     else {
         /* Different sound — stop old channel and reset timer */
-        FSOUND_StopSound(player->sound_channel);
+        Audio_StopChannel(player->sound_channel);
         player->sound_timer = 0;
     }
 
@@ -270,11 +265,7 @@ void FUN_0040fd70(int entity_idx, int param_2, int param_3, int param_4, int vol
             if (vol < 5) return;
 
             /* Play with spatial properties */
-            int chan = FSOUND_PlaySoundEx(-1,
-                (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + param_2 * 8)), NULL, 1);
-            FSOUND_SetVolume(chan, vol);
-            FSOUND_SetPan(chan, pan);
-            FSOUND_SetPaused(chan, 0);
+            int chan = Audio_PlaySample(g_SoundTable[param_2].handle, vol, pan);
 
             /* Store channel handle for later management */
             player->sound_channel = chan;
@@ -3409,8 +3400,8 @@ static void FUN_0040fb70_impl(int idx)
 
                 if (vol >= 0x100) vol = 0xff;
                 if (vol >= 5) {
-                    FSOUND_SetPan(player->sound_channel, pan);
-                    FSOUND_SetVolume(player->sound_channel, vol);
+                    Audio_SetChannelPan(player->sound_channel, pan);
+                    Audio_SetChannelVolume(player->sound_channel, vol);
                 }
             }
         }
@@ -3418,7 +3409,7 @@ static void FUN_0040fb70_impl(int idx)
 
     if (player->sound_timer == 1) {
         player->sound_timer = 0;
-        FSOUND_StopSound(player->sound_channel);
+        Audio_StopChannel(player->sound_channel);
     }
 }
 
@@ -4829,11 +4820,7 @@ void FUN_0040f9b0(int snd, int x, int y, int vol_override, int param5)
             if (iVar7 >= 0x100) iVar7 = 0xff;
             if (iVar7 < 5) return;
 
-            int chan = FSOUND_PlaySoundEx(-1,
-                (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + snd * 8)), NULL, 1);
-            FSOUND_SetVolume(chan, iVar7);
-            FSOUND_SetPan(chan, pan);
-            FSOUND_SetPaused(chan, 0);
+            Audio_PlaySample(g_SoundTable[snd].handle, iVar7, pan);
         }
     } else {
         Play_Spectator_Spatial_Sound(snd, x, y, vol_override);

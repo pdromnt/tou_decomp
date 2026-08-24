@@ -32,8 +32,8 @@ future refactoring and platform work.
 ## Running a Release
 
 Extract the complete release archive and run `TOU.exe` from that directory. Do
-not move the executable away from `fmod.dll` or the asset directories. The game
-creates `options.cfg` beside the executable after first run.
+not move the executable away from its asset directories. The game creates
+`options.cfg` beside the executable after first run.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
 `Tunnels of Underworld - RE/Decompiled - v0.4` so it cannot be confused with
@@ -49,17 +49,18 @@ Requirements:
 - `windres`
 - Windows DirectDraw and WinMM development libraries
 
-The primary build statically links SDL3 and uses it for framebuffer
-presentation. Build from a 32-bit MinGW environment:
+The primary build statically links SDL3 and SDL_mixer and uses them for
+presentation, input, WAV effects, and Ogg Vorbis music. Build from a 32-bit
+MinGW environment:
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 8
 ```
 
-The output is `TOU.exe`. SDL3 is fetched at its pinned release and statically
-linked, so the game does not require a separate SDL DLL. Pass `--directdraw` to
-run the legacy presentation backend for A/B comparison.
+The output is `TOU.exe`. Both SDL libraries are fetched at pinned releases and
+statically linked, so the game does not require separate SDL or FMOD DLLs. Pass
+`--directdraw` to run the legacy presentation backend for A/B comparison.
 
 The old Makefile remains temporarily available as a DirectDraw/DirectInput
 fallback while the platform migration is underway.

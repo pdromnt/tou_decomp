@@ -25,8 +25,9 @@ are delivered together in one larger pull request.
   active: it presents the unchanged RGB565 framebuffer through an SDL texture,
   with DirectDraw retained as a command-line A/B fallback. SDL now also owns
   the window, display modes, event queue, keyboard, and mouse. The Win32 entry
-  point, native dialogs/focus bridges, DirectDraw fallback, and FMOD remain
-  transitional dependencies.
+  point, native dialogs/focus bridges, and DirectDraw fallback remain
+  transitional dependencies. The primary build now uses SDL_mixer for audio;
+  FMOD survives only in the old Makefile comparison path.
 - `GameConfig` is the canonical byte-exact config record, and the main and
   gameplay state machines use named enum values.
 
@@ -195,7 +196,7 @@ unit is `0x40000` (`1 << 18`); avoid the ambiguous and incorrect "18.14" label.
 - `types.h` — structs, enums, constants
 - `gfx.h` — DirectDraw globals, render prototypes
 - `input.h` — DI globals, keyboard/mouse state
-- `sound.h` — FMOD globals, sound table
+- `sound.h` — sound table and game-facing audio lifecycle
 - `level.h` — map data, tilemap, .lev format
 - `entity.h` — entity arrays, behavior callbacks, AI globals
 - `gamestate.h` — state machine, timers, config
@@ -398,8 +399,11 @@ Current: `g_GameState` is a byte with values 0x01, 0x02, 0x96, 0x97, 0x98, 0xFE.
 
 ## Theme 7: Sound Abstraction
 
-### T7.1 — `AudioEngine` interface  [P2]
-Wrap FMOD 3.5 behind a portable interface.
+### T7.1 — Portable audio backend  [IN PROGRESS / P0]
+The primary CMake build uses statically linked SDL_mixer for WAV effects and
+Ogg Vorbis music. Recovered gameplay code passes its already-calculated volume
+and pan through `audio_backend.h`; it no longer calls FMOD directly. The old
+Makefile retains `audio_fmod.cpp` temporarily for A/B comparison.
 
 ```c
 typedef struct {
@@ -413,9 +417,12 @@ typedef struct {
 ```
 
 **AC:**
-- Interface defined; FMOD implementation in `audio_fmod.cpp`
-- All `FSOUND_*` / `FMUSIC_*` calls go through interface
-- Positional audio math (distance attenuation, panning) extracted to pure function
+- [x] Neutral sample/channel/music interface defined
+- [x] Primary SDL_mixer implementation in `audio_sdl.cpp`
+- [x] No FMOD symbols or DLL requirement in the primary executable/package
+- [x] Existing attenuation and direction calculations remain upstream and unchanged
+- [ ] Runtime A/B pass covers one-shot, looping, positional, music, pause, and focus behavior
+- [ ] Remove the temporary FMOD comparison backend after acceptance
 
 ---
 
@@ -522,7 +529,7 @@ DirectDraw remains selectable with `--directdraw` for parity comparisons.
 - [x] Windowed mode works without a DirectDraw presentation path
 - [x] DirectInput replaced by SDL input
 - [ ] Win32 entry point and native window bridge removed
-- [ ] FMOD replaced by a portable audio backend
+- [x] FMOD replaced by a portable audio backend in the primary build
 - [ ] Native Windows, Linux, and macOS builds pass
 
 ---

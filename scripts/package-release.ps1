@@ -22,8 +22,7 @@ if (-not $packageRoot.StartsWith($distPrefix, [System.StringComparison]::Ordinal
 }
 
 $requiredFiles = @(
-    "TOU.exe",
-    "fmod.dll"
+    "TOU.exe"
 )
 $requiredDirectories = @(
     "data",

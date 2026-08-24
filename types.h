@@ -1,6 +1,8 @@
 #ifndef TOU_TYPES_H
 #define TOU_TYPES_H
 
+#include "audio_backend.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <type_traits>
@@ -331,10 +333,11 @@ static_assert(offsetof(PlayerData, death_count) == 0x498, "PlayerData::death_cou
 static_assert(offsetof(PlayerData, sound_timer) == 0x4A8, "PlayerData::sound_timer offset");
 
 typedef struct {
-    unsigned int handle;    /* FSOUND_SAMPLE* cast to uint */
+    AudioSampleHandle handle;
     unsigned char volume;
     unsigned char padding[3];
 } SoundEntry;
+static_assert(sizeof(SoundEntry) == 8, "SoundEntry size");
 
 typedef struct {
     int pixel_offset;

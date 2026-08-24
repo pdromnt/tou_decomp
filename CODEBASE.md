@@ -23,7 +23,7 @@ winmain.cpp
   -> input, simulation, entity callbacks, effects
   -> software rendering into a backend-neutral RGB565 framebuffer
   -> platform presentation through the selected render backend
-  -> audio through the dynamically loaded FMOD library
+  -> audio through the SDL_mixer backend
 ```
 
 The project deliberately remains 32-bit because original pointer sizes,
@@ -66,8 +66,10 @@ rendering code do not access either backend's objects.
 | `assets.cpp` | Font and image asset loading |
 | `level.cpp` | `.lev` loading and swap/height-map data |
 | `gg_gen.cpp` | Procedural GG level/theme generation |
-| `sound.cpp` | Music, effects, positional sound, FMOD-facing game logic |
-| `fmod_loader.c` | Runtime loading of the bundled legacy `fmod.dll` |
+| `sound.cpp` | Recovered music selection, sample table, and sound lifecycle |
+| `audio_backend.h` | Narrow channel/sample/music interface used by game logic |
+| `audio_sdl.cpp` | Primary SDL_mixer backend with legacy volume/pan semantics |
+| `audio_fmod.cpp` | Temporary FMOD-backed A/B adapter for the old Makefile |
 | `intro.cpp` | Intro presentation |
 | `memory.cpp` | Recovered allocation and shared-memory helpers |
 | `math.cpp` | Small math compatibility helpers |
@@ -76,7 +78,7 @@ rendering code do not access either backend's objects.
 | `types.h` | Shared recovered structures |
 | `gfx.h` | Graphics, assets, typed framebuffer/viewport, effects, and HUD declarations |
 | `input.h` | Shared legacy scan-code state and keyboard/mouse declarations |
-| `sound.h` | FMOD-facing audio declarations |
+| `sound.h` | Game-facing sound and positional-audio declarations |
 | `level.h` | Level data, loading, and GG generator declarations |
 | `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
 | `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
@@ -97,7 +99,6 @@ The executable expects these paths relative to its working directory:
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
 | `options.cfg` | User configuration generated beside the executable on first run |
-| `fmod.dll` | Legacy audio runtime loaded dynamically at startup |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local

@@ -4935,7 +4935,7 @@ void FUN_00426650(void)
     }
 
     /* Click sound effect */
-    /* Original: plays FMOD sound when any mouse button pressed,
+    /* Original: plays a UI sound when any mouse button is pressed,
      * if not in input mode, sound enabled, and sound config allows. */
     if (DAT_004877bc != 0 && g_InputMode == 0 && DAT_004877ec == 0
         && g_SoundEnabled != 0 && g_SoundTable != NULL) {
@@ -4943,11 +4943,7 @@ void FUN_00426650(void)
          * Previous code used 0x155 (341) which was out of bounds (300 max). */
         int snd_idx = 0x55;
         if (*(int *)((int)g_SoundTable + snd_idx * 8) != 0) {
-            int ch = FSOUND_PlaySoundEx(-1,
-                (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + snd_idx * 8)), NULL, 1);
-            FSOUND_SetVolume(ch, 0x80);
-            FSOUND_SetPan(ch, 0x80);
-            FSOUND_SetPaused(ch, 0);
+            Audio_PlaySample(g_SoundTable[snd_idx].handle, 0x80, 0x80);
         }
     }
     DAT_004877ec = 0;

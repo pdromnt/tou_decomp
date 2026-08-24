@@ -19,9 +19,37 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_VENDORED ON CACHE BOOL "" FORCE)
+set(SDLMIXER_DEPS_SHARED OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_TESTS OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_AIFF OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_VOC OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_AU OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_FLAC OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_GME OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_MOD OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_MP3 OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_MIDI OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_OPUS OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_VORBIS_STB ON CACHE BOOL "" FORCE)
+set(SDLMIXER_VORBIS_VORBISFILE OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_VORBIS_TREMOR OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_WAVPACK OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    SDL3_mixer
+    URL https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz
+    URL_HASH SHA256=182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(SDL3_mixer)
+
 set(TOU_SOURCES
     winmain.cpp
     sound.cpp
+    audio_sdl.cpp
     assets.cpp
     gameloop.cpp
     memory.cpp
@@ -45,7 +73,6 @@ set(TOU_SOURCES
     binary_compat.cpp
     entity_callbacks.cpp
     stb_image.c
-    fmod_loader.c
     tou.rc
 )
 
@@ -55,6 +82,7 @@ target_compile_definitions(TOU PRIVATE TOU_HAS_SDL=1 SDL_MAIN_HANDLED=1)
 target_include_directories(TOU PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(TOU PRIVATE
     SDL3::SDL3
+    SDL3_mixer::SDL3_mixer-static
     ddraw
     winmm
 )

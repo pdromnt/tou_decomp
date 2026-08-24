@@ -29,14 +29,7 @@ static void Set_Focus_Audio_Muted(int muted)
 {
     if (!g_SoundEnabled)
         return;
-
-    int sfx_volume = muted ? 0 : ((int)DAT_00483720[1] * 0xFF) / 100;
-    int music_volume = muted ? 0 : ((int)DAT_00483720[0] * 0xFF) / 100;
-    FSOUND_SetSFXMasterVolume(sfx_volume);
-    if (g_MusicStream != NULL && g_MusicChannel >= 0)
-        FSOUND_SetPaused(g_MusicChannel, muted ? 1 : (DAT_004877a4 == 0x97));
-    if (g_MusicModule != NULL)
-        FMUSIC_SetMasterVolume(g_MusicModule, music_volume);
+    Audio_SetMuted(muted);
 }
 
 static void Release_Legacy_Input(void)
