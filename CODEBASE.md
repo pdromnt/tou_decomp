@@ -2,9 +2,10 @@
 
 ## Read This First
 
-This is a 32-bit, behavior-first reconstruction of a Windows game. It is not yet
-a conventional modern C++ project. Raw offsets and original addresses often
-encode facts that have not been safely expressed as types.
+This is a behavior-first reconstruction of a 32-bit Windows game that now builds
+as native x86, x64, and ARM64 code on modern desktop platforms. It is not yet a
+conventional modern C++ project. Raw offsets and original addresses often encode
+facts that have not been safely expressed as types.
 
 The safest cleanup rule is: **name and isolate understood behavior before
 changing its representation**. A build passing does not prove gameplay parity.
@@ -25,8 +26,10 @@ main.cpp
   -> audio through the SDL_mixer backend
 ```
 
-The project deliberately remains 32-bit because original pointer sizes,
-structure strides, overflow, and x87 behavior are part of the reconstruction.
+Recovered 32-bit values deliberately remain fixed-width even on 64-bit hosts.
+Original addresses are guest identity keys rather than native pointers, record
+layouts retain their verified sizes, and wrapping arithmetic, RNG, and float
+conversion live behind compatibility helpers.
 
 ## Rendering Boundary
 
@@ -94,6 +97,7 @@ The executable expects these paths relative to its working directory:
 | `sfx/` | Weapon, UI, ship, and environment sounds |
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
+| `help/` | Original HTML help, restyled for the decomp release |
 | `options.cfg` | User configuration generated beside the executable on first run |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
@@ -109,7 +113,8 @@ behaviorally equivalent to the original executable. It provides:
 - explicit little-endian reads and writes into recovered records;
 - defined 32-bit wrapping arithmetic and signed right shifts;
 - the original embedded MSVC `rand`/`srand` algorithm and call counter;
-- x87-style float-to-integer conversion on 32-bit x86.
+- the original x87 float-to-integer sequence on 32-bit x86, with an explicit
+  truncation equivalent on hosts without x87.
 
 `tou.h` maps normal `rand` and `srand` calls to this implementation. Do not
 replace it with the host CRT or a C++ random engine.
@@ -205,13 +210,25 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 8
 ```
 
-The primary CMake build fetches pinned SDL3, links it statically, compiles the
-game as 32-bit, and embeds `icon.ico` through `tou.rc`. Generated build trees,
+The primary CMake build fetches pinned SDL3 and SDL_mixer, links them statically,
+and builds for the host architecture. Windows builds embed `icon.ico` through
+`tou.rc`; other platforms do not compile the Windows resource file. Maintained
+game source is compiled with warnings treated as errors. Generated build trees,
 objects, executables, logs, and `dist/` packages are ignored by Git.
 
-`.github/workflows/build.yml` repeats the SDL-enabled 32-bit CMake build and PE
-architecture check on pushes and pull requests. It is build-only; publishing
-remains exclusive to the manually dispatched release workflow.
+The pinned SDL source receives one documented build-time patch on Windows:
+SDL's legacy `timeBeginPeriod` hook and unconditional WinMM link are removed.
+SDL's modern high-resolution waitable-timer path remains active. MSVC builds
+also link the C/C++ runtime statically, keeping release archives self-contained.
+
+`.github/workflows/build.yml` builds Windows x86 parity plus native Windows,
+Linux, and macOS x64/ARM64 targets on pushes and pull requests. It stages the
+complete runtime and checks each produced architecture. It is build-only;
+publishing remains exclusive to the manually dispatched release workflow,
+which creates one archive per platform and architecture.
+
+Windows release packages are ZIP files. Linux and macOS packages are `.tar.gz`
+archives so the executable permission survives extraction.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it

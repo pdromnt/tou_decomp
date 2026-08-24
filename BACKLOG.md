@@ -35,6 +35,11 @@ The required order is:
 Preserving the original game's observable behavior remains mandatory across
 all targets. A successful cross-compile alone is not runtime acceptance.
 
+Implementation of the native portability foundation is complete. The automated
+matrix builds, stages, architecture-checks, and uploads Windows x86/x64/ARM64, Linux
+x64/ARM64, and macOS Intel/Apple Silicon artifacts. Windows x64 has local build
+acceptance; gameplay acceptance on the native hosts remains the final gate.
+
 ## Current Foundation Status (v0.4)
 
 - `Entity` and `PlayerData` have verified sizes, offset assertions, and typed
@@ -555,7 +560,8 @@ dialogs, and software-frame presentation.
 - [x] Win32 entry point and native window bridge removed
 - [x] DirectDraw/DirectInput source, headers, fallback, and links removed
 - [x] FMOD replaced by a portable audio backend in the primary build
-- [ ] Native Windows, Linux, and macOS builds pass
+- [x] Native Windows, Linux, and macOS builds pass in CI
+- [ ] Native runtime acceptance passes on Windows, Linux, and macOS
 
 ---
 
@@ -573,26 +579,46 @@ OpenGL 3.3 or D3D11 backend for the software renderer.
 
 ### T12.0 — Build-only GitHub Actions validation  [DONE]
 The `Build` workflow runs separately from release automation on every push and
-pull request, with optional manual dispatch.
+pull request, with optional manual dispatch. It validates the original-like x86
+host plus every supported native desktop operating system and architecture.
 
 **AC:**
 - [x] Clean 32-bit MinGW build on `windows-latest`
 - [x] Result verified as `pei-i386`
+- [x] Windows x64 and ARM64 PE architectures verified
+- [x] Linux x64 and ARM64 ELF architectures verified
+- [x] macOS Intel and Apple Silicon Mach-O architectures verified
+- [x] Complete runtime staged and uploaded for every target
 - [x] Read-only repository permissions
 - [x] No packaging, release creation, or tag mutation
 
 ---
 
-### T12.1 — CMake build system  [IN PROGRESS / P0]
-The primary Windows build uses CMake and pinned static SDL3.
+### T12.1 — CMake build system  [DONE]
+The primary native build uses CMake and pinned static SDL3/SDL_mixer.
 
 **AC:**
-- [x] `CMakeLists.txt` builds the SDL-enabled Windows target
+- [x] `CMakeLists.txt` builds the SDL-enabled native target
 - [x] SDL3 dependency is pinned and fetched reproducibly
 - [x] CI and release workflows use CMake
-- [ ] Platform source/link dependencies are selected per operating system
-- [ ] 64-bit host-safe build
-- [ ] Native Linux and macOS CI
+- [x] Platform source/link dependencies are selected per operating system
+- [x] 64-bit and ARM64 host-safe build
+- [x] Native Windows, Linux, and macOS CI
+
+---
+
+### T12.3 — Warning-free native builds  [DONE]
+Maintained game source treats compiler warnings as errors. Recovered 32-bit
+semantics are represented explicitly rather than hidden behind warning
+suppression, including host pointers, guest addresses, integer byte patterns,
+unaligned config fields, x87 conversions, and signed plain-char behavior on ARM.
+
+**AC:**
+- [x] MSVC builds with `/W4 /WX`
+- [x] GCC and Clang build with `-Wall -Wextra -Wpedantic -Werror`
+- [x] ARM hosts preserve the original MSVC signed plain-char semantics
+- [x] Asset reads and generated paths fail safely instead of using partial data
+- [x] The complete native CI matrix enforces the warning policy
 
 ---
 
@@ -741,13 +767,13 @@ T2.1 (Header split) ──> all subsequent themes (cleaner includes)
 T4.1 (Framebuffer) ─┬─> T4.2 (Viewport)
                     └─> T4.3 (RenderBackend)
 
-T4.3 (RenderBackend) ──> T11.1 (SDL2)
+T4.3 (RenderBackend) ──> T11.1 (SDL3)
 
 T5.1 (Config struct) ─┬─> T5.2 (JSON)
                       └─> T14.1 (Sync fix)
 
 T8.1 (InputDevice) ──> T8.2 (Input mapping)
-T7.1 (AudioEngine) ──> T11.1 (SDL2, optional)
+T7.1 (AudioEngine) ──> T11.1 (SDL3)
 ```
 
 ## Suggested Sprint Order

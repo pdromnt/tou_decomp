@@ -31,68 +31,70 @@ future refactoring and platform work.
 
 ## Running a Release
 
-Extract the complete release archive and run `TOU.exe` from that directory. Do
-not move the executable away from its asset directories. The game creates
-`options.cfg` beside the executable after first run.
+Download the archive matching your operating system and architecture, extract
+it completely, and run `TOU.exe` on Windows or `TOU` on Linux/macOS. Do not move
+the executable away from its asset directories. The game creates `options.cfg`
+beside the executable after first run.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
 `Tunnels of Underworld - RE/Decompiled - v0.4` so it cannot be confused with
 the original executable.
 
-## Building on Windows
+## Building
 
 Requirements:
 
-- 32-bit MinGW-w64 GCC/G++
+- A C/C++ compiler for the target platform
 - CMake 3.24 or newer
 - Ninja or GNU Make
-- `windres`
 
 The primary build statically links SDL3 and SDL_mixer and uses them for
-presentation, input, WAV effects, and Ogg Vorbis/MP3 music. Build from a 32-bit
-MinGW environment:
+presentation, input, WAV effects, and Ogg Vorbis/MP3 music:
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 8
 ```
 
-The output is `TOU.exe`. Both SDL libraries are fetched at pinned releases and
-statically linked, so the game does not require separate runtime DLLs.
+The output is `TOU.exe` on Windows or `TOU` elsewhere. Both SDL libraries are
+fetched at pinned releases and statically linked. A 32-bit MinGW build remains
+the closest host to the original executable; x64 and ARM64 are also supported.
+Windows packages do not require SDL DLLs or the Visual C++ redistributable.
 
-The separate `Build` GitHub Actions workflow performs this 32-bit build for
-every push and pull request. It validates the executable architecture but never
-publishes a release.
+The separate `Build` GitHub Actions workflow builds Windows x86, Windows and
+Linux x64/ARM64, and macOS Intel/Apple Silicon for every push and pull request.
+It validates the executable architecture but never publishes a release.
 
 To create the same archive layout used by CI:
 
 ```powershell
-./scripts/package-release.ps1 -Version local
+./scripts/package-release.ps1 -Version local -Platform windows-x64 -ExecutablePath ./TOU.exe
 ```
 
 ## Releases
 
 The `Build release` GitHub Actions workflow only runs when started manually.
 Enter the release tag/version (for example `v1.0.0`) when choosing **Run
-workflow**; it builds the game and creates the tagged GitHub Release with the
-package attached. If that tag already exists, the workflow builds its exact
-commit; otherwise it creates the tag at the commit selected when starting the
-workflow. Rerunning an existing release replaces its package. Commits and tag
-pushes do not trigger releases.
+workflow**; it builds all supported desktop targets and creates the tagged
+GitHub Release with seven platform/architecture packages attached. If that tag
+already exists, the workflow builds its exact commit; otherwise it creates the
+tag at the commit selected when starting the workflow. Rerunning an existing
+release replaces its packages. Commits and tag pushes do not trigger releases.
+Windows packages use ZIP; Linux and macOS use `.tar.gz` to preserve executable
+permissions.
 
 ## Longer-Term Direction
 
-The active SDL3 migration is moving presentation, windowing, input, and audio
-behind portable platform boundaries. Native Linux and macOS builds are the
-first portability target; browser support comes only after those are stable.
-Gamepads, non-split-screen netplay, and better tooling for `.lev` and GG level
-formats remain later possibilities.
+SDL3 now owns presentation, windowing, input, audio, timing, dialogs, and file
+discovery behind portable platform boundaries. Browser support comes only after
+the native desktop builds are runtime-proven. Gamepads, non-split-screen netplay,
+and better tooling for `.lev` and GG level formats remain later possibilities.
 
 ## Contributing
 
 Behavior changes need evidence from the original executable. Pure refactors
-must keep the 32-bit build working and avoid changing fixed-point arithmetic,
-RNG order, callback dispatch, or update order by accident.
+must keep the x86 parity build and native builds working and avoid changing
+fixed-point arithmetic, RNG order, callback dispatch, or update order by accident.
 
 ## Tools Used
 
