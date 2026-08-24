@@ -4763,7 +4763,7 @@ void FUN_00426650(void)
                 /* Column 2: Ship type+1 (read from player data offset 0x2C) */
                 int shipVal = 0;
                 if (DAT_00487810)
-                    shipVal = *(unsigned char *)(DAT_00487810 + playerDataOff + 0x2C);
+                    shipVal = Player_Get(playerDataOff / 0x598)->team;
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
                     FUN_004644af(g_MenuStrings[strIdx + 1], (const unsigned char *)"%d", shipVal + 1);
                 FUN_00430200(0xAA, yPos, strIdx + 1, shipVal + 6, 0, 0, 0x1A, 0, 0xFF);
@@ -5484,11 +5484,9 @@ void FUN_0041a8c0(void)
         DAT_00486fa8[i] = 0;
         DAT_004870e8[i] = 0;
         DAT_00487228[i] = 0;
-        {
-            int poff = i * 0x598;
-            *(char *)(poff + 0x34 + DAT_00487810) = 0;
-            *(char *)(poff + 0x35 + DAT_00487810) = 0;
-        }
+        PlayerData *player = Player_Get(i);
+        player->weapon_type = 0;
+        player->weapon_mark = 0;
     }
     DAT_00486964 = 0;
 
@@ -5570,22 +5568,22 @@ void FUN_0041a8c0(void)
          * Key binding block: 8 bytes per player at blob offset 0x186A.
          * Maps to player offsets +0xAC..+0xB2 in a remapped order. */
         for (i = 0; i < (int)DAT_00489244; i++) {
-            int poff = i * 0x598;
+            PlayerData *player = Player_Get(i);
             unsigned char *kb = &g_ConfigBlob[0x186A + i * 8];
-            *(unsigned char *)(DAT_00487810 + poff + 0xAC) = kb[2];
-            *(unsigned char *)(DAT_00487810 + poff + 0xAD) = kb[3];
-            *(unsigned char *)(DAT_00487810 + poff + 0xAE) = kb[0];
-            *(unsigned char *)(DAT_00487810 + poff + 0xAF) = kb[4];
-            *(unsigned char *)(DAT_00487810 + poff + 0xB0) = kb[5];
-            *(unsigned char *)(DAT_00487810 + poff + 0xB1) = kb[6];
-            *(unsigned char *)(DAT_00487810 + poff + 0xB2) = kb[1];
+            player->key_scan_codes[0] = kb[2];
+            player->key_scan_codes[1] = kb[3];
+            player->key_scan_codes[2] = kb[0];
+            player->key_scan_codes[3] = kb[4];
+            player->key_scan_codes[4] = kb[5];
+            player->key_scan_codes[5] = kb[6];
+            player->key_scan_codes[6] = kb[1];
         }
 
         /* 13. Assign team index and human flag per player */
         for (i = 0; i < (int)DAT_00489240; i++) {
-            int poff = i * 0x598;
-            *(unsigned char *)(DAT_00487810 + poff + 0x2C) = g_ConfigBlob[0x3C6 + i];
-            *(unsigned char *)(DAT_00487810 + poff + 0x480) = g_ConfigBlob[0x376 + i];
+            PlayerData *player = Player_Get(i);
+            player->team = g_ConfigBlob[0x3C6 + i];
+            player->human_controlled = g_ConfigBlob[0x376 + i];
         }
 
         /* 14. Build per-player ship type availability list.
@@ -5593,36 +5591,36 @@ void FUN_0041a8c0(void)
          * If globally enabled (blob[0x1804+type]) AND per-player enabled,
          * add to available list at player data +0x3C. */
         for (i = 0; i < (int)DAT_00489240; i++) {
-            int poff = i * 0x598;
+            PlayerData *player = Player_Get(i);
             int count = 0;
             unsigned char *ship_avail = &g_ConfigBlob[0x4B6 + i * 0x3C];
 
             for (j = 0; j < 0x2F; j++) {
                 if (g_ConfigBlob[0x1804 + j] != 0 && ship_avail[j] != 0) {
-                    *(char *)(DAT_00487810 + poff + 0x3C + count) = (char)j;
+                    player->weapon_slots[count] = static_cast<uint8_t>(j);
                     count++;
                 }
             }
 
-            *(int *)(DAT_00487810 + poff + 0x38) = count - 1;
-            *(char *)(DAT_00487810 + poff + 0x34) = 100;
+            player->highest_weapon_slot = count - 1;
+            player->weapon_type = 100;
 
-            int max_idx = *(int *)(DAT_00487810 + poff + 0x38);
+            int max_idx = player->highest_weapon_slot;
             if (max_idx != -1) {
                 for (j = 0; j < max_idx + 1; j++) {
-                    if (*(char *)(DAT_00487810 + poff + 0x3C + j) == DAT_004836ce[i]) {
-                        *(char *)(DAT_00487810 + poff + 0x34) = (char)j;
+                    if (static_cast<int8_t>(player->weapon_slots[j]) == DAT_004836ce[i]) {
+                        player->weapon_type = static_cast<uint8_t>(j);
                     }
                 }
             }
 
-            if (*(char *)(DAT_00487810 + poff + 0x34) == 100) {
-                *(char *)(DAT_00487810 + poff + 0x34) = 0;
+            if (player->weapon_type == 100) {
+                player->weapon_type = 0;
             }
 
-            if (*(int *)(DAT_00487810 + poff + 0x38) == -1) {
-                *(int *)(DAT_00487810 + poff + 0x38) = 0;
-                *(char *)(DAT_00487810 + poff + 0x3C) = 0x32;
+            if (player->highest_weapon_slot == -1) {
+                player->highest_weapon_slot = 0;
+                player->weapon_slots[0] = 0x32;
             }
 
         }
@@ -5895,12 +5893,10 @@ void FUN_0041d740(void)
 
         /* Count players per team */
         if (playerCount > 0) {
-            unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
             for (unsigned int i = 0; i < playerCount; i++) {
-                unsigned int team = *player_ptr;
+                unsigned int team = Player_Get(i)->team;
                 team_player_count[team]++;
                 team_player_count_nz[team]++;
-                player_ptr += 0x598;
             }
         }
 
@@ -5912,12 +5908,11 @@ void FUN_0041d740(void)
 
         /* Sum per-team performance (offset 0x494 from player base) */
         if (playerCount > 0) {
-            unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
             for (unsigned int i = 0; i < playerCount; i++) {
-                unsigned int team = *player_ptr;
-                int perf = *(int *)(player_ptr + 0x468);
+                PlayerData *player = Player_Get(i);
+                unsigned int team = player->team;
+                int perf = player->frag_count;
                 team_perf_sum[team] += perf;
-                player_ptr += 0x598;
             }
         }
 
@@ -5929,17 +5924,18 @@ void FUN_0041d740(void)
         /* Compute weighted team scores: for each player above half the team average,
          * add (player_perf / player_deaths_or_1) to team score */
         if (playerCount > 0) {
-            unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
             unsigned int remaining = playerCount;
+            unsigned int player_index = 0;
             do {
-                unsigned int team = *player_ptr;
-                int perf = *(int *)(player_ptr + 0x468);
+                PlayerData *player = Player_Get(player_index);
+                unsigned int team = player->team;
+                int perf = player->frag_count;
                 if (perf > team_perf_sum[team] / 2) {
-                    unsigned int deaths = *(player_ptr - 8);  /* offset 0x24 from entity base */
+                    unsigned int deaths = player->state_24;
                     if (deaths == 0) deaths = 1;
                     team_perf_score[team] += (float)(perf / (int)deaths);
                 }
-                player_ptr += 0x598;
+                player_index++;
                 remaining--;
             } while (remaining != 0);
         }
@@ -5985,11 +5981,9 @@ void FUN_0041d740(void)
             }
             int team_pickups[4] = {0, 0, 0, 0};
             if (playerCount > 0) {
-                unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
                 for (unsigned int i = 0; i < playerCount; i++) {
-                    unsigned int team = *player_ptr;
+                    unsigned int team = Player_Get(i)->team;
                     team_pickups[team] += DAT_00487228[i];
-                    player_ptr += 0x598;
                 }
             }
             int best_val = 0;
@@ -6015,11 +6009,9 @@ void FUN_0041d740(void)
             }
             int team_damage[4] = {0, 0, 0, 0};
             if (playerCount > 0) {
-                unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
                 for (unsigned int i = 0; i < playerCount; i++) {
-                    unsigned int team = *player_ptr;
+                    unsigned int team = Player_Get(i)->team;
                     team_damage[team] += DAT_00486e68[i];
-                    player_ptr += 0x598;
                 }
             }
             int best_val = 0;
@@ -6045,11 +6037,9 @@ void FUN_0041d740(void)
             }
             int team_explosions[4] = {0, 0, 0, 0};
             if (playerCount > 0) {
-                unsigned char *player_ptr = (unsigned char *)(DAT_00487810 + 0x2c);
                 for (unsigned int i = 0; i < playerCount; i++) {
-                    unsigned int team = *player_ptr;
+                    unsigned int team = Player_Get(i)->team;
                     team_explosions[team] += DAT_004870e8[i];
-                    player_ptr += 0x598;
                 }
             }
             int best_val = 0;

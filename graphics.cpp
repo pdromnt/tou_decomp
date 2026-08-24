@@ -354,22 +354,22 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
  * param_1: buffer, param_2: stride, param_3: entity index */
 static void FUN_00408ea0(int param_1, int param_2, int param_3)
 {
-    int poff = param_3 * 0x598;
-    unsigned int timer = (unsigned int)*(unsigned char *)(poff + 0x4A3 + DAT_00487810);
+    PlayerData *player = Player_Get(param_3);
+    unsigned int timer = player->timer_4a3;
 
     /* Screen position: entity world pos (fixed-point >> 18) minus camera offset */
-    int screen_y = (*(int *)(poff + 4 + DAT_00487810) >> 0x12) - DAT_004806e0;
-    int screen_x = (*(int *)(poff + DAT_00487810) >> 0x12) - DAT_004806dc;
+    int screen_y = (player->position_y >> 0x12) - DAT_004806e0;
+    int screen_x = (player->position_x >> 0x12) - DAT_004806dc;
 
     /* 4 crosses at different radii, all quadratic in timer */
     unsigned int r1 = (timer * timer) / 0xc;
     FUN_00408a60(param_1, param_2, (int)(r1 + 0x12), screen_x, screen_y);
     FUN_00408a60(param_1, param_2, (int)(r1 + 0x0e), screen_x, screen_y);
 
-    timer = (unsigned int)*(unsigned char *)(poff + 0x4A3 + DAT_00487810);
+    timer = player->timer_4a3;
     FUN_00408a60(param_1, param_2, (int)((timer * timer) >> 3) + 0x12, screen_x, screen_y);
 
-    timer = (unsigned int)*(unsigned char *)(poff + 0x4A3 + DAT_00487810);
+    timer = player->timer_4a3;
     FUN_00408a60(param_1, param_2, (int)((timer * timer) >> 4) + 0x18, screen_x, screen_y);
 }
 
@@ -450,12 +450,12 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
     if (DAT_00487808 > 0 && DAT_00487810 != 0) {
         pidx = DAT_004877f8[vp];
-        int poff = pidx * 0x598;
-        int player_x = *(int *)(DAT_00487810 + poff);
-        int player_y = *(int *)(DAT_00487810 + poff + 4);
+        PlayerData *player = Player_Get(pidx);
+        int player_x = player->position_x;
+        int player_y = player->position_y;
 
-        int pvp_w = *(int *)(DAT_00487810 + poff + 0x484);
-        int pvp_h = *(int *)(DAT_00487810 + poff + 0x488);
+        int pvp_w = player->viewport_width;
+        int pvp_h = player->viewport_height;
         if (pvp_w > 0 && pvp_h > 0) {
             vp_w = pvp_w;
             vp_h = pvp_h;
@@ -475,7 +475,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
         screen_y_off = 0;
 
         /* Screen shake */
-        if (*(char *)(DAT_00487810 + poff + 0xC4) != 0) {
+        if (player->timer_c4 != 0) {
             vp_left += (rand() % 6) - 3;
             vp_top  += (rand() % 6) - 3;
         }
@@ -591,10 +591,10 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     /* Spawn shield overlay — draw contracting cross effect for spawning players */
     if (DAT_00487810 != 0) {
         for (int p = 0; p < DAT_00489240; p++) {
-            int poff = p * 0x598;
-            unsigned char timer = *(unsigned char *)(DAT_00487810 + poff + 0x4A3);
+            PlayerData *player = Player_Get(p);
+            unsigned char timer = player->timer_4a3;
             if (timer != 0 && timer < 0x2F &&
-                *(char *)(DAT_00487810 + poff + 0x24) == '\0') {
+                player->state_24 == 0) {
                 FUN_00408ea0((int)buffer, stride, p);
             }
         }
@@ -603,32 +603,32 @@ static void Render_Game_World(unsigned short *buffer, int stride)
     /* ---- HUD elements (per-player, only when alive) ---- */
     /* Draws inside the per-viewport loop, using the current viewport's player. */
     if (DAT_00487808 > 0 && DAT_00487810 != 0) {
-        int poff = pidx * 0x598;
+        PlayerData *player = Player_Get(pidx);
 
         /* Only draw HUD if player is alive (status field +0xD0 == 0) */
-        if (*(int *)(DAT_00487810 + poff + 0xD0) == 0) {
+        if (player->timer_d0 == 0) {
             /* Minimap/radar — guarded by config flag DAT_00483743 (blob 0x17EB) */
             if (DAT_00483743 != 0 && DAT_00489230 != NULL) {
                 FUN_004090e0((int)buffer, stride, (unsigned int)pidx);
             }
 
             /* Weapon selection grid (if player pressed weapon select key) */
-            if (*(char *)(DAT_00487810 + poff + 0x9E) == 1) {
+            if (player->weapon_select_active == 1) {
                 FUN_0040a9e0((int)buffer, stride, pidx);
             }
 
             /* Health bar (if health > 0 and LUT system initialized) */
-            if (*(int *)(DAT_00487810 + poff + 0x20) > 0 && DAT_00489230 != NULL) {
+            if (player->health > 0 && DAT_00489230 != NULL) {
                 FUN_0040b860((int)buffer, stride, pidx);
             }
 
             /* Player/weapon name text */
-            if (*(char *)(DAT_00487810 + poff + 0xC8) != 0 && DAT_00487abc != NULL) {
-                int weapon_slot = *(char *)(DAT_00487810 + poff + 0x34);
+            if (player->timer_c8 != 0 && DAT_00487abc != NULL) {
+                int weapon_slot = (int)(int8_t)player->weapon_type;
                 if (weapon_slot >= 0 && weapon_slot < 64) {
-                    int weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + weapon_slot);
+                    int weapon_type = player->weapon_slots[weapon_slot];
                     char *name_tex = (char *)DAT_00487abc + weapon_type * 0x218 + 4 +
-                                     *(char *)(DAT_00487810 + poff + 0x35) * 0x14;
+                                     (int8_t)player->weapon_mark * 0x14;
                     int font = (DAT_004806d8 > 255) ? 2 : 1;
                     Draw_Text_To_Buffer(name_tex, font, 0,
                         buffer + (DAT_004806e8 + 3) * stride + DAT_004806ec + 4,
@@ -637,15 +637,15 @@ static void Render_Game_World(unsigned short *buffer, int stride)
             }
 
             /* Pickup/powerup text */
-            if (*(char *)(DAT_00487810 + poff + 0xC9) != 0) {
+            if (player->hud_banner_timer != 0) {
                 FUN_0040aca0((int)buffer, stride, pidx);
             }
 
             /* Weapon icon + ammo dots — only if weapon data is initialized */
             if (DAT_00487abc != NULL && DAT_00487ab4 != NULL) {
-                int weapon_slot = *(char *)(DAT_00487810 + poff + 0x34);
+                int weapon_slot = (int)(int8_t)player->weapon_type;
                 if (weapon_slot >= 0 && weapon_slot < 64) {
-                    int weapon_type = *(unsigned char *)(DAT_00487810 + poff + 0x3C + weapon_slot);
+                    int weapon_type = player->weapon_slots[weapon_slot];
                     int icon_x = DAT_004806ec + DAT_004806d8 - 0x12;
                     int icon_y = DAT_004806e8 + 0x12;
 
@@ -653,11 +653,11 @@ static void Render_Game_World(unsigned short *buffer, int stride)
                      * as "selected" (bright). player[+0x94] != 0 means weapon is firing/active,
                      * then check charge threshold: sub_index * weapon_data[+0xDC] * DAT_0048382c >= 0x23000 */
                     char icon_state = 1;  /* default: normal/dim */
-                    if (*(int *)(DAT_00487810 + poff + 0x94) != 0) {
-                        unsigned char sub_idx = *(unsigned char *)(DAT_00487810 + poff + 0x35);
+                    if (player->timer_94 != 0) {
+                        unsigned char sub_idx = player->weapon_mark;
                         int capacity = *(int *)((char *)DAT_00487abc + weapon_type * 0x218 +
                                                 sub_idx * 4 + 0xDC);
-                        unsigned char charge = *(unsigned char *)(DAT_00487810 + poff + 0x9C);
+                        unsigned char charge = player->primary_fire_interval;
                         int check = (capacity * charge * DAT_0048382c) & 0xFFFFF000;
                         if (check >= 0x23000) {
                             icon_state = 0;  /* selected/bright */
@@ -668,7 +668,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
                     /* Weapon Mark selector dots around weapon icon */
                     if (DAT_00487ab0 != NULL) {
-                        int selected_mark = *(unsigned char *)(DAT_00487810 + poff + 0x35) + 1;
+                        int selected_mark = player->weapon_mark + 1;
                         int highest_mark = *(unsigned char *)((char *)DAT_00487abc +
                                            weapon_type * 0x218 + 0x7D);
                         FUN_0040a710((int)buffer, stride, icon_x, icon_y,
@@ -683,23 +683,23 @@ static void Render_Game_World(unsigned short *buffer, int stride)
             }
 
             /* Frag count text */
-            if (*(char *)(DAT_00487810 + poff + 0xCB) != 0) {
+            if (player->timer_cb != 0) {
                 char frag_buf[100];
                 FUN_004644af(frag_buf, (const unsigned char *)"Frags: %d",
-                             *(int *)(DAT_00487810 + poff + 0x494));
+                             player->frag_count);
                 Draw_Text_To_Buffer(frag_buf, 1, 1,
                     buffer + (DAT_004806e8 + 0x32) * stride + DAT_004806ec + 4,
                     stride, 0, DAT_004806d8 - 0x0C, 0);
             }
 
             /* Lives display / "You are dead!" */
-            if (*(char *)(DAT_00487810 + poff + 0xCC) != 0) {
+            if (player->timer_cc != 0) {
                 char lives_buf[32];
-                if (*(int *)(DAT_00487810 + poff + 0x28) == 0) {
+                if (player->lives == 0) {
                     strcpy(lives_buf, "You are dead!");
                 } else {
                     FUN_004644af(lives_buf, (const unsigned char *)"Lives: %d",
-                                 *(int *)(DAT_00487810 + poff + 0x28));
+                                 player->lives);
                 }
                 Draw_Text_To_Buffer(lives_buf, 1, 5,
                     buffer + (DAT_004806e8 + 0x41) * stride + DAT_004806ec + 4,
@@ -709,7 +709,7 @@ static void Render_Game_World(unsigned short *buffer, int stride)
 
         /* Team status text (outside alive-check, always if team game active) */
         if (DAT_004892a4 != 0 && DAT_0048764a == 0) {
-            int team = *(char *)(DAT_00487810 + poff + 0x2C);
+            int team = (int)(int8_t)player->team;
             FUN_004094f0((int)buffer, stride, team);
         }
 

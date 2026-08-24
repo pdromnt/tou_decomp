@@ -989,7 +989,7 @@ void FUN_0045d7d0(void)
  * Mode byte is at address 0x00483741 (offset +1 from DAT_00483740). */
 void FUN_00460d50(void)
 {
-    int i, off, soff;
+    int i, soff;
     char mode;
 
     if (DAT_004892a8 > 1) {
@@ -1000,9 +1000,9 @@ void FUN_00460d50(void)
         if (DAT_004892a8 == 0x762) {
             if (DAT_0048764a != '\0') goto post_timer;
             for (i = 0; i < DAT_00489240; i++) {
-                off = i * 0x598;
-                *(unsigned char *)(DAT_00487810 + off + 0xCA) = 200;
-                *(unsigned char *)(DAT_00487810 + off + 0xC9) = 200;
+                PlayerData *player = Player_Get(i);
+                player->hud_banner_id = 200;
+                player->hud_banner_timer = 200;
             }
         }
 
@@ -1014,35 +1014,36 @@ void FUN_00460d50(void)
                 if (mode == 4 || mode == 2) {
                     /* Cap health to 0x1000 */
                     for (i = 0; i < DAT_00489240; i++) {
-                        off = i * 0x598;
-                        if (*(int *)(DAT_00487810 + off + 0x20) > 0x1000) {
-                            *(int *)(DAT_00487810 + off + 0x20) = 0x1000;
+                        PlayerData *player = Player_Get(i);
+                        if (player->health > 0x1000) {
+                            player->health = 0x1000;
                         }
                     }
                 }
                 else if (mode == 0) {
                     /* Kill everyone */
                     for (i = 0; i < DAT_00489240; i++) {
-                        off = i * 0x598;
-                        *(int *)(DAT_00487810 + off + 0x28) = 0;
-                        *(int *)(DAT_00487810 + off + 0x20) = (int)0xFFF0BDC0;
+                        PlayerData *player = Player_Get(i);
+                        player->lives = 0;
+                        player->health = (int)0xFFF0BDC0;
                     }
                 }
                 else if (mode == 1) {
                     /* Team mode: find winning team by combined health+kills*maxhp */
                     int team_score[3] = {0, 0, 0};
                     if (DAT_00489240 > 0) {
-                        int poff = 0; soff = 0;
+                        soff = 0;
                         for (i = 0; i < DAT_00489240; i++) {
-                            unsigned char team = *(unsigned char *)(DAT_00487810 + poff + 0x2C);
+                            PlayerData *player = Player_Get(i);
+                            unsigned char team = player->team;
                             if (team < 3) {
-                                int hp = *(int *)(DAT_00487810 + poff + 0x20);
-                                int kills = *(int *)(DAT_00487810 + poff + 0x28);
+                                int hp = player->health;
+                                int kills = player->lives;
                                 int max_hp = DAT_0048780c ? *(int *)((int)DAT_0048780c + soff + 0x28) : 1;
                                 if (hp > 0) team_score[team] += hp;
                                 team_score[team] += kills * max_hp;
                             }
-                            poff += 0x598; soff += 0x40;
+                            soff += 0x40;
                         }
                     }
                     int best = -1;
@@ -1060,18 +1061,18 @@ void FUN_00460d50(void)
                     if (tie_count < 2) {
                         /* Kill non-winning teams */
                         for (i = 0; i < DAT_00489240; i++) {
-                            off = i * 0x598;
-                            if (*(unsigned char *)(DAT_00487810 + off + 0x2C) != (unsigned char)best_team) {
-                                *(int *)(DAT_00487810 + off + 0x28) = 0;
-                                *(int *)(DAT_00487810 + off + 0x20) = (int)0xFFF0BDC0;
+                            PlayerData *player = Player_Get(i);
+                            if (player->team != (unsigned char)best_team) {
+                                player->lives = 0;
+                                player->health = (int)0xFFF0BDC0;
                             }
                         }
                     } else {
                         /* Tie: kill everyone */
                         for (i = 0; i < DAT_00489240; i++) {
-                            off = i * 0x598;
-                            *(int *)(DAT_00487810 + off + 0x28) = 0;
-                            *(int *)(DAT_00487810 + off + 0x20) = (int)0xFFF0BDC0;
+                            PlayerData *player = Player_Get(i);
+                            player->lives = 0;
+                            player->health = (int)0xFFF0BDC0;
                         }
                     }
                 }
@@ -1098,9 +1099,9 @@ post_timer:
         DAT_004892ac--;
         if (DAT_004892ac == 0) {
             for (i = 0; i < DAT_00489240; i++) {
-                off = i * 0x598;
-                *(int *)(DAT_00487810 + off + 0x28) = 0;
-                *(int *)(DAT_00487810 + off + 0x20) = (int)0xFFF0BDC0;
+                PlayerData *player = Player_Get(i);
+                player->lives = 0;
+                player->health = (int)0xFFF0BDC0;
             }
         }
     }
@@ -1191,11 +1192,11 @@ void FUN_00460660(void)
     if (DAT_00487808 > 0) {
         for (i = 0; i < DAT_00487808; i++) {
             int player = DAT_004877f8[i];
-            int *ent = (int *)(DAT_00487810 + player * 0x598);
-            int vp_w = *(int *)(DAT_00487810 + player * 0x598 + 0x484) + 0x28;
-            int vp_h = ent[0x122] + 0x28;  /* +0x488 */
-            int start_x = (ent[0] >> 0x12) - vp_w / 2;
-            int start_y = (ent[1] >> 0x12) - vp_h / 2;
+            PlayerData *player_data = Player_Get(player);
+            int vp_w = player_data->viewport_width + 0x28;
+            int vp_h = player_data->viewport_height + 0x28;
+            int start_x = (player_data->position_x >> 0x12) - vp_w / 2;
+            int start_y = (player_data->position_y >> 0x12) - vp_h / 2;
 
             /* Clamp to map bounds */
             if (start_x < 0) start_x = 0;
@@ -1220,11 +1221,11 @@ void FUN_00460660(void)
 
     /* Phase 3: Mark player ship presence with bit 0x01 (5x5 coarse cells) */
     {
-        int poff = 0;
         for (i = 0; i < DAT_00489240; i++) {
-            if (*(char *)(poff + 0x24 + DAT_00487810) == '\0') {  /* alive check */
-                int cx = (*(int *)(poff + DAT_00487810) >> 0x16) - 2;
-                int cy = (*(int *)(poff + 4 + DAT_00487810) >> 0x16) - 2;
+            PlayerData *player = Player_Get(i);
+            if (player->state_24 == 0) {
+                int cx = (player->position_x >> 0x16) - 2;
+                int cy = (player->position_y >> 0x16) - 2;
                 for (dy = 0; dy < 5; dy++) {
                     for (dx = 0; dx < 5; dx++) {
                         int gx = cx + dx;
@@ -1235,7 +1236,6 @@ void FUN_00460660(void)
                     }
                 }
             }
-            poff += 0x598;
         }
     }
 
@@ -1813,6 +1813,7 @@ void FUN_00434310(void)
              *   0x17 NUCLEUS      — trail dots sit still, need entity-entity collision
              *   0x18 PILOT DISRUP — deploys on ground, needs wall collision to deploy
              *   0x19 LANDMINE     — modes 1/2 are stationary mines, need player collision
+             *   0x1C MINISHIP     — dormant ships must keep scanning at zero velocity
              *   0x1F INSECTS      — direct position movement (no velocity), need collision
              *   0x24 ETNA         — deploys on ground, needs wall collision to deploy
              *   0x25 ROMAN CANDLE — deploys on ground, needs wall collision to deploy
@@ -1823,7 +1824,7 @@ void FUN_00434310(void)
              *   0x2E SMOKING NALLE— sits still (vx=vy=0), needs wall/player collision */
             if (ent_type == 0x02 || ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
                 ent_type == 0x1F || ent_type == 0x08 || ent_type == 0x28 ||
-                ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x24 ||
+                ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x1C || ent_type == 0x24 ||
                 ent_type == 0x25 || ent_type == 0x26 || ent_type == 0x2E) {
                 is_projectile = 1;
             }
@@ -1912,27 +1913,27 @@ void FUN_00434310(void)
 
                 /* Player collision along the beam */
                 for (int p = 0; p < DAT_00489240; p++) {
-                    int poff = p * 0x598;
-                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                    PlayerData *player = Player_Get(p);
+                    if (player->health <= 0) continue;
                     unsigned char raw_owner = entity->owner;
                     if (raw_owner == (unsigned char)p) continue;
                     int ship_size = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) : 0;
                     int h_range = ship_size + 0x80000;
                     int v_range = ship_size + 0x80000;
-                    int px = *(int *)(poff + DAT_00487810);
-                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    int px = player->position_x;
+                    int py = player->position_y;
                     if (px - h_range < beam_x && beam_x < px + h_range &&
                         py - v_range < beam_y && beam_y < py + v_range) {
                         int proj_damage = entity->damage_44;
-                        unsigned char shooter_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
-                        unsigned char target_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                        unsigned char shooter_team = Player_Get(raw_owner)->team;
+                        unsigned char target_team = player->team;
                         if (shooter_team != target_team || DAT_0048373d != 0) {
-                            *(int *)(poff + 0x20 + DAT_00487810) -= proj_damage;
-                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner;
+                            player->health = tou_binary::sub_wrap_i32(player->health, proj_damage);
+                            player->last_attacker = raw_owner;
                         }
-                        *(unsigned char *)(poff + 0xc4 + DAT_00487810) = 5;
-                        *(unsigned char *)(poff + 0xa3 + DAT_00487810) = 1;
-                        *(unsigned char *)(poff + 0x4a2 + DAT_00487810) = 0x6e;
+                        player->timer_c4 = 5;
+                        player->flag_a3 = 1;
+                        player->timer_4a2 = 0x6e;
                     }
                 }
             }
@@ -1948,7 +1949,8 @@ void FUN_00434310(void)
          * entity[+0x38] = 6 for all turret projectiles (set at spawn).
          * Type 0x22 excluded: wavy fireworks overwrite velocity from heading each
          * tick (gravity would accumulate and distort the wave pattern). */
-        if (is_projectile && !is_debris && ent_type != 0x22 && ent_type != 0x1B && ent_type != 0x26) {
+        if (is_projectile && !is_debris && ent_type != 0x22 && ent_type != 0x1B &&
+            ent_type != 0x1C && ent_type != 0x26) {
             entity->velocity_y += entity->gravity_or_motion_38 * DAT_00483828;
         }
 
@@ -2064,10 +2066,10 @@ void FUN_00434310(void)
                 int found = 0;
                 for (int p = 0; p < DAT_00489240; p++) {
                     if ((unsigned char)p == own) continue;
-                    int poff = p * 0x598;
-                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
-                    int px = *(int *)(poff + DAT_00487810);
-                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    PlayerData *player = Player_Get(p);
+                    if (player->health <= 0) continue;
+                    int px = player->position_x;
+                    int py = player->position_y;
                     int dx = px - mx; int dy = py - my;
                     /* Approximate distance (Manhattan) */
                     int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
@@ -2121,10 +2123,10 @@ void FUN_00434310(void)
                     int fb_tx = fb_x, fb_ty = fb_y, fb_found = 0;
                     for (int p = 0; p < DAT_00489240; p++) {
                         if ((unsigned char)p == fb_own) continue;
-                        int poff = p * 0x598;
-                        if (*(int *)(poff + 0x20 + (int)DAT_00487810) <= 0) continue;
-                        int px = *(int *)(poff + (int)DAT_00487810);
-                        int py = *(int *)(poff + 4 + (int)DAT_00487810);
+                        PlayerData *player = Player_Get(p);
+                        if (player->health <= 0) continue;
+                        int px = player->position_x;
+                        int py = player->position_y;
                         int dx = px - fb_x; int dy = py - fb_y;
                         int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
                         if (dist < fb_best) { fb_best = dist; fb_tx = px; fb_ty = py; fb_found = 1; }
@@ -2400,15 +2402,15 @@ void FUN_00434310(void)
                             int lm_x = entity->position_x;
                             int lm_y = entity->position_y;
                             unsigned char lm_own = entity->owner;
-                            unsigned char lm_team = *(unsigned char *)((int)lm_own * 0x598 + 0x2C + (int)DAT_00487810);
+                            unsigned char lm_team = Player_Get(lm_own)->team;
                             int det_range = 0x180000; /* ~6 pixels detection range */
                             for (int p = 0; p < DAT_00489240; p++) {
-                                int poff = p * 0x598;
-                                unsigned char p_team = *(unsigned char *)(poff + 0x2C + (int)DAT_00487810);
+                                PlayerData *player = Player_Get(p);
+                                unsigned char p_team = player->team;
                                 if (p_team == lm_team) continue; /* skip allies */
-                                if (*(int *)(poff + 0x20 + (int)DAT_00487810) <= 0) continue;
-                                int px = *(int *)(poff + (int)DAT_00487810);
-                                int py = *(int *)(poff + 4 + (int)DAT_00487810);
+                                if (player->health <= 0) continue;
+                                int px = player->position_x;
+                                int py = player->position_y;
                                 int dx = lm_x - px; if (dx < 0) dx = -dx;
                                 int dy = lm_y - py; if (dy < 0) dy = -dy;
                                 if (dx < det_range && dy < det_range) {
@@ -2460,19 +2462,19 @@ void FUN_00434310(void)
                         int pd_x = entity->position_x;
                         int pd_y = entity->position_y;
                         unsigned char pd_own = entity->owner;
+                        unsigned char my_team = Player_Get(pd_own)->team;
                         for (int p = 0; p < DAT_00489240; p++) {
-                            int poff = p * 0x598;
-                            if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
-                            unsigned char p_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
-                            unsigned char my_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)pd_own * 0x598);
+                            PlayerData *player = Player_Get(p);
+                            if (player->health <= 0) continue;
+                            unsigned char p_team = player->team;
                             if (p_team == my_team) continue;
-                            int px = *(int *)(poff + DAT_00487810);
-                            int py = *(int *)(poff + 4 + DAT_00487810);
+                            int px = player->position_x;
+                            int py = player->position_y;
                             int dx = pd_x - px; if (dx < 0) dx = -dx;
                             int dy = pd_y - py; if (dy < 0) dy = -dy;
                             if (dx < 0x1180000 && dy < 0x1180000) {
-                                *(int *)(poff + 0xD8 + DAT_00487810) = 0x20;
-                                *(int *)(poff + 0xD4 + DAT_00487810) = 0x20;
+                                player->timer_d8 = 0x20;
+                                player->boost_timer = 0x20;
                             }
                         }
                     }
@@ -2490,7 +2492,7 @@ void FUN_00434310(void)
                 *   - Scans all players, finds closest enemy (different team)
                 *   - Distance threshold: 22500 pixel^2 (~150px). From Ghidra 0x57E4.
                 *   - Turn rate: +/-0x2A per tick (~7.4 degrees). Heading at +0x3C.
-                *   - When no enemy in range: decelerate (vx/vy *= 0.97)
+                *   - When no enemy in range: decelerate (vx/vy *= 0.95)
                 *   - When chasing: accumulate velocity from sincos[heading]>>5 + gravity
                 *   - Speed cap: normalize if speed^2 > 0x225510
                 *
@@ -2582,8 +2584,10 @@ void FUN_00434310(void)
                         if (entity->position_y > max_y) entity->position_y = max_y;
                     }
                 }
-                /* Invuln countdown — keep minimum 1 so same-team bullets can't
-                 * damage this miniship via the +0x5C==0 friendly-fire bypass. */
+                /* The original callback decrements this to zero, but its bullet
+                 * collision runs after the miniship callback. Our lifted type-0
+                 * callback processes the newly appended bullet in the same outer
+                 * pass, so retain a one-tick friendly guard to prevent self-hits. */
                 {
                     unsigned char ms_inv = entity->timer_5c;
                     if (ms_inv > 1) { ms_inv--; entity->timer_5c = ms_inv; }
@@ -2595,14 +2599,14 @@ void FUN_00434310(void)
                 int ms_best_dist = 0x7FFFFFFF;
                 if (DAT_00489240 > 0) {
                     /* Get own team */
-                    unsigned char ms_team = *(unsigned char *)((int)ms_own * 0x598 + 0x2C + (int)DAT_00487810);
+                    unsigned char ms_team = Player_Get(ms_own)->team;
                     for (int p = 0; p < DAT_00489240; p++) {
-                        int poff = p * 0x598;
-                        unsigned char p_team = *(unsigned char *)(poff + 0x2C + (int)DAT_00487810);
+                        PlayerData *player = Player_Get(p);
+                        unsigned char p_team = player->team;
                         if (p_team == ms_team) continue;
-                        if (*(int *)(poff + 0x20 + (int)DAT_00487810) <= 0) continue;
-                        int px = *(int *)(poff + (int)DAT_00487810);
-                        int py = *(int *)(poff + 4 + (int)DAT_00487810);
+                        if (player->state_24 != 0) continue;
+                        int px = player->position_x;
+                        int py = player->position_y;
                         int dx = entity->position_x - px;
                         int dy = entity->position_y - py;
                         /* Distance: sqrt(dx²+dy²) approximated via (dx>>18)²+(dy>>18)² */
@@ -2619,24 +2623,35 @@ void FUN_00434310(void)
                 /* Distance threshold: ~22500 pixel² ≈ 150px range.
                  * From Ghidra hex: 0x57E4 = 22500 in the comparison. */
                 if (!ms_found_enemy || ms_best_dist > 22500) {
-                    /* No enemy in range: decelerate (multiply vx/vy by ~0.97) */
-                    entity->velocity_x = (int)((double)entity->velocity_x * 0.97);
-                    entity->velocity_y = (int)((double)entity->velocity_y * 0.97);
+                    /* Original 0x00441090-0x004410AF: x87 multiply by 0.95,
+                     * followed by the game's float-to-int helper. */
+                    entity->velocity_x = tou_binary::x87_ftol(
+                        (long double)entity->velocity_x * 0.95L);
+                    entity->velocity_y = tou_binary::x87_ftol(
+                        (long double)entity->velocity_y * 0.95L);
                 } else {
-                    /* Steer toward target: heading-based turn-rate-limited pursuit.
-                     * FUN_004257e0 returns angle from src to dst. Add 0x400 offset
-                     * to match sincos velocity convention (same as kamikaze). */
+                    /* Original 0x004410B7-0x00441127 leads the target by half
+                     * the distance using the miniship's current velocity. The
+                     * old rewrite added 0x400 to the resulting angle, steering
+                     * directly away from its target. */
                     int ms_heading = entity->counter_3c;
-                    int desired = ((int)FUN_004257e0(
-                        entity->position_x, entity->position_y, ms_tx, ms_ty) + 0x400) & 0x7FF;
-                    int diff = ((desired - ms_heading) + 0x400) & 0x7FF;
-                    if (diff > 0x400) diff -= 0x800;
-                    /* Turn rate: ±0x2A per tick. 0x400 = 180°, 0x2A ≈ 7.4° */
-                    int turn_rate = 0x2A;
-                    if (diff > turn_rate) diff = turn_rate;
-                    else if (diff < -turn_rate) diff = -turn_rate;
-                    else if (diff == 0) diff = (rand() & 1) ? turn_rate : -turn_rate;
-                    ms_heading = (ms_heading + diff) & 0x7FF;
+                    int lead = tou_binary::x87_ftol(
+                        sqrt((long double)ms_best_dist) * 0.5L);
+                    int desired = (int)FUN_004257e0(
+                        entity->position_x, entity->position_y,
+                        tou_binary::sub_wrap_i32(ms_tx,
+                            (int32_t)((uint32_t)entity->velocity_x * (uint32_t)lead)),
+                        tou_binary::sub_wrap_i32(ms_ty,
+                            (int32_t)((uint32_t)entity->velocity_y * (uint32_t)lead))) & 0x7FF;
+                    /* Original 0x0044112D-0x004411B7 compares both wrapped
+                     * arcs and always turns a full 0x2A; it does not clamp to
+                     * the remaining error like the old approximation did. */
+                    int clockwise = (desired - ms_heading) & 0x7FF;
+                    int counter_clockwise = (ms_heading - desired) & 0x7FF;
+                    if (desired != ms_heading) {
+                        ms_heading = (ms_heading +
+                            (clockwise <= counter_clockwise ? 0x2A : -0x2A)) & 0x7FF;
+                    }
                     entity->counter_3c = ms_heading;
                     /* Apply velocity from heading: vx += sincos[heading] >> 5 */
                     int *sc = (int *)DAT_00487ab0;
@@ -2650,10 +2665,69 @@ void FUN_00434310(void)
                         int svy = entity->velocity_y >> 8;
                         int spd_sq = svx * svx + svy * svy;
                         if (spd_sq > 0x225510 && spd_sq > 0) {
-                            double mag = sqrt((double)spd_sq);
-                            double cap = 1500.0; /* approximate speed cap from binary */
-                            entity->velocity_x = (int)(svx * cap / mag) << 8;
-                            entity->velocity_y = (int)(svy * cap / mag) << 8;
+                            long double mag = sqrt((long double)spd_sq);
+                            entity->velocity_x = tou_binary::x87_ftol(
+                                (long double)svx * 1500.0L / mag) << 8;
+                            entity->velocity_y = tou_binary::x87_ftol(
+                                (long double)svy * 1500.0L / mag) << 8;
+                        }
+                    }
+
+                    /* Original 0x0044124E-0x00441570: while pursuing, emit a
+                     * type-0x67 engine particle every third tick when this map
+                     * region is visible. This entire path was missing. */
+                    int trail_tick = entity->scratch_30 + 1;
+                    entity->scratch_30 = trail_tick;
+                    int coarse_x = entity->position_x >> 0x16;
+                    int coarse_y = entity->position_y >> 0x16;
+                    int coarse_w = DAT_004879f8;
+                    int coarse_h = DAT_004879fc;
+                    bool trail_visible = DAT_00487814 != NULL && coarse_x >= 0 &&
+                        coarse_y >= 0 && coarse_x < coarse_w && coarse_y < coarse_h &&
+                        ((((unsigned char *)DAT_00487814)[coarse_x + coarse_y * coarse_w] & 8u) != 0u);
+                    if (trail_tick > 2 && trail_visible && DAT_00489248 < 0x9C4) {
+                        entity->scratch_30 = 0;
+                        int trail_heading = (entity->counter_3c - 0x400) & 0x7FF;
+                        int *sc = (int *)DAT_00487ab0;
+                        int *tt = (int *)DAT_00487abc;
+                        Entity *trail = &DAT_004892e8[DAT_00489248];
+                        trail->position_x = tou_binary::add_wrap_i32(
+                            entity->position_x, tou_binary::add_wrap_i32(sc[trail_heading], sc[trail_heading]));
+                        trail->position_y = tou_binary::add_wrap_i32(
+                            entity->position_y, tou_binary::add_wrap_i32(sc[trail_heading + 0x200], sc[trail_heading + 0x200]));
+                        trail->previous_x = trail->position_x;
+                        trail->previous_y = trail->position_y;
+                        trail->velocity_x = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[trail_heading] * 50u) >> 6,
+                            entity->velocity_x >> 1);
+                        trail->velocity_y = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[trail_heading + 0x200] * 50u) >> 6,
+                            entity->velocity_y >> 1);
+                        trail->motion_x_10 = 0;
+                        trail->motion_y_14 = 0;
+                        trail->state_20 = 0;
+                        trail->type = 0x67;
+                        trail->owner = 0xFF;
+                        trail->variant_24 = (unsigned short)(rand() % 6);
+                        trail->auxiliary_26 = 0xFF;
+                        trail->health_or_damage_28 = 0;
+                        trail->callback_address = tt[0xD7A8 / 4];
+                        trail->gravity_or_motion_38 = tt[0xD830 / 4];
+                        trail->counter_3c = 0;
+                        trail->subtype = 0;
+                        trail->damage_44 = tt[0xD86C / 4];
+                        trail->scratch_48 = 0;
+                        trail->palette_value = tt[0xD89C / 4];
+                        trail->animation_frame = 0;
+                        trail->timer_5c = 0;
+                        DAT_00489248++;
+                        Entity *spawned_trail = &DAT_004892e8[DAT_00489248 - 1];
+                        spawned_trail->timer_5c = 1;
+                        spawned_trail->scratch_64 = 0x12;
+                        spawned_trail->scratch_65 = 0x1C;
+                        if (DAT_00487aa8 != NULL) {
+                            spawned_trail->palette_value =
+                                (unsigned int)((unsigned short *)DAT_00487aa8)[0x1C] + 30000;
                         }
                     }
                 }
@@ -2661,7 +2735,7 @@ void FUN_00434310(void)
                 if (ms_found_enemy && ms_best_dist <= 22500) {
                     int bc = entity->scratch_2c;
                     bc++;
-                    if (bc >= 10 && DAT_00489248 < 0x9C4) {
+                    if (bc > 10 && DAT_00489248 < 0x9C4) {
                         bc = 0;
                         int heading = entity->counter_3c;
                         int *sc = (int *)DAT_00487ab0;
@@ -2672,21 +2746,23 @@ void FUN_00434310(void)
                         bp->previous_x = entity->position_x;
                         bp->previous_y = entity->position_y;
                         int bh = heading & 0x7FF;
-                        int bvx = entity->velocity_x / 2;
-                        int bvy = entity->velocity_y / 2;
-                        bp->velocity_x = (sc[bh] * 5 << 4 >> 6) + bvx;
-                        bp->velocity_y = (sc[(bh + 0x200) & 0x7FF] * 5 << 4 >> 6) + bvy;
+                        bp->velocity_x = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[bh] * 160u) >> 6,
+                            entity->velocity_x);
+                        bp->velocity_y = tou_binary::add_wrap_i32(
+                            (int32_t)((uint32_t)sc[(bh + 0x200) & 0x7FF] * 160u) >> 6,
+                            entity->velocity_y);
                         bp->motion_x_10 = 0; bp->motion_y_14 = 0;
                         bp->type = 0x00; /* basic bullet */
                         bp->variant_24 = 0;
-                        bp->state_20 = 0;
+                        bp->state_20 = 0xDE;
                         bp->auxiliary_26 = 0;
                         bp->owner = entity->owner;
                         bp->health_or_damage_28 = 0;
-                        bp->gravity_or_motion_38 = tt[0x24]; /* gravity */
-                        bp->damage_44 = tt[0x33]; /* damage */
+                        bp->gravity_or_motion_38 = tt[0x25]; /* type 0, subtype 3 gravity */
+                        bp->damage_44 = tt[0x34]; /* type 0, subtype 3 damage */
                         bp->scratch_48 = 0;
-                        bp->palette_value = tt[0x3F]; /* palette */
+                        bp->palette_value = tt[0x40]; /* type 0, subtype 3 palette */
                         bp->animation_frame = 0;
                         bp->subtype = 3; /* sub_type 3 — verified from Ghidra 0x441690 */
                         bp->callback_address = tt[0]; /* callback */
@@ -2694,12 +2770,6 @@ void FUN_00434310(void)
                         bp->timer_5c = 0;
                         DAT_00489248++;
                         DAT_004892e8[DAT_00489248 - 1].health_or_damage_28 = 60;
-                        /* Set bullet color from palette table (same as Fire_Secondary for type 0) */
-                        if (DAT_00487aa8 != NULL) {
-                            unsigned short pal = ((unsigned short *)DAT_00487aa8)[0x5A + (rand() & 1)];
-                            DAT_004892e8[DAT_00489248 - 1].palette_value =
-                                (unsigned int)pal + 30000;
-                        }
                     }
                     entity->scratch_2c = bc;
                 } /* end bullet firing gate */
@@ -2720,14 +2790,13 @@ void FUN_00434310(void)
                 int km_best = 0x15F90; /* original only acquires within 300 pixels */
                 int km_tx = km_x, km_ty = km_y;
                 int km_found = 0;
-                unsigned char km_team = *(unsigned char *)(
-                    (int)DAT_00487810 + (unsigned int)km_own * 0x598 + 0x2C);
+                unsigned char km_team = Player_Get(km_own)->team;
                 for (int p = 0; p < DAT_00489240; p++) {
-                    int poff = p * 0x598;
-                    if (*(unsigned char *)(poff + 0x2C + (int)DAT_00487810) == km_team) continue;
-                    if (*(unsigned char *)(poff + 0x24 + (int)DAT_00487810) != 0) continue;
-                    int px = *(int *)(poff + (int)DAT_00487810);
-                    int py = *(int *)(poff + 4 + (int)DAT_00487810);
+                    PlayerData *player = Player_Get(p);
+                    if (player->team == km_team) continue;
+                    if (player->state_24 != 0) continue;
+                    int px = player->position_x;
+                    int py = player->position_y;
                     int dx = (km_x - px) >> 0x12;
                     int dy = (km_y - py) >> 0x12;
                     int dist_sq = dx * dx + dy * dy;
@@ -2811,19 +2880,18 @@ void FUN_00434310(void)
                 if (retarget > 30) {
                     retarget = 0;
                     unsigned char ins_own = entity->owner;
-                    unsigned char ins_team = *(unsigned char *)(
-                        (int)DAT_00487810 + (unsigned int)ins_own * 0x598 + 0x2C);
+                    unsigned char ins_team = Player_Get(ins_own)->team;
                     int ins_x = entity->position_x;
                     int ins_y = entity->position_y;
                     int ins_best = 0x7FFFFFFF;
                     int ins_tx = 0, ins_ty = 0;
                     int ins_found = 0;
                     for (int p = 0; p < DAT_00489240; p++) {
-                        int poff = p * 0x598;
-                        if (*(unsigned char *)(poff + 0x2C + (int)DAT_00487810) == ins_team) continue;
-                        if (*(unsigned char *)(poff + 0x24 + (int)DAT_00487810) != 0) continue;
-                        int px = *(int *)(poff + (int)DAT_00487810);
-                        int py = *(int *)(poff + 4 + (int)DAT_00487810);
+                        PlayerData *player = Player_Get(p);
+                        if (player->team == ins_team) continue;
+                        if (player->state_24 != 0) continue;
+                        int px = player->position_x;
+                        int py = player->position_y;
                         int dx = (px - ins_x) >> 0x12;
                         int dy = (py - ins_y) >> 0x12;
                         int dist_sq = dx * dx + dy * dy;
@@ -2861,10 +2929,10 @@ void FUN_00434310(void)
                 int tgt_x = mx, tgt_y = my;
                 for (int p = 0; p < DAT_00489240; p++) {
                     if ((unsigned char)p == own) continue;
-                    int poff = p * 0x598;
-                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
-                    int px = *(int *)(poff + DAT_00487810);
-                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    PlayerData *player = Player_Get(p);
+                    if (player->health <= 0) continue;
+                    int px = player->position_x;
+                    int py = player->position_y;
                     int dx = px - mx; int dy = py - my;
                     int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
                     if (dist < best_dist) {
@@ -3260,7 +3328,7 @@ void FUN_00434310(void)
                                 ep->callback_address = tt[typeOff]; /* callback */
                                 /* Add team color offset (from LAB_00406a71) */
                                 unsigned char own = entity->owner;
-                                unsigned char team = *(unsigned char *)((int)own * 0x598 + 0x2C + (int)DAT_00487810);
+                                unsigned char team = Player_Get(own)->team;
                                 ep->palette_value += (int)team * 100;
                             }
                             ep->scratch_60 = 50; /* short fuse — explode soon after launch */
@@ -3460,10 +3528,10 @@ void FUN_00434310(void)
                 int tgt_x = mx, tgt_y = my;
                 for (int p = 0; p < DAT_00489240; p++) {
                     if ((unsigned char)p == own) continue;
-                    int poff = p * 0x598;
-                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
-                    int px = *(int *)(poff + DAT_00487810);
-                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    PlayerData *player = Player_Get(p);
+                    if (player->health <= 0) continue;
+                    int px = player->position_x;
+                    int py = player->position_y;
                     int dx = px - mx; int dy = py - my;
                     int dist = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
                     if (dist < best_dist) {
@@ -4203,8 +4271,7 @@ void FUN_00434310(void)
                     unsigned char turr_sub = entity->subtype;
                     unsigned char turr_raw_owner = entity->owner;
                     /* Get team byte from player record */
-                    unsigned char turr_team = *(unsigned char *)(
-                        (int)DAT_00487810 + (unsigned int)turr_raw_owner * 0x598 + 0x2C);
+                    unsigned char turr_team = Player_Get(turr_raw_owner)->team;
 
                     char sprite = 0;
                     int dmg;
@@ -4748,16 +4815,16 @@ void FUN_00434310(void)
                             }
                             /* Area freeze on nearby enemy players */
                             for (int p = 0; p < DAT_00489240; p++) {
-                                int poff = p * 0x598;
-                                if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
-                                int px13 = *(int *)(poff + DAT_00487810);
-                                int py13 = *(int *)(poff + 4 + DAT_00487810);
+                                PlayerData *player = Player_Get(p);
+                                if (player->health <= 0) continue;
+                                int px13 = player->position_x;
+                                int py13 = player->position_y;
                                 int dx13 = prev_x - px13; if (dx13 < 0) dx13 = -dx13;
                                 int dy13 = prev_y - py13; if (dy13 < 0) dy13 = -dy13;
                                 if (dx13 < 0x800000 && dy13 < 0x800000) { /* ~32 tile range */
-                                    if (*(unsigned char *)(poff + 0xc6 + DAT_00487810) == 0) {
-                                        *(unsigned char *)(poff + 0xc6 + DAT_00487810) = 5;
-                                        *(char *)(poff + 0xc7 + DAT_00487810) = (char)(rand() % 3);
+                                    if (player->stun_timer == 0) {
+                                        player->stun_timer = 5;
+                                        player->scratch_c7 = static_cast<uint8_t>(rand() % 3);
                                     }
                                 }
                             }
@@ -5013,8 +5080,30 @@ void FUN_00434310(void)
                             entity->position_y = entity->previous_y;
                             int ms_vx = entity->velocity_x;
                             int ms_vy = entity->velocity_y;
-                            if (prev_tx != tx) entity->velocity_x = -ms_vx;
-                            if (prev_ty != ty) entity->velocity_y = -ms_vy;
+                            unsigned char x_axis_tile = *(unsigned char *)(
+                                (int)DAT_0048782c + (prev_ty << shift) + tx);
+                            unsigned char y_axis_tile = *(unsigned char *)(
+                                (int)DAT_0048782c + (ty << shift) + prev_tx);
+                            bool x_blocked = *(unsigned char *)(
+                                (unsigned int)x_axis_tile * 0x20 + 2 + (int)DAT_00487928) == 0;
+                            bool y_blocked = *(unsigned char *)(
+                                (unsigned int)y_axis_tile * 0x20 + 2 + (int)DAT_00487928) == 0;
+
+                            /* Original 0x00441827-0x004418C4 probes each axis
+                             * independently. Tile-coordinate comparison alone
+                             * could reverse neither component and permanently
+                             * wedge an idle miniship against a wall. */
+                            if (y_blocked && !x_blocked) {
+                                entity->velocity_y = (-ms_vy) >> 1;
+                                entity->counter_3c = (-0x400 - entity->counter_3c) & 0x7FF;
+                            } else if (x_blocked && !y_blocked) {
+                                entity->velocity_x = (-ms_vx) >> 1;
+                                entity->counter_3c = (-entity->counter_3c) & 0x7FF;
+                            } else {
+                                entity->velocity_x = (-ms_vx) >> 2;
+                                entity->velocity_y = (-ms_vy) >> 2;
+                                entity->counter_3c = (entity->counter_3c - 0x400) & 0x7FF;
+                            }
                             did_bounce = 1;
                             break;
                         }
@@ -5581,14 +5670,14 @@ void FUN_00434310(void)
                  * For others: use raw owner byte directly. */
                 unsigned int guard_team;
                 if (ent_type == 0x1f) {
-                    guard_team = (unsigned int)*(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
+                    guard_team = Player_Get(raw_owner)->team;
                 } else {
                     guard_team = (unsigned int)raw_owner;
                 }
 
                 for (int p = 0; p < DAT_00489240; p++) {
-                    int poff = p * 0x598;
-                    if (*(int *)(poff + 0x20 + DAT_00487810) <= 0) continue;
+                    PlayerData *player = Player_Get(p);
+                    if (player->health <= 0) continue;
 
                     /* Guard check: (byte_0x26 == 0) || (guard_team != player_id).
                      * For turret projectiles: byte_0x26=0xfe, guard_team=0x50+
@@ -5596,7 +5685,7 @@ void FUN_00434310(void)
                      * This means turret projectiles hit ALL players regardless of team. */
                     unsigned int player_id;
                     if (ent_type == 0x1f) {
-                        player_id = (unsigned int)*(unsigned char *)(poff + 0x2c + DAT_00487810);
+                        player_id = player->team;
                     } else {
                         player_id = (unsigned int)p;
                     }
@@ -5607,8 +5696,8 @@ void FUN_00434310(void)
                      * should only detonate on ENEMY contact. Without this guard, a
                      * player's own landmine would blow them up on deployment. */
                     if (ent_type == 0x19 && raw_owner < 0x50) {
-                        unsigned char mine_team = *(unsigned char *)((int)raw_owner * 0x598 + 0x2C + (int)DAT_00487810);
-                        unsigned char p_team = *(unsigned char *)(poff + 0x2C + (int)DAT_00487810);
+                        unsigned char mine_team = Player_Get(raw_owner)->team;
+                        unsigned char p_team = player->team;
                         if (mine_team == p_team) continue;
                     }
 
@@ -5621,63 +5710,63 @@ void FUN_00434310(void)
                         v_range += 0x140000;
                     }
 
-                    int px = *(int *)(poff + DAT_00487810);
-                    int py = *(int *)(poff + 4 + DAT_00487810);
+                    int px = player->position_x;
+                    int py = player->position_y;
 
                     if (px - h_range < pos_x && pos_x < px + h_range &&
                         py - v_range < pos_y && pos_y < py + v_range) {
                         /* === HIT: Apply damage based on owner type === */
                         if (raw_owner < 0x50) {
                             /* Player-owned projectile: team-check before damage */
-                            unsigned char shooter_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
-                            unsigned char target_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                            unsigned char shooter_team = Player_Get(raw_owner)->team;
+                            unsigned char target_team = player->team;
                             if (shooter_team != target_team || DAT_0048373d != 0) {
-                                *(int *)(poff + 0x20 + DAT_00487810) -= proj_damage;
+                                player->health = tou_binary::sub_wrap_i32(player->health, proj_damage);
                             }
                         } else {
                             /* Turret/base-owned: always apply damage */
-                            *(int *)(poff + 0x20 + DAT_00487810) -= proj_damage;
+                            player->health = tou_binary::sub_wrap_i32(player->health, proj_damage);
                         }
 
                         /* Record who hit the player (offset 0x4a1) */
                         if (raw_owner < 0x50) {
-                            unsigned char shooter_team = *(unsigned char *)(DAT_00487810 + 0x2c + (unsigned int)raw_owner * 0x598);
-                            unsigned char target_team = *(unsigned char *)(poff + 0x2c + DAT_00487810);
+                            unsigned char shooter_team = Player_Get(raw_owner)->team;
+                            unsigned char target_team = player->team;
                             if (shooter_team != target_team || DAT_0048373d != 0) {
-                                *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner;
+                                player->last_attacker = raw_owner;
                             }
                         } else if (raw_owner < 100) {
                             /* Turret owner (0x50-0x63): record as owner + 0x14 */
-                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner + 0x14;
+                            player->last_attacker = raw_owner + 0x14;
                         } else if (raw_owner < 0x78) {
-                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner;
+                            player->last_attacker = raw_owner;
                         } else if (raw_owner < 0x8c) {
-                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = raw_owner - 0x14;
+                            player->last_attacker = raw_owner - 0x14;
                         } else {
-                            *(unsigned char *)(poff + 0x4a1 + DAT_00487810) = 0xff;
+                            player->last_attacker = 0xff;
                         }
-                        *(unsigned char *)(poff + 0x4a2 + DAT_00487810) = 0x6e;
+                        player->timer_4a2 = 0x6e;
 
                         /* Freeze reduction: if player is already frozen and projectile
                          * is NOT freeze type, reduce freeze timer */
-                        unsigned char cur_freeze = *(unsigned char *)(poff + 0xc6 + DAT_00487810);
+                        unsigned char cur_freeze = player->stun_timer;
                         if (cur_freeze != 0 && ent_type != 0x13) {
                             int new_freeze = (int)cur_freeze - (proj_damage >> 0xf) - 1;
                             if (new_freeze < 0) new_freeze = 0;
-                            *(unsigned char *)(poff + 0xc6 + DAT_00487810) = (unsigned char)new_freeze;
+                            player->stun_timer = (unsigned char)new_freeze;
                         }
 
                         /* Freeze effect: entity type 0x13 freezes the player */
-                        if (ent_type == 0x13 && *(unsigned char *)(poff + 0xc6 + DAT_00487810) == 0) {
-                            *(unsigned char *)(poff + 0xc6 + DAT_00487810) = 5;
-                            *(char *)(poff + 0xc7 + DAT_00487810) = (char)(rand() % 3);
+                        if (ent_type == 0x13 && player->stun_timer == 0) {
+                            player->stun_timer = 5;
+                            player->scratch_c7 = static_cast<uint8_t>(rand() % 3);
                             FUN_0040f9b0(0x13, pos_x, pos_y);
                         }
 
                         /* Set hit flags (original FUN_004348a0 also sets
                          * DAT_00481e8f=4 as callback state, but we use should_remove) */
-                        *(unsigned char *)(poff + 0xc4 + DAT_00487810) = 5;
-                        *(unsigned char *)(poff + 0xa3 + DAT_00487810) = 1;
+                        player->timer_c4 = 5;
+                        player->flag_a3 = 1;
 
                         /* Apply knockback */
                         if (DAT_00487abc != NULL) {
@@ -5685,15 +5774,17 @@ void FUN_00434310(void)
                             if (kb_div != 99 && kb_div != 0) {
                                 int proj_vx = entity->velocity_x;
                                 int proj_vy = entity->velocity_y;
-                                *(int *)(poff + 0x10 + DAT_00487810) += proj_vx / (int)(unsigned int)kb_div;
-                                *(int *)(poff + 0x14 + DAT_00487810) += proj_vy / (int)(unsigned int)kb_div;
+                                player->velocity_x = tou_binary::add_wrap_i32(
+                                    player->velocity_x, proj_vx / (int)(unsigned int)kb_div);
+                                player->velocity_y = tou_binary::add_wrap_i32(
+                                    player->velocity_y, proj_vy / (int)(unsigned int)kb_div);
                             }
                         }
 
                         /* PHOTON FLUX: confusion effect — set +0xD0 timer to 240 ticks.
                          * Causes aim jitter (+/-64/tick), forced movement, HUD hidden. */
                         if (ent_type == 0x1E) {
-                            *(int *)(poff + 0xD0 + DAT_00487810) = 0xF0;
+                            player->timer_d0 = 0xF0;
                         }
 
                         /* MOVING SUCKER and INSECTS survive player contact. Insects
@@ -5711,8 +5802,8 @@ void FUN_00434310(void)
                          * above, but kept for safety). On enemy contact: flash particle
                          * (warm fire, sprite 17-19) + explosion sound + die. */
                         else if (ent_type == 0x19 && raw_owner < 0x50) {
-                            unsigned char mine_team = *(unsigned char *)((int)raw_owner * 0x598 + 0x2C + (int)DAT_00487810);
-                            unsigned char player_team = *(unsigned char *)(poff + 0x2C + (int)DAT_00487810);
+                            unsigned char mine_team = Player_Get(raw_owner)->team;
+                            unsigned char player_team = player->team;
                             if (mine_team == player_team) {
                                 /* skip ally damage — mine stays alive */
                             } else {
@@ -5968,6 +6059,7 @@ void FUN_00434310(void)
             i++;
         }
     }
+
 }
 /* ===== FUN_004527e0 — Update_Projectiles (004527E0) ===== */
 /* Updates particles in DAT_00481f34 (stride 0x20, DAT_00489250 count).
@@ -6000,7 +6092,7 @@ void FUN_004527e0(void)
         unsigned char owner_byte = *(unsigned char *)(part + 5);  /* +0x14 */
         unsigned int owner_team;
         if (owner_byte < 0x50) {
-            owner_team = (unsigned int)*(unsigned char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598);
+            owner_team = Player_Get(owner_byte)->team;
         } else if (owner_byte >= 0x78 && owner_byte <= 0x8B) {
             owner_team = owner_byte - 0x78;
         } else {
@@ -6053,7 +6145,7 @@ void FUN_004527e0(void)
                     Entity *entity = &DAT_004892e8[ei];
                     if (entity->type != 0x0E) continue;
                     unsigned char ent_owner = entity->owner;
-                    unsigned char ent_team = *(unsigned char *)(DAT_00487810 + 0x2C + (unsigned int)ent_owner * 0x598);
+                    unsigned char ent_team = Player_Get(ent_owner)->team;
                     if (ent_team != (unsigned char)owner_team) {
                         if (new_x - 0x12C0000 < entity->position_x &&
                             entity->position_x < new_x + 0x12C0000 &&
@@ -6200,67 +6292,66 @@ void FUN_004527e0(void)
 
                 /* Player collision */
                 if ((grid_byte & 1) == 1 && DAT_00489240 > 0) {
-                    int poff = 0;
                     int *stat_ptr = &DAT_00486be8[0];
                     for (int p = 0; p < DAT_00489240; p++) {
-                        if (*(int *)(poff + 0x20 + DAT_00487810) > 0 &&
+                        PlayerData *player = Player_Get(p);
+                        if (player->health > 0 &&
                             p != (int)(unsigned int)owner_byte) {
                             /* AABB check using sprite descriptor dimensions */
                             int desc_base = (int)DAT_00481f20 + (unsigned int)*(unsigned char *)(part + 4) * 8;
                             unsigned int hw = (unsigned int)(*(unsigned char *)(desc_base + 4) & 0xFE);
-                            int player_x = *(int *)(poff + DAT_00487810);
+                            int player_x = player->position_x;
                             if (player_x - (int)(hw * 0x20000) < p_x &&
                                 p_x < player_x + (int)(hw * 0x20000)) {
-                                int player_y = *(int *)(poff + 4 + DAT_00487810);
+                                int player_y = player->position_y;
                                 unsigned int hh = (unsigned int)(*(unsigned char *)(desc_base + 5) & 0xFE);
                                 if (player_y - (int)(hh * 0x20000) < p_y &&
                                     p_y < player_y + (int)(hh * 0x20000)) {
                                     /* Hit! */
-                                    *(unsigned char *)(poff + 0xA3 + DAT_00487810) = 1;
+                                    player->flag_a3 = 1;
                                     int dmg_score = base_damage >> 0xD;
                                     *stat_ptr += dmg_score;
 
                                     /* Track damage dealt by owner */
                                     if (owner_byte < 0x50) {
-                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598) !=
-                                            *(char *)(poff + 0x2C + DAT_00487810)) {
+                                        PlayerData *owner = Player_Get(owner_byte);
+                                        if (owner->team != player->team) {
                                             DAT_00486e68[owner_byte] += dmg_score;
                                         }
                                         /* Apply damage (check team + friendly fire) */
-                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598) !=
-                                            *(char *)(poff + 0x2C + DAT_00487810) || DAT_0048373d != '\0') {
-                                            *(int *)(poff + 0x20 + DAT_00487810) -= base_damage;
+                                        if (owner->team != player->team || DAT_0048373d != '\0') {
+                                            player->health = tou_binary::sub_wrap_i32(
+                                                player->health, base_damage);
                                         }
                                     } else {
-                                        *(int *)(poff + 0x20 + DAT_00487810) -= base_damage;
+                                        player->health = tou_binary::sub_wrap_i32(
+                                            player->health, base_damage);
                                     }
 
                                     /* Record last attacker */
                                     if (owner_byte < 0x50) {
-                                        if (*(char *)(DAT_00487810 + 0x2C + (unsigned int)owner_byte * 0x598) !=
-                                            *(char *)(poff + 0x2C + DAT_00487810) || DAT_0048373d != '\0') {
-                                            *(unsigned char *)(poff + 0x4A1 + DAT_00487810) = owner_byte;
+                                        if (Player_Get(owner_byte)->team != player->team || DAT_0048373d != '\0') {
+                                            player->last_attacker = owner_byte;
                                         }
                                     } else if (owner_byte < 0x8C) {
-                                        *(unsigned char *)(poff + 0x4A1 + DAT_00487810) = owner_byte - 0x14;
+                                        player->last_attacker = owner_byte - 0x14;
                                     } else {
-                                        *(unsigned char *)(poff + 0x4A1 + DAT_00487810) = 0xFF;
+                                        player->last_attacker = 0xFF;
                                     }
 
                                     /* Set damage type indicator */
-                                    *(unsigned char *)(poff + 0x4A2 + DAT_00487810) = 0x6E;
+                                    player->timer_4a2 = 0x6E;
 
                                     /* Reduce armor if present */
-                                    unsigned char armor = *(unsigned char *)(poff + 0xC6 + DAT_00487810);
+                                    unsigned char armor = player->stun_timer;
                                     if (armor != 0) {
                                         int new_armor = (unsigned int)armor - dmg_score - 1;
                                         if (new_armor < 0) new_armor = 0;
-                                        *(unsigned char *)(poff + 0xC6 + DAT_00487810) = (unsigned char)new_armor;
+                                        player->stun_timer = (unsigned char)new_armor;
                                     }
                                 }
                             }
                         }
-                        poff += 0x598;
                         stat_ptr++;
                     }
                 }
@@ -6821,13 +6912,12 @@ void FUN_00454b00(void)
                     int player_idx = 0;
 
                     if (DAT_00489240 > 0) {
-                        int poff = 0;
                         for (int p = 0; p < DAT_00489240; p++) {
+                            PlayerData *player = Player_Get(p);
                             /* Skip dead or same-team players */
-                            if (*(char *)(poff + 0x24 + DAT_00487810) == '\0' &&
-                                *(char *)(poff + 0x2c + DAT_00487810) != (char)t[7]) {
-                                int px = *(int *)(poff + DAT_00487810);
-                                int py = *(int *)(poff + 4 + DAT_00487810);
+                            if (player->state_24 == 0 && player->team != (uint8_t)t[7]) {
+                                int px = player->position_x;
+                                int py = player->position_y;
 
                                 if (px < range_x_hi && range_x_lo < px &&
                                     py < range_y_hi && range_y_lo < py) {
@@ -6854,14 +6944,14 @@ void FUN_00454b00(void)
                                 }
                             }
                             player_idx++;
-                            poff += 0x598;
                         }
 
                         if (candidate_count > 0) {
                             unsigned int pick = (unsigned int)rand() % candidate_count;
                             int chosen = candidate_indices[pick];
-                            tgt_x = *(int *)(DAT_00487810 + chosen * 0x598);
-                            tgt_y = *(int *)(DAT_00487810 + chosen * 0x598 + 4);
+                            PlayerData *target = Player_Get(chosen);
+                            tgt_x = target->position_x;
+                            tgt_y = target->position_y;
                             found_target = 1;
                         }
                     }
@@ -6938,9 +7028,6 @@ void FUN_00454b00(void)
                     }
 
                     if (fire_angle != 0x801) {
-                        /* Update barrel direction to match shot */
-                        t[0xc] = fire_angle & 0x7ff;
-
                         /* Determine projectile type based on building type at +0x1C (t[7]).
                          * Type 0 (basic turret): entity type 0x00 (basic bullet)
                          * Type 1 (ice turret): entity type 0x13 (freeze projectile)
@@ -6966,27 +7053,16 @@ void FUN_00454b00(void)
                         projectile->position_x = *t;
                         projectile->position_y = t[2] - 0x100000;
 
-                        /* Compute velocity: aimed shots fire directly at target,
-                         * random shots (team 0xFE) use sin/cos LUT from random angle. */
-                        if ((char)t[7] != (char)-2 && tgt_x != 0 && tgt_y != 0) {
-                            /* Direct aim at target coordinates */
-                            double speed = 524288.0 * (double)speed_sqrt * 2.3;
-                            double dx = (double)(tgt_x - *t);
-                            double dy = (double)(tgt_y - (t[2] - 0x100000));
-                            double dist = sqrt(dx * dx + dy * dy);
-                            if (dist > 1.0) {
-                                projectile->velocity_x = (int)(dx / dist * speed);
-                                projectile->velocity_y = (int)(dy / dist * speed);
-                            } else {
-                                projectile->velocity_x = 0;
-                                projectile->velocity_y = 0;
-                            }
-                        } else if (DAT_00487ab0 != NULL) {
-                            /* Random angle: use sin/cos LUT */
+                        /* Original 0x00455653-0x00455699 always launches along
+                         * the ballistic angle returned above. The reconstructed
+                         * direct target-vector path discarded that arc entirely. */
+                        if (DAT_00487ab0 != NULL) {
                             int sin_val = *(int *)((int)DAT_00487ab0 + fire_angle * 4);
                             int cos_val = *(int *)((int)DAT_00487ab0 + 0x800 + fire_angle * 4);
-                            projectile->velocity_x = (int)((double)sin_val * (double)speed_sqrt * 2.3);
-                            projectile->velocity_y = (int)((double)cos_val * (double)speed_sqrt * 2.3);
+                            projectile->velocity_x = (int)tou_binary::x87_ftol(
+                                (long double)sin_val * (long double)speed_sqrt * 2.3L);
+                            projectile->velocity_y = (int)tou_binary::x87_ftol(
+                                (long double)cos_val * (long double)speed_sqrt * 2.3L);
                         } else {
                             projectile->velocity_x = 0;
                             projectile->velocity_y = 0;
@@ -7053,8 +7129,8 @@ void FUN_00454b00(void)
                         projectile->motion_x_10 = *t;
                         projectile->motion_y_14 = t[2];
 
-                        /* Play turret fire sound */
-                        FUN_0040f9b0(0x29, *t, t[2]);
+                        /* No one-shot firing sound here in the original. Cars'
+                         * continuous engine audio is managed by their own path. */
                     }
                 }
 
@@ -7378,17 +7454,16 @@ void FUN_00458010(void)
 
                 if (DAT_00489240 > 0) {
                     int p = 0;
-                    int p_off = 0;
-                    int player_base = (int)DAT_00487810;
                     do {
+                        PlayerData *player = Player_Get(p);
                         /* Skip same-team players and dead/inactive players */
-                        if (*(char *)(off + 0x1d + (int)DAT_00481f28) != *(char *)(p_off + 0x2c + player_base) &&
-                            *(char *)(p_off + 0x24 + player_base) == '\0') {
+                        if (*(char *)(off + 0x1d + (int)DAT_00481f28) != (char)player->team &&
+                            player->state_24 == 0) {
 
                             int src_x = *(int *)(off + (int)DAT_00481f28);
                             int src_y = *(int *)(off + 4 + (int)DAT_00481f28);
-                            int tgt_x = *(int *)(p_off + player_base);
-                            int tgt_y = *(int *)(p_off + 4 + player_base);
+                            int tgt_x = player->position_x;
+                            int tgt_y = player->position_y;
                             int ddx = (src_x - tgt_x) >> 0x12;
                             int ddy = (src_y - tgt_y) >> 0x12;
                             int dist = ddx * ddx + ddy * ddy;
@@ -7415,18 +7490,17 @@ void FUN_00458010(void)
                         }
 next_player:
                         p++;
-                        p_off += 0x598;
                     } while (p < DAT_00489240);
 
                     if (best_target_idx != 0xfa) {
                         /* Found a player target */
                         *(int *)(off + 0x18 + (int)DAT_00481f28) = (int)sqrt((double)best_dist);
 
-                        DAT_00481edc = *(int *)(DAT_00487810 + best_target_idx * 0x598);
-                        int tgt_off = (int)DAT_00487810 + best_target_idx * 0x598;
-                        DAT_00481ee0 = *(int *)(tgt_off + 4);
-                        DAT_00481ef4 = *(int *)(tgt_off + 0x10);
-                        DAT_00481ef8 = *(int *)(tgt_off + 0x14);
+                        PlayerData *target = Player_Get(best_target_idx);
+                        DAT_00481edc = target->position_x;
+                        DAT_00481ee0 = target->position_y;
+                        DAT_00481ef4 = target->velocity_x;
+                        DAT_00481ef8 = target->velocity_y;
                         DAT_00481ed8 = (char)best_side;
                         *(unsigned char *)(off + 0x21 + (int)DAT_00481f28) = 1;
 
@@ -7983,7 +8057,7 @@ void FUN_00453cd0(void)
             char particle_team;
             unsigned char owner = (unsigned char)p[5]; /* byte at +0x14 */
             if (owner < 0x50) {
-                particle_team = *(char *)(DAT_00487810 + 0x2c + (unsigned int)owner * 0x598);
+                particle_team = static_cast<char>(Player_Get(owner)->team);
             }
             else {
                 particle_team = (char)-5;
@@ -7994,7 +8068,7 @@ void FUN_00453cd0(void)
                 Entity *entity = &DAT_004892e8[ei];
                 if (entity->type != 0x0E) continue;
                 unsigned char ent_owner = entity->owner;
-                char ent_team = *(char *)(DAT_00487810 + 0x2c + (unsigned int)ent_owner * 0x598);
+                char ent_team = static_cast<char>(Player_Get(ent_owner)->team);
                 if (ent_team != particle_team) {
                     if (((int)(new_x - 0x12C0000) < entity->position_x) &&
                         (entity->position_x < (int)(new_x + 0x12C0000)) &&
@@ -8067,17 +8141,15 @@ void FUN_00453cd0(void)
                 }
                 unsigned int pi2 = 0;
                 if (DAT_00489240 > 0) {
-                    int poff = 0;
                     int *dmg_ptr = &DAT_00486be8[0];
-                    int pbase = (int)DAT_00487810;
                     do {
-                        int *hp_ptr = (int *)(poff + 0x20 + pbase);
-                        if (*hp_ptr > 0 && pi2 != (unsigned char)p[5]) {
+                        PlayerData *player = Player_Get(pi2);
+                        if (player->health > 0 && pi2 != (unsigned char)p[5]) {
                             /* AABB check: player within +/- 0x2C0000 */
-                            if ((*(int *)(poff + pbase) - 0x2C0000 < (int)p[0]) &&
-                                ((int)p[0] < *(int *)(poff + pbase) + 0x2C0000))
+                            if ((player->position_x - 0x2C0000 < (int)p[0]) &&
+                                ((int)p[0] < player->position_x + 0x2C0000))
                             {
-                                int player_y = *(int *)(poff + 4 + pbase);
+                                int player_y = player->position_y;
                                 if ((player_y - 0x2C0000 < (int)p[1]) &&
                                     ((int)p[1] < player_y + 0x2C0000))
                                 {
@@ -8086,29 +8158,26 @@ void FUN_00453cd0(void)
                                         *dmg_ptr = *dmg_ptr + 1;
                                         unsigned char fire_owner = (unsigned char)p[5];
                                         if (fire_owner < 0x50) {
-                                            if (*(char *)(pbase + 0x2c + (unsigned int)fire_owner * 0x598) !=
-                                                *(char *)(poff + 0x2c + pbase)) {
+                                            if (Player_Get(fire_owner)->team != player->team) {
                                                 DAT_00486e68[fire_owner] = DAT_00486e68[fire_owner] + 1;
                                             }
-                                            if (*(char *)(pbase + 0x2c + (unsigned int)(unsigned char)p[5] * 0x598) !=
-                                                *(char *)(poff + 0x2c + pbase) || DAT_0048373d != '\0') {
-                                                *hp_ptr = *hp_ptr - 0x1928;
+                                            if (Player_Get(fire_owner)->team != player->team || DAT_0048373d != '\0') {
+                                                player->health = tou_binary::sub_wrap_i32(player->health, 0x1928);
                                             }
                                         }
                                         else {
-                                            *hp_ptr = *hp_ptr - 0x1928;
+                                            player->health = tou_binary::sub_wrap_i32(player->health, 0x1928);
                                         }
                                         /* Random knockback (1/500 chance) */
                                         int rk = rand();
-                                        pbase = (int)DAT_00487810;
                                         if (rk % 500 == 0) {
-                                            unsigned int heading = (unsigned int)(*(int *)(poff + 0x18 + DAT_00487810) - 0x400) & 0x7ff;
-                                            *(int *)(poff + 0x10 + DAT_00487810) =
-                                                *(int *)(poff + 0x10 + DAT_00487810) +
-                                                *(int *)((int)DAT_00487ab0 + heading * 4);
-                                            int *push_y = (int *)(poff + 0x14 + DAT_00487810);
-                                            *push_y = *push_y + *(int *)((int)DAT_00487ab0 + 0x800 + heading * 4);
-                                            pbase = (int)DAT_00487810;
+                                            unsigned int heading = (unsigned int)(player->heading - 0x400) & 0x7ff;
+                                            player->velocity_x = tou_binary::add_wrap_i32(
+                                                player->velocity_x,
+                                                *(int *)((int)DAT_00487ab0 + heading * 4));
+                                            player->velocity_y = tou_binary::add_wrap_i32(
+                                                player->velocity_y,
+                                                *(int *)((int)DAT_00487ab0 + 0x800 + heading * 4));
                                         }
                                     }
                                     else {
@@ -8116,43 +8185,34 @@ void FUN_00453cd0(void)
                                         *dmg_ptr = *dmg_ptr + 3;
                                         unsigned char fire_owner = (unsigned char)p[5];
                                         if (fire_owner < 0x50) {
-                                            if (*(char *)(pbase + 0x2c + (unsigned int)fire_owner * 0x598) !=
-                                                *(char *)(poff + 0x2c + pbase)) {
+                                            if (Player_Get(fire_owner)->team != player->team) {
                                                 DAT_00486e68[fire_owner] = DAT_00486e68[fire_owner] + 3;
                                             }
-                                            if (*(char *)(pbase + 0x2c + (unsigned int)(unsigned char)p[5] * 0x598) !=
-                                                *(char *)(poff + 0x2c + pbase) || DAT_0048373d != '\0') {
-                                                *hp_ptr = *hp_ptr - 0x6400;
-                                                pbase = (int)DAT_00487810;
+                                            if (Player_Get(fire_owner)->team != player->team || DAT_0048373d != '\0') {
+                                                player->health = tou_binary::sub_wrap_i32(player->health, 0x6400);
                                             }
                                         }
                                         else {
-                                            *hp_ptr = *hp_ptr - 0x6400;
-                                            pbase = (int)DAT_00487810;
+                                            player->health = tou_binary::sub_wrap_i32(player->health, 0x6400);
                                         }
                                     }
                                     /* Set attacker and damage indicator */
                                     unsigned char att_owner = (unsigned char)p[5];
                                     if (att_owner < 0x50) {
-                                        if (*(char *)(pbase + 0x2c + (unsigned int)att_owner * 0x598) !=
-                                            *(char *)(poff + 0x2c + pbase) || DAT_0048373d != '\0') {
-                                            *(unsigned char *)(poff + 0x4a1 + pbase) = att_owner;
-                                            pbase = (int)DAT_00487810;
+                                        if (Player_Get(att_owner)->team != player->team || DAT_0048373d != '\0') {
+                                            player->last_attacker = att_owner;
                                         }
                                     }
                                     else {
-                                        *(unsigned char *)(poff + 0x4a1 + pbase) = 0xff;
-                                        pbase = (int)DAT_00487810;
+                                        player->last_attacker = 0xff;
                                     }
-                                    *(unsigned char *)(poff + 0x4a2 + pbase) = 0x6e;
-                                    pbase = (int)DAT_00487810;
+                                    player->timer_4a2 = 0x6e;
                                 }
                             }
                         }
 
                         pi2++;
                         dmg_ptr++;
-                        poff += 0x598;
                     } while ((int)pi2 < DAT_00489240);
                 }
             }
@@ -8222,12 +8282,12 @@ void FUN_00455d50(void)
         int item_y = *(int *)(base);
 
         for (int p = 0; p < DAT_00489240; p++) {
-            int poff = p * 0x598;
+            PlayerData *player = Player_Get(p);
             int ship_half = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x38) / 2 : FIXED_SCALE;
 
-            if (*(int *)(poff + 0x20 + DAT_00487810) > 0) {
-                int px = *(int *)(poff + DAT_00487810);
-                int py = *(int *)(poff + 4 + DAT_00487810);
+            if (player->health > 0) {
+                int px = player->position_x;
+                int py = player->position_y;
 
                 if (item_x - ship_half - half_w < px && px < item_x + ship_half + half_w &&
                     item_y - ship_half - half_h < py && py < item_y + ship_half + half_h) {
@@ -8239,15 +8299,15 @@ void FUN_00455d50(void)
                      * the id feeds FUN_0040aca0 in hud.cpp which maps to a string. */
                     if (item_anim_type == 0) {
                         /* Small health pack — banner id 0x14. */
-                        *(int *)(poff + 0x20 + DAT_00487810) += 0x5DC000;
-                        *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x14;
-                        *(unsigned char *)(poff + 0xC9 + DAT_00487810) = 200;
+                        player->health = tou_binary::add_wrap_i32(player->health, 0x5DC000);
+                        player->hud_banner_id = 0x14;
+                        player->hud_banner_timer = 200;
                     }
                     else if (item_anim_type == 1) {
                         /* Large health pack */
-                        *(int *)(poff + 0x20 + DAT_00487810) += 0x9C4000;
-                        *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x15;
-                        *(unsigned char *)(poff + 0xC9 + DAT_00487810) = 200;
+                        player->health = tou_binary::add_wrap_i32(player->health, 0x9C4000);
+                        player->hud_banner_id = 0x15;
+                        player->hud_banner_timer = 200;
                     }
                     else if (item_anim_type == 2) {
                         /* Random pickup crate */
@@ -8255,12 +8315,13 @@ void FUN_00455d50(void)
                         if (roll < 12) {
                             /* Full energy — restore health to max */
                             int max_hp = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x28) : 0;
-                            *(int *)(poff + 0x20 + DAT_00487810) = max_hp;
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x00;
+                            player->health = max_hp;
+                            player->hud_banner_id = 0x00;
                         } else if (roll < 42) {
                             /* Booby trap — damages player, spawns 16 bullets + 75 shrapnel.
                              * Original jump table case 1, at 0x455d50. */
-                            *(int *)(poff + 0x20 + DAT_00487810) += (int)0xFFD8F000; /* damage player */
+                            player->health = tou_binary::add_wrap_i32(
+                                player->health, (int)0xFFD8F000);
                             FUN_00437cf0(item_x, item_y, 0x12C, 0xFF, 0); /* explosion KB */
                             int *bt_sc = (int *)DAT_00487ab0;
                             int *bt_tt = (int *)DAT_00487abc;
@@ -8338,7 +8399,7 @@ void FUN_00455d50(void)
                                 unsigned short *pal_s = (unsigned short *)DAT_00487aa8;
                                 if (pal_s) ep2->palette_value = (unsigned int)pal_s[sh_pal] + 30000; /* +0x4C */
                             }
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x01;
+                            player->hud_banner_id = 0x01;
                         } else if (roll < 142) {
                             /* Death Ring — 32 bullets in a ring around crate.
                              * Original jump table case 2. */
@@ -8374,13 +8435,13 @@ void FUN_00455d50(void)
                                 if (pal_dr) ep2->palette_value = (unsigned int)pal_dr[7] + 30000; /* +0x4C */
                                 ep2->health_or_damage_28 = (rand() & 7) + 0x96; /* +0x28: lifespan 150-157 */
                             }
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x02;
+                            player->hud_banner_id = 0x02;
                         } else if (roll < 242) {
                             /* 4 Miniships — allied to collecting player.
                              * Original jump table case 3. Type 0x1C, 4 cardinal directions. */
                             int *ms_sc = (int *)DAT_00487ab0;
                             int *ms_tt = (int *)DAT_00487abc;
-                            unsigned char plr_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
+                            unsigned char plr_team = player->team;
                             for (int ms = 0; ms < 4 && DAT_00489248 < 0x9C4; ms++) {
                                 int ms_ang = (ms * 0x200 + 0x100) & 0x7FF;
                                 Entity *ep = &DAT_004892e8[DAT_00489248];
@@ -8403,7 +8464,7 @@ void FUN_00455d50(void)
                                 ep->scratch_48 = 0;
                                 ep->palette_value = ms_tt[0x3B94/4];
                                 ep->animation_frame = 0;
-                                ep->timer_5c = 0x20; /* spawn immunity (team check bypass) */
+                                ep->timer_5c = 0x20;
                                 DAT_00489248++;
                                 /* Post-increment trailing writes */
                                 Entity *ep2 = &DAT_004892e8[DAT_00489248 - 1];
@@ -8416,12 +8477,12 @@ void FUN_00455d50(void)
                                 ep2->scratch_50 = DAT_00487834[5]; /* +0x50: tracking slot */
                                 DAT_00487834[5]++;
                             }
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x03;
+                            player->hud_banner_id = 0x03;
                         } else if (roll < 342) {
                             /* 6 Insects — allied to collecting player.
                              * Original jump table case 4. Type 0x1F, zero initial velocity. */
                             int *in_tt = (int *)DAT_00487abc;
-                            unsigned char plr_team = *(unsigned char *)(poff + 0x2C + DAT_00487810);
+                            unsigned char plr_team = player->team;
                             for (int in = 0; in < 6 && DAT_00489248 < 0x9C4; in++) {
                                 Entity *ep = &DAT_004892e8[DAT_00489248];
                                 ep->position_x = item_x; ep->previous_x = item_x;
@@ -8456,29 +8517,29 @@ void FUN_00455d50(void)
                                 ep2->scratch_50 = DAT_00487834[4]; /* +0x50: tracking slot */
                                 DAT_00487834[4]++;
                             }
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x04;
+                            player->hud_banner_id = 0x04;
                         } else if (roll < 442) {
                             /* Faster special gun — decrease fire rate delay, min 8 */
-                            int cur_rate = *(unsigned char *)(poff + 0x9C + DAT_00487810);
+                            int cur_rate = player->primary_fire_interval;
                             cur_rate -= 8;
                             if (cur_rate < 8) cur_rate = 8;
-                            *(unsigned char *)(poff + 0x9C + DAT_00487810) = (unsigned char)cur_rate;
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x06;
+                            player->primary_fire_interval = (unsigned char)cur_rate;
+                            player->hud_banner_id = 0x06;
                         } else {
                             /* Better basic gun — upgrade primary weapon, cap at 5 */
-                            int cur_weapon = *(unsigned char *)(poff + 0x8C + DAT_00487810);
+                            int cur_weapon = player->primary_weapon_level;
                             cur_weapon += 1;
                             if (cur_weapon > 5) cur_weapon = 5;
-                            *(unsigned char *)(poff + 0x8C + DAT_00487810) = (unsigned char)cur_weapon;
-                            *(unsigned char *)(poff + 0xCA + DAT_00487810) = 0x07;
+                            player->primary_weapon_level = (unsigned char)cur_weapon;
+                            player->hud_banner_id = 0x07;
                         }
-                        *(unsigned char *)(poff + 0xC9 + DAT_00487810) = 200;
+                        player->hud_banner_timer = 200;
                     }
 
                     /* Cap health to max */
                     int max_hp = DAT_0048780c ? *(int *)((int)DAT_0048780c + p * 0x40 + 0x28) : 0;
-                    if (*(int *)(poff + 0x20 + DAT_00487810) > max_hp) {
-                        *(int *)(poff + 0x20 + DAT_00487810) = max_hp;
+                    if (player->health > max_hp) {
+                        player->health = max_hp;
                     }
 
                     /* Consume item — set lifetime to 0 */
@@ -8527,44 +8588,47 @@ void FUN_004571f0(void)
         }
 
         /* Check each player for proximity */
-        int poff = 0;
         int soff = 0;
         for (int p = 0; p < DAT_00489240; p++) {
-            if (*(int *)(DAT_00487810 + poff + 0x20) > 0) {  /* alive check */
-                int dx = (exp_ent[0] - *(int *)(DAT_00487810 + poff)) >> 0x12;
-                int dy = (exp_ent[1] - *(int *)(DAT_00487810 + poff + 4)) >> 0x12;
+            PlayerData *player = Player_Get(p);
+            if (player->health > 0) {
+                int dx = (exp_ent[0] - player->position_x) >> 0x12;
+                int dy = (exp_ent[1] - player->position_y) >> 0x12;
 
                 if (dx * dx + dy * dy < 0x1C2) {  /* within ~21 tiles radius */
                     /* Calculate angle from explosion to player */
                     int angle = FUN_004257e0(exp_ent[0], exp_ent[1],
-                                            *(int *)(DAT_00487810 + poff),
-                                            *(int *)(DAT_00487810 + poff + 4));
+                                            player->position_x, player->position_y);
                     unsigned int push_angle = ((unsigned int)angle + 0x200) & 0x7FF;
 
                     /* Push player away from explosion */
                     int *lut = (int *)DAT_00487ab0;
-                    *(int *)(DAT_00487810 + poff + 0x10) += lut[push_angle] >> 6;
-                    *(int *)(DAT_00487810 + poff + 0x14) += lut[push_angle + 0x200] >> 6;
+                    player->velocity_x = tou_binary::add_wrap_i32(
+                        player->velocity_x, lut[push_angle] >> 6);
+                    player->velocity_y = tou_binary::add_wrap_i32(
+                        player->velocity_y, lut[push_angle + 0x200] >> 6);
 
                     /* Also apply reverse force (original has both directions) */
-                    *(int *)(DAT_00487810 + poff + 0x10) -= lut[angle] >> 6;
-                    *(int *)(DAT_00487810 + poff + 0x14) -= lut[(unsigned int)angle + 0x200] >> 6;
+                    player->velocity_x = tou_binary::sub_wrap_i32(
+                        player->velocity_x, lut[angle] >> 6);
+                    player->velocity_y = tou_binary::sub_wrap_i32(
+                        player->velocity_y, lut[(unsigned int)angle + 0x200] >> 6);
 
-                    *(unsigned char *)(DAT_00487810 + poff + 0xA1) = 1;
+                    player->flag_a1 = 1;
 
                     /* Heal player by damage_flag * 0x800 */
-                    *(int *)(DAT_00487810 + poff + 0x20) += (unsigned int)DAT_00483754[1] * 0x800;
+                    player->health = tou_binary::add_wrap_i32(
+                        player->health, (unsigned int)DAT_00483754[1] * 0x800);
 
                     /* Cap at max health */
                     int max_hp = DAT_0048780c ? *(int *)((int)DAT_0048780c + soff + 0x28) : 0;
-                    if (*(int *)(DAT_00487810 + poff + 0x20) < max_hp) {
-                        *(unsigned char *)(DAT_00487810 + poff + 0xA1) = 2;
+                    if (player->health < max_hp) {
+                        player->flag_a1 = 2;
                     } else {
-                        *(int *)(DAT_00487810 + poff + 0x20) = max_hp;
+                        player->health = max_hp;
                     }
                 }
             }
-            poff += 0x598;
             soff += 0x40;
         }
         exp_off += 0x10;
@@ -8848,14 +8912,15 @@ void FUN_004573e0(void)
                 int score = 0;
                 if (DAT_00489240 > 0) {
                     int count = DAT_00489240;
-                    char *pcTeam = (char *)((int)DAT_00487810 + 0x2C);
+                    int player_index = 0;
                     do {
-                        if (pcTeam[-8] == '\0') {
+                        PlayerData *player = Player_Get(player_index);
+                        if (player->state_24 == 0) {
                             char doorTeam = *(char *)(off + 0x19 + iVar8);
-                            if (*pcTeam == doorTeam || doorTeam == '\x03') {
-                                int dy = (*(int *)(pcTeam - 0x28) >> 0x12) -
+                            if ((char)player->team == doorTeam || doorTeam == '\x03') {
+                                int dy = (player->position_y >> 0x12) -
                                          *(int *)(off + 4 + iVar8);
-                                int dx = (*(int *)(pcTeam - 0x2C) >> 0x12) -
+                                int dx = (player->position_x >> 0x12) -
                                          *(int *)(off + iVar8);
                                 int dist = (int)sqrt((double)(dx * dx + dy * dy));
                                 if (dist > 0x4F) dist = 0x4F;
@@ -8863,7 +8928,7 @@ void FUN_004573e0(void)
                                 score += (0x4F - dist);
                             }
                         }
-                        pcTeam += 0x598;
+                        player_index++;
                         count--;
                     } while (count != 0);
                     if (score > 0x50) score = 0x50;
@@ -8875,14 +8940,15 @@ void FUN_004573e0(void)
                 int triggered = 0;
                 if (DAT_00489240 > 0) {
                     int count = DAT_00489240;
-                    char *pcTeam = (char *)((int)DAT_00487810 + 0x2C);
+                    int player_index = 0;
                     do {
-                        if (pcTeam[-8] == '\0') {
+                        PlayerData *player = Player_Get(player_index);
+                        if (player->state_24 == 0) {
                             char doorTeam = *(char *)(off + 0x19 + iVar8);
-                            if (*pcTeam == doorTeam || doorTeam == '\x03') {
-                                int dy = (*(int *)(pcTeam - 0x28) >> 0x12) -
+                            if ((char)player->team == doorTeam || doorTeam == '\x03') {
+                                int dy = (player->position_y >> 0x12) -
                                          *(int *)(off + 4 + iVar8);
-                                int dx = (*(int *)(pcTeam - 0x2C) >> 0x12) -
+                                int dx = (player->position_x >> 0x12) -
                                          *(int *)(off + iVar8);
                                 int dist = (int)sqrt((double)(dx * dx + dy * dy));
                                 if ((double)dist < 96.0) {
@@ -8890,7 +8956,7 @@ void FUN_004573e0(void)
                                 }
                             }
                         }
-                        pcTeam += 0x598;
+                        player_index++;
                         count--;
                     } while (count != 0);
                     if (triggered) {
@@ -10000,15 +10066,15 @@ void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
         owner = radius;
     }
 
-    int iVar6 = 0;
     int local_4 = 0;
 
     if (0 < DAT_00489240) {
         do {
-            int iVar2 = *(int *)(iVar6 + (int)DAT_00487810);
+            PlayerData *player = Player_Get(local_4);
+            int iVar2 = player->position_x;
             /* 0xf00000 = 60 tiles with 18 fractional bits: knockback scan radius. */
             if ((iVar2 - 0xf00000 < x) && (x < iVar2 + 0xf00000)) {
-                int iVar5 = *(int *)(iVar6 + 4 + (int)DAT_00487810);
+                int iVar5 = player->position_y;
                 if ((iVar5 - 0xf00000 < y) && (y < iVar5 + 0xf00000)) {
                     int dx = (x - iVar2) >> 0x12;
                     iVar5 = (y - iVar5) >> 0x12;
@@ -10018,33 +10084,28 @@ void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
                     if (iVar2 < 7) iVar2 = 7;
 
                     /* Apply knockback velocity */
-                    int *pVelX = (int *)(iVar6 + 0x10 + (int)DAT_00487810);
-                    *pVelX = *pVelX + (dx * radius * -0x800) / iVar2;
-                    *(int *)(iVar6 + 0x14 + (int)DAT_00487810) =
-                        *(int *)(iVar6 + 0x14 + (int)DAT_00487810) + (iVar5 * radius * -0x800) / iVar2;
+                    player->velocity_x = tou_binary::add_wrap_i32(
+                        player->velocity_x, (dx * radius * -0x800) / iVar2);
+                    player->velocity_y = tou_binary::add_wrap_i32(
+                        player->velocity_y, (iVar5 * radius * -0x800) / iVar2);
 
-                    int base = (int)DAT_00487810;
                     if (palette_id < 0x50) {
                         /* Owner is a player — check team for friendly fire */
-                        if (*(char *)((int)DAT_00487810 + 0x2c + palette_id * 0x598) !=
-                            *(char *)(iVar6 + 0x2c + (int)DAT_00487810))
+                        if (Player_Get(palette_id)->team != player->team)
                         {
                             int iVar3 = (owner << 0xf) / iVar2;
                             DAT_00486e68[palette_id] += (int)(iVar3 + (iVar3 >> 0x1f & 0x1fffU)) >> 0xd;
                         }
-                        if ((*(char *)((int)DAT_00487810 + 0x2c + palette_id * 0x598) !=
-                             *(char *)(iVar6 + 0x2c + (int)DAT_00487810)) ||
+                        if ((Player_Get(palette_id)->team != player->team) ||
                             (DAT_0048373d != '\0'))
                         {
-                            int *pHP = (int *)(iVar6 + 0x20 + (int)DAT_00487810);
-                            *pHP = *pHP - (owner << 0xf) / iVar2;
-                            base = (int)DAT_00487810;
+                            player->health = tou_binary::sub_wrap_i32(
+                                player->health, (owner << 0xf) / iVar2);
                         }
                     }
                     else {
-                        int *pHP = (int *)(iVar6 + 0x20 + (int)DAT_00487810);
-                        *pHP = *pHP - (owner << 0xf) / iVar2;
-                        base = (int)DAT_00487810;
+                        player->health = tou_binary::sub_wrap_i32(
+                            player->health, (owner << 0xf) / iVar2);
                     }
 
                     /* Track damage received */
@@ -10054,35 +10115,28 @@ void FUN_00437cf0(int x, int y, int radius, int palette_id, int owner)
                     /* Record kill attribution */
                     char cVar4 = (char)palette_id;
                     if (palette_id < 0x50) {
-                        if ((*(char *)(base + 0x2c + palette_id * 0x598) !=
-                             *(char *)(iVar6 + 0x2c + base)) ||
+                        if ((Player_Get(palette_id)->team != player->team) ||
                             (DAT_0048373d != '\0'))
                         {
-                            *(char *)(iVar6 + 0x4a1 + base) = cVar4;
-                            base = (int)DAT_00487810;
+                            player->last_attacker = static_cast<uint8_t>(cVar4);
                         }
                     }
                     else if (palette_id < 100) {
-                        *(char *)(iVar6 + 0x4a1 + base) = cVar4 + 0x14;
-                        base = (int)DAT_00487810;
+                        player->last_attacker = static_cast<uint8_t>(cVar4 + 0x14);
                     }
                     else if (palette_id < 0x78) {
-                        *(char *)(iVar6 + 0x4a1 + base) = cVar4;
-                        base = (int)DAT_00487810;
+                        player->last_attacker = static_cast<uint8_t>(cVar4);
                     }
                     else if (palette_id < 0x8c) {
-                        *(char *)(iVar6 + 0x4a1 + base) = cVar4 - 0x14;
-                        base = (int)DAT_00487810;
+                        player->last_attacker = static_cast<uint8_t>(cVar4 - 0x14);
                     }
                     else {
-                        *(unsigned char *)(iVar6 + 0x4a1 + base) = 0xff;
-                        base = (int)DAT_00487810;
+                        player->last_attacker = 0xff;
                     }
-                    *(unsigned char *)(iVar6 + 0x4a2 + base) = 0x6e;
+                    player->timer_4a2 = 0x6e;
                 }
             }
             local_4++;
-            iVar6 += 0x598;
         } while (local_4 < DAT_00489240);
     }
 }
@@ -10339,9 +10393,10 @@ void FUN_0045e2c0(void)
             int p;
             for (p = 0; p < DAT_00489240; p++) {
                 int poff = p * 0x598;
-                if (*(unsigned char *)(DAT_00487810 + poff + 0x2C) == base_team) {
-                    *(int *)(DAT_00487810 + poff + 0x28) = 0;        /* clear something */
-                    *(int *)(DAT_00487810 + poff + 0x20) = (int)0xFFF0BDC0;  /* force death */
+                PlayerData *player = Player_Get(p);
+                if (player->team == base_team) {
+                    player->lives = 0;
+                    player->health = (int)0xFFF0BDC0;
                 }
             }
             FUN_00451500();  /* team reinit */
@@ -10626,14 +10681,14 @@ void FUN_00460cf0(char param_1, unsigned char param_2)
  * sets player position in fixed-point 14.18 format. Returns 1 on success, 0 on fail. */
 int FUN_0044dfb0(int player)
 {
-    int poff = player * 0x598;
+    PlayerData *player_data = Player_Get(player);
     int iVar7, iVar6;
     unsigned char valid_points[256];
     int num_valid = 0;
 
     /* Phase 1: Build list of spawn points matching player's team */
     if (DAT_004892d4 > 0 && DAT_004876a0 != NULL) {
-        char team = *(char *)(poff + 0x2C + DAT_00487810);
+        char team = static_cast<char>(player_data->team);
         char *sp_team = (char *)((int)DAT_004876a0 + 8); /* +8 = team field */
         for (int i = 0; i < DAT_004892d4; i++) {
             if (*sp_team == team || *sp_team == '\x03') { /* team match or neutral */
@@ -10644,7 +10699,7 @@ int FUN_0044dfb0(int player)
         }
 
         /* Phase 2: Pick random spawn point with radius offset */
-        if (num_valid != 0 && *(unsigned char *)(poff + 0x26 + DAT_00487810) < 0xFB) {
+        if (num_valid != 0 && player_data->scratch_26 < 0xFB) {
             int radius = 8; /* spawn radius (original computes via ftol, ~8 tiles) */
             unsigned char sp = valid_points[rand() % num_valid];
 
@@ -10686,8 +10741,8 @@ validate:
         }
 
         /* All tiles passable — set entity position (fixed-point << 18) */
-        *(int *)(DAT_00487810 + poff) = iVar7 << 0x12;
-        *(int *)(DAT_00487810 + poff + 4) = iVar6 << 0x12;
+        player_data->position_x = iVar7 << 0x12;
+        player_data->position_y = iVar6 << 0x12;
         return 1;
     }
     return 0; /* out of bounds */
