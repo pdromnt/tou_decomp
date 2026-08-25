@@ -2154,6 +2154,30 @@ static void FUN_00413e70(const char *extension_pattern)
     SDL_free(entries);
 }
 
+static void Normalize_Level_Selection_For_Catalog(void)
+{
+    if (DAT_00485088 <= 0)
+        return;
+
+    /* A freshly initialized config starts at one round because the level
+     * catalog does not exist yet. Once discovery is complete, the factory
+     * default is the complete catalog. Reset Defaults runs after discovery,
+     * so it must pass through this same normalization before being saved. */
+    if (g_GameConfig.values.active_level_count == 1 && DAT_00485088 > 1) {
+        g_GameConfig.values.active_level_count =
+            (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
+    }
+
+    unsigned int *level =
+        reinterpret_cast<unsigned int *>(g_GameConfig.values.level_order);
+    const unsigned int *end = level + 200;
+    while (level < end) {
+        if (*level >= (unsigned int)DAT_00485088)
+            *level = rand() % DAT_00485088;
+        level++;
+    }
+}
+
 /* ===== FUN_00414060 — Level File Scanner (00414060) ===== */
 /* Scans levels/ for .lev files and ggstuff/ for GG themes.
  * Returns 1 if any levels found, 0 if none. */
@@ -2255,23 +2279,7 @@ int FUN_00414060(void)
         return 0; /* no levels found */
     }
 
-    /* If round count is still the default (1) and we have multiple levels,
-     * set it to the actual level count so all levels play through. Once the
-     * user saves via the menu, their preference persists in settings.json. */
-    if (g_GameConfig.values.active_level_count == 1 && DAT_00485088 > 1) {
-        g_GameConfig.values.active_level_count =
-            (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
-    }
-
-    /* DAT_00481f5c is g_ConfigBlob + 4; scan up to 0x48227c */
-    unsigned int *pIdx = reinterpret_cast<unsigned int *>(g_GameConfig.values.level_order);
-    unsigned int *pEnd = pIdx + 200;
-    while (pIdx < pEnd) {
-        if (*pIdx >= (unsigned int)DAT_00485088) {
-            *pIdx = rand() % DAT_00485088;
-        }
-        pIdx++;
-    }
+    Normalize_Level_Selection_For_Catalog();
 
     return 1;
 }
@@ -6595,6 +6603,7 @@ void Reset_Config_To_Defaults(void)
      * stale values that Set_Config_Defaults intentionally does not mention. */
     memset(&g_GameConfig, 0, sizeof(g_GameConfig));
     Set_Config_Defaults();
+    Normalize_Level_Selection_For_Catalog();
     DAT_00483838[3] = 0x6739;
 
     Settings_ResetAuxiliaryDefaults();
