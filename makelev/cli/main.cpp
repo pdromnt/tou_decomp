@@ -14,14 +14,14 @@ void Usage() {
     std::cout
         << "TOU level compiler\n\n"
         << "Usage:\n"
-        << "  tou-level new <project.toulevel.json> <visual.jpg> [parallax.jpg]\n"
-        << "  tou-level new-gg <project.toulevel.json> <width> <height> <theme>\n"
-        << "  tou-level new-theme <ggstuff-directory> <theme-name>\n"
-        << "  tou-level import <level.lev> <project.toulevel.json>\n"
-        << "  tou-level inspect <level.lev>\n"
-        << "  tou-level validate <project.toulevel.json>\n"
-        << "  tou-level build <project.toulevel.json> <output.lev>\n"
-        << "  tou-level compare <left.lev> <right.lev>\n";
+        << "  tou-level-compiler new <project.toulevel.json> <visual.jpg> [parallax.jpg]\n"
+        << "  tou-level-compiler new-gg <project.toulevel.json> <width> <height> <theme>\n"
+        << "  tou-level-compiler new-theme <ggstuff-directory> <theme-name>\n"
+        << "  tou-level-compiler import <level.lev> <project.toulevel.json>\n"
+        << "  tou-level-compiler inspect <level.lev>\n"
+        << "  tou-level-compiler validate <project.toulevel.json>\n"
+        << "  tou-level-compiler build <project.toulevel.json> <output.lev>\n"
+        << "  tou-level-compiler compare <left.lev> <right.lev>\n";
 }
 
 int PrintMessages(const std::vector<ValidationMessage> &messages) {

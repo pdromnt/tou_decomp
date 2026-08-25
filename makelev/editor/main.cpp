@@ -150,9 +150,10 @@ std::filesystem::path AssetRoot() {
     const char *base_text = SDL_GetBasePath();
     const std::filesystem::path base = base_text == nullptr
         ? std::filesystem::path{} : std::filesystem::path(base_text);
-    const std::array<std::filesystem::path, 5> candidates{{
+    const std::array<std::filesystem::path, 6> candidates{{
         base,
         base / "..",
+        base / "../../../..",
         base / "../TOU.app/Contents/Resources",
         base / "../Resources",
         std::filesystem::path(TOU_ASSET_ROOT),
@@ -166,6 +167,39 @@ std::filesystem::path AssetRoot() {
     return std::filesystem::absolute(std::filesystem::path(TOU_ASSET_ROOT));
 }
 
+void SetEditorWindowIcon(SDL_Window *window) {
+    const char *base_text = SDL_GetBasePath();
+    const std::filesystem::path base = base_text == nullptr
+        ? std::filesystem::path{} : std::filesystem::path(base_text);
+    const std::array<std::filesystem::path, 3> candidates{{
+        base / "level-editor-icon.png",
+        base / "../Resources/level-editor-icon.png",
+        std::filesystem::path(TOU_ASSET_ROOT) /
+            "makelev/resources/level-editor-icon.png",
+    }};
+    for (const std::filesystem::path &candidate : candidates) {
+        if (!std::filesystem::is_regular_file(candidate)) {
+            continue;
+        }
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+        unsigned char *pixels = stbi_load(candidate.string().c_str(), &width,
+                                          &height, &channels, 4);
+        if (pixels == nullptr) {
+            continue;
+        }
+        SDL_Surface *surface = SDL_CreateSurfaceFrom(
+            width, height, SDL_PIXELFORMAT_RGBA32, pixels, width * 4);
+        if (surface != nullptr) {
+            SDL_SetWindowIcon(window, surface);
+            SDL_DestroySurface(surface);
+        }
+        stbi_image_free(pixels);
+        return;
+    }
+}
+
 std::optional<std::filesystem::path> ChooseStartupProject() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         throw std::runtime_error(SDL_GetError());
@@ -175,6 +209,7 @@ std::optional<std::filesystem::path> ChooseStartupProject() {
         SDL_Quit();
         throw std::runtime_error(SDL_GetError());
     }
+    SetEditorWindowIcon(window);
 
     std::optional<std::filesystem::path> result;
     try {
@@ -263,7 +298,12 @@ std::optional<std::filesystem::path> ChooseStartupProject() {
                 size_buttons, 4);
             if (size != 0) {
                 static constexpr std::array<std::pair<std::uint16_t, std::uint16_t>, 4>
-                    dimensions{{{0, 0}, {640, 480}, {1280, 720}, {1920, 1080}}};
+                    dimensions{{
+                        {std::uint16_t{0}, std::uint16_t{0}},
+                        {std::uint16_t{640}, std::uint16_t{480}},
+                        {std::uint16_t{1280}, std::uint16_t{720}},
+                        {std::uint16_t{1920}, std::uint16_t{1080}},
+                    }};
                 const auto project = WaitForFileDialog(
                     window, true, project_filter, 2, "new-gg.toulevel.json");
                 if (project) {
@@ -313,6 +353,7 @@ public:
         if (window_ == nullptr) {
             throw std::runtime_error(SDL_GetError());
         }
+        SetEditorWindowIcon(window_);
         SDL_SetWindowMinimumSize(window_, 1280, 600);
         renderer_ = SDL_CreateRenderer(window_, nullptr);
         if (renderer_ == nullptr) {

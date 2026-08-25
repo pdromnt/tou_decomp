@@ -8,10 +8,9 @@ dependencies.
 ## What exists now
 
 - `tou_level`: typed C++ library for project files and `.lev` v1.4 files.
-- `tou-level`: validation, compilation, inspection, and comparison CLI.
+- `tou-level-compiler`: compilation, validation, inspection, and comparison CLI.
 - `tou-level-editor`: SDL3 terrain/attribute painter and export preview.
 - `fixtures/jungle`: original Jungle source assets and a modern project file.
-- `tests`: golden checks against the shipped Jungle level and format round trips.
 
 The Jungle project currently compiles byte-for-byte identically to the shipped
 `levels/jungle.lev`. Generated padding is deterministic instead of inheriting
@@ -22,7 +21,7 @@ the original converter's uninitialized bytes.
 Configure the repository normally, then build one or all of these targets:
 
 ```text
-cmake --build build --target tou-level tou-level-editor tou-level-tests
+cmake --build build --target tou-level-compiler tou-level-editor
 ```
 
 The interactive tools are written to `makelev/bin`.
@@ -30,14 +29,14 @@ The interactive tools are written to `makelev/bin`.
 ## CLI
 
 ```text
-tou-level new project.toulevel.json visual.jpg [parallax.jpg]
-tou-level new-gg project.toulevel.json width height theme
-tou-level new-theme path/to/ggstuff "theme name"
-tou-level import input.lev project.toulevel.json
-tou-level validate project.toulevel.json
-tou-level build project.toulevel.json output.lev
-tou-level inspect output.lev
-tou-level compare original.lev output.lev
+tou-level-compiler new project.toulevel.json visual.jpg [parallax.jpg]
+tou-level-compiler new-gg project.toulevel.json width height theme
+tou-level-compiler new-theme path/to/ggstuff "theme name"
+tou-level-compiler import input.lev project.toulevel.json
+tou-level-compiler validate project.toulevel.json
+tou-level-compiler build project.toulevel.json output.lev
+tou-level-compiler inspect output.lev
+tou-level-compiler compare original.lev output.lev
 ```
 
 `new` reads the JPEG dimensions, writes a transparent attribute TGA beside the

@@ -42,7 +42,7 @@
               <li>From the TOU directory, create the project. The optional last
                 argument adds a parallax JPEG:</li>
             </ol>
-            <pre>makelev\bin\tou-level.exe new projects\my-level\my-level.toulevel.json projects\my-level\my-level.jpg [projects\my-level\my-level-parallax.jpg]</pre>
+            <pre>makelev\bin\tou-level-compiler.exe new projects\my-level\my-level.toulevel.json projects\my-level\my-level.jpg [projects\my-level\my-level-parallax.jpg]</pre>
             <ol start="3">
               <li>Open <code>my-level.toulevel.json</code> with
                 <code>tou-level-editor</code>.</li>
@@ -172,7 +172,7 @@
             <h4>Legacy conversion</h4>
             <p>The historical converter accepted the old JPG/TGA/TXT set. New
               projects should use the native editor's <b>Export</b> button or
-              <code>tou-level build project.toulevel.json output.lev</code>.</p>
+              <code>tou-level-compiler build project.toulevel.json output.lev</code>.</p>
             <p><b>Maximum level size:</b></p>
             <p>Both width and height must be less than 8000 pixels. By the way, 
               a 8000x8000 map would take 196 megabytes of memory!</p>
@@ -194,7 +194,7 @@
             </ul>
             <h3>Native editor: new custom GG level</h3>
             <p>Create a project with a size and an existing theme directory name:</p>
-            <pre>makelev\bin\tou-level.exe new-gg projects\my-gg\my-gg.toulevel.json 1280 720 "the earth"</pre>
+            <pre>makelev\bin\tou-level-compiler.exe new-gg projects\my-gg\my-gg.toulevel.json 1280 720 "the earth"</pre>
             <p>Open the JSON in the editor. Paint the constraint/attribute map in
               <b>Terrain</b>, change the theme, shape, densities, and seed in
               <b>GG</b>, then Save and Export. Add sign records in the GG list
@@ -227,7 +227,7 @@
             <h3>Native theme workflow</h3>
             <ol>
               <li>Press <b>Ctrl+N</b> in a GG project, or run
-                <code>tou-level new-theme ggstuff "my theme"</code>. This creates
+                <code>tou-level-compiler new-theme ggstuff "my theme"</code>. This creates
                 the directory and a starter <code>info.txt</code>.</li>
               <li>Edit its <code>info.txt</code>. That file controls generator and
                 rendering behavior for the theme.</li>
@@ -237,7 +237,7 @@
               <li>Start TOU again. The directory itself is discovered as a dynamic
                 GG entry. Test several generated sizes and seeds before shipping.</li>
               <li>Optionally use the theme name in a custom GG project created by
-                <code>tou-level new-gg</code>.</li>
+                <code>tou-level-compiler new-gg</code>.</li>
             </ol>
             <p>All the tgas you draw here must be 24-bit tgas without compression! 
               And all the jpegs must have the extension &quot;jpg&quot;.</p>

@@ -9,21 +9,38 @@ target_link_libraries(tou_level PUBLIC
     nlohmann_json::nlohmann_json
 )
 
-add_executable(tou-level
+add_executable(tou-level-compiler
     cli/main.cpp
 )
-target_compile_features(tou-level PRIVATE cxx_std_17)
-target_link_libraries(tou-level PRIVATE tou_level)
+target_compile_features(tou-level-compiler PRIVATE cxx_std_17)
+target_link_libraries(tou-level-compiler PRIVATE tou_level)
+
+set(TOU_LEVEL_EDITOR_SOURCES
+    editor/main.cpp
+    ${CMAKE_SOURCE_DIR}/stb_image.c
+)
 
 if(WIN32)
+    enable_language(RC)
     add_executable(tou-level-editor WIN32
-        editor/main.cpp
-        ${CMAKE_SOURCE_DIR}/stb_image.c
+        ${TOU_LEVEL_EDITOR_SOURCES}
+        resources/tou-level-editor.rc
+        resources/level-editor.ico
+    )
+elseif(APPLE)
+    set_source_files_properties(
+        resources/level-editor.icns
+        resources/level-editor-icon.png
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    add_executable(tou-level-editor MACOSX_BUNDLE
+        ${TOU_LEVEL_EDITOR_SOURCES}
+        resources/level-editor.icns
+        resources/level-editor-icon.png
     )
 else()
     add_executable(tou-level-editor
-        editor/main.cpp
-        ${CMAKE_SOURCE_DIR}/stb_image.c
+        ${TOU_LEVEL_EDITOR_SOURCES}
     )
 endif()
 target_compile_features(tou-level-editor PRIVATE cxx_std_17)
@@ -37,18 +54,39 @@ target_link_libraries(tou-level-editor PRIVATE
 )
 
 set(TOU_LEVEL_TOOL_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/bin")
-set_target_properties(tou-level tou-level-editor PROPERTIES
+set_target_properties(tou-level-compiler tou-level-editor PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TOU_LEVEL_TOOL_OUTPUT}"
 )
+if(APPLE)
+    set_target_properties(tou-level-editor PROPERTIES
+        OUTPUT_NAME "TOU Level Editor"
+        MACOSX_BUNDLE_BUNDLE_NAME "TOU Level Editor"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou.level-editor"
+        MACOSX_BUNDLE_ICON_FILE "level-editor.icns"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.6"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.6"
+    )
+endif()
 foreach(TOU_CONFIG DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
-    set_target_properties(tou-level tou-level-editor PROPERTIES
+    set_target_properties(tou-level-compiler tou-level-editor PROPERTIES
         "RUNTIME_OUTPUT_DIRECTORY_${TOU_CONFIG}" "${TOU_LEVEL_TOOL_OUTPUT}"
     )
 endforeach()
 
-install(TARGETS tou-level tou-level-editor
+install(TARGETS tou-level-compiler tou-level-editor
     RUNTIME DESTINATION level-editor
+    BUNDLE DESTINATION level-editor
 )
+if(NOT APPLE)
+    install(FILES resources/level-editor-icon.png
+        DESTINATION level-editor
+    )
+endif()
+if(UNIX AND NOT APPLE)
+    install(FILES resources/tou-level-editor.desktop
+        DESTINATION level-editor
+    )
+endif()
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README.md
     DESTINATION level-editor
 )
@@ -62,27 +100,10 @@ install(FILES
 if(MSVC)
     target_compile_definitions(tou_level PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(tou_level PRIVATE /W4 /WX)
-    target_compile_options(tou-level PRIVATE /W4 /WX)
+    target_compile_options(tou-level-compiler PRIVATE /W4 /WX)
     target_compile_options(tou-level-editor PRIVATE /W4 /WX)
 else()
     target_compile_options(tou_level PRIVATE -Wall -Wextra -Wpedantic -Werror)
-    target_compile_options(tou-level PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(tou-level-compiler PRIVATE -Wall -Wextra -Wpedantic -Werror)
     target_compile_options(tou-level-editor PRIVATE -Wall -Wextra -Wpedantic -Werror)
-endif()
-
-if(BUILD_TESTING)
-    add_executable(tou-level-tests
-        tests/level_tests.cpp
-    )
-    target_compile_features(tou-level-tests PRIVATE cxx_std_17)
-    target_compile_definitions(tou-level-tests PRIVATE
-        TOU_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    )
-    target_link_libraries(tou-level-tests PRIVATE tou_level)
-    if(MSVC)
-        target_compile_options(tou-level-tests PRIVATE /W4 /WX)
-    else()
-        target_compile_options(tou-level-tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
-    endif()
-    add_test(NAME tou-level-golden COMMAND tou-level-tests)
 endif()

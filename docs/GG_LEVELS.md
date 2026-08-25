@@ -69,7 +69,7 @@ textures, decoration, entities, and pickups.
 Use `Ctrl+N` in a GG editor project, or:
 
 ```text
-tou-level new-theme path/to/ggstuff "my theme"
+tou-level-compiler new-theme path/to/ggstuff "my theme"
 ```
 
 This creates the directory and an `info.txt` scaffold. It intentionally does

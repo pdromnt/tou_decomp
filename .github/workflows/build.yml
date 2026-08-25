@@ -50,7 +50,10 @@ jobs:
 
       - name: Verify 32-bit executable
         shell: msys2 {0}
-        run: objdump -f stage/TOU.exe | grep -q "file format pei-i386"
+        run: |
+          objdump -f stage/TOU.exe | grep -q "file format pei-i386"
+          objdump -f stage/level-editor/tou-level-editor.exe | grep -q "file format pei-i386"
+          test -f stage/level-editor/level-editor-icon.png
 
       - name: Upload staged build
         uses: actions/upload-artifact@v7
@@ -125,15 +128,38 @@ jobs:
         shell: bash
         run: |
           executable=stage/TOU
+          editor=stage/level-editor/tou-level-editor
           case "${{ matrix.platform }}" in
-            macos-*) executable=stage/TOU.app/Contents/MacOS/TOU ;;
+            macos-*)
+              executable=stage/TOU.app/Contents/MacOS/TOU
+              editor="stage/level-editor/TOU Level Editor.app/Contents/MacOS/TOU Level Editor"
+              ;;
+          esac
+          case "${{ matrix.platform }}" in
+            linux-*)
+              test -f stage/level-editor/level-editor-icon.png
+              test -f stage/level-editor/tou-level-editor.desktop
+              ;;
           esac
           file "$executable"
+          file "$editor"
           case "${{ matrix.platform }}" in
-            linux-x64) file "$executable" | grep -q 'x86-64' ;;
-            linux-arm64) file "$executable" | grep -Eq 'ARM aarch64|ARM64' ;;
-            macos-x64) file "$executable" | grep -q 'x86_64' ;;
-            macos-arm64) file "$executable" | grep -q 'arm64' ;;
+            linux-x64)
+              file "$executable" | grep -q 'x86-64'
+              file "$editor" | grep -q 'x86-64'
+              ;;
+            linux-arm64)
+              file "$executable" | grep -Eq 'ARM aarch64|ARM64'
+              file "$editor" | grep -Eq 'ARM aarch64|ARM64'
+              ;;
+            macos-x64)
+              file "$executable" | grep -q 'x86_64'
+              file "$editor" | grep -q 'x86_64'
+              ;;
+            macos-arm64)
+              file "$executable" | grep -q 'arm64'
+              file "$editor" | grep -q 'arm64'
+              ;;
           esac
 
       - name: Verify macOS app bundle
@@ -142,6 +168,9 @@ jobs:
         run: |
           test -f stage/TOU.app/Contents/Info.plist
           test -f stage/TOU.app/Contents/Resources/icon.icns
+          test -f "stage/level-editor/TOU Level Editor.app/Contents/Info.plist"
+          test -f "stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor.icns"
+          test -f "stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor-icon.png"
           for directory in data ggstuff help lang levels music sfx ships swap; do
             test -d "stage/TOU.app/Contents/Resources/$directory"
           done
@@ -150,26 +179,33 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $executable = Resolve-Path -LiteralPath stage/TOU.exe -ErrorAction Stop
-          $stream = [System.IO.File]::OpenRead($executable)
-          $reader = [System.IO.BinaryReader]::new($stream)
-          try {
-            $stream.Position = 0x3c
-            $peOffset = $reader.ReadInt32()
-            $stream.Position = $peOffset + 4
-            $machine = $reader.ReadUInt16()
-          } finally {
-            $reader.Dispose()
-            $stream.Dispose()
-          }
           $expected = [Convert]::ToUInt16(
             '${{ matrix.expected_machine }}'.Substring(2), 16)
-          if ($machine -ne $expected) {
-            throw ('Wrong PE machine: expected 0x{0:X4}, found 0x{1:X4}' `
-              -f $expected, $machine)
+          $executables = @(
+            'stage/TOU.exe',
+            'stage/level-editor/tou-level-editor.exe'
+          )
+          foreach ($path in $executables) {
+            $executable = Resolve-Path -LiteralPath $path -ErrorAction Stop
+            $stream = [System.IO.File]::OpenRead($executable)
+            $reader = [System.IO.BinaryReader]::new($stream)
+            try {
+              $stream.Position = 0x3c
+              $peOffset = $reader.ReadInt32()
+              $stream.Position = $peOffset + 4
+              $machine = $reader.ReadUInt16()
+            } finally {
+              $reader.Dispose()
+              $stream.Dispose()
+            }
+            if ($machine -ne $expected) {
+              throw ('Wrong PE machine for {0}: expected 0x{1:X4}, found 0x{2:X4}' `
+                -f $path, $expected, $machine)
+            }
           }
-          if (-not (Test-Path -LiteralPath $executable)) {
-            throw "Missing staged TOU.exe"
+          if (-not (Test-Path -LiteralPath stage/level-editor/level-editor-icon.png `
+              -PathType Leaf)) {
+            throw 'Missing staged level editor icon'
           }
 
       - name: Upload staged build

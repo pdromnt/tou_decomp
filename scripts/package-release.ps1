@@ -62,13 +62,28 @@ if (-not (Test-Path -LiteralPath $resolvedLevelEditor -PathType Container)) {
 
 $toolSuffix = if ($isWindowsPackage) { ".exe" } else { "" }
 $requiredEditorFiles = @(
-    "tou-level$toolSuffix",
-    "tou-level-editor$toolSuffix",
+    "tou-level-compiler$toolSuffix",
     "README.md",
     "docs/LEVEL_FORMAT.md",
     "docs/LEVEL_PALETTE.json",
     "docs/GG_LEVELS.md"
 )
+if ($isMacPackage) {
+    $requiredEditorFiles += @(
+        "TOU Level Editor.app/Contents/Info.plist",
+        "TOU Level Editor.app/Contents/MacOS/TOU Level Editor",
+        "TOU Level Editor.app/Contents/Resources/level-editor.icns",
+        "TOU Level Editor.app/Contents/Resources/level-editor-icon.png"
+    )
+} else {
+    $requiredEditorFiles += @(
+        "tou-level-editor$toolSuffix",
+        "level-editor-icon.png"
+    )
+    if (-not $isWindowsPackage) {
+        $requiredEditorFiles += "tou-level-editor.desktop"
+    }
+}
 foreach ($relativePath in $requiredEditorFiles) {
     $editorInput = Join-Path $resolvedLevelEditor $relativePath
     if (-not (Test-Path -LiteralPath $editorInput -PathType Leaf)) {

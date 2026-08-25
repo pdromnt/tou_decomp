@@ -460,7 +460,12 @@ std::filesystem::path ResolveAsset(const std::filesystem::path &project_path,
     if (value.empty()) {
         return {};
     }
+#if defined(__cpp_char8_t)
+    const auto *utf8 = reinterpret_cast<const char8_t *>(value.c_str());
+    const std::filesystem::path path(utf8, utf8 + value.size());
+#else
     const std::filesystem::path path = std::filesystem::u8path(value);
+#endif
     return path.is_absolute() ? path : project_path.parent_path() / path;
 }
 
@@ -472,7 +477,12 @@ std::string RelativeAsset(const std::filesystem::path &project_path,
     std::error_code error;
     const std::filesystem::path relative =
         std::filesystem::relative(asset_path, project_path.parent_path(), error);
-    return (error ? asset_path : relative).generic_u8string();
+    const auto utf8 = (error ? asset_path : relative).generic_u8string();
+#if defined(__cpp_char8_t)
+    return {reinterpret_cast<const char *>(utf8.data()), utf8.size()};
+#else
+    return utf8;
+#endif
 }
 
 std::uint8_t ByteValue(const json &object, const char *key,
