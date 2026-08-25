@@ -40,17 +40,9 @@ physics, effects, scoring, or original single-machine gameplay.
 - `.lev`, `.gfx`, and `.SHP` format notes live under `docs/`; architecture and
   safe-refactoring guidance live in `CODEBASE.md`.
 
-### Remaining portability acceptance
-
-| Target | Status |
-| --- | --- |
-| Windows x64 | Accepted through hands-on gameplay |
-| macOS Apple Silicon | Accepted through hands-on gameplay |
-| Windows x86 legacy parity | Build maintained; final release smoke test pending |
-| Windows ARM64 | Runtime acceptance pending |
-| Linux x64 | Runtime acceptance pending |
-| Linux ARM64 | Accepted through hands-on Raspberry Pi CM4 gameplay |
-| macOS Intel | Runtime acceptance pending |
+Desktop packages have passed hands-on smoke testing across the supported
+Windows, Linux, and macOS targets. New platform-specific problems will be
+tracked when reproduced rather than retained as blanket acceptance tasks.
 
 Browser/WebAssembly remains last-of-last and is not part of the current plan.
 
@@ -132,8 +124,6 @@ Initial locales:
   errors, control-key names, pickups, prompts, and gameplay messages.
 - [x] Keep all four catalogs at exact key parity; validate placeholders and every
   required bitmap glyph automatically.
-- [ ] Complete native-speaker review of the initial Spanish, Brazilian Portuguese,
-  and Finnish translations.
 - [ ] Decide whether content-defined proper names (weapons, ships, levels, and GG
   themes) remain universal or gain separate localized display-name metadata.
 - [ ] Replace or overlay the few English labels baked into legacy menu/panel sprites;
@@ -147,7 +137,7 @@ Initial locales:
 
 ---
 
-## M3 — Level Compiler and Editor  [IMPLEMENTED / RUNTIME QA]
+## M3 — Level Compiler and Editor  [ACCEPTED]
 
 The repository contains original sample sources, documentation,
 `level converter.exe`, and `COLPICK.EXE`, but not maintainable source for those
@@ -176,7 +166,6 @@ legacy tools. Build a native replacement instead of embedding them.
 - [x] Import visual JPEG, attribute TGA, optional parallax, and documented config.
 - [x] Replace COLPICK marker lookup with a named palette/schema.
 - [x] Produce structural comparison reports against original converter fixtures.
-- [ ] Load newly authored generated levels in both the original game and decomp.
 
 ### M3.3 — Visual editor MVP  [P1]
 
@@ -205,13 +194,8 @@ legacy tools. Build a native replacement instead of embedding them.
 - [x] Scaffold new GG themes from the editor or CLI; authors supply the actual
   `s1.tga` and `t1.jpg` art assets.
 
-### M3 acceptance
-
-- Author and play a new normal level on Windows, Linux, and macOS.
-- Rebuild sample source projects into behaviorally equivalent levels.
-- Project save/reopen/export preserves every understood value.
-- The compiler/editor never silently emits a malformed or partially understood
-  `.lev`.
+The editor/compiler workflow is accepted. Further authoring or compatibility
+problems will be handled from concrete projects and runtime reproductions.
 
 ---
 
@@ -254,7 +238,7 @@ host, so cross-architecture peer lockstep is not required.
 
 ---
 
-## M5 — Direct-IP LAN Multiplayer  [CLI BETA / RUNTIME QA]
+## M5 — Direct-IP LAN Multiplayer  [CLI BETA]
 
 ### Fixed v1 product scope
 
@@ -308,14 +292,6 @@ Client: Join -> enter host/IP and port -> choose team -> compatibility check
 - [ ] Add host snapshot correction after replay/restore runtime acceptance.
 - Handle clean quit, refusal, timeout, host loss, client loss, and return to the
   session screen between host-selected levels.
-
-### M5 acceptance
-
-- Windows, Linux, and macOS clients interoperate by direct IP.
-- Two-, three-, and four-player sessions complete multiple levels.
-- Every peer agrees on terrain, deaths, frags, winners, and level progression.
-- Invalid clients cannot change rules, start, enable AI, or choose a third team.
-- A 30-minute mixed-architecture LAN soak has no drift, leak, hang, or stale roster.
 
 ---
 
