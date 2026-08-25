@@ -20,7 +20,9 @@ Each client selects **Join LAN Match**, edits the host/IP and port fields,
 chooses Team 1 or Team 2, and selects **Connect**. Hostnames and IPv4 addresses
 are accepted. Permit the game through the host firewall for private networks
 if prompted. The status line and window title report the connection state and
-assigned player number; the host lobby lists connected player/team assignments.
+assigned player number. Both sides see the compact roster with player, team,
+ship, and implicit ready/loading state. The Join screen remembers the most
+recent valid host, port, and team in `settings.json`.
 
 The following command-line interface remains available for diagnostics and
 custom ports. The host launches the game from its extracted directory:
@@ -56,20 +58,22 @@ those session controls.
 - Delayed per-tick action exchange; clients never send gameplay outcomes.
 - A level-loaded barrier and authoritative host tick-zero snapshot, followed by
   host RNG sequencing, synchronized pause/exit state, and periodic state hashes.
-- Explicit rejection when the discovered level catalogs do not match.
-- Automatic pause on disconnect or detected simulation divergence.
+- Explicit rejection when the simulation build, level/theme bytes, ships, or
+  gameplay data do not match.
+- Host snapshot correction after a periodic checksum mismatch.
+- Clean session teardown back to the LAN screen after timeout or peer loss.
 
 ## Deliberate beta limits
 
-- The host has a compact player/team roster. There is no client-side full
-  roster, explicit Ready button, discovery, AI, reconnect, mid-match join,
+- There is no explicit Ready button, discovery, AI, reconnect, mid-match join,
   asset transfer, NAT traversal, or internet relay.
 - TCP lockstep favors correctness over latency. A slow or lost peer can stall
   the match until the disconnect is detected.
-- Content fingerprinting currently covers the ordered level catalog, not every
-  byte of every asset. Test from matching release archives.
-- Snapshot correction is not enabled yet. A hash mismatch pauses everyone for
-  diagnosis rather than attempting to hide the desync.
+- Content fingerprinting covers the ordered normal-level bytes, GG theme files,
+  ships, and gameplay data. Music, sound effects, help, and translations are
+  intentionally not simulation compatibility inputs.
+- Snapshot correction recovers detected state drift; it is not prediction,
+  rollback, or reconnection and may cause a visible hitch.
 - Tick-zero snapshots are capped at 64 MiB. Very large authored/GG worlds can
   be rejected by this first beta instead of exhausting peer memory.
 

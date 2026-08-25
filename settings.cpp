@@ -1,6 +1,7 @@
 #include "settings.h"
 
 #include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <stdexcept>
@@ -18,6 +19,9 @@ const int SETTINGS_SCHEMA_VERSION = 1;
 const char *const SETTINGS_PATH = "settings.json";
 const char *const SETTINGS_TEMP_PATH = "settings.json.tmp";
 std::string g_Language = "en";
+std::string g_RecentLanHost = "127.0.0.1";
+int g_RecentLanPort = 27015;
+int g_RecentLanTeam = 1;
 
 int ClampInt(long long value, int minimum, int maximum)
 {
@@ -85,6 +89,16 @@ void ReadLanguage(const json &root, std::string &language)
         LOG("[CFG] Unknown language '%s'; retaining %s\n",
             candidate.c_str(), language.c_str());
     }
+}
+
+void ReadString(const json &object, const char *key, std::string &target,
+                size_t maximumLength)
+{
+    json::const_iterator found = object.find(key);
+    if (found == object.end() || !found->is_string()) return;
+    const std::string value = found->get<std::string>();
+    if (!value.empty() && value.size() <= maximumLength)
+        target = value;
 }
 
 json SettingsToJson(const UserSettings &settings)
@@ -186,6 +200,11 @@ json SettingsToJson(const UserSettings &settings)
         {"camera", settings.controls.camera},
         {"menu", WriteIntArray(settings.controls.menu)},
         {"players", controlPlayers}
+    };
+    root["network"] = {
+        {"recentHost", settings.network.recentHost},
+        {"recentPort", settings.network.recentPort},
+        {"recentTeam", settings.network.recentTeam}
     };
     return root;
 }
@@ -316,6 +335,13 @@ void OverlayJson(UserSettings &settings, const json &root)
             }
         }
     }
+
+    section = root.find("network");
+    if (section != root.end() && section->is_object()) {
+        ReadString(*section, "recentHost", settings.network.recentHost, 63);
+        ReadInt(*section, "recentPort", settings.network.recentPort, 1, 65535);
+        ReadInt(*section, "recentTeam", settings.network.recentTeam, 1, 2);
+    }
 }
 
 } // namespace
@@ -395,6 +421,7 @@ UserSettings Settings_CaptureCurrent(void)
     for (size_t i = 0; i < settings.controls.players.size(); ++i)
         for (size_t j = 0; j < settings.controls.players[i].size(); ++j)
             settings.controls.players[i][j] = g_GameConfig.values.player_keys[i][j];
+    settings.network = {g_RecentLanHost, g_RecentLanPort, g_RecentLanTeam};
     return settings;
 }
 
@@ -486,6 +513,9 @@ void Settings_Apply(const UserSettings &settings)
         for (size_t j = 0; j < settings.controls.players[i].size(); ++j)
             g_GameConfig.values.player_keys[i][j] =
                 static_cast<uint8_t>(settings.controls.players[i][j]);
+    g_RecentLanHost = settings.network.recentHost;
+    g_RecentLanPort = settings.network.recentPort;
+    g_RecentLanTeam = settings.network.recentTeam;
 }
 
 SettingsLoadResult Settings_LoadJson(void)
@@ -566,4 +596,38 @@ bool Settings_SetLanguage(const char *language)
         return false;
     g_Language = candidate;
     return true;
+}
+
+const char *Settings_GetRecentLanHost(void)
+{
+    return g_RecentLanHost.c_str();
+}
+
+int Settings_GetRecentLanPort(void)
+{
+    return g_RecentLanPort;
+}
+
+int Settings_GetRecentLanTeam(void)
+{
+    return g_RecentLanTeam;
+}
+
+bool Settings_RememberLanEndpoint(const char *host, int port, int team)
+{
+    if (host == NULL || host[0] == 0 || strlen(host) > 63 ||
+        port < 1 || port > 65535 || team < 1 || team > 2)
+        return false;
+    g_RecentLanHost = host;
+    g_RecentLanPort = port;
+    g_RecentLanTeam = team;
+    return Settings_SaveJson();
+}
+
+void Settings_ResetAuxiliaryDefaults(void)
+{
+    g_Language = "en";
+    g_RecentLanHost = "127.0.0.1";
+    g_RecentLanPort = 27015;
+    g_RecentLanTeam = 1;
 }
