@@ -46,7 +46,12 @@
               <tr> 
                 <td> 
                   <h2><a name="newgame">4.2 Start a new game</a></h2>
-                  <p>Not much to explain here. The game begins :)</p>
+                  <p><b>Team Deathmatch</b> now opens two choices. <b>Local
+                    Deathmatch</b> starts the original same-computer game using
+                    the configured Players. <b>LAN Deathmatch</b> opens the
+                    direct-IP host/join flow for one player per computer. The
+                    host supplies the rules and level list; clients choose a
+                    team and contribute their local Player 1 ship and controls.</p>
                   </td>
               </tr>
             </table>
@@ -157,19 +162,22 @@
                       <td height="230"> 
                         <h2><a name="details">4.5.2 Details &amp; Visuals</a></h2>
                         <ul>
-                          <li><b><i>Resolution</i></b>: If you have an old computer, 
-                            use 640 x 400 or lower resolution. Fast computers 
-                            are able to view 1024 x 768 with no problem.</li>
-                          <li><i><b>Player screen sizes</b></i>: &quot;Full&quot; 
-                            means that the player screens always try to cover 
+                          <li><b><i>Resolution</i></b>: Changes the output window
+                            or fullscreen resolution. The original 640 x 480
+                            software framebuffer is scaled while keeping its
+                            aspect ratio.</li>
+                          <li><b><i>Mode</i></b>: Switches immediately between
+                            Windowed and Fullscreen presentation.</li>
+                          <li><i><b>Viewport size</b></i>: &quot;Full&quot;
+                            means that the player viewports always try to cover
                             the whole screen. &quot;Square&quot; means that player 
-                            screens are square-shaped. &quot;1/4 screen&quot; 
+                            viewports are square-shaped. &quot;1/4 screen&quot;
                             means the classic style. &quot;Full&quot; is preferable, 
                             of course.</li>
                           <li><b><i>Parallax background</i></b>: This doesn't 
                             affect the game's speed very much. If parallax is 
                             &quot;no&quot;, the level loading times are lower 
-                            (unless you use <a href="#swap">swap files</a>).</li>
+                            (unless a precomputed swap cache is available).</li>
                           <li><b><i>Running water</i></b>: Running water makes 
                             the game quite slow, so turn it off if you feel so.</li>
                           <li>Line of sight (LOS)</li>

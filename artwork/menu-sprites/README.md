@@ -17,8 +17,8 @@ python tools/extract_gfx_sprites.py 0x38 0x3C 0x3D 0x3E 0x3F --output artwork/me
 
 When cleaning these assets, preserve each PNG's exact canvas dimensions and
 transparent background. Remove only the lettering; retain the button/panel
-artwork beneath it. The cleaned sprites will become language-neutral backplates,
-with localized text drawn by the game at runtime.
+artwork beneath it. The cleaned sprites are the language-neutral backplates used
+by the game, with localized text drawn at runtime.
 
 Import the finished backplates with:
 

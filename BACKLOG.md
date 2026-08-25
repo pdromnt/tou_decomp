@@ -1,7 +1,7 @@
 # Tunnels of Underworld Backlog
 
-The v0.6 settings, localization, level-editor, portable-runtime, simulation,
-and direct-IP LAN milestones are complete. Their implementation and forensic
+The settings, localization, level-editor, portable-runtime, simulation, and
+direct-IP LAN foundations are complete. Their implementation and forensic
 notes live in `CODEBASE.md` and `docs/`; they are intentionally not duplicated
 here as a wall of checked boxes.
 

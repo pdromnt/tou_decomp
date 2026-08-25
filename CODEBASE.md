@@ -120,8 +120,9 @@ their relative order:
 Ship intelligence is bounded inside `entity.cpp` by `AI_UpdateShip` and
 `AI_ScanNearbyThreats`. These names describe observed responsibility; they do
 not authorize reordering RNG calls, pool iteration, callbacks, or state writes.
-Physical source-file extraction can happen later, once deterministic replay can
-prove that a move did not change behavior.
+Further source-file extraction is safe only in evidence-backed slices. Use the
+snapshot/replay diagnostics to catch ordering or state-boundary changes, then
+obtain hands-on gameplay acceptance before merging the move.
 
 ## Multiplayer Boundary
 
@@ -130,8 +131,8 @@ become the original seven logical action bits, which can then come from local
 input, replay, or `netplay.cpp` without changing entity update order. The LAN
 beta uses conservative delayed TCP lockstep, host RNG sequencing, and periodic
 snapshot-derived hashes. Presentation state remains local. See
-`docs/LAN_BETA.md`; `BACKLOG.md` records the completed milestone boundary and
-future feature candidates.
+`docs/LAN_BETA.md`; `BACKLOG.md` contains only active future candidates and the
+rules that constrain new work.
 
 The beta remains conservative: a peer loss tears down the lockstep session,
 while a checksum mismatch applies a current authoritative host snapshot to the
@@ -152,7 +153,7 @@ The executable expects these paths relative to its working directory:
 | `sfx/` | Weapon, UI, ship, and environment sounds |
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
-| `help/` | Original HTML help, restyled for the decomp release |
+| `help/` | Original gameplay help plus updated runtime, menu, and level-editor guidance |
 | `lang/` | UTF-8 language catalogs; English is the per-key fallback |
 | `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
