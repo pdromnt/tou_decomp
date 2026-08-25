@@ -91,10 +91,10 @@ Windows packages do not require SDL DLLs or the Visual C++ redistributable. The
 32-bit MinGW build remains the closest host to the original executable; native
 x64 and ARM64 builds are also supported.
 
-The `Build` GitHub Actions workflow runs on pushes and pull requests. It builds
-Windows x86, Windows/Linux x64 and ARM64, and macOS Intel and Apple Silicon,
-validates localization, checks executable architecture, and stages the full
-runtime. It never publishes a release.
+The `Build` GitHub Actions workflow runs once for each pull request and for
+direct pushes to `main`. It builds Windows x86, Windows/Linux x64 and ARM64,
+and macOS Intel and Apple Silicon, validates localization, checks executable
+architecture, and stages the full runtime. It never publishes a release.
 
 To create the Windows x64 archive layout used by CI:
 
