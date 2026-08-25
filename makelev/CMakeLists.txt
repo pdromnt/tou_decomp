@@ -77,12 +77,10 @@ install(TARGETS tou-level-compiler tou-level-editor
     RUNTIME DESTINATION level-editor
     BUNDLE DESTINATION level-editor
 )
-if(NOT APPLE)
+if(UNIX AND NOT APPLE)
     install(FILES resources/level-editor-icon.png
         DESTINATION level-editor
     )
-endif()
-if(UNIX AND NOT APPLE)
     install(FILES resources/tou-level-editor.desktop
         DESTINATION level-editor
     )

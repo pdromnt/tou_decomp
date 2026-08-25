@@ -72,7 +72,6 @@ jobs:
         run: |
           objdump -f stage/TOU.exe | grep -q "file format pei-i386"
           objdump -f stage/level-editor/tou-level-editor.exe | grep -q "file format pei-i386"
-          test -f stage/level-editor/level-editor-icon.png
 
       - name: Package runtime
         shell: pwsh

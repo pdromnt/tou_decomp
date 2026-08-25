@@ -76,12 +76,12 @@ if ($isMacPackage) {
         "TOU Level Editor.app/Contents/Resources/level-editor-icon.png"
     )
 } else {
-    $requiredEditorFiles += @(
-        "tou-level-editor$toolSuffix",
-        "level-editor-icon.png"
-    )
+    $requiredEditorFiles += "tou-level-editor$toolSuffix"
     if (-not $isWindowsPackage) {
-        $requiredEditorFiles += "tou-level-editor.desktop"
+        $requiredEditorFiles += @(
+            "level-editor-icon.png",
+            "tou-level-editor.desktop"
+        )
     }
 }
 foreach ($relativePath in $requiredEditorFiles) {

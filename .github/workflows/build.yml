@@ -55,7 +55,6 @@ jobs:
         run: |
           objdump -f stage/TOU.exe | grep -q "file format pei-i386"
           objdump -f stage/level-editor/tou-level-editor.exe | grep -q "file format pei-i386"
-          test -f stage/level-editor/level-editor-icon.png
 
       - name: Upload staged build
         uses: actions/upload-artifact@v7
@@ -204,10 +203,6 @@ jobs:
               throw ('Wrong PE machine for {0}: expected 0x{1:X4}, found 0x{2:X4}' `
                 -f $path, $expected, $machine)
             }
-          }
-          if (-not (Test-Path -LiteralPath stage/level-editor/level-editor-icon.png `
-              -PathType Leaf)) {
-            throw 'Missing staged level editor icon'
           }
 
       - name: Upload staged build
