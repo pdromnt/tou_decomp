@@ -26,8 +26,8 @@ offsets, and Ghidra-style names remain where changing them without stronger
 types would risk behavior. Cleanup should be incremental and parity-preserving.
 
 See [CODEBASE.md](CODEBASE.md) for the source map and safe-refactoring guidance,
-and [BACKLOG.md](BACKLOG.md) for the parity contract, current roadmap, and
-remaining work.
+and [BACKLOG.md](BACKLOG.md) for the parity contract, completed roadmap, and
+future feature candidates.
 
 ## Running a Release
 

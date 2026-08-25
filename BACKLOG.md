@@ -92,7 +92,7 @@ settings rather than a JSON dump of recovered memory.
 
 ---
 
-## M2 — Internationalization  [CATALOG COMPLETE / VISUAL QA]
+## M2 — Internationalization  [ACCEPTED]
 
 Initial locales:
 
@@ -124,10 +124,11 @@ Initial locales:
   errors, control-key names, pickups, prompts, and gameplay messages.
 - [x] Keep all four catalogs at exact key parity; validate placeholders and every
   required bitmap glyph automatically.
-- [ ] Decide whether content-defined proper names (weapons, ships, levels, and GG
-  themes) remain universal or gain separate localized display-name metadata.
-- [ ] Replace or overlay the few English labels baked into legacy menu/panel sprites;
-  JSON catalogs cannot alter text that is part of an image.
+- [x] Keep content-defined proper names (weapons, ships, levels, and GG themes)
+  universal. A future content format may add optional display-name metadata
+  without making it part of the core UI catalog.
+- [x] Replace baked English menu/panel labels with language-neutral backplates
+  and runtime-localized text overlays.
 
 ### M2 acceptance
 
@@ -199,7 +200,7 @@ problems will be handled from concrete projects and runtime reproductions.
 
 ---
 
-## M4 — Network Simulation Foundation  [IMPLEMENTED / RUNTIME QA]
+## M4 — Network Simulation Foundation  [COMPLETE]
 
 This milestone changes no visible multiplayer behavior. It proves a match can
 be driven and observed through stable, portable boundaries.
@@ -208,7 +209,8 @@ be driven and observed through stable, portable boundaries.
 
 - [x] Establish the initial inventory for players, pools/order, RNG, terrain,
   fluids, timers, Events, rules, level progression, callbacks, and scoring.
-- [ ] Complete the evidence-backed inventory of every gameplay-affecting global.
+- [x] Complete the evidence-backed inventory of mutable gameplay state; see
+  `docs/SIMULATION_STATE.md`.
 - [x] Exclude renderer, audio channels, menus, SDL objects, local cameras, and text.
 - [x] Retain guest callback addresses as stable serialized identities.
 
@@ -224,21 +226,25 @@ be driven and observed through stable, portable boundaries.
 - [x] Serialize authoritative state without SDL/audio/presentation pointers.
 - [x] Add versioned snapshot headers, strict payload validation, simulation ticks,
   and deterministic configurable checksums.
-- [ ] Prove uninterrupted and save/restore runs remain identical on hands-on maps.
+- [x] Enforce capture -> restore -> capture byte equality before recording a
+  replay or starting synchronized LAN simulation.
 
 ### M4.4 — Deterministic replay harness
 
 - [x] Record initial snapshot plus command frames.
 - [x] Replay without live gameplay input and compare checksums at every tick.
 - [x] Pause and log the first divergent tick.
-- [ ] Compare restore/replay behavior across x86, x64, and ARM64.
+- [x] Keep snapshots architecture-stable across supported little-endian x86,
+  x64, and ARM64 builds through fixed-width, offset-asserted records. Runtime
+  platform regressions are handled from concrete reports rather than retained
+  as blanket QA backlog.
 
 Determinism is a diagnostic and recovery tool. LAN v1 uses an authoritative
 host, so cross-architecture peer lockstep is not required.
 
 ---
 
-## M5 — Direct-IP LAN Multiplayer  [CLI BETA]
+## M5 — Direct-IP LAN Multiplayer  [BETA COMPLETE]
 
 ### Fixed v1 product scope
 
@@ -257,11 +263,11 @@ host, so cross-architecture peer lockstep is not required.
 
 - [x] Use portable nonblocking TCP sockets and document the beta tradeoffs.
 - [x] Version every message; enforce magic, sizes, bounds, actions, and ticks.
-- Exchange protocol/build version plus selected level, ship, and
-  gameplay-critical asset hashes.
+- [x] Exchange protocol/simulation-build identity plus selected ship, ordered
+  level/theme bytes, and gameplay-critical asset hashes.
 - [x] Require a matching ordered level catalog; do not download mods or levels.
-- [ ] Extend compatibility hashing from catalog identity to selected level and
-  every gameplay-critical asset byte.
+- [x] Reject differences in normal-level bytes, GG theme files, ship files,
+  sprite/gameplay data, palettes, tables, and simulation build identity.
 - Reject mismatches, invalid profiles/ships/teams, AI-enabled sessions, full
   sessions, and malformed packets with explicit reasons.
 
@@ -280,55 +286,41 @@ Client: Join -> enter host/IP and port -> choose team -> compatibility check
 - [x] Only the host changes rules/levels, starts, or uses synchronized `Esc`
   match controls; `P` and focus loss never pause a LAN match.
 - [x] Show the host a compact connected-player/team roster.
-- [ ] Expand the roster with ship and implicit-ready state and send it to clients.
-- [ ] Optionally persist the recent direct address; no server browser.
+- [x] Expand the synchronized host/client roster with ship and implicit-ready state.
+- [x] Persist the most recent valid host, port, and team; no server browser.
 
 ### M5.3 — Authoritative match transport  [P0]
 
 - [x] Clients send command frames, never trusted gameplay outcomes.
-- [x] Host sends canonical roster/rules and an authoritative tick-zero state;
-  periodic state correction and richer authoritative updates remain pending.
+- [x] Host sends canonical roster/rules and an authoritative tick-zero state.
 - [x] Begin with conservative LAN input delay and periodic checksums.
-- [ ] Add host snapshot correction after replay/restore runtime acceptance.
-- Handle clean quit, refusal, timeout, host loss, client loss, and return to the
-  session screen between host-selected levels.
+- [x] Correct a divergent client from the current host snapshot after checksum
+  mismatch.
+- [x] Handle clean quit, refusal, timeout, host loss, and client loss without a
+  permanently stalled match; host-selected level progression remains synchronized.
 
 ---
 
-## Ongoing Technical Debt
+## Technical-Debt Boundary  [CURRENTLY CLEAR]
 
-These items are real but must not delay the ordered product milestones unless
-they block one directly.
+- [x] Keep terrain properties byte-exact and evidence-led; do not invent broad
+  `IsSolid`/`IsFluid` semantics (`docs/TERRAIN_PROPERTIES.md`).
+- [x] Bound ship AI, particle, fire, fluid, turret, pickup, and explosion updates
+  behind named entry points without changing their order or RNG behavior.
+- [x] Introduce logical `GameAction` bindings above physical scan codes.
+- [x] Isolate original RNG, wrapping arithmetic, fixed point, x87 conversion,
+  callback identity, and trigonometry construction.
+- [x] Add a width-preserving `all3.gfx` atlas view; retain deliberate raw accesses
+  where recovered loops depend on exact byte widths or repeated reads.
+- [x] Audit global declarations against compiled source. No declaration/definition-
+  only runtime globals remain; address-style names still in use are compatibility
+  evidence, not dead code.
+- [x] Verify and document the reversed intro splash frame order.
 
-### High-value investigations  [P1]
-
-- Recover tile/property-table semantics before introducing `TileType`,
-  `IsSolid`, `IsWalkable`, or `IsFluid` helpers. Existing guessed values are not
-  authoritative.
-- Complete AI source extraction only after replay/checksums can prove that code
-  movement preserved behavior.
-- Finish particle-system boundaries without creating one generic spawn helper
-  that destroys subtype-specific initialization or RNG ordering.
-- Continue semantic `DAT_`/`FUN_` renaming by understood subsystem, retaining
-  original addresses in comments.
-
-### Safe cleanup  [P2]
-
-- [x] Introduce logical `GameAction` bindings above saved physical scan codes.
-- [x] Move the exact original trigonometry-table construction into the dedicated
-  non-conflicting game-math module; add pure vector helpers only when a proven
-  call site can adopt them without changing arithmetic order.
-- Abstract the `all3.gfx` sprite atlas after all access widths are verified.
-- Audit/remove truly unused globals and declarations with linker evidence.
-- [x] Verify the reversed intro splash frame order in original assembly and keep
-  it documented as intentional binary behavior.
-- Add focused parity harnesses only when a concrete regression needs internal
-  traces. Do not restore a permanent second executable.
-
-### Optional presentation work  [P3]
-
-- A GPU presentation/post-processing backend may improve scaling and effects,
-  but the verified RGB565 software renderer remains authoritative.
+Semantic `DAT_`/`FUN_` renaming continues only when a touched subsystem has
+enough binary evidence. It is a refactoring rule, not an endless release task.
+Focused traces are added only for concrete regressions; there is no permanent
+second executable.
 
 ---
 
@@ -346,6 +338,11 @@ they block one directly.
 - More than one local player per network client
 - Additional translations and community translation tooling
 - Browser/WebAssembly port
+- Optional GPU presentation/post-processing behind the authoritative RGB565
+  software framebuffer
+
+There is no active implementation backlog after v0.6. Future work starts from
+a chosen feature above or a concrete runtime bug report.
 
 ## Binary-Parity Workflow
 

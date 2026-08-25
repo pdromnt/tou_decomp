@@ -100,6 +100,7 @@ do not access SDL renderer objects directly.
 | `docs/TERRAIN_PROPERTIES.md` | Evidence ledger for the 256 x 0x20 terrain-property table |
 | `docs/LAN_BETA.md` | Direct-IP beta launch, scope, limitations, and bug-report data |
 | `docs/REPLAY_DIAGNOSTICS.md` | Replay recording/playback and snapshot boundary |
+| `docs/SIMULATION_STATE.md` | Complete authoritative snapshot inventory and exclusions |
 
 ## Simulation Boundaries
 
@@ -129,11 +130,14 @@ become the original seven logical action bits, which can then come from local
 input, replay, or `netplay.cpp` without changing entity update order. The LAN
 beta uses conservative delayed TCP lockstep, host RNG sequencing, and periodic
 snapshot-derived hashes. Presentation state remains local. See
-`docs/LAN_BETA.md`; `BACKLOG.md` keeps the remaining product/UI work explicit.
+`docs/LAN_BETA.md`; `BACKLOG.md` records the completed milestone boundary and
+future feature candidates.
 
-The beta is deliberately diagnostic: a disconnect or hash mismatch pauses the
-match. It does not yet apply snapshot correction or claim a fully authoritative
-host-state transport.
+The beta remains conservative: a peer loss tears down the lockstep session,
+while a checksum mismatch applies a current authoritative host snapshot to the
+divergent client. Handshake compatibility covers simulation build identity,
+normal/GG level content, ships, and gameplay data. It is still delayed TCP
+lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
 ## Runtime Data
 
