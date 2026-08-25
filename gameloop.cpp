@@ -365,7 +365,7 @@ static void Gameplay_Tick(void)
                 /* Check tile at trooper position */
                 int tx = trooper->position_x >> 0x12;
                 int ty = trooper->position_y >> 0x12;
-                int tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
+                const uint8_t tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
                     (ty << (DAT_00487a18 & 0x1f)) + tx];
                 if (TerrainProperty_Read(tile_idx, 0x01) == 1) {
                     trooper->animation_state_24 = 0;
