@@ -43,6 +43,7 @@ DIRECT_ENGLISH = {
     "key.page_down": "Page down", "key.insert": "Insert", "key.delete": "Delete",
     "key.left_system": "Left system key", "key.right_system": "Right system key",
     "key.application": "Application key",
+    "key.escape": "Esc",
     "levels.hover.gg_author_format": "GG THEME AUTHOR: %s",
     "levels.hover.gg_name_format": "GG THEME NAME: %s",
     "levels.hover.level_author_format": "LEVEL AUTHOR: %s",
@@ -53,6 +54,7 @@ DIRECT_ENGLISH = {
     "levels.hover.type.normal_level": "NORMAL LEVEL",
     "levels.summary_format": "You have %d levels and %d GG themes",
     "results.draw": "Draw!",
+    "results.back_to_menu": "Back to the menu",
     "results.team_draw_format": "Team %d and team %d win with a draw!",
     "results.team_wins_format": "Team %d wins!",
     "results.debris_killed_format": "Debris killed: %d",
@@ -74,6 +76,14 @@ DIRECT_ENGLISH = {
     "hud.lives_format": "Lives: %d",
     "hud.you_are_dead": "You are dead!",
     "hud.pause_format": "Game Paused. Press \"%s\" to continue.",
+    "hud.back_to_game": "Back to the game",
+    "hud.exit_to_menu": "Exit to menu",
+    "hud.next_level": "Next level",
+    "hud.round_continue_action": "to continue",
+    "hud.round_current_wins": "Current wins:",
+    "hud.round_exit_action": "to exit",
+    "hud.round_exit_prefix": "and",
+    "hud.round_level_format": "Level: %d / %d",
     "hud.level_skipped": "Level skipped",
     "hud.everybody_died": "Draw. Everybody died",
     "hud.team_wins_round_format": "Team %d wins the round",
@@ -90,12 +100,38 @@ DIRECT_ENGLISH = {
     "pickup.small_medikit": "Small medikit", "pickup.large_medikit": "Large medikit",
     "pickup.hurry_up": "Hurry up!",
     "error.could_not_load_ships": "Could not load ships!",
+    "lan.landing_prompt": "Host a session or join one.",
+    "lan.join_prompt": "Edit the host, port, and team, then connect.",
+    "lan.roster_format": "%d/4 players: %s",
+    "lan.team_format": "Team %d",
+    "lan.error.client_not_ready": "A client is still connecting. Wait or ask them to reconnect.",
+    "lan.error.no_clients": "No client is connected yet.",
+    "lan.status.choose_host_or_join": "Choose either LAN host or LAN join.",
+    "lan.status.client_joined_format": "Player %u joined; press Start when ready.",
+    "lan.status.connect_failed_format": "Could not connect to %s:%u",
+    "lan.status.connected_format": "Connected as Player %u; waiting for host",
+    "lan.status.connecting_format": "Connecting to %s:%u",
+    "lan.status.desync_format": "DESYNC at tick %u (local %llx, remote %llx)",
+    "lan.status.disconnected_format": "Disconnected: %s",
+    "lan.status.host_accept_failed": "Could not accept LAN client",
+    "lan.status.host_failed_format": "Could not host on port %u",
+    "lan.status.hosting_format": "Hosting on port %u; waiting for clients",
+    "lan.status.invalid_address": "Invalid LAN address",
+    "lan.status.level_loaded_client": "Level loaded; waiting for host synchronization",
+    "lan.status.level_loaded_host": "Host level loaded; waiting for clients",
+    "lan.status.match_starting": "Match starting",
+    "lan.status.player_loaded_format": "Player %u loaded; waiting for synchronization",
+    "lan.status.snapshot_failed": "Could not synchronize this level; it is too large for LAN beta",
+    "lan.status.socket_init_failed": "Could not initialize network sockets",
+    "lan.status.starting_players_format": "Starting %u-player LAN match",
+    "lan.status.synchronized": "Synchronized; match active",
 }
 
 ASSIGNMENT = re.compile(
     r'^\s*g_MenuStrings\[(0x[0-9A-Fa-f]+|\d+)\]\s*=\s*\(char \*\)"((?:\\.|[^"\\])*)";'
 )
-DYNAMIC_SLOTS = {0x65, *range(0x71, 0x8C), *range(0x149, 0x14D)}
+DYNAMIC_SLOTS = {0x65, *range(0x71, 0x8C), *range(0x149, 0x14D),
+                 0x15E, 0x15F, 0x160, 0x162, 0x164}
 
 
 def decode_c_string(value: str) -> str:

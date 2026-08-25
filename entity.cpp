@@ -4868,23 +4868,10 @@ static void FUN_0044b990(void)
         if (player->ai_level != 0)
             continue;
 
-        unsigned char k0 = player->key_scan_codes[0];
-        unsigned char k1 = player->key_scan_codes[1];
-        unsigned char k2 = player->key_scan_codes[2];
-        unsigned char k3 = player->key_scan_codes[3];
-        unsigned char k4 = player->key_scan_codes[4];
-        unsigned char k5 = player->key_scan_codes[5];
-        unsigned char k6 = player->key_scan_codes[6];
-
-        unsigned int *buttons = &player->buttons;
-        if (keyState[k0] & 0x80) *buttons |= 0x01;  /* Turn Left */
-        if (keyState[k1] & 0x80) *buttons |= 0x02;  /* Turn Right */
-        if (keyState[k2] & 0x80) *buttons |= 0x04;  /* Thrust */
-        if (keyState[k3] & 0x80) *buttons |= 0x08;  /* Fire Primary */
-        if (keyState[k4] & 0x80) *buttons |= 0x10;  /* Fire Secondary */
-        if (keyState[k5] & 0x80) *buttons |= 0x20;  /* Special/Detonate */
-        if (keyState[k6] & 0x80) *buttons |= 0x40;  /* Brake */
-
+        const uint8_t local_actions = Input_EncodeGameActions(
+            keyState, player->key_scan_codes);
+        player->buttons = Replay_PlayerActions(
+            i, Netplay_PlayerActions(i, local_actions));
     }
 }
 

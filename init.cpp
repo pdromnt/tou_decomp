@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL3/SDL_filesystem.h>
-#include <math.h>
 #include <ctype.h>
+#include <math.h>
 
 /* ===== Globals defined in this module ===== */
 
@@ -113,6 +113,106 @@ static char s_HoverLevelEmail[128]  = "";
 static char s_HoverLevelType[96]    = "";
 static int  s_HoveredLevelIdx       = -1;
 static void Update_Level_Hover_Metadata(int level_idx);
+
+/* Modern LAN setup uses otherwise-free high menu pages while retaining the
+ * original menu renderer and click routing. Join fields use explicit edit
+ * mode so mouse-up cannot accidentally finish keyboard capture. */
+enum LanEditField { LAN_EDIT_NONE, LAN_EDIT_HOST, LAN_EDIT_PORT };
+static char s_LanJoinHost[64] = "127.0.0.1";
+static char s_LanJoinPort[6] = "27015";
+static char s_LanHostDisplay[72] = "127.0.0.1";
+static char s_LanPortDisplay[16] = "27015";
+static char s_LanStatus[160] = "";
+static char s_LanTeamText[32] = "Team 1";
+static char s_LanRoster[96] = "";
+static unsigned char s_LanPreviousKeys[256] = {0};
+static int s_LanTeam = 1;
+static LanEditField s_LanEditField = LAN_EDIT_NONE;
+static bool s_LanAttemptedConnection = false;
+static void Build_Lan_Menu_Page(void);
+static void Build_Lan_Join_Page(void);
+
+static void Update_Lan_Menu_Dynamic_Text(void)
+{
+    snprintf(s_LanTeamText, sizeof(s_LanTeamText), Text_Get("lan.team_format"), s_LanTeam);
+    snprintf(s_LanHostDisplay, sizeof(s_LanHostDisplay), "%s%s",
+             s_LanJoinHost, s_LanEditField == LAN_EDIT_HOST ? "_" : "");
+    snprintf(s_LanPortDisplay, sizeof(s_LanPortDisplay), "%s%s",
+             s_LanJoinPort, s_LanEditField == LAN_EDIT_PORT ? "_" : "");
+    const char *status = Netplay_IsEnabled() || s_LanAttemptedConnection
+        ? Netplay_Status()
+        : (DAT_004877a4 == 0xF6 ? Text_Get("lan.join_prompt")
+                               : Text_Get("lan.landing_prompt"));
+    if (strcmp(s_LanStatus, status) != 0) {
+        snprintf(s_LanStatus, sizeof(s_LanStatus), "%s", status);
+        if (DAT_004877a4 == 0xF9 || DAT_004877a4 == 0xF6)
+            DAT_004877b1 = 1;
+    }
+    char roster[sizeof(s_LanRoster)] = "";
+    if (Netplay_IsHost()) {
+        char players[64];
+        Netplay_FormatRoster(players, sizeof(players));
+        snprintf(roster, sizeof(roster), Text_Get("lan.roster_format"),
+                 Netplay_ConnectedPlayerCount(), players);
+    }
+    if (strcmp(s_LanRoster, roster) != 0) {
+        snprintf(s_LanRoster, sizeof(s_LanRoster), "%s", roster);
+        if (DAT_004877a4 == 0xF9)
+            DAT_004877b1 = 1;
+    }
+}
+
+static void Update_Lan_Address_Input(void)
+{
+    if (DAT_004877a4 != 0xF6 || Netplay_IsEnabled() ||
+        s_LanEditField == LAN_EDIT_NONE) {
+        memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+        Update_Lan_Menu_Dynamic_Text();
+        return;
+    }
+
+    char typed = 0;
+    const unsigned char digit_scans[10] = {0x0B, 0x02, 0x03, 0x04, 0x05,
+                                            0x06, 0x07, 0x08, 0x09, 0x0A};
+    for (int digit = 0; digit < 10; ++digit) {
+        const unsigned char scan = digit_scans[digit];
+        if ((g_KeyboardState[scan] & 0x80) && !(s_LanPreviousKeys[scan] & 0x80))
+            typed = static_cast<char>('0' + digit);
+    }
+    static const unsigned char letter_scans[26] = {
+        0x1E,0x30,0x2E,0x20,0x12,0x21,0x22,0x23,0x17,0x24,0x25,0x26,0x32,
+        0x31,0x18,0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11,0x2D,0x15,0x2C
+    };
+    for (int letter = 0; letter < 26; ++letter) {
+        const unsigned char scan = letter_scans[letter];
+        if ((g_KeyboardState[scan] & 0x80) && !(s_LanPreviousKeys[scan] & 0x80))
+            typed = static_cast<char>('a' + letter);
+    }
+    if ((g_KeyboardState[0x34] & 0x80) && !(s_LanPreviousKeys[0x34] & 0x80)) typed = '.';
+    if ((g_KeyboardState[0x0C] & 0x80) && !(s_LanPreviousKeys[0x0C] & 0x80)) typed = '-';
+    char *value = s_LanEditField == LAN_EDIT_HOST ? s_LanJoinHost : s_LanJoinPort;
+    const size_t capacity = s_LanEditField == LAN_EDIT_HOST
+        ? sizeof(s_LanJoinHost) : sizeof(s_LanJoinPort);
+    if (s_LanEditField == LAN_EDIT_PORT && (typed < '0' || typed > '9'))
+        typed = 0;
+
+    size_t length = strlen(value);
+    if ((g_KeyboardState[0x0E] & 0x80) && !(s_LanPreviousKeys[0x0E] & 0x80)) {
+        if (length != 0) {
+            value[--length] = 0;
+            DAT_004877b1 = 1;
+        }
+    } else if ((g_KeyboardState[0x1C] & 0x80) && !(s_LanPreviousKeys[0x1C] & 0x80)) {
+        s_LanEditField = LAN_EDIT_NONE;
+        DAT_004877b1 = 1;
+    } else if (typed != 0 && length + 1 < capacity) {
+        value[length] = typed;
+        value[length + 1] = 0;
+        DAT_004877b1 = 1;
+    }
+    memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+    Update_Lan_Menu_Dynamic_Text();
+}
 
 /* Music scanner */
 int   DAT_00485fcc = 0;         /* music file count */
@@ -871,8 +971,8 @@ void FUN_0042d8b0(void)
     g_KeyNameTable[0xDC] = (char *)"Right winkey";
     g_KeyNameTable[0xDD] = (char *)"Application key";
 
-    /* --- Menu string table (350 entries) --- */
-    g_MenuStrings = (char **)Mem_Alloc(350u * sizeof(*g_MenuStrings));
+    /* --- Menu string table (legacy 350 entries plus modern UI additions) --- */
+    g_MenuStrings = (char **)Mem_Alloc(MENU_STRING_CAPACITY * sizeof(*g_MenuStrings));
 
     /* Allocate 50-byte dynamic buffers for player/stats entries */
     pvVar = Mem_Alloc(MENU_DYNAMIC_TEXT_CAPACITY);
@@ -1242,8 +1342,24 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x152] = (char *)"Espa\xC3\xB1ol";
     g_MenuStrings[0x153] = (char *)"Portugu\xC3\xAAs (Brasil)";
     g_MenuStrings[0x154] = (char *)"Suomi";
+    g_MenuStrings[0x155] = (char *)"Local deathmatch";
+    g_MenuStrings[0x156] = (char *)"LAN deathmatch";
+    g_MenuStrings[0x157] = (char *)"Host LAN match";
+    g_MenuStrings[0x158] = (char *)"Join LAN match";
+    g_MenuStrings[0x159] = (char *)"Host / IP";
+    g_MenuStrings[0x15A] = (char *)"Team";
+    g_MenuStrings[0x15B] = (char *)"Start LAN match";
+    g_MenuStrings[0x15C] = (char *)"Cancel session";
+    g_MenuStrings[0x15D] = (char *)"LAN lobby";
+    g_MenuStrings[0x15E] = s_LanHostDisplay;
+    g_MenuStrings[0x15F] = s_LanStatus;
+    g_MenuStrings[0x160] = s_LanTeamText;
+    g_MenuStrings[0x161] = (char *)"Port";
+    g_MenuStrings[0x162] = s_LanPortDisplay;
+    g_MenuStrings[0x163] = (char *)"Connect";
+    g_MenuStrings[0x164] = s_LanRoster;
 
-    Localization_BindLegacyMenuStrings(g_MenuStrings, 350);
+    Localization_BindLegacyMenuStrings(g_MenuStrings, MENU_STRING_CAPACITY);
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -2400,6 +2516,9 @@ void FUN_00425fe0(void)
             g_MouseDeltaY = 0x5b80000;
         } else {
             /* Navigate to parent page (DAT_004877c9 = back page) */
+            if (Netplay_IsEnabled() && DAT_004877c9 == 0 &&
+                DAT_004877a4 >= 0x13 && DAT_004877a4 <= 0x15)
+                Netplay_CancelSession();
             DAT_004877b1 = 1;
             DAT_004877a4 = DAT_004877c9;
         }
@@ -2483,13 +2602,13 @@ void FUN_004644af_bounded(char *dest, size_t capacity,
     va_end(args);
 }
 
-/* ===== FUN_00425840 — Match-End / Briefing Page Builder (00425840) ===== */
-/* Page builder for menu case 0x1D. This page is never reached by any
- * menu entry in the shipped build — unused briefing/tournament-end
- * content that was cut before release. The body is empty; we leave
- * the hook in place so any stray jump to 0x1D just produces a blank
- * page rather than a crash. Do NOT wire a menu item to nav_target
- * 0x1D: it will land here and render the unused page. */
+/* ===== FUN_00425840 — Cut Campaign Briefing Builder (00425840) ===== */
+/* The retail function is a substantial 408-instruction campaign UI, not an
+ * empty hook. It selects one of 15 briefing/epilogue states, portraits, player
+ * count, difficulty, mission progression, and the start action. The released
+ * game has no reachable entry into that state and omits its sp1..sp14 levels,
+ * so restoration needs to be treated as a separate feature rather than wired
+ * blindly into the normal menu. See docs/CAMPAIGN_FORENSICS.md. */
 void FUN_00425840(void)
 {
 }
@@ -2908,6 +3027,75 @@ static void Build_Options_Menu_Page(void)
     DAT_004877b1 = 0;
 }
 
+static void Build_Lan_Menu_Page(void)
+{
+    Update_Lan_Menu_Dynamic_Text();
+    FUN_00430200(0, 0x28, 0x15D, 1, 0, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x58, 0x15F, 2, 3, 0, 0, 1, 0xff);
+
+    if (!Netplay_IsEnabled()) {
+        FUN_00430200(0, 0xa0, 0x157, 2, 2, 1, 0, 1, 0xFA);
+        FUN_00430200(0, 0xd0, 0x158, 2, 2, 1, 0, 1, 0xF6);
+        FUN_00430200(0, 0x180, 0x0F, 2, 0, 1, 0, 1, 0xF8);
+        DAT_004877c9 = 0xF8;
+    } else {
+        if (Netplay_IsHost()) {
+            FUN_00430200(0, 0x90, 0x164, 1, 2, 0, 0, 1, 0xff);
+            FUN_00430200(0, 0xd0, 0x15B, 2, 2, 1, 0, 1, 0x1E);
+        } else {
+            FUN_00430200(0, 0x9c, 0x160, 1, 2, 0, 0, 1, 0xff);
+        }
+        FUN_00430200(0, 0x110, 0x15C, 2, 2, 1, 0, 1, 0xF7);
+        DAT_004877c9 = 0xF7;
+    }
+    g_FrameIndex = 0;
+    DAT_004877b1 = 0;
+}
+
+/* Pick the most readable of two existing bitmap fonts that fits a fixed-width
+ * menu column. This keeps translated result text legible without allowing long
+ * player/team award names to run off the 640-pixel logical canvas. */
+static int Menu_Fitting_Font(int string_idx, int preferred_font,
+                             int fallback_font, int max_width)
+{
+    const char *str = NULL;
+    int width = 0;
+
+    if (g_MenuStrings && string_idx >= 0 &&
+        string_idx < MENU_STRING_CAPACITY)
+        str = g_MenuStrings[string_idx];
+
+    if (!str)
+        return preferred_font;
+
+    const char *cursor = str;
+    while (*cursor) {
+        unsigned char glyph = '?';
+        cursor = Text_NextGlyph(cursor, &glyph);
+        width += Font_Char_Table[preferred_font * 256 + glyph].width;
+    }
+
+    return width <= max_width ? preferred_font : fallback_font;
+}
+
+static void Build_Lan_Join_Page(void)
+{
+    Update_Lan_Menu_Dynamic_Text();
+    FUN_00430200(0, 0x28, 0x158, 1, 0, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x52, 0x15F, 2, 3, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x80, 0x159, 2, 2, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x9c, 0x15E, 1, 2, 1, 0, 1, 0xF5);
+    FUN_00430200(0, 0xc0, 0x161, 2, 2, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0xdc, 0x162, 1, 2, 1, 0, 1, 0xF4);
+    FUN_00430200(0, 0x100, 0x15A, 2, 2, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x11c, 0x160, 1, 2, 1, 0, 1, 0xFC);
+    FUN_00430200(0, 0x14c, 0x163, 2, 2, 1, 0, 1, 0xFB);
+    FUN_00430200(0, 0x180, 0x0F, 2, 0, 1, 0, 1, 0xF9);
+    DAT_004877c9 = 0xF9;
+    g_FrameIndex = 0;
+    DAT_004877b1 = 0;
+}
+
 /* ===== FUN_0042a470 - Menu page builder (0042A470) =====
  * Builds the menu item layout for the current page (DAT_004877a4).
  * Each page creates menu items in g_GameViewData via FUN_00430200.
@@ -2924,13 +3112,11 @@ static void Build_Options_Menu_Page(void)
  *      without adding items. Most transition to a different g_GameState
  *      or explicitly redirect DAT_004877a4 to a real page so the renderer
  *      has something to draw. An action case that neither transitions nor
- *      redirects leaves the user stranded on an item-less page — see the
- *      0x1D booby trap below.
+ *      redirects leaves the user stranded on an item-less page.
  *
- * BEWARE: case 0x1D is an UNUSED briefing/match-end page left in the
- * shipped binary. Never wire a new menu entry to nav_target 0x1D — use a
- * high unused ID (e.g. 0xFD) and add a new case that redirects to a real
- * page if your entry is an action rather than a page.
+ * Case 0x1D is the cut campaign briefing page. Its original builder and
+ * mission assets are not restored; see docs/CAMPAIGN_FORENSICS.md before
+ * changing that state graph.
  *
  * Item count is reset at the top of this function via DAT_004877a8 = 0. */
 void FUN_0042a470(void)
@@ -2950,7 +3136,7 @@ void FUN_0042a470(void)
     case 0x00: /* Main menu page */
         FUN_0042ff80(0xe6, 0x20, 0x13, 0, 0, 0, 0xff);          /* title bar sprite */
         FUN_00430200(0, 0x7d, 7, 0, 0, 0, 0, 1, 0xff);          /* "Tunnels Of the Underworld" */
-        FUN_00430200(0, 0xaa, 1, 2, 0, 1, 0, 1, 3);             /* "Team deathmatch" → page 3 */
+        FUN_00430200(0, 0xaa, 1, 2, 0, 1, 0, 1, 0xF8);          /* "Team deathmatch" → local/LAN chooser */
         FUN_00430200(0, 200, 2, 2, 0, 1, 0, 1, 0x11);           /* "Levels" → page 0x11 */
         FUN_00430200(0, 0xe6, 3, 2, 0, 1, 0, 1, 0x12);          /* "Players" → page 0x12 */
         FUN_00430200(0, 0x104, 4, 2, 0, 1, 0, 1, 1);            /* "Options" → page 1 */
@@ -2988,9 +3174,85 @@ void FUN_0042a470(void)
         return;
 
     case 0x03: /* Start game - transition to gameplay */
+        /* Local Deathmatch is a hard session boundary. Restore any temporary
+         * LAN player count, teams, ships, and client key mapping first even if
+         * the previous network session ended through an unusual exit path. */
+        if (Netplay_IsEnabled())
+            Netplay_CancelSession();
         DAT_0048764a = 0;
         GameState_Transition(GAME_STATE_QUICK_RESTART);
         DAT_004877b1 = 0;
+        return;
+
+    case 0xF8: /* Team deathmatch: local or LAN */
+        FUN_00430200(0, 0x40, 1, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x92, 0x155, 2, 2, 1, 0, 1, 0x03);
+        FUN_00430200(0, 0xc2, 0x156, 2, 2, 1, 0, 1, 0xF9);
+        FUN_00430200(0, 0x168, 0x0F, 2, 0, 1, 0, 1, 0x00);
+        DAT_004877c9 = 0x00;
+        g_FrameIndex = 0;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0xF9: /* LAN setup/lobby */
+        s_LanEditField = LAN_EDIT_NONE;
+        Build_Lan_Menu_Page();
+        return;
+
+    case 0xF6: /* LAN join setup */
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xFA: /* Host LAN session */
+        s_LanAttemptedConnection = true;
+        Netplay_StartHostSession(27015, 1);
+        DAT_004877a4 = 0xF9;
+        Build_Lan_Menu_Page();
+        return;
+
+    case 0xFB: /* Join LAN session */
+    {
+        char endpoint[80];
+        snprintf(endpoint, sizeof(endpoint), "%s:%s", s_LanJoinHost, s_LanJoinPort);
+        s_LanAttemptedConnection = true;
+        s_LanEditField = LAN_EDIT_NONE;
+        Netplay_StartClientSession(endpoint, s_LanTeam);
+        DAT_004877a4 = Netplay_IsEnabled() ? 0xF9 : 0xF6;
+        if (Netplay_IsEnabled())
+            Build_Lan_Menu_Page();
+        else
+            Build_Lan_Join_Page();
+        return;
+    }
+
+    case 0xFC: /* Toggle LAN team */
+        s_LanTeam = s_LanTeam == 1 ? 2 : 1;
+        DAT_004877a4 = 0xF6;
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xF5: /* Edit LAN host/IP */
+        s_LanJoinHost[0] = 0;
+        s_LanEditField = LAN_EDIT_HOST;
+        memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+        DAT_004877a4 = 0xF6;
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xF4: /* Edit LAN port */
+        s_LanJoinPort[0] = 0;
+        s_LanEditField = LAN_EDIT_PORT;
+        memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+        DAT_004877a4 = 0xF6;
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xF7: /* Cancel LAN session */
+        Netplay_CancelSession();
+        s_LanAttemptedConnection = false;
+        s_LanEditField = LAN_EDIT_NONE;
+        DAT_004877a4 = 0xF9;
+        Build_Lan_Menu_Page();
         return;
 
     case 0x04: /* Video settings */
@@ -3687,10 +3949,10 @@ void FUN_0042a470(void)
                         FUN_004644af_bounded(g_MenuStrings[awardBufIdx], MENU_DYNAMIC_TEXT_CAPACITY,
                             (const unsigned char *)Text_Get("results.player_award_format"),
                             awardName, playerNum);
-                    /* Small font keeps two-digit 64-player labels inside the
-                     * 640-pixel logical canvas. Headers retain the original
-                     * larger presentation. */
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x31, 0, 0xff);
+                    /* Prefer the readable 12-pixel font. Only exceptionally
+                     * long translations fall back to the narrow 11-pixel one. */
+                    int awardFont = Menu_Fitting_Font(awardBufIdx, 1, 3, 0x140 - 8);
+                    FUN_00430200(0x138, iVar3, awardBufIdx, 0, awardFont, 0, 0x31, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -3707,7 +3969,8 @@ void FUN_0042a470(void)
                         FUN_004644af_bounded(g_MenuStrings[awardBufIdx], MENU_DYNAMIC_TEXT_CAPACITY,
                             (const unsigned char *)Text_Get("results.team_award_format"),
                             awardName, teamNum);
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x32, 0, 0xff);
+                    int awardFont = Menu_Fitting_Font(awardBufIdx, 1, 3, 0x140 - 8);
+                    FUN_00430200(0x138, iVar3, awardBufIdx, 0, awardFont, 0, 0x32, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -3724,7 +3987,7 @@ void FUN_0042a470(void)
         return;
     }
 
-    case 0x16: /* Color customization - team 1 */
+    case 0x16: /* Inaccessible campaign-unlock page: unlock missions 0..4 */
         FUN_00430200(0x78, 0x7d, 0xe2, 0, 0, 0, 0, 1, 0xff);
         FUN_00430200(10, 10, 0xe6, 2, 0, 1, 0, 0, 0x17);
         FUN_00430200(0x78, 0xe1, 0xe5, 1, 2, 0, 0, 1, 0xff);
@@ -3742,7 +4005,7 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x17: /* Color customization - team 2 */
+    case 0x17: /* Inaccessible campaign-unlock page: unlock missions 0..8 */
         FUN_00430200(0x78, 200, 0xe3, 0, 0, 0, 0, 1, 0xff);
         FUN_00430200(0x140, 0xe1, 0xe6, 2, 0, 1, 0, 0, 0x18);
         FUN_00430200(0x78, 0xe1, 0x5b, 1, 2, 0, 0, 1, 0xff);
@@ -3760,7 +4023,7 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x18: /* Color customization - confirm */
+    case 0x18: /* Inaccessible campaign-unlock page: unlock missions 0..14 */
         FUN_00430200(0x78, 0x7d, 0xe4, 0, 0, 0, 0, 1, 0xff);
         FUN_00430200(0x78, 0x96, 0xe7, 2, 2, 0, 0, 1, 0xff);
         FUN_00430200(0x78, 200, 0xe8, 1, 2, 0, 0, 1, 0xff);
@@ -3879,13 +4142,17 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x1D: /* Unused briefing / match-end page — never reached by shipped UI.
-                * FUN_00425840 is an empty hook; see its definition. */
+    case 0x1D: /* Cut campaign briefing page; see docs/CAMPAIGN_FORENSICS.md. */
         FUN_00425840();
         DAT_004877b1 = 0;
         return;
 
     case 0x1E: /* Start match */
+        if (!Netplay_HostStartMatch()) {
+            DAT_004877a4 = 0xF9;
+            Build_Lan_Menu_Page();
+            return;
+        }
         DAT_0048764a = 1;
         GameState_Transition(GAME_STATE_QUICK_RESTART);
         DAT_004877b1 = 0;
@@ -3956,7 +4223,6 @@ void FUN_0042a470(void)
                 * unused briefing/match-end page and would render that screen
                 * instead of returning to Options. */
         Reset_Config_To_Defaults();
-        Apply_Audio_Settings();
         s_ResetDefaultsNotice = 1;      /* Trigger the small confirmation text on the Options rebuild below. */
         DAT_004877a4 = 0x01;            /* Treat the rest of this frame as the Options page. */
         Build_Options_Menu_Page();
@@ -4006,6 +4272,9 @@ void FUN_00427df0(int param_1, char param_2)
 
     /* Navigation: if nav_target != 0xFF, switch to that page */
     if (item->nav_target != 0xFF) {
+        if (Netplay_IsEnabled() && item->nav_target == 0 &&
+            DAT_004877a4 >= 0x13 && DAT_004877a4 <= 0x15)
+            Netplay_CancelSession();
         DAT_004877a4 = item->nav_target;
         DAT_004877b1 = 1;
         return;
@@ -4559,6 +4828,8 @@ void FUN_00426650(void)
     if (DAT_004877f0 > 1000) {
         DAT_004877f0 = 1000;
     }
+
+    Update_Lan_Address_Input();
 
     /* Preview audio sliders while they are being dragged instead of waiting
      * for button release. FUN_00427a70 commits the same value afterward. */
@@ -5493,9 +5764,13 @@ void FUN_0041a8c0(void)
         FUN_0045adc0();
     }
 
-    /* 3. Save and reload the one canonical config record. */
-    Save_Options_Config();
-    Load_Options_Config();
+    /* 3. Save and reload the one canonical config record in local play.
+     * A LAN match uses a temporary host-authored record; persisting it here
+     * corrupts the player's normal split-screen count, teams, and controls. */
+    if (!Netplay_IsMatchActive()) {
+        Save_Options_Config();
+        Load_Options_Config();
+    }
     DAT_004892e5 = 0;
 
     /* 4. Apply game mode presets (only when not mid-match — the match-time
@@ -5670,7 +5945,7 @@ void FUN_0041a8c0(void)
  * Player awards: Most valuable, Most violent, Survivor, Most moving,
  *   Most explosive, Base builder award, Most useless, Greedy award
  * Team awards: The best, Odd award, Greedy award, Most violent, Explosive award
- * Sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D (tournament end). */
+ * Sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D (cut campaign briefing). */
 
 /* Helper: add a player award entry */
 static void AddPlayerAward(const char *name, int winner_idx)
@@ -5699,7 +5974,11 @@ void FUN_0041d740(void)
     unsigned char saved_cfg_732 = DAT_00483732;
     unsigned char saved_cfg_72d = DAT_0048372d;
 
-    Load_Options_Config();
+    /* LAN temporarily owns the authoritative player/team configuration.
+     * Reloading local settings here would replace it underneath the results
+     * screens and make later restoration depend on stale disk state. */
+    if (!Netplay_IsEnabled())
+        Load_Options_Config();
 
     if (DAT_0048764a == 0) {
         /* Not tournament mode - restore pre-load values */
@@ -6300,9 +6579,26 @@ void Init_Game_Config(void)
  * here too so the post-reset state matches a fresh boot exactly. */
 void Reset_Config_To_Defaults(void)
 {
+    /* A fresh process starts with zeroed storage before applying defaults.
+     * Recreate that state exactly instead of overlaying defaults on top of
+     * stale values that Set_Config_Defaults intentionally does not mention. */
+    memset(&g_GameConfig, 0, sizeof(g_GameConfig));
     Set_Config_Defaults();
     DAT_00483838[3] = 0x6739;
+
+    Settings_SetLanguage("en");
+    Localization_SetLanguage("en");
+    s_LanguageIndex = (unsigned char)Localization_GetLanguageIndex();
+
+    snprintf(s_LanJoinHost, sizeof(s_LanJoinHost), "%s", "127.0.0.1");
+    snprintf(s_LanJoinPort, sizeof(s_LanJoinPort), "%s", "27015");
+    s_LanTeam = 1;
+    s_LanEditField = LAN_EDIT_NONE;
+    s_LanAttemptedConnection = false;
+
     Save_Options_Config();
+    Apply_Audio_Settings();
+    Apply_Display_Settings();
 }
 
 /* Reads the old packed record only for one-time settings.json migration. */
@@ -6354,19 +6650,6 @@ void Load_Options_Config(void)
 void Save_Options_Config(void)
 {
     Settings_SaveJson();
-}
-
-/* ===== Init_Math_Tables (00425780) ===== */
-/* Generates sin LUT with 1.25x entries for cosine offset access */
-void Init_Math_Tables(int *buffer, unsigned int count)
-{
-    unsigned int total = count + (count >> 2); /* count * 1.25 */
-    double two_pi = 6.283185307179586;
-
-    for (unsigned int i = 0; i < total; i++) {
-        double angle = ((double)i / (double)count) * two_pi;
-        buffer[i] = (int)(sin(angle) * 524288.0); /* scale = 2^19 = 0x80000 */
-    }
 }
 
 /* ===== System_Init_Check (0041D480) ===== */

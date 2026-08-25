@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.24)
 project(TunnelsOfUnderworld LANGUAGES C CXX)
 
 include(FetchContent)
-include(CTest)
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 FetchContent_Declare(
@@ -78,6 +77,10 @@ set(TOU_SOURCES
     memory.cpp
     init.cpp
     input_sdl.cpp
+    input_actions.cpp
+    simulation_state.cpp
+    netplay.cpp
+    replay.cpp
     graphics.cpp
     platform_sdl.cpp
     render_backend.cpp
@@ -92,7 +95,7 @@ set(TOU_SOURCES
     entity.cpp
     hud.cpp
     gg_gen.cpp
-    binary_compat.cpp
+    original_semantics.cpp
     entity_callbacks.cpp
     settings.cpp
     localization.cpp
@@ -136,6 +139,9 @@ target_link_libraries(TOU PRIVATE
     SDL3_mixer::SDL3_mixer-static
     nlohmann_json::nlohmann_json
 )
+if(WIN32)
+    target_link_libraries(TOU PRIVATE ws2_32)
+endif()
 
 set_target_properties(TOU PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -151,8 +157,8 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_NAME "Tunnels of Underworld"
         MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou"
         MACOSX_BUNDLE_ICON_FILE "icon.icns"
-        MACOSX_BUNDLE_BUNDLE_VERSION "0.5"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.5"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.6"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.6"
     )
 endif()
 

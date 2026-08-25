@@ -206,9 +206,11 @@ gg_level_ready:
             player->team = g_GameConfig.values.player_team[i];
         }
     }
+    Netplay_PreparePlayersBeforeInit();
 
     /* FUN_0041b010() - Ship/player init */
     FUN_0041b010();
+    Netplay_FinalizePlayersAfterInit();
 
     /* FUN_004249c0() - Ship sprite loading (fatal on failure in original) */
     result = FUN_004249c0();
@@ -274,6 +276,9 @@ gg_level_ready:
 
     /* Visibility map: full rebuild for init */
     FUN_00449040('\x01');
+
+    SimulationState_Reset();
+    Netplay_OnLevelLoaded();
 
     return 1;
 }

@@ -35,7 +35,9 @@ size_t g_BoundMenuCount = 0;
 bool IsDynamicMenuSlot(int index)
 {
     return index == 0x65 || (index >= 0x71 && index <= 0x8B) ||
-           (index >= 0x149 && index <= 0x14C);
+           (index >= 0x149 && index <= 0x14C) ||
+           index == 0x15E || index == 0x15F || index == 0x160 ||
+           index == 0x162 || index == 0x164;
 }
 
 bool LoadCatalog(const char *code, StringMap &strings)
@@ -82,7 +84,7 @@ void BuildMenuKeyIndex(void)
         const std::string number = key.substr(5, end - 5);
         char *tail = NULL;
         const long index = strtol(number.c_str(), &tail, 10);
-        if (tail && *tail == '\0' && index >= 0 && index < 350)
+        if (tail && *tail == '\0' && index >= 0 && index < MENU_STRING_CAPACITY)
             g_MenuKeys[(int)index] = key;
     }
 }

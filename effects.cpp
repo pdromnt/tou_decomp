@@ -1367,7 +1367,7 @@ void FUN_0040d810(Framebuffer *framebuffer)
 void FUN_0040caf0(Framebuffer *framebuffer)
 {
     uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
-    unsigned int param_2 = (unsigned int)framebuffer->stride;
+    int param_2 = framebuffer->stride;
     /* Pass 1: Ship sprites via FUN_0040c590 */
     int explosion_offset = 0;
     for (int i = 0; i < DAT_00489240; i++) {
@@ -1458,37 +1458,33 @@ void FUN_0040caf0(Framebuffer *framebuffer)
                         int cx = ((player->position_x >> 0x12) - (int)(cw >> 1)) - DAT_004806dc;
                         int cy = ((player->position_y >> 0x12) - (int)(ch >> 1)) - DAT_004806e0;
                         int src_idx = ((int *)DAT_00489234)[charge_spr];
-
-                        unsigned short *dst = (unsigned short *)(param_1 +
-                            ((DAT_004806e8 + cy) * param_2 + DAT_004806ec + cx) * 2);
                         int draw_h = ch, draw_w = cw;
-                        int src_skip = 0, dst_skip;
+                        int draw_x = cx;
+                        int draw_y = cy;
 
                         /* Clip top */
                         if (cy < 0) {
                             src_idx += cw * (-cy);
-                            dst += (-cy) * param_2;
                             draw_h = ch + cy;
+                            draw_y = 0;
                         } else if (DAT_004806e4 < (int)(ch + cy)) {
                             draw_h = DAT_004806e4 - cy;
                         }
                         /* Clip left */
                         if (cx < 0) {
                             src_idx -= cx;
-                            dst_skip = (param_2 - cw) - cx;
-                            dst += -cx;
-                            src_skip = -cx;
                             draw_w = cx + cw;
+                            draw_x = 0;
                         } else if (DAT_004806d8 < (int)(cw + cx)) {
-                            src_skip = (cw - DAT_004806d8) + cx;
-                            dst_skip = (src_skip - cw) + param_2;
-                            draw_w = cw - src_skip;
-                        } else {
-                            dst_skip = param_2 - cw;
-                            src_skip = 0;
+                            draw_w = DAT_004806d8 - cx;
                         }
 
                         if (draw_w > 0 && draw_h > 0) {
+                            const int src_skip = (int)cw - draw_w;
+                            const int dst_skip = param_2 - draw_w;
+                            unsigned short *dst = framebuffer->pixels +
+                                (DAT_004806e8 + draw_y) * param_2 +
+                                DAT_004806ec + draw_x;
                             for (int row = 0; row < draw_h; row++) {
                                 for (int col = 0; col < draw_w; col++) {
                                     int intensity = (int)(((unsigned char *)DAT_00489e94)[src_idx] + 0x10) >> 5;

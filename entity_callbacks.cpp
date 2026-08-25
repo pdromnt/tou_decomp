@@ -1,6 +1,6 @@
 #include "entity_callbacks.h"
 
-#include "binary_compat.h"
+#include "original_semantics.h"
 #include "tou.h"
 
 #include <stdio.h>

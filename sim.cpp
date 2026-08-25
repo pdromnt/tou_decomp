@@ -309,17 +309,10 @@ void FUN_004357b0(int param_1, int param_2, int param_3, unsigned char param_4, 
             iVar6 = iVar15;
             iVar17 = iVar8;
 
-            /* Play random fire sound — limit to 1 per call to prevent
-             * deafening volume when many tiles explode simultaneously */
-            {
-                static int snd_count = 0;
-                if (snd_count == 0) {
-                    iVar7 = rand();
-                    FUN_0040f9b0(iVar7 % 7 + 0x65, iVar6, iVar17);
-                }
-                snd_count++;
-                if (snd_count > 3) snd_count = 0;
-            }
+            /* Original 0x00435D09-0x00435D1F plays one of the seven fire
+             * samples for every eligible burning tile. */
+            iVar7 = rand();
+            FUN_0040f9b0(iVar7 % 7 + 0x65, iVar6, iVar17);
 
             particle->color_index = 1;
 
@@ -1174,13 +1167,18 @@ void FUN_00460660(void)
     unsigned char *pTail = (unsigned char *)&p32[dwords];
     for (i = 0; (unsigned int)i < (grid_size & 3); i++) pTail[i] = 0;
 
-    /* Phase 2: Mark viewport areas with bit 0x08 for each active player viewport */
-    if (DAT_00487808 > 0) {
-        for (i = 0; i < DAT_00487808; i++) {
-            int player = DAT_004877f8[i];
+    /* Phase 2: Mark viewport areas with bit 0x08 for each active player viewport.
+     * In LAN each machine owns a different local viewport.  The original
+     * visibility optimization gates VFX spawning (and therefore RNG/pool
+     * ordering), so build a shared union around every network player instead. */
+    const int lan_viewports = Netplay_IsMatchActive() ? DAT_00489240 : 0;
+    const int viewport_count = lan_viewports > 0 ? lan_viewports : DAT_00487808;
+    if (viewport_count > 0) {
+        for (i = 0; i < viewport_count; i++) {
+            int player = lan_viewports > 0 ? i : DAT_004877f8[i];
             PlayerData *player_data = Player_Get(player);
-            int vp_w = player_data->viewport_width + 0x28;
-            int vp_h = player_data->viewport_height + 0x28;
+            int vp_w = lan_viewports > 0 ? 640 + 0x28 : player_data->viewport_width + 0x28;
+            int vp_h = lan_viewports > 0 ? 480 + 0x28 : player_data->viewport_height + 0x28;
             int start_x = (player_data->position_x >> 0x12) - vp_w / 2;
             int start_y = (player_data->position_y >> 0x12) - vp_h / 2;
 

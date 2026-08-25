@@ -240,7 +240,7 @@ void Cleanup_Sound(void)
         Audio_Shutdown();
     }
     if (g_SoundTable) {
-        free(g_SoundTable);
+        Mem_Free(g_SoundTable);
         g_SoundTable = NULL;
     }
 }

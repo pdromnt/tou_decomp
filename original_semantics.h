@@ -1,5 +1,5 @@
-#ifndef TOU_BINARY_COMPAT_H
-#define TOU_BINARY_COMPAT_H
+#ifndef TOU_ORIGINAL_SEMANTICS_H
+#define TOU_ORIGINAL_SEMANTICS_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -51,5 +51,6 @@ extern "C" int TOU_Rand(void);
 extern "C" void TOU_Srand(unsigned int seed);
 extern "C" uint32_t TOU_RandState(void);
 extern "C" uint64_t TOU_RandCallCount(void);
+extern "C" void TOU_RestoreRandState(uint32_t state, uint64_t call_count);
 
 #endif

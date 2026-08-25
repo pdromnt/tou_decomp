@@ -20,6 +20,7 @@ typedef struct PlatformEvent {
 int   Platform_SetRuntimeDirectory(void);
 int   Platform_CreateWindow(const char *title, int width, int height);
 void  Platform_ShowWindow(void);
+void  Platform_SetWindowTitle(const char *title);
 void  Platform_DestroyWindow(void);
 void *Platform_GetSdlWindow(void);
 int   Platform_PollEvent(PlatformEvent *event);

@@ -238,6 +238,10 @@ static void Gameplay_Tick(void)
 
     /* Execute each tick */
     for (tick = 0; tick < catch_up; tick++) {
+        if (!Netplay_PrepareSimulationTick(SimulationState_Tick() + 1))
+            break;
+        if (!Replay_PrepareSimulationTick(SimulationState_Tick() + 1))
+            break;
         g_TimerAux++;
 
         /* Sub-frame counter: 0→1→2→...→7→0 */
@@ -260,16 +264,25 @@ static void Gameplay_Tick(void)
 
         /* ---- Subsystem calls ---- */
         FUN_00460d50();                          /* 1-RoundTimer */
+        Memory_Trace_Check("1-RoundTimer");
         FUN_004609e0();                          /* 2-SpatialGrid */
+        Memory_Trace_Check("2-SpatialGrid");
         if ((DAT_00489288 & 1) == 0) {
             FUN_00460660();                      /* 3-CollisionBitmap (half-rate) */
+            Memory_Trace_Check("3-CollisionBitmap");
         }
         FUN_00460ac0();                          /* 4-RelocateEdge */
+        Memory_Trace_Check("4-RelocateEdge");
         FUN_00413720();                          /* 5-Spawner */
+        Memory_Trace_Check("5-Spawner");
         FUN_00454340();                          /* 6-Emitters */
+        Memory_Trace_Check("6-Emitters");
         FUN_0044b0b0();                          /* 7-EntityBehavior */
+        Memory_Trace_Check("7-EntityBehavior");
         FUN_00434310();                          /* 8-DebrisAnim */
+        Memory_Trace_Check("8-DebrisAnim");
         ParticleSystem_Update();                 /* 9-Animated particles */
+        Memory_Trace_Check("9-AnimatedParticles");
 
         /* Inline: effect/particle rotation and timer decrement */
         {
@@ -286,16 +299,24 @@ static void Gameplay_Tick(void)
         }
 
         TrooperSystem_Update();                  /* 11-Troopers/cars */
+        Memory_Trace_Check("11-Troopers");
         TurretSystem_UpdateTargeting();          /* 12-Turret LOS and firing */
+        Memory_Trace_Check("12-TurretTargeting");
         FireParticleSystem_Update();             /* 13-Fire/smoke particles */
+        Memory_Trace_Check("13-FireParticles");
         PickupSystem_Update();                   /* 14-Pickups */
+        Memory_Trace_Check("14-Pickups");
         ExplosionSystem_UpdateLegacy();          /* 15-Legacy explosions */
+        Memory_Trace_Check("15-Explosions");
         FUN_00453a80();                          /* 16-ItemAI */
+        Memory_Trace_Check("16-ItemAI");
         TrapDoorSystem_Update();                 /* 17-Trap doors */
+        Memory_Trace_Check("17-TrapDoors");
 
         /* Conditional: turret sound */
         if (DAT_00483834 != 0) {
             FUN_004133d0('\0');                   /* 18-TurretBehavior */
+            Memory_Trace_Check("18-TurretBehavior");
         }
 
         /* Conditional: trooper-related + round-end check */
@@ -306,11 +327,18 @@ static void Gameplay_Tick(void)
             if (DAT_00489288 == 0) {
                 /* Every 8th tick: round-end check causes early return */
                 FUN_00453230();                  /* 20-WaypointCheck */
+                {
+                    const uint64_t checksum = SimulationState_OnTickComplete();
+                    Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
+                    Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
+                }
                 return;
             }
         }
         FluidSystem_Update();                    /* 21-Fluid spread */
+        Memory_Trace_Check("21-FluidSpread");
         FUN_0045e2c0();                          /* 22-Deaths */
+        Memory_Trace_Check("22-Deaths");
 
         /* Inline: health clamping for specific game modes */
         if (DAT_004892a8 == 1) {
@@ -339,7 +367,7 @@ static void Gameplay_Tick(void)
                 int ty = trooper->position_y >> 0x12;
                 int tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
                     (ty << (DAT_00487a18 & 0x1f)) + tx];
-                if (static_cast<char *>(DAT_00487928)[tile_idx * 0x20 + 1] == '\x01') {
+                if (TerrainProperty_Read(tile_idx, 0x01) == 1) {
                     trooper->animation_state_24 = 0;
                 } else {
                     char stale = (char)trooper->animation_state_24;
@@ -348,6 +376,11 @@ static void Gameplay_Tick(void)
                     trooper->animation_state_24 = (uint8_t)stale;
                 }
             }
+        }
+        {
+            const uint64_t checksum = SimulationState_OnTickComplete();
+            Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
+            Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
         }
     }  /* end tick loop */
 }
@@ -410,7 +443,7 @@ void Game_Update_Render(void)
         /* State 4: Level preview / stats screen.
          * First level (counter == 0): skip straight to gameplay.
          * Subsequent levels: show stats overlay, wait for Enter/F10. */
-        if (g_SubState == GAMEPLAY_LEVEL_PREVIEW) {
+        if (g_SubState == GAMEPLAY_LEVEL_PREVIEW && Netplay_LocalSessionControlsAllowed()) {
             if ((unsigned char)DAT_0048693c == 0) {
                 /* First level — no stats to show, start immediately */
                 g_SubState = GAMEPLAY_ACTIVE;
@@ -422,6 +455,7 @@ void Game_Update_Render(void)
                 if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                     *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
+                    Netplay_BroadcastGameplayStateNow();
                 }
                 if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     DAT_00489ee8 = now_input + 500;
@@ -437,12 +471,13 @@ void Game_Update_Render(void)
 
         /* State 2: ESC pause menu — F10/Enter/ESC.
          * Sprite 0x37 panel: "F10 Exit to menu / Enter Next level / Esc Back to the game" */
-        if (g_SubState == GAMEPLAY_EXIT_MENU) {
+        if (g_SubState == GAMEPLAY_EXIT_MENU && Netplay_LocalSessionControlsAllowed()) {
             /* F10 (scan 0x44): exit to menu */
             if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
                 g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
+                Netplay_BroadcastGameplayStateNow();
             }
             /* Enter (scan 0x1C): next level */
             if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
@@ -451,12 +486,13 @@ void Game_Update_Render(void)
                 g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
                 g_NeedsRedraw = 1;
+                Netplay_BroadcastGameplayStateNow();
             }
         }
 
         /* P key (configurable) — toggle pause.
          * Only when g_SubState < 2 (not during ESC-menu or transitions). */
-        if (g_SubState < GAMEPLAY_EXIT_MENU) {
+        if (g_SubState < GAMEPLAY_EXIT_MENU && !Netplay_IsMatchActive()) {
             unsigned char pause_key = DAT_004837ba;
             if ((g_KeyboardState[pause_key] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 g_SubState = (g_SubState == GAMEPLAY_ACTIVE)
@@ -472,7 +508,8 @@ void Game_Update_Render(void)
 
         /* ESC (scan 0x01) — toggle between active (0) and ESC menu (2).
          * Excluded from states 3 and 4. */
-        if (g_SubState != GAMEPLAY_ROUND_COMPLETE &&
+        if (Netplay_LocalSessionControlsAllowed() &&
+            g_SubState != GAMEPLAY_ROUND_COMPLETE &&
             g_SubState != GAMEPLAY_LEVEL_PREVIEW) {
             if ((g_KeyboardState[0x01] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 g_SubState = (g_SubState != GAMEPLAY_EXIT_MENU)

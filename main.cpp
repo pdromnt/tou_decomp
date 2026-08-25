@@ -62,7 +62,8 @@ static void Handle_App_Focus(int active)
         return;
     }
 
-    if (g_GameState == GAME_STATE_GAMEPLAY && g_SubState == GAMEPLAY_ACTIVE) {
+    if (g_GameState == GAME_STATE_GAMEPLAY && g_SubState == GAMEPLAY_ACTIVE &&
+        !Netplay_IsMatchActive()) {
         g_SubState = GAMEPLAY_PAUSED;
         g_NeedsRedraw = 1;
         g_SurfaceReady = 2;
@@ -92,7 +93,7 @@ int main(int argc, char **argv)
     if (Has_Argument(argc, argv, "--logging"))
         g_LogEnabled = 1;
 
-    SDL_SetAppMetadata("Tunnels of Underworld", "0.5", "fi.iobox.tou");
+    SDL_SetAppMetadata("Tunnels of Underworld", "0.6", "fi.iobox.tou");
     if (!Platform_SetRuntimeDirectory()) {
         Platform_ShowError("Unable to locate the game data directory.");
         SDL_Quit();
@@ -112,6 +113,22 @@ int main(int argc, char **argv)
     if (init_result != 1) {
         Platform_ShowError(init_result == 0
             ? STR_ERR_INIT_FILENOTFOUND : STR_ERR_INIT_NOLEVELS);
+        Shutdown_Runtime();
+        Platform_DestroyWindow();
+        SDL_Quit();
+        return 1;
+    }
+
+    if (!Netplay_InitializeFromArguments(argc, argv)) {
+        Platform_ShowError(Netplay_Status());
+        Shutdown_Runtime();
+        Platform_DestroyWindow();
+        SDL_Quit();
+        return 1;
+    }
+    if (!Replay_InitializeFromArguments(argc, argv)) {
+        Platform_ShowError(Replay_Status());
+        Netplay_Shutdown();
         Shutdown_Runtime();
         Platform_DestroyWindow();
         SDL_Quit();
@@ -172,7 +189,13 @@ int main(int argc, char **argv)
         if (g_QuitRequested)
             break;
 
-        if (!g_bIsActive) {
+        Netplay_Poll();
+
+        /* A LAN peer must keep polling, advancing lobby UI, loading levels, and
+         * simulating while another game's window has focus.  Restrict the
+         * inactive-window throttle to ordinary local play; using match-active
+         * here froze the host lobby before the connection could become visible. */
+        if (!g_bIsActive && !Netplay_IsEnabled()) {
             Platform_Delay(1);
             continue;
         }
@@ -190,6 +213,8 @@ int main(int argc, char **argv)
             Game_State_Manager();
     }
 
+    Replay_Shutdown();
+    Netplay_Shutdown();
     Save_Options_Config();
     Shutdown_Runtime();
     Platform_DestroyWindow();

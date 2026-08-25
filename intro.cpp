@@ -240,6 +240,8 @@ static void Update_Particles(void)
 /* ===== Intro_Sequence (0045C720) ===== */
 void Intro_Sequence(void)
 {
+    /* Verified against original assembly at 0045C720: frame 1 precedes frame 0.
+     * The apparently reversed splash order is intentional binary behavior. */
     static const uint32_t Durations[] = {3200, 8200, 10640};
 
     /* Intro finished (splash index >= 3) - do nothing */

@@ -5,6 +5,9 @@
 #include "tou.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <vector>
 
 /* ===== Globals defined in this module ===== */
 int g_MemoryTracker = 0;            /* 004892A0 */
@@ -73,10 +76,51 @@ void *DAT_00481f3c = NULL;
 void *DAT_00481f38 = NULL;
 void *DAT_00481f44 = NULL;
 
+namespace {
+
+enum { MEMORY_REDZONE_SIZE = 64 };
+static const unsigned char MEMORY_REDZONE_BYTE = 0xA5;
+
+struct TracedAllocation {
+    unsigned char *pointer;
+    size_t size;
+};
+
+static std::vector<TracedAllocation> g_TracedAllocations;
+
+static void WriteMemoryTraceFailure(const char *phase, const char *reason,
+                                    const void *pointer, size_t size, size_t offset)
+{
+    FILE *file = fopen("memory-trace.log", "a");
+    if (file == NULL) return;
+    fprintf(file,
+            "phase=%s reason=%s allocation=%p size=%llu offset=%llu "
+            "players=%d entities=%d particles=%d fire=%d troopers=%d "
+            "projectiles=%d debris=%d fluid=%d edges=%d\n",
+            phase ? phase : "unknown", reason, pointer,
+            (unsigned long long)size, (unsigned long long)offset,
+            DAT_00489240, g_EntityCount, g_ParticleCount, g_FireParticleCount,
+            g_TrooperCount, g_ProjectileCount, g_DebrisItemCount,
+            g_FluidSourceCount, g_MapEdgeCount);
+    fclose(file);
+}
+
+static void FailMemoryTrace(const char *phase, const char *reason,
+                            const void *pointer, size_t size, size_t offset)
+{
+    WriteMemoryTraceFailure(phase, reason, pointer, size, offset);
+    abort();
+}
+
+} // namespace
+
 /* ===== Mem_Alloc (0046F4BD) ===== */
 void *Mem_Alloc(size_t size)
 {
-    void *ptr = calloc(1, size);
+    unsigned char *ptr = static_cast<unsigned char *>(calloc(1, size + MEMORY_REDZONE_SIZE));
+    if (ptr == NULL) return NULL;
+    memset(ptr + size, MEMORY_REDZONE_BYTE, MEMORY_REDZONE_SIZE);
+    g_TracedAllocations.push_back(TracedAllocation{ptr, size});
     return ptr;
 }
 
@@ -84,7 +128,59 @@ void *Mem_Alloc(size_t size)
 void Mem_Free(void *ptr)
 {
     if (ptr != NULL) {
+        bool tracked = false;
+        for (size_t i = 0; i < g_TracedAllocations.size(); ++i) {
+            if (g_TracedAllocations[i].pointer != ptr) continue;
+            tracked = true;
+            unsigned char *redzone = g_TracedAllocations[i].pointer + g_TracedAllocations[i].size;
+            for (size_t byte = 0; byte < MEMORY_REDZONE_SIZE; ++byte) {
+                if (redzone[byte] != MEMORY_REDZONE_BYTE) {
+                    FailMemoryTrace("free", "redzone-corruption", ptr,
+                                    g_TracedAllocations[i].size, byte);
+                }
+            }
+            g_TracedAllocations.erase(g_TracedAllocations.begin() + i);
+            break;
+        }
+        if (!tracked) {
+            FailMemoryTrace("free", "untracked-or-double-free", ptr, 0, 0);
+        }
         free(ptr);
+    }
+}
+
+void Memory_Trace_Check(const char *phase)
+{
+    struct CountLimit { const char *name; int value; int limit; };
+    const CountLimit counts[] = {
+        {"players", DAT_00489240, GAMEPLAY_PLAYER_CAPACITY},
+        {"entities", g_EntityCount, ENTITY_ACTIVE_CAPACITY},
+        {"particles", g_ParticleCount, PARTICLE_CAPACITY},
+        {"fire-particles", g_FireParticleCount, EDGE_RECORD_CAPACITY},
+        {"troopers", g_TrooperCount, TROOPER_CAPACITY},
+        {"projectiles", g_ProjectileCount, PROJECTILE_CAPACITY},
+        {"debris", g_DebrisItemCount, DEBRIS_ITEM_CAPACITY},
+        {"fluid", g_FluidSourceCount, FLUID_SOURCE_CAPACITY},
+        {"map-edges", g_MapEdgeCount, MAP_EDGE_CAPACITY},
+        {"misc-effects", DAT_00489264, 25},
+        {"pickups", DAT_0048926c, 100}
+    };
+    for (size_t i = 0; i < sizeof(counts) / sizeof(counts[0]); ++i) {
+        if (counts[i].value < 0 || counts[i].value > counts[i].limit) {
+            FailMemoryTrace(phase, counts[i].name, NULL,
+                            (size_t)counts[i].limit, (size_t)counts[i].value);
+        }
+    }
+
+    for (size_t i = 0; i < g_TracedAllocations.size(); ++i) {
+        const TracedAllocation &allocation = g_TracedAllocations[i];
+        const unsigned char *redzone = allocation.pointer + allocation.size;
+        for (size_t byte = 0; byte < MEMORY_REDZONE_SIZE; ++byte) {
+            if (redzone[byte] != MEMORY_REDZONE_BYTE) {
+                FailMemoryTrace(phase, "redzone-corruption", allocation.pointer,
+                                allocation.size, byte);
+            }
+        }
     }
 }
 
@@ -175,10 +271,14 @@ void Init_Memory_Pools(void)
         g_MemoryTracker += 0x2000;
     }
 
-    /* DAT_00487704: 4 pointers, 2KB each */
+    /* Original 0x00487704 is not a separate allocation. It lies inside the
+     * DAT_004876a4 pointer array: (0x00487704 - 0x004876a4) / 4 == 24.
+     * These are aliases for highlight palette LUTs [24..27], each of which is
+     * a full 4096-entry (0x2000-byte) RGB565 table. Allocating smaller tables
+     * here made valid 12-bit color indices read out of bounds during large
+     * explosions. */
     for (int i = 0; i < 4; i++) {
-        DAT_00487704[i] = Mem_Alloc(0x800);
-        g_MemoryTracker += 0x800;
+        DAT_00487704[i] = DAT_004876a4[24 + i];
     }
 
     ALLOC_POOL(DAT_00487abc, 0x11030);

@@ -65,6 +65,12 @@ void Platform_ShowWindow(void)
     }
 }
 
+void Platform_SetWindowTitle(const char *title)
+{
+    if (s_PlatformWindow != NULL && title != NULL)
+        SDL_SetWindowTitle(s_PlatformWindow, title);
+}
+
 void Platform_DestroyWindow(void)
 {
     if (s_PlatformWindow != NULL) {
