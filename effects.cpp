@@ -404,9 +404,12 @@ void FUN_0045b2a0(void)
                 g = g + ((tgt_g - g) * alpha) / 63;
                 b = b + ((tgt_b - b) * alpha) / 63;
 
-                if (r < 0) r = 0; if (r > 255) r = 255;
-                if (g < 0) g = 0; if (g > 255) g = 255;
-                if (b < 0) b = 0; if (b > 255) b = 255;
+                if (r < 0) r = 0;
+                if (r > 255) r = 255;
+                if (g < 0) g = 0;
+                if (g > 255) g = 255;
+                if (b < 0) b = 0;
+                if (b > 255) b = 255;
 
                 /* Convert to RGB565 */
                 lut[src_idx] = (unsigned short)(
@@ -439,9 +442,9 @@ int FUN_00422fc0(void)
     unsigned char header[3];
     int pixel_offset = 0;
 
-    f = fopen("data\\explode.gfx", "rb");
+    f = fopen("data/explode.gfx", "rb");
     if (!f) {
-        LOG("[FX] Failed to open data\\explode.gfx\n");
+        LOG("[FX] Failed to open data/explode.gfx\n");
         return 0;
     }
 
@@ -514,7 +517,7 @@ int FUN_00422fc0(void)
  */
 void FUN_0040d100(Framebuffer *framebuffer)
 {
-    int buffer = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t buffer = (uintptr_t)framebuffer->pixels;
     int stride = framebuffer->stride;
     if (g_ParticleCount <= 0) return;
 
@@ -642,7 +645,7 @@ void FUN_0040d100(Framebuffer *framebuffer)
  * Dimensions: DAT_00489e8c[sprite] = width, DAT_00489e88[sprite] = height
  */
 void FUN_0040c280(int param_1, int param_2, int param_3, unsigned char param_4,
-                  int param_5, int param_6, unsigned char param_7)
+                  uintptr_t param_5, int param_6, unsigned char param_7)
 {
     int pixel_base = ((int *)DAT_00489234)[param_1];
     int spr_w = (int)((unsigned char *)DAT_00489e8c)[param_1];
@@ -770,9 +773,9 @@ void FUN_0040c280(int param_1, int param_2, int param_3, unsigned char param_4,
  * param_8: blend mode (0 = no blend)
  */
 void FUN_0040c590(int param_1, int param_2, int param_3, int param_4,
-                  unsigned char param_5, int param_6, int param_7, unsigned char param_8)
+                  unsigned char param_5, uintptr_t param_6, int param_7, unsigned char param_8)
 {
-    int base = (int)DAT_00487aac;
+    intptr_t base = (intptr_t)DAT_00487aac;
     int spr_h = *(int *)(base + 0x186a4 + param_2 * 0x186a8);
     int spr_w = *(int *)(base + param_2 * 0x186a8 + 100000);
     int src_idx = spr_w * spr_h * param_1;
@@ -893,7 +896,7 @@ void FUN_0040c590(int param_1, int param_2, int param_3, int param_4,
  * param_4: buffer stride
  * param_5: intensity (subtracted from alpha for fade-in effect)
  */
-void FUN_0040c940(unsigned int param_1, unsigned int param_2, unsigned int param_3,
+void FUN_0040c940(unsigned int param_1, unsigned int param_2, uintptr_t param_3,
                   int param_4, int param_5)
 {
     unsigned int spr_w = (unsigned int)((unsigned char *)DAT_00489e8c)[0x1a3];
@@ -961,10 +964,10 @@ void FUN_0040c940(unsigned int param_1, unsigned int param_2, unsigned int param
  */
 void FUN_0040dbd0(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     int offset = 0;
-    int base = (int)DAT_00489e98;
+    intptr_t base = (intptr_t)DAT_00489e98;
 
     for (int i = 0; i < DAT_00489274; i++) {
         int px = *(int *)(offset + base) >> 0x12;
@@ -982,7 +985,7 @@ void FUN_0040dbd0(Framebuffer *framebuffer)
 
                 FUN_0040c280(sprite, (px - (sw >> 1)) - DAT_004806dc,
                              (py - (sh >> 1)) - DAT_004806e0, 0, param_1, param_2, darkness);
-                base = (int)DAT_00489e98;
+                base = (intptr_t)DAT_00489e98;
             }
         }
         offset += 0x10;
@@ -996,7 +999,7 @@ void FUN_0040dbd0(Framebuffer *framebuffer)
  */
 void FUN_0040dce0(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     int vp_left = DAT_004806dc;
 
@@ -1062,7 +1065,7 @@ void FUN_0040dce0(Framebuffer *framebuffer)
  */
 void FUN_0040bb60(Framebuffer *framebuffer)
 {
-    unsigned int param_1 = (unsigned int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     if (g_EntityCount <= 0) return;
 
@@ -1097,7 +1100,7 @@ void FUN_0040bb60(Framebuffer *framebuffer)
                 if (DAT_004806e0 < py_raw + 7 && py_raw - 7 < DAT_004806d4) {
                     /* Determine animation variant */
                     unsigned char anim_data = *(unsigned char *)(
-                        (int)DAT_00487abc + (unsigned int)entity->subtype +
+                        (intptr_t)DAT_00487abc + (unsigned int)entity->subtype +
                         0x124 + (unsigned int)anim_type * 0x218);
 
                     /* anim_data is the entity-type "animation source" byte from
@@ -1173,7 +1176,8 @@ void FUN_0040bb60(Framebuffer *framebuffer)
                     unsigned short *dst = (unsigned short *)(param_1 +
                         (((py - DAT_004806e0 + DAT_004806e8) * param_2 - DAT_004806dc + px + DAT_004806ec) * 2));
 
-                    unsigned short color = (unsigned short)((short)entity->palette_value + (short)0x8ad0);
+                    unsigned short color = static_cast<unsigned short>(
+                        static_cast<unsigned int>(entity->palette_value) + 0x8AD0u);
 
                     /* COMPAT: Convert X1R5G5B5 → RGB565. All entity +0x4C values
                      * should be X1R5G5B5 + 30000 (splash water colors are now converted
@@ -1242,7 +1246,7 @@ void FUN_0040bb60(Framebuffer *framebuffer)
  */
 void FUN_0040a870(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     for (int i = 0; i < g_ProjectileCount; i++) {
         const ProjectileRecord *projectile = &g_ProjectilePool[i];
@@ -1260,7 +1264,7 @@ void FUN_0040a870(Framebuffer *framebuffer)
                     angle_idx = (angle_raw + 0x20) & 0x7ff;
                 }
 
-                int sprite = *(int *)((unsigned int)proj_type * 0x20 + 0xc + (int)DAT_00487818) +
+                int sprite = *(int *)((unsigned int)proj_type * 0x20 + 0xc + (intptr_t)DAT_00487818) +
                              (unsigned int)projectile->team * 100 +
                              ((int)(angle_idx + (angle_idx >> 0x1f & 0x3f)) >> 6);
 
@@ -1294,21 +1298,21 @@ void FUN_0040a870(Framebuffer *framebuffer)
  */
 void FUN_0040d6c0(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
     int offset = 0;
 
     for (int i = 0; i < DAT_0048926c; i++) {
-        int px = *(int *)(offset + (int)DAT_00487a9c) >> 0x12;
+        int px = *(int *)(offset + (intptr_t)DAT_00487a9c) >> 0x12;
         if (DAT_004806dc < px + 0x14 && px - 0x14 < DAT_004806d0) {
-            int py = *(int *)(offset + 4 + (int)DAT_00487a9c) >> 0x12;
+            int py = *(int *)(offset + 4 + (intptr_t)DAT_00487a9c) >> 0x12;
             if (DAT_004806e0 < py + 0x14 && py - 0x14 < DAT_004806d4) {
-                unsigned int player = (unsigned int)*(unsigned char *)(offset + 0x18 + (int)DAT_00487a9c);
-                int base = (int)DAT_00487aac + player * 0x186a8;
+                unsigned int player = (unsigned int)*(unsigned char *)(offset + 0x18 + (intptr_t)DAT_00487a9c);
+                intptr_t base = (intptr_t)DAT_00487aac + player * 0x186a8;
                 int ew = *(int *)(base + 100000);
                 int eh = *(int *)(base + 0x186a4);
 
-                int angle_raw = *(int *)(offset + 0x10 + (int)DAT_00487a9c);
+                int angle_raw = *(int *)(offset + 0x10 + (intptr_t)DAT_00487a9c);
                 int frame = (int)(((angle_raw + 0x20) & 0x7ff) * 0x20) >> 0xb;
 
                 unsigned char tile = ((unsigned char *)DAT_0048782c)[(py << ((unsigned char)DAT_00487a18 & 0x1f)) + px];
@@ -1331,7 +1335,7 @@ void FUN_0040d6c0(Framebuffer *framebuffer)
  */
 void FUN_0040d810(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     for (int i = 0; i < g_DebrisItemCount; i++) {
         const DebrisItemRecord *debris = &g_DebrisItemPool[i];
@@ -1362,8 +1366,8 @@ void FUN_0040d810(Framebuffer *framebuffer)
  */
 void FUN_0040caf0(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
-    unsigned int param_2 = (unsigned int)framebuffer->stride;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
+    int param_2 = framebuffer->stride;
     /* Pass 1: Ship sprites via FUN_0040c590 */
     int explosion_offset = 0;
     for (int i = 0; i < DAT_00489240; i++) {
@@ -1381,7 +1385,7 @@ void FUN_0040caf0(Framebuffer *framebuffer)
                         blend = (char)((int)(b + (b >> 0x1f & 0x3f)) >> 6) + 0x30;
                     }
 
-                    int base = (int)DAT_00487aac + explosion_offset;
+                    intptr_t base = (intptr_t)DAT_00487aac + explosion_offset;
                     int ew = *(int *)(base + 100000);
                     int eh = *(int *)(base + 0x186a4);
 
@@ -1454,37 +1458,33 @@ void FUN_0040caf0(Framebuffer *framebuffer)
                         int cx = ((player->position_x >> 0x12) - (int)(cw >> 1)) - DAT_004806dc;
                         int cy = ((player->position_y >> 0x12) - (int)(ch >> 1)) - DAT_004806e0;
                         int src_idx = ((int *)DAT_00489234)[charge_spr];
-
-                        unsigned short *dst = (unsigned short *)(param_1 +
-                            ((DAT_004806e8 + cy) * param_2 + DAT_004806ec + cx) * 2);
                         int draw_h = ch, draw_w = cw;
-                        int src_skip = 0, dst_skip;
+                        int draw_x = cx;
+                        int draw_y = cy;
 
                         /* Clip top */
                         if (cy < 0) {
                             src_idx += cw * (-cy);
-                            dst += (-cy) * param_2;
                             draw_h = ch + cy;
+                            draw_y = 0;
                         } else if (DAT_004806e4 < (int)(ch + cy)) {
                             draw_h = DAT_004806e4 - cy;
                         }
                         /* Clip left */
                         if (cx < 0) {
                             src_idx -= cx;
-                            dst_skip = (param_2 - cw) - cx;
-                            dst += -cx;
-                            src_skip = -cx;
                             draw_w = cx + cw;
+                            draw_x = 0;
                         } else if (DAT_004806d8 < (int)(cw + cx)) {
-                            src_skip = (cw - DAT_004806d8) + cx;
-                            dst_skip = (src_skip - cw) + param_2;
-                            draw_w = cw - src_skip;
-                        } else {
-                            dst_skip = param_2 - cw;
-                            src_skip = 0;
+                            draw_w = DAT_004806d8 - cx;
                         }
 
                         if (draw_w > 0 && draw_h > 0) {
+                            const int src_skip = (int)cw - draw_w;
+                            const int dst_skip = param_2 - draw_w;
+                            unsigned short *dst = framebuffer->pixels +
+                                (DAT_004806e8 + draw_y) * param_2 +
+                                DAT_004806ec + draw_x;
                             for (int row = 0; row < draw_h; row++) {
                                 for (int col = 0; col < draw_w; col++) {
                                     int intensity = (int)(((unsigned char *)DAT_00489e94)[src_idx] + 0x10) >> 5;
@@ -1532,12 +1532,12 @@ void FUN_0040caf0(Framebuffer *framebuffer)
  */
 void FUN_0040d930(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     unsigned int param_2 = (unsigned int)framebuffer->stride;
     if (DAT_00489264 <= 0) return;
 
-    int base = (int)DAT_00487780;
-    int widths = (int)DAT_00489e8c;
+    intptr_t base = (intptr_t)DAT_00487780;
+    intptr_t widths = (intptr_t)DAT_00489e8c;
 
     int entry_off = 0;
     for (int i = 0; i < DAT_00489264; i++) {
@@ -1549,12 +1549,12 @@ void FUN_0040d930(Framebuffer *framebuffer)
                 /* Glow sprite 0x193 - inline grayscale blitter */
                 unsigned int spr_w = (unsigned int)*(unsigned char *)(widths + 0x193);
                 int screen_x = (px - (int)(spr_w >> 1)) - DAT_004806dc;
-                int screen_y = (py - (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x193)) / 2 - DAT_004806e0;
-                screen_y = (py - (int)((unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x193) >> 1)) - DAT_004806e0;
+                int screen_y = (py - (int)(unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x193)) / 2 - DAT_004806e0;
+                screen_y = (py - (int)((unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x193) >> 1)) - DAT_004806e0;
                 int src_idx = ((int *)DAT_00489234)[0x193];
                 unsigned short *dst = (unsigned short *)(param_1 +
                     ((DAT_004806e8 + screen_y) * param_2 + DAT_004806ec + screen_x) * 2);
-                unsigned int rows_remaining = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x193);
+                unsigned int rows_remaining = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x193);
 
                 if (rows_remaining != 0) {
                     int row_count = 0;
@@ -1568,7 +1568,7 @@ void FUN_0040d930(Framebuffer *framebuffer)
                                 if (gray == 0) {
                                     intensity = 0;
                                 } else {
-                                    intensity = (int)((*(int *)((int)DAT_00487ab0 + *(int *)(saved_off + 0x10 + base) * 4) >> 0xc)
+                                    intensity = (int)((*(int *)((intptr_t)DAT_00487ab0 + *(int *)(saved_off + 0x10 + base) * 4) >> 0xc)
                                                 + 0x6e + (unsigned int)gray) >> 5;
                                     if (intensity > 0xe) intensity = 0xe;
                                 }
@@ -1576,8 +1576,8 @@ void FUN_0040d930(Framebuffer *framebuffer)
                                     screen_y >= 0 && screen_y < DAT_004806e4 && intensity > 0) {
                                     unsigned short remap = ((unsigned short *)DAT_00489230)[(unsigned int)*dst];
                                     *dst = ((unsigned short *)DAT_0048792c[32 + intensity])[remap];
-                                    base = (int)DAT_00487780;
-                                    widths = (int)DAT_00489e8c;
+                                    base = (intptr_t)DAT_00487780;
+                                    widths = (intptr_t)DAT_00489e8c;
                                 }
                                 src_idx++;
                                 dst++;
@@ -1589,7 +1589,7 @@ void FUN_0040d930(Framebuffer *framebuffer)
                         row_count++;
                         dst += (param_2 - spr_w);
                         screen_y++;
-                    } while (row_count < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x193));
+                    } while (row_count < (int)(unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x193));
                 }
 
                 /* Additional large glow sprite */
@@ -1603,8 +1603,8 @@ void FUN_0040d930(Framebuffer *framebuffer)
                     FUN_0040c280(spr2, (px2 - (sw2 >> 1)) - DAT_004806dc,
                                  (py2 - (sh2 >> 1)) - DAT_004806e0, 0,
                                  param_1, param_2, 0);
-                    base = (int)DAT_00487780;
-                    widths = (int)DAT_00489e8c;
+                    base = (intptr_t)DAT_00487780;
+                    widths = (intptr_t)DAT_00489e8c;
                 }
             }
         }
@@ -1615,35 +1615,34 @@ void FUN_0040d930(Framebuffer *framebuffer)
 /* ===== FUN_0040d360 - Edge tile/detail renderer (0040D360) ===== */
 /*
  * Renders edge/detail tiles with custom inline grayscale blitter.
- * Array: DAT_00481f2c, stride 0x20, count DAT_0048925c.
+ * Array: DAT_00481f2c, stride 0x20, count g_FireParticleCount.
  * Three blend modes based on entry[0x15].
  */
 void FUN_0040d360(Framebuffer *framebuffer)
 {
-    int param_1 = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t param_1 = (uintptr_t)framebuffer->pixels;
     int param_2 = framebuffer->stride;
-    if (DAT_0048925c <= 0) return;
+    if (g_FireParticleCount <= 0) return;
 
     unsigned int entry_off = 0;
-    for (int i = 0; i < DAT_0048925c; i++) {
+    for (int i = 0; i < g_FireParticleCount; i++) {
         unsigned int saved_off = entry_off;
-        int px = *(int *)(entry_off + (int)DAT_00481f2c) >> 0x12;
+        int px = *(int *)(entry_off + (intptr_t)DAT_00481f2c) >> 0x12;
         if (DAT_004806dc < px + 0x14 && px - 0x14 < DAT_004806d0) {
-            int py = *(int *)(entry_off + 4 + (int)DAT_00481f2c) >> 0x12;
+            int py = *(int *)(entry_off + 4 + (intptr_t)DAT_00481f2c) >> 0x12;
             if (DAT_004806e0 < py + 0x14 && py - 0x14 < DAT_004806d4) {
                 /* Look up edge sprite from type table */
-                int spr_base = *(int *)((int)DAT_00487ab8 + (unsigned int)*(unsigned char *)(entry_off + 0x10 + (int)DAT_00481f2c) * 8);
-                unsigned char w_byte = *(unsigned char *)((int)DAT_00489e8c + 500 + spr_base);
+                int spr_base = *(int *)((intptr_t)DAT_00487ab8 + (unsigned int)*(unsigned char *)(entry_off + 0x10 + (intptr_t)DAT_00481f2c) * 8);
+                unsigned char w_byte = *(unsigned char *)((intptr_t)DAT_00489e8c + 500 + spr_base);
                 unsigned int spr_w = (unsigned int)w_byte;
                 int sprite = spr_base + 500;
                 int screen_x = (px - (int)(w_byte >> 1)) - DAT_004806dc;
-                unsigned char h_byte = *(unsigned char *)((int)DAT_00489e88 + sprite);
+                unsigned char h_byte = *(unsigned char *)((intptr_t)DAT_00489e88 + sprite);
                 unsigned int spr_h = (unsigned int)h_byte;
                 int screen_y = (py - (int)(h_byte >> 1)) - DAT_004806e0;
                 int src_idx = ((int *)DAT_00489234)[sprite];
                 unsigned short *dst = (unsigned short *)(param_1 +
                     ((DAT_004806e8 + screen_y) * param_2 + DAT_004806ec + screen_x) * 2);
-                int src_skip = 0;
                 int dst_skip;
 
                 /* Clip top */
@@ -1683,8 +1682,8 @@ void FUN_0040d360(Framebuffer *framebuffer)
                     dst_skip += param_2;
                 }
 
-                char blend_mode = *(char *)(saved_off + 0x15 + (int)DAT_00481f2c);
-                unsigned char threshold = *(unsigned char *)(saved_off + 0x11 + (int)DAT_00481f2c);
+                char blend_mode = *(char *)(saved_off + 0x15 + (intptr_t)DAT_00481f2c);
+                unsigned char threshold = *(unsigned char *)(saved_off + 0x11 + (intptr_t)DAT_00481f2c);
 
                 if (blend_mode == '\x02') {
                     /* Blend mode 2: palette[23+n] */
@@ -1755,7 +1754,7 @@ void FUN_0040d360(Framebuffer *framebuffer)
  */
 static void FUN_004075f0(Framebuffer *framebuffer)
 {
-    int buffer = (int)(uintptr_t)framebuffer->pixels;
+    uintptr_t buffer = (uintptr_t)framebuffer->pixels;
     int stride = framebuffer->stride;
     if (g_EntityCount <= 0) return;
 
@@ -1779,7 +1778,8 @@ static void FUN_004075f0(Framebuffer *framebuffer)
          * sprite_idx >= 30000 means they can't use FUN_0040c280; draw inline. */
         if (ent_type == 0x67 || ent_type == 0x65) {
             /* Read X1R5G5B5 color from entity[0x4C] offset trick */
-            unsigned short x1r5 = (unsigned short)((short)entity->palette_value + (short)0x8AD0);
+            unsigned short x1r5 = static_cast<unsigned short>(
+                static_cast<unsigned int>(entity->palette_value) + 0x8AD0u);
             /* Convert X1R5G5B5 → RGB565 */
             unsigned short r5 = (x1r5 >> 10) & 0x1F;
             unsigned short g5 = (x1r5 >> 5) & 0x1F;

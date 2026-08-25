@@ -2,23 +2,19 @@
 #define TOU_GAMESTATE_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
-#include "compat.h"
 #include "types.h"
 
 /* ===== Error Strings (matching binary string table) ===== */
-/* 0047F0EC */ #define STR_ERR_DDRAW_INSTALL  "DirectDraw Init FAILED.\nInstall DirectX 7.0 to play TOU.\n\nRead readme.txt for more\ninformation."
-/* 0047EF74 */ #define STR_ERR_DDRAW_MODE     "DirectDraw Init FAILED.\nCouldn't set video mode to 640x480 16-bit.\nYour video card must support this\nresolution to play TOU.\nRead readme.txt for more information"
-/* 0047F098 */ #define STR_ERR_DDRAW_MEMORY   "DirectDraw Init FAILED.\nNot enough memory.\n\nRead readme.txt for more\ninformation."
-/* 0047F058 */ #define STR_ERR_DINPUT         "DirectInput Init FAILED.\n\nRead readme.txt for more\ninformation."
-/* 0047F048 */ #define STR_ERR_UNKNOWN        "Unknown error."
+/* COMPAT */   #define STR_ERR_RENDER_INIT    "Video renderer initialization failed.\n\nRun with --logging for details."
+/* COMPAT */   #define STR_ERR_RENDER_MODE    "Video renderer configuration failed.\n\nRun with --logging for details."
 /* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."
 /* 0047F14C */ #define STR_ERR_INIT_NOLEVELS  "Tou init failed!\nYou don't have any levels or GG themes!\n\nYou can't run the game without levels.\n\nRead readme.txt for more information."
-/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.4"
-/* 0047EB10 */ #define STR_CLASSNAME          "TOU"
+/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.6"
 
-/* ===== Window / App Globals (winmain.cpp) ===== */
-extern HWND                  hWnd_Main;         /* 00489EDC */
+/* ===== Window / App Globals (main.cpp) ===== */
 extern int                   g_bIsActive;       /* 00489EC4 */
 
 typedef enum GameState : unsigned char {
@@ -48,6 +44,7 @@ typedef enum GameplaySubState : unsigned char {
 
 extern GameState             g_GameState;       /* 004877A0 - main state machine */
 void GameState_Transition(GameState next_state);
+void Request_App_Quit(void);
 
 /* ===== Sub-State Globals (gameloop.cpp) ===== */
 extern char                  g_MouseButtons;    /* 004877BE */
@@ -56,32 +53,33 @@ extern GameplaySubState      g_SubState;        /* 00489296 */
 extern unsigned char         g_NeedsRedraw;     /* 00489297 */
 extern unsigned char         g_SurfaceReady;    /* 00489298 */
 extern unsigned char         g_SubState2;       /* 00489299 */
-extern DWORD                 DAT_00489ee8;      /* Key repeat cooldown timestamp */
+extern uint32_t              DAT_00489ee8;      /* Key repeat cooldown timestamp */
 extern unsigned int          DAT_00489eec;      /* Last pressed key scan code */
 
-/* ===== Timing (winmain.cpp) ===== */
-extern DWORD                 g_TimerStart;      /* 004892B0 */
+/* ===== Timing (main.cpp) ===== */
+extern uint32_t              g_TimerStart;      /* 004892B0 */
 extern int                   g_TimerAux;        /* 004892B4 */
 
 /* ===== Config (init.cpp) ===== */
 extern unsigned char         DAT_00487640[4];   /* Display mode */
-extern DWORD                 g_FrameTimer;      /* 004877F4 */
+extern uint32_t              g_FrameTimer;      /* 004877F4 */
 extern unsigned char         DAT_004877b1;
 extern unsigned char         DAT_004877a4;
-extern DWORD                 DAT_004892b8;
+extern uint32_t              DAT_004892b8;
 extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 
 /* ===== Menu / Session (init.cpp / FUN_0042d8b0) ===== */
-extern char                **g_MenuStrings;     /* 00481D3C - 350-entry menu text table */
+enum { MENU_STRING_CAPACITY = 360 };
+extern char                **g_MenuStrings;     /* 00481D3C - extended legacy menu text table */
 extern void                 *g_GameViewData;    /* 00481D40 - game view item array */
 extern char                **g_KeyNameTable;    /* 00481D88 - 256-entry scan code name table */
 extern unsigned char         g_KeyOrderTable[47]; /* 00481D48 - key sort/priority order */
 extern unsigned char         DAT_00481d84;      /* extra key order byte */
-extern unsigned char         g_KeyboardState[256]; /* 00481D8C - DirectInput keyboard state */
+extern unsigned char         g_KeyboardState[256]; /* 00481D8C - legacy scan-code state */
 
 /* ===== Additional State Globals ===== */
-extern unsigned char         DAT_004877a8;      /* game sub-flag */
+extern int                   DAT_004877a8;      /* active menu item count */
 extern unsigned char         DAT_004877bc;      /* input flag */
 extern unsigned char         DAT_004877bd;      /* input flag */
 extern unsigned char         DAT_004877c4;      /* render flag */
@@ -113,17 +111,12 @@ extern int g_LogEnabled;
 void Log(const char *format, ...);
 #define LOG Log
 
-/* ===== Function Prototypes: winmain.cpp ===== */
-extern "C" LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-int Handle_Init_Error(HWND hWnd, unsigned char errorCode);
-
 /* ===== Function Prototypes: init.cpp ===== */
 void Early_Init_Vars(void);
 int  System_Init_Check(void);
-int  Init_DirectInput(void);
 void Init_Game_Config(void);
 void Set_Config_Defaults(void);      /* hardcoded defaults → g_ConfigBlob (no I/O) */
-void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → options.cfg → globals */
+void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → settings.json */
 void Init_Math_Tables(int *buffer, unsigned int count);
 void FUN_0041a8c0(void);          /* session/level init */
 void FUN_0045c300(void);          /* game mode presets (local) */
@@ -132,11 +125,11 @@ void FUN_0045c300(void);          /* game mode presets (local) */
 void  Init_Memory_Pools(void);
 void *Mem_Alloc(size_t size);
 void  Mem_Free(void *ptr);
+void  Memory_Trace_Check(const char *phase);
 
 /* ===== Function Prototypes: gameloop.cpp ===== */
 void Game_State_Manager(void);
 void Game_Update_Render(void);
-void Input_Update(void);
 void Handle_Menu_State(void);
 void Intro_Sequence(void);
 int  Init_New_Game(void);
@@ -172,11 +165,18 @@ void FUN_0041aea0(void);        /* player spawn init */
 void FUN_00449040(char param);  /* visibility map (0=incremental, 1=full) */
 
 /* ===== Function Prototypes: init.cpp (config) ===== */
-void Load_Options_Config(void);   /* reads options.cfg → g_ConfigBlob */
-void Save_Options_Config(void);   /* writes g_ConfigBlob → options.cfg */
+void Load_Options_Config(void);   /* reads settings.json / migrates options.cfg */
+void Save_Options_Config(void);   /* writes user-facing state to settings.json */
 
 /* ===== Utility functions (init.cpp) ===== */
-void FUN_004644af(char *dest, const unsigned char *format, ...);
+void FUN_004644af_bounded(char *dest, size_t capacity,
+                          const unsigned char *format, ...);
+template <size_t N, typename... Args>
+inline void FUN_004644af(char (&dest)[N], const unsigned char *format,
+                         Args... args)
+{
+    snprintf(dest, N, reinterpret_cast<const char *>(format), args...);
+}
 void FUN_00425840(void);
 void FUN_004265e0(int index);
 
@@ -205,7 +205,7 @@ int  FUN_00430200(int x, int y, int string_idx, int color_style, int font_idx,
 void FUN_0042ff80(int x, int y, int sprite_idx, unsigned char clickable,
                   unsigned char render_mode, unsigned char alignment,
                   unsigned char nav_target);
-void FUN_0042fc90(int value);
+void FUN_0042fc90(intptr_t value);
 void FUN_0042fcf0(void);
 int  FUN_0042fdf0(int y);
 void FUN_0042fcb0(void);

@@ -16,6 +16,7 @@
  *   after entities:     RLE tilemap (terminated by 0xFF remap)
  */
 #include "tou.h"
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -47,11 +48,12 @@ char          DAT_0048396d = 0;       /* generated-map flag */
 char          DAT_00483960 = 0;       /* swap-file enabled flag */
 char         *DAT_00486938 = NULL;    /* current level name ptr */
 int           DAT_0048693c = 0;       /* current level index */
+unsigned char g_TeamWins[4] = {0};    /* recovered bytes originally adjacent to level index */
 char          DAT_004892e4 = 0;       /* random mirror flag */
 char          DAT_004892e5 = 0;       /* difficulty flag */
 char          DAT_00489d7c[256];      /* error string buffer */
 void         *DAT_00487aa4 = NULL;    /* large game state buffer */
-int           DAT_00489254 = 0;       /* edge count */
+int           g_MapEdgeCount = 0;       /* was DAT_00489254 */
 PlayerData    *DAT_00487810 = NULL;   /* player/ship runtime record storage */
 int           DAT_00489240 = 0;       /* player count */
 int           DAT_00489244 = 0;       /* active player count */
@@ -65,7 +67,7 @@ static const char LEV_MAGIC[] = "TOU level file v1.4";
 #define LEV_MAGIC_LEN 19
 
 /* ===== Load_SWP_Sky (based on FUN_004213f0 partial) ===== */
-/* Loads a pre-computed sky image from swap\<name>.SWP.
+/* Loads a pre-computed sky image from swap/<name>.swp.
  * Format: 4-byte width, 4-byte height, then width*height*2 RGB565 pixels.
  * The original generates these on first load and caches them. */
 int Load_SWP_Sky(const char *level_name)
@@ -74,18 +76,17 @@ int Load_SWP_Sky(const char *level_name)
     FILE *f;
     int w, h;
 
-    sprintf(path, "swap\\%s.SWP", level_name);
+    snprintf(path, sizeof(path), "swap/%s.swp", level_name);
     f = fopen(path, "rb");
     if (!f) {
-        sprintf(path, "swap/%s.SWP", level_name);
-        f = fopen(path, "rb");
-    }
-    if (!f) {
-            return 0;
+        return 0;
     }
 
-    fread(&w, 4, 1, f);
-    fread(&h, 4, 1, f);
+    if (fread(&w, sizeof(w), 1, f) != 1 ||
+        fread(&h, sizeof(h), 1, f) != 1) {
+        fclose(f);
+        return 0;
+    }
 
     if (w <= 0 || h <= 0 || w > 4096 || h > 4096) {
         LOG("[LEVEL] SWP sky invalid dimensions: %dx%d\n", w, h);
@@ -104,11 +105,16 @@ int Load_SWP_Sky(const char *level_name)
         return 0;
     }
 
-    fread(DAT_00489ea0, 1, size, f);
+    if (fread(DAT_00489ea0, 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        Mem_Free(DAT_00489ea0);
+        DAT_00489ea0 = NULL;
+        return 0;
+    }
     fclose(f);
 
     /* Convert RGB555 (X1R5G5B5) → RGB565 (R5G6B5).
-     * SWP files store pixels in the original DirectDraw RGB555 format.
+     * SWP files store pixels in the original RGB555 display format.
      * Our compat renderer uses RGB565, same conversion as the sprite loader. */
     {
         unsigned short *px = (unsigned short *)DAT_00489ea0;
@@ -152,10 +158,10 @@ void Assign_Water_Tile_Colors(void)
         int row_off = y * row_stride;
         for (int x = 0; x < width; x++) {
             int tile_off = row_off + x;
-            unsigned char tile_type = *(unsigned char *)((int)DAT_0048782c + tile_off);
-            char water_prop = *(char *)((unsigned int)tile_type * 0x20 + 4 + (int)DAT_00487928);
+            unsigned char tile_type = *(unsigned char *)((intptr_t)DAT_0048782c + tile_off);
+            char water_prop = *(char *)((unsigned int)tile_type * 0x20 + 4 + (intptr_t)DAT_00487928);
             if (water_prop != 0) {
-                *(unsigned short *)((int)DAT_00481f50 + tile_off * 2) = DAT_0048384c;
+                *(unsigned short *)((intptr_t)DAT_00481f50 + tile_off * 2) = DAT_0048384c;
             }
         }
     }
@@ -171,7 +177,7 @@ void Assign_Water_Tile_Colors(void)
  * toward the water base color (DAT_00483840/44/48). */
 void FUN_0045af70(void)
 {
-    int tbl, r4, g4, b4;
+    int tbl, g4, b4;
 
     /* First set: strong blend (step 0x1e = 30) at DAT_004876a4[28..31] */
     for (tbl = 0; tbl < 4; tbl++) {
@@ -326,20 +332,19 @@ void FUN_00421310(void)
 /* Opens a .lev file, verifies the header, extracts tile type table,
  * then delegates to Load_Image_Data for JPEG/entities/tilemap.
  * Returns 1 on success, 0 on failure. */
-int Load_Level_File(const char *level_name)
+int Load_Level_File_Path(const char *path)
 {
-    char path[256];
+    const char *level_name = path;
     FILE *f;
     long file_size;
     unsigned char *file_buf;
     int jpeg_offset, extra_offset, entity_offset;
     int result;
 
-    /* Build path: levels\<name>.lev */
-    sprintf(path, "levels\\%s.lev", level_name);
     f = fopen(path, "rb");
     if (!f) {
-        sprintf(DAT_00489d7c, "Level \"%s\" not found!", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" not found!", level_name);
         LOG("[LEVEL] ERROR: %s\n", DAT_00489d7c);
         return 0;
     }
@@ -350,7 +355,8 @@ int Load_Level_File(const char *level_name)
     fseek(f, 0, SEEK_SET);
 
     if (file_size < 0x22 + 0x39c) {
-        sprintf(DAT_00489d7c, "Level \"%s\" is too small!", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" is too small!", level_name);
         fclose(f);
         return 0;
     }
@@ -358,17 +364,25 @@ int Load_Level_File(const char *level_name)
     /* Read entire file into memory */
     file_buf = (unsigned char *)Mem_Alloc(file_size);
     if (!file_buf) {
-        sprintf(DAT_00489d7c, "Not enough memory for level \"%s\"!", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Not enough memory for level \"%s\"!", level_name);
         fclose(f);
         return 0;
     }
 
-    fread(file_buf, 1, file_size, f);
+    if (fread(file_buf, 1, (size_t)file_size, f) != (size_t)file_size) {
+        fclose(f);
+        Mem_Free(file_buf);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" could not be read completely.", level_name);
+        return 0;
+    }
     fclose(f);
 
     /* Verify magic header (19 bytes) */
     if (memcmp(file_buf, LEV_MAGIC, LEV_MAGIC_LEN) != 0) {
-        sprintf(DAT_00489d7c, "Level \"%s\" is wrong version or not a TOU level.", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" is wrong version or not a TOU level.", level_name);
         Mem_Free(file_buf);
         return 0;
     }
@@ -381,7 +395,8 @@ int Load_Level_File(const char *level_name)
     /* Validate offsets are within file bounds */
     if (jpeg_offset < 0x22 || entity_offset < jpeg_offset ||
         entity_offset >= file_size) {
-        sprintf(DAT_00489d7c, "Level \"%s\" has invalid section offsets.", level_name);
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level \"%s\" has invalid section offsets.", level_name);
         Mem_Free(file_buf);
         return 0;
     }
@@ -402,7 +417,8 @@ int Load_Level_File(const char *level_name)
 
     if (!result) {
         if (DAT_00489d7c[0] == '\0') {
-            sprintf(DAT_00489d7c, "Could not load level \"%s\"", level_name);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "Could not load level \"%s\"", level_name);
         }
     }
 
@@ -419,6 +435,39 @@ int Load_Level_File(const char *level_name)
     return result;
 }
 
+int Load_Level_File(const char *level_name)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "levels/%s.lev", level_name);
+    return Load_Level_File_Path(path);
+}
+
+int Save_Level_Preview_Bmp(const char *path)
+{
+    if (!DAT_00481f50 || DAT_004879f0 <= 14 || DAT_004879f4 <= 14)
+        return 0;
+    const int width = (int)DAT_004879f0 - 14;
+    const int height = (int)DAT_004879f4 - 14;
+    SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGB24);
+    if (!surface)
+        return 0;
+    const unsigned short *source = (const unsigned short *)DAT_00481f50;
+    unsigned char *destination = (unsigned char *)surface->pixels;
+    for (int y = 0; y < height; ++y) {
+        unsigned char *row = destination + y * surface->pitch;
+        for (int x = 0; x < width; ++x) {
+            const unsigned short pixel =
+                source[((y + 7) << ((unsigned char)DAT_00487a18 & 0x1f)) + x + 7];
+            row[x * 3] = (unsigned char)(((pixel >> 11) & 0x1f) * 255 / 31);
+            row[x * 3 + 1] = (unsigned char)(((pixel >> 5) & 0x3f) * 255 / 63);
+            row[x * 3 + 2] = (unsigned char)((pixel & 0x1f) * 255 / 31);
+        }
+    }
+    const int result = SDL_SaveBMP(surface, path) ? 1 : 0;
+    SDL_DestroySurface(surface);
+    return result;
+}
+
 
 /* ===== Load_Image_Data (based on Load_Image_Wrapper @ 00420720) ===== */
 /* Processes the embedded JPEG, entity placements, and RLE tilemap.
@@ -427,6 +476,7 @@ int Load_Level_File(const char *level_name)
 int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                     unsigned char *file_buf)
 {
+    (void)extra_offset;
     unsigned char *jpeg_data;
     int jpeg_len;
     int img_w, img_h;
@@ -438,13 +488,36 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     unsigned char *tilemap;
     int i, row, col;
 
-    /* ---- 1. Decode embedded JPEG background ---- */
+    /* ---- 1. Decode normal JPEG or initialize a custom GG canvas ---- */
     jpeg_data = file_buf + jpeg_offset;
     jpeg_len  = entity_offset - jpeg_offset;
 
-    rgb24 = (unsigned char *)Load_JPEG_From_Memory(jpeg_data, jpeg_len, &img_w, &img_h);
-    if (!rgb24) {
-        sprintf(DAT_00489d7c, "Failed to decode level background JPEG");
+    if (DAT_0048396d != 0) {
+        /* The original Load_Image_Wrapper reads a four-byte little-endian
+         * width/height payload for custom GG levels. The visible background is
+         * generated later from the decoded constraint map and selected theme. */
+        if (jpeg_len < 4) {
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "Generated level has an invalid dimension payload");
+            return 0;
+        }
+        img_w = (int)jpeg_data[0] | ((int)jpeg_data[1] << 8);
+        img_h = (int)jpeg_data[2] | ((int)jpeg_data[3] << 8);
+        rgb24 = NULL;
+    } else {
+        rgb24 = (unsigned char *)Load_JPEG_From_Memory(
+            jpeg_data, jpeg_len, &img_w, &img_h);
+        if (!rgb24) {
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "Failed to decode level background JPEG");
+            return 0;
+        }
+    }
+
+    if (img_w <= 0 || img_h <= 0) {
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Level has invalid dimensions %dx%d", img_w, img_h);
+        if (rgb24) stbi_image_free(rgb24);
         return 0;
     }
 
@@ -474,7 +547,8 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     /* Layout: [stride*height*2 bytes RGB565] [stride*height*1 byte tilemap] */
     combined_buf = (unsigned char *)Mem_Alloc(stride * map_h * 3);
     if (!combined_buf) {
-        sprintf(DAT_00489d7c, "Not enough memory for level background");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "Not enough memory for level background");
         stbi_image_free(rgb24);
         return 0;
     }
@@ -489,24 +563,34 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     /* Clear tilemap to 0 */
     memset(tilemap, 0, stride * map_h);
 
-    /* ---- 4. Convert RGB24 → RGB565 into stride-aligned positions ---- */
-    /* Place JPEG pixels at interior positions (7,7) to (map_w-8, map_h-8) */
-    for (row = 0; row < img_h; row++) {
-        for (col = 0; col < img_w; col++) {
-            int src_idx = (row * img_w + col) * 3;
-            unsigned char r = rgb24[src_idx + 0];
-            unsigned char g = rgb24[src_idx + 1];
-            unsigned char b = rgb24[src_idx + 2];
-            unsigned short rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-
-            /* Place at border-offset position in stride-aligned buffer */
-            int dst_row = row + 7;
-            int dst_col = col + 7;
-            bg_pixels[(dst_row << shift) + dst_col] = rgb565;
+    /* ---- 4. Initialize the background ---- */
+    if (DAT_0048396d != 0) {
+        /* Binary parity: custom GG starts as dark blue RGB565 (0x0080),
+         * then FUN_004143e0 paints the generated theme over it. */
+        for (row = 0; row < (int)map_h; row++) {
+            for (col = 0; col < (int)map_w; col++) {
+                bg_pixels[(row << shift) + col] = 0x0080;
+            }
         }
-    }
+    } else {
+        /* Place JPEG pixels at interior positions (7,7) to
+         * (map_w-8, map_h-8). */
+        for (row = 0; row < img_h; row++) {
+            for (col = 0; col < img_w; col++) {
+                int src_idx = (row * img_w + col) * 3;
+                unsigned char r = rgb24[src_idx + 0];
+                unsigned char g = rgb24[src_idx + 1];
+                unsigned char b = rgb24[src_idx + 2];
+                unsigned short rgb565 = ((r & 0xF8) << 8) |
+                    ((g & 0xFC) << 3) | (b >> 3);
 
-    stbi_image_free(rgb24);
+                int dst_row = row + 7;
+                int dst_col = col + 7;
+                bg_pixels[(dst_row << shift) + dst_col] = rgb565;
+            }
+        }
+        stbi_image_free(rgb24);
+    }
     /* ---- 5. Parse entity placements ---- */
     {
         unsigned char *ent_section = file_buf + entity_offset;
@@ -537,17 +621,21 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
             unsigned char *rle_data = ent_data + ent_count * 20;
             int tile_row = 7;
             int tile_col = 7;
-            int tiles_filled = 0;
 
             while (1) {
                 unsigned char b0 = *rle_data++;
                 unsigned char b1 = *rle_data++;
+                if (b0 == 0xFF) {
+                    break;
+                }
+
                 int remap_idx = b0 >> 2;
 
-                /* Bounds check: any index >= 33 is terminator (original
-                 * table entry [33] = 0xFF). The RLE stream ends with
-                 * b0=0xFC (remap_idx=63) or similar out-of-range value. */
-                if (remap_idx >= 33) {
+                /* The original stream terminator is the literal first byte
+                 * 0xFF. Palette index 33 is valid and remaps to tile 0xFF,
+                 * which GG generation uses as its sign-placement marker. */
+                if (remap_idx >= (int)sizeof(tile_remap)) {
+                    LOG("[LEVEL] WARNING: invalid RLE palette index %d\n", remap_idx);
                     break;
                 }
 
@@ -558,7 +646,6 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                 for (int r = 0; r < run_len; r++) {
                     /* Write tile to tilemap at stride-aligned position */
                     tilemap[(tile_row << shift) + tile_col] = tile_val;
-                    tiles_filled++;
 
                     tile_col++;
                     if (tile_col >= (int)(map_w - 7)) {
@@ -598,6 +685,12 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                     /* Solid tile: black background */
                     bg_pixels[(row << shift) + col] = 0;
                 }
+                if (ent_entry[4] == 0x01) {
+                    /* Retail uses the configured water color for normal levels,
+                     * but leaves GG water dark for the generator to texture. */
+                    bg_pixels[(row << shift) + col] =
+                        DAT_0048396d == 0 ? DAT_0048384c : 0;
+                }
             }
         }
     }
@@ -611,7 +704,34 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
         }
     }
 
-    /* ---- 9. Allocate grid buffers ---- */
+    /* ---- 9. Generate custom GG artwork from the authored constraints ---- */
+    if (DAT_0048396d != 0) {
+        /* These were overlapping globals in the original executable. Keep the
+         * reconstructed standalone GG globals synchronized with the packed
+         * level config before entering the generator. */
+        memcpy(DAT_0048396e, DAT_00483860 + 0x10E, 0x80);
+        DAT_0048396e[0x7F] = '\0';
+        DAT_004839ee = (char)DAT_00483860[0x18E];
+        DAT_004839ef = (char)DAT_00483860[0x18F];
+        DAT_004839f0 = (short)((unsigned short)DAT_00483860[0x190] |
+            ((unsigned short)DAT_00483860[0x191] << 8));
+        DAT_004839f4 = (uint32_t)DAT_00483860[0x194] |
+            ((uint32_t)DAT_00483860[0x195] << 8) |
+            ((uint32_t)DAT_00483860[0x196] << 16) |
+            ((uint32_t)DAT_00483860[0x197] << 24);
+
+        if (DAT_004839f4 == 0) {
+            DAT_004839f4 = Platform_GetTicks();
+        }
+        srand(DAT_004839f4);
+        if (FUN_004143e0(0, 0) == 0) {
+            return 0;
+        }
+        /* The retail binary restores a time-based gameplay RNG after GG. */
+        srand(Platform_GetTicks());
+    }
+
+    /* ---- 10. Allocate grid buffers ---- */
     DAT_00487814 = Mem_Alloc((DAT_004879fc + 1) * (DAT_004879f8 + 1));
     if (DAT_00487814) {
         g_MemoryTracker += (DAT_004879fc + 1) * (DAT_004879f8 + 1);
@@ -629,7 +749,7 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
         memset(DAT_00489ea8, 0, (DAT_00487a08 + 1) * (DAT_00487a04 + 1));
     }
 
-    /* ---- 10. Initialize game config defaults (from FUN_00416ad0) ---- */
+    /* ---- 11. Initialize game config defaults (from FUN_00416ad0) ---- */
     /* Original addresses 0x483963-0x48396c are after the saved config range. */
     g_LevelPhysicsTuning.spawn_timer = 0x28;
     g_LevelPhysicsTuning.respawn_delay = 0x3c;

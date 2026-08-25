@@ -1,4 +1,3 @@
-/* Resource script for TOU.exe
- * 32512 == IDI_APPLICATION; winmain.cpp loads it by numeric ID for the
- * window class, and Explorer picks it up as the EXE icon. */
+/* Resource script for TOU.exe. SDL uses the executable's first icon for its
+ * Windows window class; Explorer uses the same resource. */
 32512 ICON "icon.ico"

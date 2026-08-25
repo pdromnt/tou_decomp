@@ -3,29 +3,35 @@
  * Address: Render_Frame=0045D800
  */
 #include "tou.h"
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
+#define CFG_ADDR(a) ((intptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
 
 /* ===== Globals defined in this module ===== */
 int                 DAT_00489238    = 640;   /* Screen/viewport width */
 int                 DAT_0048923c    = 480;   /* Screen/viewport height */
 
+static int Menu_Text_Width(const char *str, int font_idx);
+static void Menu_Draw_Fitted_Block(unsigned short *frame, int x, int y,
+                                   int width, int height, const char *text,
+                                   int color, int hover);
+static void Menu_Draw_Keyed_Instruction(unsigned short *frame, int x, int y,
+                                        int width, const char *prefix,
+                                        const char *key, const char *suffix);
+
 
 /* The recovered renderer remains natively 640x480. Display settings resize
  * only its presentation viewport, keeping gameplay coordinates untouched. */
-void Get_Game_Presentation_Rect(RECT *rect)
+void Get_Game_Presentation_Rect(PresentationRect *rect)
 {
-    RECT client = {0, 0, 640, 480};
-    if (hWnd_Main != NULL)
-        GetClientRect(hWnd_Main, &client);
-
-    int client_w = client.right - client.left;
-    int client_h = client.bottom - client.top;
+    int client_w = 640;
+    int client_h = 480;
+    Platform_GetWindowSize(&client_w, &client_h);
     if (client_w <= 0 || client_h <= 0) {
-        *rect = client;
+        rect->left = rect->top = rect->right = rect->bottom = 0;
         return;
     }
 
@@ -44,7 +50,7 @@ void Get_Game_Presentation_Rect(RECT *rect)
 
 void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *game_y)
 {
-    RECT viewport;
+    PresentationRect viewport;
     Get_Game_Presentation_Rect(&viewport);
     int width = viewport.right - viewport.left;
     int height = viewport.bottom - viewport.top;
@@ -66,50 +72,29 @@ void Client_To_Game_Coordinates(int client_x, int client_y, int *game_x, int *ga
 
 void Apply_Display_Settings(void)
 {
-    if (hWnd_Main == NULL)
-        return;
-
-    unsigned int mode = DAT_00483724[1];
+    unsigned int mode = g_GameConfig.values.resolution_index;
     if (g_NumDisplayModes <= 0 || mode >= (unsigned int)g_NumDisplayModes)
         mode = 5;
 
-    MONITORINFO monitor = {};
-    monitor.cbSize = sizeof(monitor);
-    GetMonitorInfoA(MonitorFromWindow(hWnd_Main, MONITOR_DEFAULTTONEAREST), &monitor);
-
-    if (g_WindowMode != 0) {
-        SetWindowLongA(hWnd_Main, GWL_STYLE, WS_POPUP);
-        SetWindowPos(hWnd_Main, HWND_TOP,
-            monitor.rcMonitor.left, monitor.rcMonitor.top,
-            monitor.rcMonitor.right - monitor.rcMonitor.left,
-            monitor.rcMonitor.bottom - monitor.rcMonitor.top,
-            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    } else {
-        DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-        RECT window_rect = {0, 0, g_ModeWidths[mode], g_ModeHeights[mode]};
-        AdjustWindowRect(&window_rect, style, FALSE);
-        int width = window_rect.right - window_rect.left;
-        int height = window_rect.bottom - window_rect.top;
-        int x = monitor.rcWork.left + ((monitor.rcWork.right - monitor.rcWork.left) - width) / 2;
-        int y = monitor.rcWork.top + ((monitor.rcWork.bottom - monitor.rcWork.top) - height) / 2;
-
-        SetWindowLongA(hWnd_Main, GWL_STYLE, style);
-        SetWindowPos(hWnd_Main, HWND_NOTOPMOST, x, y, width, height,
-            SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    }
-
-    InvalidateRect(hWnd_Main, NULL, TRUE);
+    int requested_width = g_ModeWidths[mode];
+    int requested_height = g_ModeHeights[mode];
+    if (!Platform_ApplyDisplaySettings(requested_width, requested_height,
+                                       g_WindowMode != 0))
+        LOG("[GFX] Could not apply display settings\n");
 }
 
 /* Scratch buffer for compositing particles onto RGB565 before conversion */
 static unsigned short *g_ScratchBuffer = NULL;
+
+static const char *Menu_Key_Name(int scan_code, const char *fallback,
+                                 char *buffer, size_t buffer_size);
 
 /* ===== FUN_00408a60 — Shield cross/ring drawing primitive ===== */
 /* Draws 8 line segments forming a cross shape using double LUT color transform.
  * Each pixel under the cross is remapped: pixel → DAT_00489230[pixel] → DAT_004876a4[12][remap].
  * param_1: framebuffer base, param_2: stride, param_3: arm size,
  * param_4: screen X center, param_5: screen Y center */
-static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int param_5)
+static void FUN_00408a60(unsigned short *param_1, int param_2, int param_3, int param_4, int param_5)
 {
     unsigned short *remap_lut = (unsigned short *)DAT_00489230;
     unsigned short *color_lut = (unsigned short *)DAT_004876a4[12];
@@ -125,7 +110,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar8; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar5 >= 0 && iVar5 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -136,7 +121,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar8; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar2 >= 0 && iVar2 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -147,7 +132,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar6; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar5 >= 0 && iVar5 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar5) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -159,7 +144,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int x1 = iVar1 + iVar6; if (x1 > DAT_004806d8) x1 = DAT_004806d8;
         if (x0 < DAT_004806d8 && iVar2 >= 0 && iVar2 < DAT_004806e4 && x0 < x1) {
             int cnt = x1 - x0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + iVar2) * param_2 + DAT_004806ec + x0;
             do { *p = color_lut[remap_lut[*p]]; p++; } while (--cnt);
         }
     }
@@ -169,7 +154,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar8 >= 0 && iVar8 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -180,7 +165,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar2 >= 0 && iVar2 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -191,7 +176,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5b; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar8 >= 0 && iVar8 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar8;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -203,7 +188,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
         int y1 = iVar1 + iVar5b; if (y1 > DAT_004806e4) y1 = DAT_004806e4;
         if (y0 < DAT_004806e4 && iVar2 >= 0 && iVar2 < DAT_004806d8 && y0 < y1) {
             int cnt = y1 - y0;
-            unsigned short *p = (unsigned short *)(param_1 + ((DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2) * 2);
+            unsigned short *p = param_1 + (DAT_004806e8 + y0) * param_2 + DAT_004806ec + iVar2;
             do { *p = color_lut[remap_lut[*p]]; p += param_2; } while (--cnt);
         }
     }
@@ -213,7 +198,7 @@ static void FUN_00408a60(int param_1, int param_2, int param_3, int param_4, int
 /* Draws 4 contracting cross shapes around a spawning entity.
  * Timer at entity+0x4A3 controls the size — starts large and shrinks to zero.
  * param_1: buffer, param_2: stride, param_3: entity index */
-static void FUN_00408ea0(int param_1, int param_2, int param_3)
+static void FUN_00408ea0(unsigned short *param_1, int param_2, int param_3)
 {
     PlayerData *player = Player_Get(param_3);
     unsigned int timer = player->timer_4a3;
@@ -263,16 +248,17 @@ static void Render_Game_World(Framebuffer *framebuffer)
 
     /* Sky pattern fill — tiles a sprite across the entire buffer ONCE as background.
      * MUST be before the viewport loop so it doesn't wipe per-viewport rendering.
-     * Sky type (g_ConfigBlob[0x1803] = byte 3 of DAT_00483758):
+     * Sky type (`sky_settings_bytes[3]`):
      *   0 → sprite 0x40, 1 → sprite 0x45, 2 → sprite 0x46 (default)
      *   3 → solid color 0x446, ≥4 → black */
     {
         unsigned char sky_type = g_GameConfig.values.sky_settings_bytes[3];
         if (sky_type < 3 && DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
             int sky_sprite = (sky_type == 0) ? 0x40 : ((sky_type == 1) ? 0x45 : 0x46);
-            int spr_w = (int)((unsigned char *)DAT_00489e8c)[sky_sprite];
-            int spr_h = (int)((unsigned char *)DAT_00489e88)[sky_sprite];
-            int spr_base = ((int *)DAT_00489234)[sky_sprite];
+            const SpriteAtlasFrame sky_frame = SpriteAtlas_GetFrame(sky_sprite);
+            int spr_w = sky_frame.width;
+            int spr_h = sky_frame.height;
+            int spr_base = sky_frame.pixel_offset;
             unsigned short *spr_pixels = (unsigned short *)DAT_00487ab4;
             if (spr_w > 0 && spr_h > 0) {
                 int src_y = spr_base;
@@ -354,6 +340,21 @@ static void Render_Game_World(Framebuffer *framebuffer)
         vp_left = (int)DAT_004879f0 - 7 - vp_w;
     if (vp_top + vp_h > (int)DAT_004879f4 - 7)
         vp_top = (int)DAT_004879f4 - 7 - vp_h;
+
+    /* Original FUN_00407720 at 0x00407A57-0x00407A98 shrinks a viewport
+     * when a generated map's playable interior is smaller than the requested
+     * view. Without this block, the right/bottom clamp above makes vp_left or
+     * vp_top negative and the background blitter reads before the GG map. */
+    const int map_view_w = (int)DAT_004879f0 - 14;
+    const int map_view_h = (int)DAT_004879f4 - 14;
+    if (vp_w > map_view_w) {
+        vp_w = map_view_w;
+        vp_left = 7;
+    }
+    if (vp_h > map_view_h) {
+        vp_h = map_view_h;
+        vp_top = 7;
+    }
     if (vp_w & 1) vp_w--;
 
     /* Set viewport globals (all entity renderers + HUD read these) */
@@ -370,7 +371,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
      * Zero pixels (0x0000) in the level background represent empty/sky areas.
      *
      * Two modes (matching original FUN_00407720 viewport blit):
-     *   DAT_00483960 != 0 → FUN_0040c0a0 path: per-level sky from .SWP file
+     *   DAT_00483960 != 0 → FUN_0040c0a0 path: per-level sky from .swp file
      *     composites sky image behind transparent tile pixels
      *   DAT_00483960 == 0 → direct blit, sky comes from tiled sprite fill above */
     if (DAT_00483960 != 0 && DAT_00489ea0 != NULL) {
@@ -458,7 +459,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
             unsigned char timer = player->timer_4a3;
             if (timer != 0 && timer < 0x2F &&
                 player->state_24 == 0) {
-                FUN_00408ea0((int)buffer, stride, p);
+                FUN_00408ea0(buffer, stride, p);
             }
         }
     }
@@ -548,7 +549,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
             /* Frag count text */
             if (player->timer_cb != 0) {
                 char frag_buf[100];
-                FUN_004644af(frag_buf, (const unsigned char *)"Frags: %d",
+                FUN_004644af(frag_buf, (const unsigned char *)Text_Get("hud.frags_format"),
                              player->frag_count);
                 Draw_Text_To_Buffer(frag_buf, 1, 1,
                     buffer + (DAT_004806e8 + 0x32) * stride + DAT_004806ec + 4,
@@ -559,9 +560,9 @@ static void Render_Game_World(Framebuffer *framebuffer)
             if (player->timer_cc != 0) {
                 char lives_buf[32];
                 if (player->lives == 0) {
-                    strcpy(lives_buf, "You are dead!");
+                    snprintf(lives_buf, sizeof(lives_buf), "%s", Text_Get("hud.you_are_dead"));
                 } else {
-                    FUN_004644af(lives_buf, (const unsigned char *)"Lives: %d",
+                    FUN_004644af(lives_buf, (const unsigned char *)Text_Get("hud.lives_format"),
                                  player->lives);
                 }
                 Draw_Text_To_Buffer(lives_buf, 1, 5,
@@ -589,11 +590,14 @@ static void Render_Game_World(Framebuffer *framebuffer)
         if (g_SubState == GAMEPLAY_PAUSED) {
             /* State 1 (Pause key): text overlay with key name + version string.
              * Original: "Game Paused. Press \"[KEY]\" to continue." + "TOU v1.0" */
-            char pause_msg[100];
+            char pause_msg[128];
+            char key_buf[64];
             const char *key_name = "???";
-            if (g_KeyNameTable && DAT_004837ba < 256 && g_KeyNameTable[DAT_004837ba])
-                key_name = g_KeyNameTable[DAT_004837ba];
-            sprintf(pause_msg, "Game Paused. Press \"%s\" to continue.", key_name);
+            if (g_KeyNameTable && g_KeyNameTable[DAT_004837ba])
+                key_name = Menu_Key_Name(DAT_004837ba, g_KeyNameTable[DAT_004837ba],
+                                         key_buf, sizeof(key_buf));
+            snprintf(pause_msg, sizeof(pause_msg),
+                     Text_Get("hud.pause_format"), key_name);
             Draw_Text_To_Buffer(pause_msg, 3, 2,
                 buffer + (DAT_0048923c - 0x1e) * stride + 8,
                 stride, 0, DAT_00489238 - 0x10, 0);
@@ -624,6 +628,25 @@ static void Render_Game_World(Framebuffer *framebuffer)
                         }
                         dst += stride;
                     }
+
+                    /* Sprite 0x37 is now a language-neutral backplate. Keep
+                     * the fixed controls in the left column and localize the
+                     * actions in a fitted right column. */
+                    Menu_Draw_Fitted_Block(buffer, cx + 4, cy + 10, 68, 43,
+                                           "F10", 0, 32);
+                    Menu_Draw_Fitted_Block(buffer, cx + 75, cy + 10,
+                                           spr_w - 82, 43,
+                                           Text_Get("hud.exit_to_menu"), 11, 32);
+                    Menu_Draw_Fitted_Block(buffer, cx + 4, cy + 58, 68, 43,
+                                           Text_Get("key.enter"), 0, 32);
+                    Menu_Draw_Fitted_Block(buffer, cx + 75, cy + 58,
+                                           spr_w - 82, 43,
+                                           Text_Get("hud.next_level"), 11, 32);
+                    Menu_Draw_Fitted_Block(buffer, cx + 4, cy + 106, 68, 58,
+                                           Text_Get("key.escape"), 0, 32);
+                    Menu_Draw_Fitted_Block(buffer, cx + 75, cy + 106,
+                                           spr_w - 82, 58,
+                                           Text_Get("hud.back_to_game"), 11, 32);
                 }
             }
         }
@@ -659,29 +682,33 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     /* Dynamic text overlaid on sprite panel */
                     char text_buf[100];
 
-                    /* Level count: "N / M" (original format at 0x47b110) */
-                    FUN_004644af(text_buf, (const unsigned char *)"%d / %d",
+                    /* The cleaned panel is language-neutral; all labels are
+                     * now localized text instead of English baked pixels. */
+                    FUN_004644af(text_buf,
+                                 (const unsigned char *)Text_Get("hud.round_level_format"),
                                  (int)(unsigned char)DAT_0048693c,
                                  (int)g_GameConfig.values.active_level_count);
+                    int line_width = Menu_Text_Width(text_buf, 2);
                     Draw_Text_To_Buffer(text_buf, 2, 0,
-                        buffer + (panel_y + 10) * stride + panel_x + 0x73,
-                        stride, 0, 0xFA, 0);
+                        buffer + (panel_y + 10) * stride + panel_x +
+                            (spr_w - line_width) / 2,
+                        stride, 0, 0, 0);
 
                     /* Round result text */
                     if ((char)DAT_00487640[0] == 0) {
-                        strcpy(text_buf, "Level skipped");
+                        snprintf(text_buf, sizeof(text_buf), "%s", Text_Get("hud.level_skipped"));
                     } else if ((char)DAT_00487640[0] == (char)-1) {
-                        strcpy(text_buf, "Draw. Everybody died");
+                        snprintf(text_buf, sizeof(text_buf), "%s", Text_Get("hud.everybody_died"));
                     } else {
-                        FUN_004644af(text_buf, (const unsigned char *)"Team %d wins the round",
+                        FUN_004644af(text_buf, (const unsigned char *)Text_Get("hud.team_wins_round_format"),
                                      (int)(unsigned char)DAT_00487640[0]);
                     }
                     /* Two-line display: "Team N" + "wins the round" (font 1, centered) */
                     if ((char)DAT_00487640[0] > 0 && (char)DAT_00487640[0] != (char)-1) {
                         char line1[32], line2[32];
-                        FUN_004644af(line1, (const unsigned char *)"Team %d",
+                        FUN_004644af(line1, (const unsigned char *)Text_Get("hud.team_format"),
                                      (int)(unsigned char)DAT_00487640[0]);
-                        strcpy(line2, "wins the round");
+                        snprintf(line2, sizeof(line2), "%s", Text_Get("hud.wins_the_round"));
                         Draw_Text_To_Buffer(line1, 1, 1,
                             buffer + (panel_y + 0x1f) * stride + panel_x + 0x12,
                             stride, 0, spr_w - 0x24, 0);
@@ -694,32 +721,55 @@ static void Render_Game_World(Framebuffer *framebuffer)
                             stride, 0, spr_w - 0x24, 0);
                     }
 
-                    /* Team names and win counts */
-                    unsigned char *slots = (unsigned char *)&DAT_0048693c;
+                    /* Team names and win counts. Translations such as
+                     * Portuguese "Equipe" and Finnish "Joukkue" are wider
+                     * than the baked English columns, so center each label and
+                     * use the narrow font only when its column truly needs it. */
+                    const int team_centers[3] = { 0x2f, 0x7f, 0xd4 };
+                    const char *team_labels[3] = {
+                        Text_Get("hud.team_1"), Text_Get("hud.team_2"),
+                        Text_Get("hud.team_3")
+                    };
+                    for (int team = 0; team < 3; ++team) {
+                        int font = 1;
+                        int width = Menu_Text_Width(team_labels[team], font);
+                        if (width > 72) {
+                            font = 3;
+                            width = Menu_Text_Width(team_labels[team], font);
+                        }
+                        Draw_Text_To_Buffer(team_labels[team], font, 6 + team,
+                            buffer + (panel_y + 0x55) * stride + panel_x +
+                                team_centers[team] - width / 2,
+                            stride, 32, 0, 0);
+                    }
 
-                    Draw_Text_To_Buffer("Team1", 1, 6,
-                        buffer + (panel_y + 0x55) * stride + panel_x + 10,
-                        stride, 0, 0xFA, 0);
-                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[1]);
+                    line_width = Menu_Text_Width(Text_Get("hud.round_current_wins"), 2);
+                    Draw_Text_To_Buffer(Text_Get("hud.round_current_wins"), 2, 0,
+                        buffer + (panel_y + 0x3e) * stride + panel_x +
+                            (spr_w - line_width) / 2,
+                        stride, 0, 0, 0);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[0]);
                     Draw_Text_To_Buffer(text_buf, 2, 6,
                         buffer + (panel_y + 100) * stride + panel_x + 0x1E,
                         stride, 0, 0xFA, 0);
 
-                    Draw_Text_To_Buffer("Team2", 1, 7,
-                        buffer + (panel_y + 0x55) * stride + panel_x + 0x5A,
-                        stride, 0, 0xFA, 0);
-                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[2]);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[1]);
                     Draw_Text_To_Buffer(text_buf, 2, 7,
                         buffer + (panel_y + 100) * stride + panel_x + 0x6E,
                         stride, 0, 0xFA, 0);
 
-                    Draw_Text_To_Buffer("Team3", 1, 8,
-                        buffer + (panel_y + 0x55) * stride + panel_x + 0xAF,
-                        stride, 0, 0xFA, 0);
-                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)slots[3]);
+                    FUN_004644af(text_buf, (const unsigned char *)"%d", (int)g_TeamWins[2]);
                     Draw_Text_To_Buffer(text_buf, 2, 8,
                         buffer + (panel_y + 100) * stride + panel_x + 0xC3,
                         stride, 0, 0xFA, 0);
+
+                    Menu_Draw_Keyed_Instruction(buffer, panel_x,
+                        panel_y + 0x83, spr_w, "", Text_Get("key.enter"),
+                        Text_Get("hud.round_continue_action"));
+                    Menu_Draw_Keyed_Instruction(buffer, panel_x,
+                        panel_y + 0x94, spr_w,
+                        Text_Get("hud.round_exit_prefix"), "F10",
+                        Text_Get("hud.round_exit_action"));
                 }
             }
         }
@@ -728,9 +778,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
 
 /* ===== Render_Frame (0045D800) ===== */
 /*
- * The original DirectDraw lock/blit sequence is now split at a stable boundary:
- * this function composes the RGB565 software frame, then the selected backend
- * presents it. The DirectDraw backend retains the existing conversion/scaling.
+ * The original lock/blit sequence is split at a stable boundary: this function
+ * composes the RGB565 software frame, then SDL presents it.
  */
 void Render_Frame(void)
 {
@@ -769,16 +818,264 @@ void Render_Frame(void)
 
 /* ===== Render_Game_View_To - Draw menu items onto a target buffer ===== */
 /* Called every frame by Render_Frame on the scratch buffer.
- * The scratch framebuffer replaces the original locked DirectDraw surface. */
+ * The scratch framebuffer replaces the original locked display surface. */
 static int Menu_Text_Width(const char *str, int font_idx)
 {
     int width = 0;
-    if (!str || !Font_Char_Table)
+    if (!str)
         return 0;
     int font_base = (font_idx & 0xFF) * 256;
-    while (*str)
-        width += Font_Char_Table[font_base + (unsigned char)*str++].width;
+    while (*str) {
+        unsigned char glyph = '?';
+        str = Text_NextGlyph(str, &glyph);
+        width += Font_Char_Table[font_base + glyph].width;
+    }
     return width;
+}
+
+static void Menu_Draw_Centered_Line(unsigned short *frame, int x, int y,
+                                    int width, const char *text, int font,
+                                    int color, int hover)
+{
+    int text_width = Menu_Text_Width(text, font);
+    int draw_x = x + (width - text_width) / 2;
+    if (draw_x < 0 || draw_x + text_width > 640 || y < 0 || y >= 480)
+        return;
+    Draw_Text_To_Buffer(text, font, color, frame + y * 640 + draw_x,
+                        640, hover, 0, 0);
+}
+
+static void Menu_Draw_Keyed_Instruction(unsigned short *frame, int x, int y,
+                                        int width, const char *prefix,
+                                        const char *key, const char *suffix)
+{
+    int font = 1;
+    const int has_prefix = prefix && prefix[0] != '\0';
+    const int has_suffix = suffix && suffix[0] != '\0';
+    int total_width = Menu_Text_Width(prefix, font) +
+                      Menu_Text_Width(key, font) +
+                      Menu_Text_Width(suffix, font) +
+                      (has_prefix + has_suffix) *
+                          Font_Char_Table[font * 256 + ' '].width;
+    if (total_width > width - 12) {
+        font = 3;
+        total_width = Menu_Text_Width(prefix, font) +
+                      Menu_Text_Width(key, font) +
+                      Menu_Text_Width(suffix, font) +
+                      (has_prefix + has_suffix) *
+                          Font_Char_Table[font * 256 + ' '].width;
+    }
+
+    /* Original artwork sits a few pixels left of mathematical center. */
+    int draw_x = x + (width - total_width) / 2 - 4;
+    const int space_width = Font_Char_Table[font * 256 + ' '].width;
+    if (has_prefix) {
+        Draw_Text_To_Buffer(prefix, font, 11, frame + y * 640 + draw_x,
+                            640, 32, 0, 0);
+        draw_x += Menu_Text_Width(prefix, font) + space_width;
+    }
+    Draw_Text_To_Buffer(key, font, 0, frame + y * 640 + draw_x,
+                        640, 32, 0, 0);
+    draw_x += Menu_Text_Width(key, font);
+    if (has_suffix) {
+        draw_x += space_width;
+        Draw_Text_To_Buffer(suffix, font, 11, frame + y * 640 + draw_x,
+                            640, 32, 0, 0);
+    }
+}
+
+static void Menu_Draw_Fitted_Block(unsigned short *frame, int x, int y,
+                                   int width, int height, const char *text,
+                                   int color, int hover)
+{
+    if (!text || width <= 0 || height <= 0)
+        return;
+
+    const int candidate_fonts[2] = {2, 1};
+    for (int font : candidate_fonts) {
+        if (Menu_Text_Width(text, font) <= width - 8) {
+            int line_height = Font_Char_Table[font * 256].height;
+            Menu_Draw_Centered_Line(frame, x, y + (height - line_height) / 2,
+                                    width, text, font, color, hover);
+            return;
+        }
+    }
+
+    int font = 1;
+    const char *best_space = NULL;
+    int best_width = 0x7fffffff;
+    for (const char *space = strchr(text, ' '); space;
+         space = strchr(space + 1, ' ')) {
+        char first[96];
+        size_t length = (size_t)(space - text);
+        if (length >= sizeof(first))
+            continue;
+        memcpy(first, text, length);
+        first[length] = '\0';
+        int first_width = Menu_Text_Width(first, font);
+        int second_width = Menu_Text_Width(space + 1, font);
+        int widest = first_width > second_width ? first_width : second_width;
+        if (widest < best_width) {
+            best_width = widest;
+            best_space = space;
+        }
+    }
+
+    if (!best_space) {
+        font = 3;
+        int line_height = Font_Char_Table[font * 256].height;
+        Menu_Draw_Centered_Line(frame, x, y + (height - line_height) / 2,
+                                width, text, font, color, hover);
+        return;
+    }
+
+    if (best_width > width - 8)
+        font = 3;
+    char first[96];
+    size_t length = (size_t)(best_space - text);
+    memcpy(first, text, length);
+    first[length] = '\0';
+    int line_height = Font_Char_Table[font * 256].height;
+    int top = y + (height - line_height * 2) / 2;
+    Menu_Draw_Centered_Line(frame, x, top, width, first,
+                            font, color, hover);
+    Menu_Draw_Centered_Line(frame, x, top + line_height, width,
+                            best_space + 1, font, color, hover);
+}
+
+static void Menu_Draw_Localized_Button_Label(unsigned short *frame,
+                                             const MenuItem *item,
+                                             int sprite_idx)
+{
+    const char *text = NULL;
+    switch (sprite_idx) {
+    case 0x38: text = Text_Get("results.back_to_menu"); break;
+    case 0x3C: text = Text_Get("menu.102.team_stats"); break;
+    case 0x3D: text = Text_Get("menu.109.awards"); break;
+    case 0x3E: text = Text_Get("menu.112.player_stats"); break;
+    default: return;
+    }
+
+    const int inner_width = item->width - 14;
+    const int label_x = item->x - 4;
+    /* The baked labels used nearly full-bright pixels. Normal font palette
+     * rendering is deliberately dimmer, which made text sink into these dark
+     * blue backplates. Use the brighter cyan ramp and a modest baseline lift;
+     * actual hover animation can still brighten it further. */
+    const int color = sprite_idx == 0x3D ? 0 : 11;
+    int hover = item->hover_state >> 18;
+    if (hover < 64)
+        hover = 64;
+    int font = 2;
+    int text_width = Menu_Text_Width(text, font);
+    if (text_width <= inner_width) {
+        int height = Font_Char_Table[font * 256].height;
+        Menu_Draw_Centered_Line(frame, label_x,
+            item->y + (item->height - height) / 2,
+            item->width, text, font, color, hover);
+        return;
+    }
+
+    font = 1;
+    text_width = Menu_Text_Width(text, font);
+    if (text_width <= inner_width) {
+        int height = Font_Char_Table[font * 256].height;
+        Menu_Draw_Centered_Line(frame, label_x,
+            item->y + (item->height - height) / 2,
+            item->width, text, font, color, hover);
+        return;
+    }
+
+    /* Pick the word boundary that produces the most balanced two lines. */
+    const char *best_space = NULL;
+    int best_width = 0x7fffffff;
+    for (const char *space = strchr(text, ' '); space;
+         space = strchr(space + 1, ' ')) {
+        char first[96];
+        size_t first_length = (size_t)(space - text);
+        if (first_length >= sizeof(first))
+            continue;
+        memcpy(first, text, first_length);
+        first[first_length] = '\0';
+        int first_width = Menu_Text_Width(first, font);
+        int second_width = Menu_Text_Width(space + 1, font);
+        int widest = first_width > second_width ? first_width : second_width;
+        if (widest < best_width) {
+            best_width = widest;
+            best_space = space;
+        }
+    }
+
+    if (!best_space) {
+        font = 3;
+        int height = Font_Char_Table[font * 256].height;
+        Menu_Draw_Centered_Line(frame, label_x,
+            item->y + (item->height - height) / 2,
+            item->width, text, font, color, hover);
+        return;
+    }
+
+    if (best_width > inner_width)
+        font = 3;
+    char first[96];
+    size_t first_length = (size_t)(best_space - text);
+    memcpy(first, text, first_length);
+    first[first_length] = '\0';
+    const char *second = best_space + 1;
+    int height = Font_Char_Table[font * 256].height;
+    int top = item->y + (item->height - height * 2) / 2;
+    Menu_Draw_Centered_Line(frame, label_x, top,
+                            item->width, first, font, color, hover);
+    Menu_Draw_Centered_Line(frame, label_x, top + height,
+                            item->width, second, font, color, hover);
+}
+
+static const char *Menu_Key_Name(int scan_code, const char *fallback,
+                                 char *buffer, size_t buffer_size)
+{
+    const char *key = NULL;
+    switch (scan_code) {
+    case 0x0E: key = "key.backspace"; break;
+    case 0x1C: key = "key.enter"; break;
+    case 0x1D: key = "key.left_ctrl"; break;
+    case 0x2A: key = "key.left_shift"; break;
+    case 0x36: key = "key.right_shift"; break;
+    case 0x38: key = "key.left_alt"; break;
+    case 0x39: key = "key.spacebar"; break;
+    case 0x3A: key = "key.caps_lock"; break;
+    case 0x45: key = "key.num_lock"; break;
+    case 0x46: key = "key.scroll_lock"; break;
+    case 0x9D: key = "key.right_ctrl"; break;
+    case 0xB8: key = "key.right_alt"; break;
+    case 0xC5: key = "key.pause"; break;
+    case 0xC7: key = "key.home"; break;
+    case 0xC8: key = "key.up_arrow"; break;
+    case 0xC9: key = "key.page_up"; break;
+    case 0xCB: key = "key.left_arrow"; break;
+    case 0xCD: key = "key.right_arrow"; break;
+    case 0xCF: key = "key.end"; break;
+    case 0xD0: key = "key.down_arrow"; break;
+    case 0xD1: key = "key.page_down"; break;
+    case 0xD2: key = "key.insert"; break;
+    case 0xD3: key = "key.delete"; break;
+    case 0xDB: key = "key.left_system"; break;
+    case 0xDC: key = "key.right_system"; break;
+    case 0xDD: key = "key.application"; break;
+    default: break;
+    }
+    if (key) return Text_Get(key);
+
+    const bool numpad = (scan_code >= 0x37 && scan_code <= 0x53) ||
+                        scan_code == 0x9C || scan_code == 0xB3 || scan_code == 0xB5;
+    if (numpad && fallback && buffer && buffer_size > 0) {
+        const char *separator = strstr(fallback, " (numpad)");
+        if (separator) {
+            snprintf(buffer, buffer_size, "%.*s (%s)",
+                     (int)(separator - fallback), fallback, Text_Get("key.numpad"));
+            return buffer;
+        }
+    }
+    return fallback;
 }
 
 void Render_Game_View_To(Framebuffer *framebuffer)
@@ -808,7 +1105,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x00: case 0x0C: case 0x1A: case 0x20: case 0x21:
             case 0x22: case 0x23: case 0x24: case 0x25: case 0x2B:
             case 0x2C: case 0x2D: case 0x2E: case 0x2F:
-                if (g_MenuStrings && item->string_idx < 350 &&
+                if (g_MenuStrings && item->string_idx < MENU_STRING_CAPACITY &&
                     g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
                 break;
@@ -817,7 +1114,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x06: {
                 if (DAT_00487abc != NULL) {
                     static char wpn_name[21];
-                    char *raw = (char *)((int)DAT_00487abc + item->string_idx * 0x218 + 4);
+                    char *raw = static_cast<char *>(DAT_00487abc) +
+                                item->string_idx * 0x218 + 4;
                     memcpy(wpn_name, raw, 20);
                     wpn_name[20] = '\0';
                     for (int ti = 19; ti >= 0 && wpn_name[ti] == ' '; ti--)
@@ -847,7 +1145,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                     val = v;
                 }
                 int idx = item->string_idx + val;
-                if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
+                if (g_MenuStrings && idx >= 0 && idx < MENU_STRING_CAPACITY && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
                 if (str && item->render_mode != 0x1E) {
                     int text_w = Menu_Text_Width(str, item->font_idx);
@@ -961,7 +1259,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 else if (val == 30) offset = 3;
                 else offset = 4;
                 int idx = item->string_idx + offset;
-                if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
+                if (g_MenuStrings && idx >= 0 && idx < MENU_STRING_CAPACITY && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
@@ -971,7 +1269,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x03: {
                 int val = cfgPtr ? (int)*cfgPtr : 1;
                 int idx = item->string_idx + val - 1;
-                if (g_MenuStrings && idx >= 0 && idx < 350 && g_MenuStrings[idx])
+                if (g_MenuStrings && idx >= 0 && idx < MENU_STRING_CAPACITY && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
@@ -1053,14 +1351,14 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 default: break;
                 }
                 if (item->render_mode == 0x34 && val > 1200) {
-                    str = "INFINITE";
+                    str = Text_Get("menu.value.infinite");
                 } else if (item->render_mode == 0x0E || item->render_mode == 0x13 ||
                            item->render_mode == 0x14 || item->render_mode == 0x15 ||
                            item->render_mode == 0x16 || item->render_mode == 0x34) {
-                    sprintf(valBuf, "%d %%", val);
+                    snprintf(valBuf, sizeof(valBuf), "%d %%", val);
                     str = valBuf;
                 } else {
-                    sprintf(valBuf, "%d", val);
+                    snprintf(valBuf, sizeof(valBuf), "%d", val);
                     str = valBuf;
                 }
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
@@ -1072,10 +1370,10 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 int modeIdx = cfgPtr ? (int)*cfgPtr : 0;
                 if (modeIdx >= 0 && modeIdx < g_NumDisplayModes &&
                     g_ModeWidths[modeIdx] > 0) {
-                    sprintf(valBuf, "%d x %d",
-                            g_ModeWidths[modeIdx], g_ModeHeights[modeIdx]);
+                    snprintf(valBuf, sizeof(valBuf), "%d x %d",
+                             g_ModeWidths[modeIdx], g_ModeHeights[modeIdx]);
                 } else {
-                    sprintf(valBuf, "%d x %d", 640, 480);
+                    snprintf(valBuf, sizeof(valBuf), "%d x %d", 640, 480);
                 }
                 str = valBuf;
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
@@ -1085,9 +1383,16 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x35: {
                 int mode = cfgPtr ? (int)*cfgPtr : 0;
                 int idx = 0x14E + ((mode != 0) ? 1 : 0);
-                if (g_MenuStrings && idx < 350 && g_MenuStrings[idx])
+                if (g_MenuStrings && idx < MENU_STRING_CAPACITY && g_MenuStrings[idx])
                     str = g_MenuStrings[idx];
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
+                break;
+            }
+
+            case 0x36: {
+                str = Localization_GetLanguageName(Localization_GetLanguageIndex());
+                item->width = Menu_Text_Width(str, item->font_idx);
+                item->x = 540 - item->width;
                 break;
             }
 
@@ -1095,12 +1400,11 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             case 0x07: {
                 int scanCode = cfgPtr ? (int)*cfgPtr : 0;
                 if (g_InputMode == 2 && DAT_004877e6 == (unsigned char)i) {
-                    /* Waiting for key press - show ESC hint */
-                    if (g_KeyNameTable && g_KeyNameTable[1])
-                        str = g_KeyNameTable[1];
+                    str = "?";
                 } else {
                     if (g_KeyNameTable && scanCode < 256 && g_KeyNameTable[scanCode])
-                        str = g_KeyNameTable[scanCode];
+                        str = Menu_Key_Name(scanCode, g_KeyNameTable[scanCode],
+                                            valBuf, sizeof(valBuf));
                 }
                 item->x = 540 - Menu_Text_Width(str, item->font_idx);
                 break;
@@ -1115,21 +1419,18 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                     DAT_00485090[levelIdx] != NULL) {
                     const char *name = (const char *)DAT_00485090[levelIdx];
                     if (DAT_00485ea0[levelIdx] == '\x02') {
-                        sprintf(valBuf, "GG: %s", name);
+                        snprintf(valBuf, sizeof(valBuf), "GG: %s", name);
                         str = valBuf;
                     } else {
                         str = name;
                     }
                 } else {
-                    sprintf(valBuf, "<%d>", levelIdx);
+                    snprintf(valBuf, sizeof(valBuf), "<%d>", levelIdx);
                     str = valBuf;
                 }
                 /* Center text at x=320 by calculating pixel width */
                 if (str) {
-                    int fontBase = (item->font_idx & 0xFF) * 256;
-                    int textW = 0;
-                    for (const char *p = str; *p; p++)
-                        textW += Font_Char_Table[fontBase + (unsigned char)*p].width;
+                    int textW = Menu_Text_Width(str, item->font_idx);
                     item->x = 320 - textW / 2;
                     if (item->x < 0) item->x = 0;
                 }
@@ -1164,7 +1465,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             /* Team number: sprintf + team-colored text */
             case 0x1C: {
                 int teamVal = cfgPtr ? (int)*cfgPtr : 0;
-                sprintf(valBuf, "%d", teamVal);
+                snprintf(valBuf, sizeof(valBuf), "%d", teamVal);
                 str = valBuf;
                 /* Use team color palette (6=team0, 7=team1, 8=team2) */
                 item->color_style = teamVal + 6;
@@ -1201,7 +1502,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
 
                 if (shipType == 9) {
                     /* "Random" text */
-                    str = "Random";
+                    str = Text_Get("menu.value.random");
                 } else if (DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
                     /* Draw ship preview sprite at index 0xE5 + ship_type */
                     int sIdx = (int)shipType + 0xE5;
@@ -1270,7 +1571,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             }
 
             default:
-                if (g_MenuStrings && item->string_idx < 350 &&
+                if (g_MenuStrings && item->string_idx < MENU_STRING_CAPACITY &&
                     g_MenuStrings[item->string_idx])
                     str = g_MenuStrings[item->string_idx];
                 break;
@@ -1297,9 +1598,10 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             if (!DAT_00487ab4 || !DAT_00489234 || !DAT_00489e8c || !DAT_00489e88)
                 continue;
 
-            int pixel_base = ((int *)DAT_00489234)[sprite_idx];
-            int spr_w = (int)((unsigned char *)DAT_00489e8c)[sprite_idx];
-            int spr_h = (int)((unsigned char *)DAT_00489e88)[sprite_idx];
+            const SpriteAtlasFrame atlas_frame = SpriteAtlas_GetFrame(sprite_idx);
+            int pixel_base = atlas_frame.pixel_offset;
+            int spr_w = atlas_frame.width;
+            int spr_h = atlas_frame.height;
 
             if (spr_w <= 0 || spr_h <= 0)
                 continue;
@@ -1347,6 +1649,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                     dst += 640;
                 }
             }
+
+            Menu_Draw_Localized_Button_Label(frame, item, sprite_idx);
         }
     }
 
@@ -1436,8 +1740,8 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 /* Compact two-line drag hint at the frozen drag-start cursor. */
                 int cursor_x = g_MouseDeltaX >> 18;
                 int cursor_y = g_MouseDeltaY >> 18;
-                const char *tip_top = "Hold &";
-                const char *tip_bottom = "drag";
+                const char *tip_top = Text_Get("menu.tooltip.hold");
+                const char *tip_bottom = Text_Get("menu.tooltip.drag");
                 int tip_top_w = Menu_Text_Width(tip_top, 2);
                 int tip_bottom_w = Menu_Text_Width(tip_bottom, 2);
                 int box_w = 0x61;
@@ -1530,14 +1834,15 @@ void Render_Game_View_To(Framebuffer *framebuffer)
     if (g_GameState < 0x90 &&
         DAT_00487ab4 && DAT_00489234 && DAT_00489e8c && DAT_00489e88) {
         int cur_sprite = 0x22;  /* cursor sprite index (decimal 34) */
-        int cur_w = (int)((unsigned char *)DAT_00489e8c)[cur_sprite];
-        int cur_h = (int)((unsigned char *)DAT_00489e88)[cur_sprite];
+        const SpriteAtlasFrame atlas_frame = SpriteAtlas_GetFrame(cur_sprite);
+        int cur_w = atlas_frame.width;
+        int cur_h = atlas_frame.height;
 
         if (cur_w > 0 && cur_h > 0) {
             int cx = (g_MouseDeltaX >> 18);
             int cy = (g_MouseDeltaY >> 18) - 9;  /* hotspot offset ~9px up */
 
-            int pixel_base = ((int *)DAT_00489234)[cur_sprite];
+            int pixel_base = atlas_frame.pixel_offset;
             unsigned short *src_pixels = (unsigned short *)DAT_00487ab4;
 
             /* Draw with clipping and transparency */
@@ -1577,9 +1882,12 @@ static int Font_Palettes_Built = 0;
 /* Helper: pack R8,G8,B8 to RGB565 */
 static inline unsigned short PackRGB565(int r, int g, int b)
 {
-    if (r < 0) r = 0; if (r > 255) r = 255;
-    if (g < 0) g = 0; if (g > 255) g = 255;
-    if (b < 0) b = 0; if (b > 255) b = 255;
+    if (r < 0) r = 0;
+    if (r > 255) r = 255;
+    if (g < 0) g = 0;
+    if (g > 255) g = 255;
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
     return (unsigned short)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b >> 3)));
 }
 
@@ -1674,6 +1982,7 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
                          unsigned short *dest_buf, int stride, int hover,
                          int max_width, int len)
 {
+    (void)max_width;
     if (!str || !Font_Pixel_Data)
         return;
 
@@ -1766,8 +2075,10 @@ void Draw_Text_To_Buffer(const char *str, int font_idx, int color_idx,
     }
 
     int cur_x = 0;
-    for (int si = 0; si < slen; si++) {
-        unsigned char c = (unsigned char)str[si];
+    const char *cursor = str;
+    for (int si = 0; si < slen && *cursor; si++) {
+        unsigned char c = '?';
+        cursor = Text_NextGlyph(cursor, &c);
 
         if (c == ' ') {
             cur_x += Font_Char_Table[font_idx * 256 + 32].width;

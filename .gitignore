@@ -47,6 +47,10 @@ NUL
 
 # user config files
 *.cfg
+settings.json
+settings.json.tmp
 
 # Generated runtime and release artifacts
 /dist/
+/build*/
+__pycache__/

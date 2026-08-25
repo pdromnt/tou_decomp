@@ -1,4 +1,4 @@
-#include "binary_compat.h"
+#include "original_semantics.h"
 
 #include <math.h>
 #include <string.h>
@@ -166,3 +166,8 @@ extern "C" void TOU_Srand(unsigned int seed)
 
 extern "C" uint32_t TOU_RandState(void) { return g_rng.state(); }
 extern "C" uint64_t TOU_RandCallCount(void) { return g_rng_call_count; }
+extern "C" void TOU_RestoreRandState(uint32_t state, uint64_t call_count)
+{
+    g_rng.seed(state);
+    g_rng_call_count = call_count;
+}

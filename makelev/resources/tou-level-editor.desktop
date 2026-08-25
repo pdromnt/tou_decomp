@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=TOU Level Editor
+Comment=Create and edit Tunnels of Underworld levels
+Exec=tou-level-editor
+Icon=level-editor-icon
+Terminal=false
+Categories=Development;Graphics;

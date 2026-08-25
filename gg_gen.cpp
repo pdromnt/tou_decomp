@@ -15,6 +15,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <SDL3/SDL_stdinc.h>
 
 extern "C" void stbi_image_free(void *retval_from_stbi_load);
 
@@ -121,10 +122,10 @@ int           DAT_00480714;         /* texdark/pardark parsed flags */
 int           DAT_00480718;         /* sign parsed flag */
 
 /* Entity spawning config */
-char          DAT_004839ee;         /* entity enable flag */
-char          DAT_004839ef;         /* creature density */
-short         DAT_004839f0;         /* treasure/pickup config (bytes) */
-DWORD         DAT_004839f4;         /* progress timer */
+char          DAT_004839ee;         /* custom GG shape flag */
+char          DAT_004839ef;         /* custom GG repair density */
+short         DAT_004839f0;         /* custom GG stuff/sign densities */
+uint32_t      DAT_004839f4;         /* custom GG random seed */
 int           DAT_00480878;         /* creature spawn rate */
 int           DAT_0048087c;         /* pickup spawn rate */
 int           DAT_00480880;         /* treasure spawn rate */
@@ -185,7 +186,7 @@ int Calc_Power_Of_Two(int value)
 }
 
 /* ===== FUN_004152e0: Convert RGB24 tile data to RGB565 in work buffer ===== */
-void FUN_004152e0(int src_rgb24, int tile_idx, int height, int width)
+void FUN_004152e0(const void *src_rgb24, int tile_idx, int height, int width)
 {
     int rec_offset = tile_idx * 0xc;
 
@@ -202,7 +203,8 @@ void FUN_004152e0(int src_rgb24, int tile_idx, int height, int width)
         }
 
         for (int x = 0; x < width; x++) {
-            unsigned char *p = (unsigned char *)(src_rgb24 + (actual_y * width + x) * 3);
+            const unsigned char *p = (const unsigned char *)src_rgb24 +
+                                     (actual_y * width + x) * 3;
             unsigned char r = p[0];
             unsigned char g = p[1];
             unsigned char b = p[2];
@@ -223,8 +225,8 @@ void FUN_004152e0(int src_rgb24, int tile_idx, int height, int width)
 /* Returns: 1=success, 0=not found, -1=too large */
 int FUN_004153b0(const char *filename, int tile_idx)
 {
-    char path[256];
-    sprintf(path, "ggstuff//%s//%s.tga", DAT_00480740, filename);
+    char path[1024];
+    snprintf(path, sizeof(path), "ggstuff/%s/%s.tga", DAT_00480740, filename);
 
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -280,7 +282,12 @@ int FUN_004153b0(const char *filename, int tile_idx)
         fseek(f, cm_len, SEEK_CUR);
     }
 
-    fread(pixels, 1, data_size, f);
+    if (fread(pixels, 1, (size_t)data_size, f) != (size_t)data_size) {
+        free(pixels);
+        fclose(f);
+        DAT_004808d0 = 1;
+        return 0;
+    }
     fclose(f);
 
     /* Convert BGR(A) to RGB and store in DAT_00481cf8 (shared temp buffer).
@@ -295,7 +302,7 @@ int FUN_004153b0(const char *filename, int tile_idx)
     }
     free(pixels);
 
-    FUN_004152e0((int)DAT_00481cf8, tile_idx, height, width);
+    FUN_004152e0(DAT_00481cf8, tile_idx, height, width);
 
     DAT_004808d0 = 0;
     return 1;
@@ -338,8 +345,8 @@ int FUN_00415a60(void)
     DAT_00480718 = 0;
 
     /* Build path: ggstuff//<theme>//info.txt */
-    char path[256];
-    sprintf(path, "ggstuff//%s//info.txt", DAT_00480740);
+    char path[1024];
+    snprintf(path, sizeof(path), "ggstuff/%s/info.txt", DAT_00480740);
 
     FILE *f = fopen(path, "r");
     if (!f) {
@@ -491,7 +498,7 @@ int FUN_00415a60(void)
 
         case 13: /* SIGNU (sign name, text above) */
             if (DAT_00481a43 < 16) {
-                strncpy(&DAT_00481a44[(int)DAT_00481a43 * 16], line, 15);
+                memcpy(&DAT_00481a44[(int)DAT_00481a43 * 16], line, 15);
                 DAT_00481a44[(int)DAT_00481a43 * 16 + 15] = '\0';
                 DAT_00481b44[(int)DAT_00481a43] = 0;
                 DAT_00481a43++;
@@ -500,7 +507,7 @@ int FUN_00415a60(void)
 
         case 14: /* SIGND (sign name, text below) */
             if (DAT_00481a43 < 16) {
-                strncpy(&DAT_00481a44[(int)DAT_00481a43 * 16], line, 15);
+                memcpy(&DAT_00481a44[(int)DAT_00481a43 * 16], line, 15);
                 DAT_00481a44[(int)DAT_00481a43 * 16 + 15] = '\0';
                 DAT_00481b44[(int)DAT_00481a43] = 1;
                 DAT_00481a43++;
@@ -513,7 +520,7 @@ int FUN_00415a60(void)
 
         case 16: /* SIGNA (sign name, alongside) */
             if (DAT_00481a43 < 16) {
-                strncpy(&DAT_00481a44[(int)DAT_00481a43 * 16], line, 15);
+                memcpy(&DAT_00481a44[(int)DAT_00481a43 * 16], line, 15);
                 DAT_00481a44[(int)DAT_00481a43 * 16 + 15] = '\0';
                 DAT_00481b44[(int)DAT_00481a43] = 2;
                 DAT_00481a43++;
@@ -647,7 +654,7 @@ void FUN_00416ad0(void)
     DAT_0048396d = 1;           /* generated-map flag */
     DAT_004839f4 = 0;
     DAT_004839ef = 10;
-    DAT_004839f4 = timeGetTime();
+    DAT_004839f4 = Platform_GetTicks();
     ((unsigned char *)&DAT_004839f0)[0] = 10;
     ((unsigned char *)&DAT_004839f0)[1] = 10;
 
@@ -678,7 +685,7 @@ void FUN_00417700(int x, int y, unsigned int sprite_idx)
                 if (pix != 0) {
                     unsigned char *tilemap = (unsigned char *)DAT_0048782c +
                                              (py << shift) + px;
-                    if (*(char *)((unsigned int)(*tilemap) * 0x20 + (int)DAT_00487928) != '\0') {
+                    if (*(char *)((unsigned int)(*tilemap) * 0x20 + (intptr_t)DAT_00487928) != '\0') {
                         DAT_00480844++;
                         *tilemap = 0x51;
                         *(unsigned short *)((char *)DAT_00481f50 +
@@ -696,7 +703,7 @@ void FUN_00417700(int x, int y, unsigned int sprite_idx)
 void FUN_00417850(int param_1, int param_2, unsigned char param_3)
 {
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
-    unsigned char cur_tile = *(unsigned char *)((int)DAT_0048782c + (param_2 << shift) + param_1);
+    unsigned char cur_tile = *(unsigned char *)((intptr_t)DAT_0048782c + (param_2 << shift) + param_1);
 
     if (cur_tile == 0 || cur_tile > 0x7F) {
         /* Look up tile info for the main tile sprite */
@@ -745,8 +752,8 @@ void FUN_00417850(int param_1, int param_2, unsigned char param_3)
                         unsigned char old = *tmap;
                         if (old > 0x7F) old += 0x80;  /* unwrap */
 
-                        char *type_info = (char *)((unsigned int)param_3 * 0x20 + (int)DAT_00487928);
-                        char *old_info = (char *)((unsigned int)old * 0x20 + (int)DAT_00487928);
+                        char *type_info = (char *)((unsigned int)param_3 * 0x20 + (intptr_t)DAT_00487928);
+                        char *old_info = (char *)((unsigned int)old * 0x20 + (intptr_t)DAT_00487928);
 
                         if (old_info[0] != '\0') {
                             DAT_00480844++;
@@ -819,8 +826,8 @@ int FUN_00417d90(int x, int y, unsigned int angle, int steps)
             return 0;
         }
 
-        unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (py << shift) + px);
-        if (*(char *)((unsigned int)tile * 0x20 + (int)DAT_00487928) == '\0') {
+        unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + (py << shift) + px);
+        if (*(char *)((unsigned int)tile * 0x20 + (intptr_t)DAT_00487928) == '\0') {
             return 0;
         }
 
@@ -887,8 +894,8 @@ void FUN_00417b40(int cx, int cy, int radius_mult)
                 unsigned char shift_val = (unsigned char)DAT_00487a18 & 0x1F;
                 if (px >= DAT_0048071c && px < DAT_00480720 &&
                     py >= DAT_00480724 && py < DAT_00480728) {
-                    unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (py << shift_val) + px);
-                    if (*(char *)((unsigned int)tile * 0x20 + (int)DAT_00487928) != '\0') {
+                    unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + (py << shift_val) + px);
+                    if (*(char *)((unsigned int)tile * 0x20 + (intptr_t)DAT_00487928) != '\0') {
                         FUN_00417850(px, py, 0x51);
                     }
                 }
@@ -988,9 +995,9 @@ void FUN_00417ea0(void)
                             ty < DAT_00480724 || ty >= DAT_00480728) {
                             valid = 0;
                         } else {
-                            unsigned char tile = *(unsigned char *)((int)DAT_0048782c +
+                            unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c +
                                                 (ty << ((unsigned char)DAT_00487a18 & 0x1F)) + tx);
-                            if (*(char *)((unsigned int)tile * 0x20 + (int)DAT_00487928) == '\0') {
+                            if (*(char *)((unsigned int)tile * 0x20 + (intptr_t)DAT_00487928) == '\0') {
                                 valid = 0;
                             }
                         }
@@ -1069,9 +1076,9 @@ void FUN_00417ea0(void)
                                 ty < DAT_00480724 || ty >= DAT_00480728) {
                                 area_ok = 0;
                             } else {
-                                unsigned char tile = *(unsigned char *)((int)DAT_0048782c +
+                                unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c +
                                     (ty << ((unsigned char)DAT_00487a18 & 0x1F)) + tx);
-                                if (*(char *)((unsigned int)tile * 0x20 + (int)DAT_00487928) == '\0') {
+                                if (*(char *)((unsigned int)tile * 0x20 + (intptr_t)DAT_00487928) == '\0') {
                                     area_ok = 0;
                                 }
                             }
@@ -1133,7 +1140,6 @@ void FUN_004155e0(void)
     int *tile_info = (int *)((char *)DAT_00481b54 + (DAT_00480894 * 3 + 3) * 4);
     int tile_w = tile_info[0];
     int tile_h = tile_info[1];
-    int tile_start = tile_info[2];
 
     int unique_count = 0;
     int palette[256];
@@ -1145,7 +1151,7 @@ void FUN_004155e0(void)
 
         for (int x = 0; x < tile_w; x++) {
             int src_idx = src_y * tile_w + x;
-            unsigned char *pixel = (unsigned char *)((int)DAT_00481cf8 + src_idx * 3);
+            unsigned char *pixel = (unsigned char *)((intptr_t)DAT_00481cf8 + src_idx * 3);
 
             /* Pack RGB into single int for comparison */
             int color = ((int)pixel[0] << 16) | ((int)pixel[1] << 8) | pixel[2];
@@ -1284,7 +1290,7 @@ int FUN_00416320(void)
     int tile_slot = 0;
     char name[64];
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "s%d", i + 1);
+        snprintf(name, sizeof(name), "s%d", i + 1);
         int next_slot = tile_slot + 1;
         int result = FUN_004153b0(name, tile_slot);
         if (result == 0) break;
@@ -1303,7 +1309,7 @@ int FUN_00416320(void)
     DAT_0048088c = (char)tile_slot;
     for (int i = 0; i < 255; i++) {
         int prev_slot = tile_slot;
-        sprintf(name, "sd%d", i + 1);
+        snprintf(name, sizeof(name), "sd%d", i + 1);
         tile_slot = prev_slot + 1;
         int result = FUN_004153b0(name, prev_slot);
         if (result == 0) break;
@@ -1316,8 +1322,8 @@ int FUN_00416320(void)
 
     /* Load main tile JPEG (t1.jpg) */
     DAT_00480898 = 0;
-    char path[256];
-    sprintf(path, "ggstuff//%s//t1.jpg", DAT_00480740);
+    char path[1024];
+    snprintf(path, sizeof(path), "ggstuff/%s/t1.jpg", DAT_00480740);
 
     DAT_00480894 = tile_slot;
     void *jpeg_data = Load_JPEG_Asset(path, &g_ImageWidth, &g_ImageHeight);
@@ -1333,7 +1339,7 @@ int FUN_00416320(void)
         return 0;
     }
 
-    FUN_004152e0((int)jpeg_data, tile_slot, g_ImageHeight, g_ImageWidth);
+    FUN_004152e0(jpeg_data, tile_slot, g_ImageHeight, g_ImageWidth);
     stbi_image_free(jpeg_data);
     DAT_00480898++;
     DAT_004808d0 = 0;
@@ -1368,7 +1374,7 @@ int FUN_00416320(void)
 
     /* Load extra tile JPEGs (px1.jpg, ex1.jpg) */
     DAT_004808a8 = 0;
-    sprintf(path, "ggstuff//%s//px1.jpg", DAT_00480740);
+    snprintf(path, sizeof(path), "ggstuff/%s/px1.jpg", DAT_00480740);
     DAT_004808a4 = t2_slot;
     jpeg_data = Load_JPEG_Asset(path, &g_ImageWidth, &g_ImageHeight);
     if (jpeg_data) {
@@ -1378,7 +1384,7 @@ int FUN_00416320(void)
             DAT_004808d0 = 4;
             return 0;
         }
-        FUN_004152e0((int)jpeg_data, t2_slot, g_ImageHeight, g_ImageWidth);
+        FUN_004152e0(jpeg_data, t2_slot, g_ImageHeight, g_ImageWidth);
         stbi_image_free(jpeg_data);
         DAT_004808a8++;
         DAT_004808d0 = 0;
@@ -1388,7 +1394,7 @@ int FUN_00416320(void)
 
     /* Load landscape tile (ex1.jpg) */
     DAT_004808a0 = 0;
-    sprintf(path, "ggstuff//%s//ex1.jpg", DAT_00480740);
+    snprintf(path, sizeof(path), "ggstuff/%s/ex1.jpg", DAT_00480740);
     DAT_0048089c = t2_slot + 1;
     jpeg_data = Load_JPEG_Asset(path, &g_ImageWidth, &g_ImageHeight);
     if (jpeg_data) {
@@ -1398,7 +1404,7 @@ int FUN_00416320(void)
             DAT_004808d0 = 4;
             return 0;
         }
-        FUN_004152e0((int)jpeg_data, t2_slot + 1, g_ImageHeight, g_ImageWidth);
+        FUN_004152e0(jpeg_data, t2_slot + 1, g_ImageHeight, g_ImageWidth);
         stbi_image_free(jpeg_data);
         DAT_004808a0++;
         DAT_004808d0 = 0;
@@ -1423,7 +1429,7 @@ int FUN_00416320(void)
     int creature_slot = t2_slot + 3;
     DAT_004808b4 = creature_slot;
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "d%d", i + 1);
+        snprintf(name, sizeof(name), "d%d", i + 1);
         int prev = creature_slot;
         creature_slot = prev + 1;
         result = FUN_004153b0(name, prev);
@@ -1439,7 +1445,7 @@ int FUN_00416320(void)
     DAT_004808c8 = 0;
     DAT_004808c4 = creature_slot;
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "x%d", i + 1);
+        snprintf(name, sizeof(name), "x%d", i + 1);
         int prev = creature_slot;
         creature_slot = prev + 1;
         result = FUN_004153b0(name, prev);
@@ -1455,7 +1461,7 @@ int FUN_00416320(void)
     DAT_004808b0 = 0;
     DAT_004808ac = creature_slot;
     for (int i = 0; i < 255; i++) {
-        sprintf(name, "p%d", i + 1);
+        snprintf(name, sizeof(name), "p%d", i + 1);
         result = FUN_004153b0(name, creature_slot);
         if (result == 0) break;
         if (result == -1) {
@@ -1482,7 +1488,7 @@ void FUN_00414b00(void)
 
     for (int y = DAT_00480724; y < DAT_00480728; y++) {
         for (int x = DAT_0048071c; x < DAT_00480720; x++) {
-            char *tile = (char *)((int)DAT_0048782c + (y << shift) + x);
+            char *tile = (char *)((intptr_t)DAT_0048782c + (y << shift) + x);
             char val = *tile;
             char replacement;
 
@@ -1583,12 +1589,12 @@ void FUN_00417460(void)
 
         for (int x = DAT_0048071c; x < DAT_00480720; x++) {
             int map_offset = (y << shift) + x;
-            unsigned char tile_val = *(unsigned char *)((int)DAT_0048782c + map_offset);
+            unsigned char tile_val = *(unsigned char *)((intptr_t)DAT_0048782c + map_offset);
 
             /* Unwrap high-bit tiles */
             if (tile_val > 0x7F) tile_val += 0x80;
 
-            char *type = (char *)((unsigned int)tile_val * 0x20 + (int)DAT_00487928);
+            char *type = (char *)((unsigned int)tile_val * 0x20 + (intptr_t)DAT_00487928);
 
             if (type[4] != '\0') {
                 /* Water tile */
@@ -1661,7 +1667,7 @@ void FUN_00417460(void)
 /* ===== FUN_00414c90: Background texture sampling and water vertex generation ===== */
 void FUN_00414c90(void)
 {
-    if (DAT_00483724[3] != '\x01') return;
+    if (g_GameConfig.values.display_detail != 1) return;
 
     /* Calculate swap dimensions from map size */
     DAT_00487a0c = (int)((float)DAT_004879f0);
@@ -1767,11 +1773,11 @@ void FUN_00416ea0(int param_1, int param_2)
     int idx = (param_2 << shift_val) + param_1;
 
     /* Read four corner brightness values */
-    unsigned int tl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + idx * 2);
-    unsigned int tr = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + idx * 2);
+    unsigned int tl = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + idx * 2);
+    unsigned int tr = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + 0x40 + idx * 2);
     int idx_bottom = (0x20 << shift_val) + idx;
-    unsigned int bl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + idx_bottom * 2);
-    unsigned int br = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + idx_bottom * 2);
+    unsigned int bl = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + idx_bottom * 2);
+    unsigned int br = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + 0x40 + idx_bottom * 2);
 
     /* Clamp to minimum brightness */
     unsigned int min_val = 0x80 - DAT_0048085c;
@@ -1792,7 +1798,7 @@ void FUN_00416ea0(int param_1, int param_2)
         int horiz_step = (h_diff + (h_diff >> 31 & 0x1F)) >> 5;
 
         for (int col = 0x20; col > 0; col--) {
-            *(short *)((int)DAT_00481f50 + idx * 2) = (short)(horiz >> 0x12);
+            *(short *)((intptr_t)DAT_00481f50 + idx * 2) = (short)(horiz >> 0x12);
             horiz += horiz_step;
             idx++;
         }
@@ -1812,19 +1818,19 @@ void FUN_00416fb0(int param_1, int param_2)
     int idx = (param_2 << shift_val) + param_1;
 
     /* Read corners with boundary checking (use darkness default for out-of-bounds) */
-    unsigned int tl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + idx * 2);
+    unsigned int tl = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + idx * 2);
 
     unsigned int bl = (unsigned int)DAT_00480860;
     if (param_2 + 0x20 <= DAT_00480728) {
-        bl = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + ((0x20 << shift_val) + idx) * 2);
+        bl = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + ((0x20 << shift_val) + idx) * 2);
     }
 
     unsigned int tr = (unsigned int)DAT_00480860;
     unsigned int br = (unsigned int)DAT_00480860;
     if (param_1 + 0x20 <= DAT_00480720) {
-        tr = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + idx * 2);
+        tr = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + 0x40 + idx * 2);
         if (param_2 + 0x20 <= DAT_00480728) {
-            br = (unsigned int)*(unsigned short *)((int)DAT_00481f50 + 0x40 + ((0x20 << shift_val) + idx) * 2);
+            br = (unsigned int)*(unsigned short *)((intptr_t)DAT_00481f50 + 0x40 + ((0x20 << shift_val) + idx) * 2);
         }
     }
 
@@ -1852,7 +1858,7 @@ void FUN_00416fb0(int param_1, int param_2)
 
         if (cell_w > 0) {
             for (int col = 0; col < cell_w; col++) {
-                *(short *)((int)DAT_00481f50 + idx * 2) = (short)(horiz >> 0x12);
+                *(short *)((intptr_t)DAT_00481f50 + idx * 2) = (short)(horiz >> 0x12);
                 horiz += horiz_step;
                 idx++;
             }
@@ -1876,28 +1882,28 @@ void FUN_00414bb0(int param_1)
     for (int y = water_y; y < DAT_00480728; y++) {
         for (int x = DAT_0048071c; x < DAT_00480720; x++) {
             int offset = (y << shift) + x;
-            char tile = *(char *)((int)DAT_0048782c + offset);
+            char tile = *(char *)((intptr_t)DAT_0048782c + offset);
 
             if (tile == 'R') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x57;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x57;
             } else if (tile == 'P') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x55;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x55;
             } else if (tile == 'Q') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x56;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x56;
             } else if (tile == 'S') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x58;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x58;
             } else if (tile == '\0') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x40;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x40;
             } else if (tile == '\f') {  /* 0x0C */
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x11;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x11;
             } else if (tile == '\a') {  /* 0x07 */
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x12;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x12;
             } else if (tile == '\n') {  /* 0x0A */
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x10;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x10;
             } else if (tile == '\x02') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x13;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x13;
             } else {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x0F;
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x0F;
             }
         }
     }
@@ -1912,7 +1918,7 @@ void FUN_00418430(void)
     /* Pass 1: Mark all non-zero tiles < 0x80 with +0x80 */
     for (int y = DAT_00480724; y < DAT_00480728; y++) {
         for (int x = DAT_0048071c; x < DAT_00480720; x++) {
-            unsigned char *tile = (unsigned char *)((int)DAT_0048782c + (y << shift) + x);
+            unsigned char *tile = (unsigned char *)((intptr_t)DAT_0048782c + (y << shift) + x);
             if (*tile != 0 && *tile < 0x80) {
                 *tile += 0x80;
             }
@@ -1922,11 +1928,11 @@ void FUN_00418430(void)
     /* Pass 2: Process tiles > 0x7F via FUN_00417850 for tile-aware placement */
     for (int y = DAT_00480724; y < DAT_00480728; y++) {
         for (int x = DAT_0048071c; x < DAT_00480720; x++) {
-            unsigned char *tile = (unsigned char *)((int)DAT_0048782c + (y << shift) + x);
+            unsigned char *tile = (unsigned char *)((intptr_t)DAT_0048782c + (y << shift) + x);
             unsigned char val = *tile;
             if (val > 0x7F && val != 0xFF) {
                 unsigned char unwrapped = val + 0x80; /* byte wrap: same as val - 0x80 */
-                char *type = (char *)((unsigned int)unwrapped * 0x20 + (int)DAT_00487928);
+                char *type = (char *)((unsigned int)unwrapped * 0x20 + (intptr_t)DAT_00487928);
                 if (type[0] == '\0' && type[4] == '\0' && type[0x18] == '\0') {
                     FUN_00417850(x, y, unwrapped);
                 } else {
@@ -1948,9 +1954,9 @@ void FUN_00418420(void)
 void FUN_00418800(int param_1, int param_2)
 {
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
-    int tile_start = *(int *)((int)DAT_00481b54 + 8 + DAT_004808bc * 0xc);
-    int tile_w = *(int *)((int)DAT_00481b54 + DAT_004808bc * 0xc);
-    int tile_h = *(int *)((int)DAT_00481b54 + 4 + DAT_004808bc * 0xc);
+    int tile_start = *(int *)((intptr_t)DAT_00481b54 + 8 + DAT_004808bc * 0xc);
+    int tile_w = *(int *)((intptr_t)DAT_00481b54 + DAT_004808bc * 0xc);
+    int tile_h = *(int *)((intptr_t)DAT_00481b54 + 4 + DAT_004808bc * 0xc);
     int half_w = tile_w / 2;
 
     for (int row = 0; row < tile_h; row++) {
@@ -1964,12 +1970,12 @@ void FUN_00418800(int param_1, int param_2)
             if ((int)px >= DAT_0048071c && (int)px < DAT_00480720 &&
                 py >= DAT_00480724 && py < DAT_00480728) {
 
-                unsigned short src_pixel = *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                unsigned short src_pixel = *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
                 if (src_pixel != 0) {
                     int map_offset = (py << shift) + (int)px;
-                    unsigned short *dest = (unsigned short *)((int)DAT_00481f50 + map_offset * 2);
+                    unsigned short *dest = (unsigned short *)((intptr_t)DAT_00481f50 + map_offset * 2);
                     unsigned short cur_pixel = *dest;
-                    unsigned char tile_val = *(unsigned char *)((int)DAT_0048782c + map_offset);
+                    unsigned char tile_val = *(unsigned char *)((intptr_t)DAT_0048782c + map_offset);
 
                     /* Overwrite if on specific tile types, or if source is brighter */
                     if (tile_val == 1 || tile_val == 0x81 || tile_val == 0x51 || tile_val == 0xD1 ||
@@ -1978,16 +1984,16 @@ void FUN_00418800(int param_1, int param_2)
                           (unsigned int)(unsigned char)((char)cur_pixel << 3)) <
                          ((unsigned int)(unsigned char)((unsigned char)(src_pixel >> 10) << 3) +
                           (unsigned int)(unsigned char)((char)(src_pixel >> 5) << 3) +
-                          (unsigned int)(unsigned char)(*(char *)((int)DAT_0048072c + tile_start * 2) << 3)) &&
-                         *(char *)((unsigned int)tile_val * 0x20 + (int)DAT_00487928) == '\0')) {
+                          (unsigned int)(unsigned char)(*(char *)((intptr_t)DAT_0048072c + tile_start * 2) << 3)) &&
+                         *(char *)((unsigned int)tile_val * 0x20 + (intptr_t)DAT_00487928) == '\0')) {
 
                         *dest = src_pixel;
 
                         /* Set tile code based on current tile type */
                         if (tile_val == 1 || tile_val == 0x51) {
-                            *(unsigned char *)((int)DAT_0048782c + map_offset) = 0x50;
+                            *(unsigned char *)((intptr_t)DAT_0048782c + map_offset) = 0x50;
                         } else if (tile_val == 0x81 || tile_val == 0xD1) {
-                            *(unsigned char *)((int)DAT_0048782c + map_offset) = 0xD0;
+                            *(unsigned char *)((intptr_t)DAT_0048782c + map_offset) = 0xD0;
                         }
                     }
                 }
@@ -1995,9 +2001,9 @@ void FUN_00418800(int param_1, int param_2)
 
             tile_start++;
             /* Re-read tile dimensions (compiler pattern, values unchanged) */
-            tile_w = *(int *)((int)DAT_00481b54 + DAT_004808bc * 0xc);
+            tile_w = *(int *)((intptr_t)DAT_00481b54 + DAT_004808bc * 0xc);
         }
-        tile_h = *(int *)((int)DAT_00481b54 + 4 + DAT_004808bc * 0xc);
+        tile_h = *(int *)((intptr_t)DAT_00481b54 + 4 + DAT_004808bc * 0xc);
     }
 }
 
@@ -2018,14 +2024,14 @@ void FUN_00418a60(void)
     for (int y = DAT_00480724; y < DAT_00480728; y += step) {
         for (int x = DAT_0048071c; x < DAT_00480720; x += step) {
             int offset = (y << shift) + x;
-            unsigned char tile = *(unsigned char *)((int)DAT_0048782c + offset);
+            unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + offset);
             if (tile > 0x7F) tile += 0x80; /* unwrap */
 
             /* Check tile one stride-row below */
-            unsigned char below = *(unsigned char *)((int)DAT_0048782c + DAT_00487a00 + offset);
+            unsigned char below = *(unsigned char *)((intptr_t)DAT_0048782c + DAT_00487a00 + offset);
             if (below > 0x7F) below += 0x80;
 
-            char *type = (char *)((unsigned int)tile * 0x20 + (int)DAT_00487928);
+            char *type = (char *)((unsigned int)tile * 0x20 + (intptr_t)DAT_00487928);
 
             /* Must be solid tile with open space below (tile codes 1, 0x51, 0x50) */
             if (type[0] != '\0' && (below == 1 || below == 0x51 || below == 0x50)) {
@@ -2038,12 +2044,12 @@ void FUN_00418a60(void)
                         if (cx_start >= DAT_0048071c && cx_start < DAT_00480720 &&
                             cy >= DAT_00480724 && cy < DAT_00480728) {
                             int coff = (cy << shift) + cx_start;
-                            unsigned char ct = *(unsigned char *)((int)DAT_0048782c + coff);
+                            unsigned char ct = *(unsigned char *)((intptr_t)DAT_0048782c + coff);
                             if (ct > 0x7F) ct += 0x80;
-                            unsigned char cb = *(unsigned char *)((int)DAT_0048782c + DAT_00487a00 + coff);
+                            unsigned char cb = *(unsigned char *)((intptr_t)DAT_0048782c + DAT_00487a00 + coff);
                             if (cb > 0x7F) cb += 0x80;
 
-                            char *ctype = (char *)((unsigned int)ct * 0x20 + (int)DAT_00487928);
+                            char *ctype = (char *)((unsigned int)ct * 0x20 + (intptr_t)DAT_00487928);
                             if (ctype[0] != '\0' && (cb == 1 || cb == 0x51 || cb == 0x50)) {
                                 count++;
                             }
@@ -2073,15 +2079,15 @@ void FUN_00417140(void)
     for (int x = DAT_0048071c; x <= DAT_00480720; x += 0x20) {
         for (int y = DAT_00480724; y <= DAT_00480728; y += 0x20) {
             int offset = (y << shift) + x;
-            unsigned char *tmap = (unsigned char *)((int)DAT_0048782c + offset);
-            char *type = (char *)((unsigned int)*tmap * 0x20 + (int)DAT_00487928);
+            unsigned char *tmap = (unsigned char *)((intptr_t)DAT_0048782c + offset);
+            char *type = (char *)((unsigned int)*tmap * 0x20 + (intptr_t)DAT_00487928);
 
             if (type[0] == '\0' && type[4] == '\0') {
                 /* Scan downward to find extent of open air */
                 int scan_y = y;
                 unsigned char *scan = tmap;
                 while (scan_y <= DAT_00480728) {
-                    char *stype = (char *)((unsigned int)*scan * 0x20 + (int)DAT_00487928);
+                    char *stype = (char *)((unsigned int)*scan * 0x20 + (intptr_t)DAT_00487928);
                     if (stype[0] != '\0' || stype[4] != '\0') break;
                     if (stype[0x1a] == '\0') {
                         if (type[0x1a] != '\0') break;
@@ -2101,7 +2107,7 @@ void FUN_00417140(void)
                     int grad_step = darkness_factor / extent;
 
                     for (unsigned int i = 0; i < cells; i++) {
-                        *(short *)((int)DAT_00481f50 + pixel_offset) = (short)(gradient >> 0x12);
+                        *(short *)((intptr_t)DAT_00481f50 + pixel_offset) = (short)(gradient >> 0x12);
                         gradient -= grad_step;
                         pixel_offset += stride * 0x40;
                     }
@@ -2114,15 +2120,15 @@ void FUN_00417140(void)
     for (int y = DAT_00480724; y <= DAT_00480728; y += 0x20) {
         for (int x = DAT_0048071c; x <= DAT_00480720; x += 0x20) {
             int offset = (y << shift) + x;
-            char *type = (char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + offset) *
-                         0x20 + (int)DAT_00487928);
+            char *type = (char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + offset) *
+                         0x20 + (intptr_t)DAT_00487928);
 
             if (type[0] == '\0' && type[4] == '\0') {
                 /* Scan rightward to find extent of open air */
                 int scan_x = x;
-                unsigned char *scan = (unsigned char *)((y << shift) + (int)DAT_0048782c + x);
+                unsigned char *scan = (unsigned char *)((y << shift) + (intptr_t)DAT_0048782c + x);
                 while (scan_x <= DAT_00480720) {
-                    char *stype = (char *)((unsigned int)*scan * 0x20 + (int)DAT_00487928);
+                    char *stype = (char *)((unsigned int)*scan * 0x20 + (intptr_t)DAT_00487928);
                     if (stype[0] != '\0' || stype[4] != '\0') break;
                     if (stype[0x1a] == '\0') {
                         if (type[0x1a] != '\0') break;
@@ -2142,7 +2148,7 @@ void FUN_00417140(void)
                     int grad_step = darkness_factor / extent;
 
                     for (unsigned int i = 0; i < cells; i++) {
-                        unsigned short *pixel = (unsigned short *)((int)DAT_00481f50 + pixel_offset);
+                        unsigned short *pixel = (unsigned short *)((intptr_t)DAT_00481f50 + pixel_offset);
                         unsigned int jitter = rand() & 0x1F;
                         int val = (int)((gradient >> 0x12) + (unsigned int)*pixel) / 2 +
                                   (int)(jitter - 0x10);
@@ -2183,33 +2189,33 @@ void FUN_00419d80(void)
             int offset = (y << shift) + x;
 
             /* Check for creature portal (tile == 2) */
-            if (*(char *)((int)DAT_0048782c + offset) == '\x02') {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0;
+            if (*(char *)((intptr_t)DAT_0048782c + offset) == '\x02') {
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0;
 
-                unsigned char below = *(unsigned char *)((y_check << shift) + (int)DAT_0048782c + x);
-                char *type = (char *)((unsigned int)below * 0x20 + (int)DAT_00487928);
+                unsigned char below = *(unsigned char *)((y_check << shift) + (intptr_t)DAT_0048782c + x);
+                char *type = (char *)((unsigned int)below * 0x20 + (intptr_t)DAT_00487928);
 
                 if (DAT_004808dc < 1000 && type[0] == '\0' && type[4] == '\0' &&
                     type[0x18] == '\0' && below != 0xFF) {
-                    *(int *)((int)DAT_00480730 + DAT_004808dc * 0xc) = x;
-                    *(int *)((int)DAT_00480730 + 4 + DAT_004808dc * 0xc) = y_check - 5;
-                    *(int *)((int)DAT_00480730 + 8 + DAT_004808dc * 0xc) = 0;
+                    *(int *)((intptr_t)DAT_00480730 + DAT_004808dc * 0xc) = x;
+                    *(int *)((intptr_t)DAT_00480730 + 4 + DAT_004808dc * 0xc) = y_check - 5;
+                    *(int *)((intptr_t)DAT_00480730 + 8 + DAT_004808dc * 0xc) = 0;
                     DAT_004808dc++;
                 }
             }
 
             /* Check for pickup portal (tile == 0xFF / -1 signed) */
-            if (*(char *)((int)DAT_0048782c + offset) == -1) {
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0;
+            if (*(char *)((intptr_t)DAT_0048782c + offset) == -1) {
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0;
 
-                unsigned char below = *(unsigned char *)((y_check << shift) + (int)DAT_0048782c + x);
-                char *type = (char *)((unsigned int)below * 0x20 + (int)DAT_00487928);
+                unsigned char below = *(unsigned char *)((y_check << shift) + (intptr_t)DAT_0048782c + x);
+                char *type = (char *)((unsigned int)below * 0x20 + (intptr_t)DAT_00487928);
 
                 if (DAT_004808dc < 1000 && type[0] == '\0' && type[4] == '\0' &&
                     type[0x18] == '\0' && below != 0xFF) {
-                    *(int *)((int)DAT_00480730 + DAT_004808dc * 0xc) = x;
-                    *(int *)((int)DAT_00480730 + 4 + DAT_004808dc * 0xc) = y_check - 3;
-                    *(int *)((int)DAT_00480730 + 8 + DAT_004808dc * 0xc) = 1;
+                    *(int *)((intptr_t)DAT_00480730 + DAT_004808dc * 0xc) = x;
+                    *(int *)((intptr_t)DAT_00480730 + 4 + DAT_004808dc * 0xc) = y_check - 3;
+                    *(int *)((intptr_t)DAT_00480730 + 8 + DAT_004808dc * 0xc) = 1;
                     DAT_004808dc++;
                 }
             }
@@ -2236,17 +2242,17 @@ int FUN_00418ed0(int param_1, int param_2, int param_3, int param_4,
             }
             int offset = (cy << shift) + cx;
             if (param_7 == '\0') {
-                if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + offset) *
-                    0x20 + (int)DAT_00487928) == '\0') {
+                if (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + offset) *
+                    0x20 + (intptr_t)DAT_00487928) == '\0') {
                     return 0;
                 }
             } else {
-                if (*(unsigned char *)((int)DAT_0048782c + offset) > 0x7F) {
+                if (*(unsigned char *)((intptr_t)DAT_0048782c + offset) > 0x7F) {
                     return 0;
                 }
             }
             if (special) {
-                *(unsigned short *)((int)DAT_00481f50 + offset * 2) = 0x1e;
+                *(unsigned short *)((intptr_t)DAT_00481f50 + offset * 2) = 0x1e;
             }
         }
     }
@@ -2257,23 +2263,23 @@ int FUN_00418ed0(int param_1, int param_2, int param_3, int param_4,
 int FUN_00419010(int param_1, unsigned int param_2, int param_3)
 {
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
-    int tile_w = *(int *)((int)DAT_00481b54 + param_3 * 0xc);
-    int tile_h = *(int *)((int)DAT_00481b54 + param_3 * 0xc + 4);
-    int tile_start = *(int *)((int)DAT_00481b54 + param_3 * 0xc + 8);
+    int tile_w = *(int *)((intptr_t)DAT_00481b54 + param_3 * 0xc);
+    int tile_h = *(int *)((intptr_t)DAT_00481b54 + param_3 * 0xc + 4);
+    int tile_start = *(int *)((intptr_t)DAT_00481b54 + param_3 * 0xc + 8);
 
     int px = param_1 - tile_w / 2;
 
     if ((int)param_2 >= DAT_00480724 && (int)param_2 < DAT_00480728 && tile_w > 0) {
         /* Point to bottom row of sprite data */
-        short *src = (short *)((int)DAT_0048072c + ((tile_h - 1) * tile_w + tile_start) * 2);
+        short *src = (short *)((intptr_t)DAT_0048072c + ((tile_h - 1) * tile_w + tile_start) * 2);
         int col = 0;
 
         while (col < tile_w) {
             if (px + col < DAT_0048071c || px + col >= DAT_00480720) {
                 return 0;
             }
-            unsigned char tile = *(unsigned char *)((param_2 << shift) + px + col + (int)DAT_0048782c);
-            char *type = (char *)((int)DAT_00487928 + (unsigned int)tile * 0x20);
+            unsigned char tile = *(unsigned char *)((param_2 << shift) + px + col + (intptr_t)DAT_0048782c);
+            char *type = (char *)((intptr_t)DAT_00487928 + (unsigned int)tile * 0x20);
             if ((type[4] == '\x01' || type[0] == '\x01' || tile > 0x7F) && *src != 0) {
                 return 0;
             }
@@ -2288,9 +2294,9 @@ int FUN_00419010(int param_1, unsigned int param_2, int param_3)
 void FUN_00418c50(int param_1, int param_2)
 {
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
-    int tile_w = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc);
-    int tile_h = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc + 4);
-    int tile_start = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc + 8);
+    int tile_w = *(int *)((intptr_t)DAT_00481b54 + DAT_004808cc * 0xc);
+    int tile_h = *(int *)((intptr_t)DAT_00481b54 + DAT_004808cc * 0xc + 4);
+    int tile_start = *(int *)((intptr_t)DAT_00481b54 + DAT_004808cc * 0xc + 8);
     int half_w = tile_w / 2;
 
     for (int row = 0; row < tile_h; row++) {
@@ -2299,18 +2305,18 @@ void FUN_00418c50(int param_1, int param_2)
         for (int col = 0; col < tile_w; col++) {
             if (px >= DAT_0048071c && px < DAT_00480720 &&
                 py >= DAT_00480724 && py < DAT_00480728 &&
-                *(short *)((int)DAT_0048072c + tile_start * 2) != 0) {
+                *(short *)((intptr_t)DAT_0048072c + tile_start * 2) != 0) {
                 int offset = (py << shift) + px;
-                *(unsigned char *)((int)DAT_0048782c + offset) = 0x82;
-                *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
-                    *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                *(unsigned char *)((intptr_t)DAT_0048782c + offset) = 0x82;
+                *(unsigned short *)((intptr_t)DAT_00481f50 + offset * 2) =
+                    *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
             }
             tile_start++;
             px++;
             /* Re-read tile_w (compiler pattern) */
-            tile_w = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc);
+            tile_w = *(int *)((intptr_t)DAT_00481b54 + DAT_004808cc * 0xc);
         }
-        tile_h = *(int *)((int)DAT_00481b54 + DAT_004808cc * 0xc + 4);
+        tile_h = *(int *)((intptr_t)DAT_00481b54 + DAT_004808cc * 0xc + 4);
     }
 }
 
@@ -2319,9 +2325,9 @@ void FUN_00418d50(int param_1, int param_2, int sprite_idx, char solid_code, cha
 {
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
     int rec_off = sprite_idx * 0xc;
-    int tile_w = *(int *)((int)DAT_00481b54 + rec_off);
-    int tile_h = *(int *)((int)DAT_00481b54 + rec_off + 4);
-    int tile_start = *(int *)((int)DAT_00481b54 + rec_off + 8);
+    int tile_w = *(int *)((intptr_t)DAT_00481b54 + rec_off);
+    int tile_h = *(int *)((intptr_t)DAT_00481b54 + rec_off + 4);
+    int tile_start = *(int *)((intptr_t)DAT_00481b54 + rec_off + 8);
     int half_w = tile_w / 2;
 
     for (int row = 0; row < tile_h; row++) {
@@ -2330,38 +2336,40 @@ void FUN_00418d50(int param_1, int param_2, int sprite_idx, char solid_code, cha
         for (int col = 0; col < tile_w; col++) {
             if (px >= DAT_0048071c && px < DAT_00480720 &&
                 py >= DAT_00480724 && py < DAT_00480728 &&
-                *(short *)((int)DAT_0048072c + tile_start * 2) != 0) {
+                *(short *)((intptr_t)DAT_0048072c + tile_start * 2) != 0) {
                 int offset = (py << shift) + px;
-                unsigned char *tmap = (unsigned char *)((int)DAT_0048782c + offset);
-                char *type = (char *)((unsigned int)*tmap * 0x20 + (int)DAT_00487928);
+                unsigned char *tmap = (unsigned char *)((intptr_t)DAT_0048782c + offset);
+                char *type = (char *)((unsigned int)*tmap * 0x20 + (intptr_t)DAT_00487928);
 
                 if (type[0] == '\0') {
                     /* Air/open tile */
                     if (type[4] != '\0') {
                         /* Water tile: apply brightness remap */
-                        *tmap = (unsigned char)(water_code + (char)0x80);
+                        *tmap = static_cast<unsigned char>(
+                            static_cast<unsigned char>(water_code) + 0x80u);
                         if (DAT_00489230 != NULL && DAT_004876a4[29] != NULL) {
-                            unsigned short src = *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
-                            unsigned short remapped = *(unsigned short *)((int)DAT_00489230 + (unsigned int)src * 2);
-                            *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
-                                *(unsigned short *)((int)DAT_004876a4[29] + (unsigned int)remapped * 2);
+                            unsigned short src = *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
+                            unsigned short remapped = *(unsigned short *)((intptr_t)DAT_00489230 + (unsigned int)src * 2);
+                            *(unsigned short *)((intptr_t)DAT_00481f50 + offset * 2) =
+                                *(unsigned short *)((intptr_t)DAT_004876a4[29] + (unsigned int)remapped * 2);
                         } else {
-                            *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
-                                *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                            *(unsigned short *)((intptr_t)DAT_00481f50 + offset * 2) =
+                                *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
                         }
                     }
                 } else {
                     /* Solid tile: place directly */
-                    *tmap = (unsigned char)(solid_code + (char)0x80);
-                    *(unsigned short *)((int)DAT_00481f50 + offset * 2) =
-                        *(unsigned short *)((int)DAT_0048072c + tile_start * 2);
+                    *tmap = static_cast<unsigned char>(
+                        static_cast<unsigned char>(solid_code) + 0x80u);
+                    *(unsigned short *)((intptr_t)DAT_00481f50 + offset * 2) =
+                        *(unsigned short *)((intptr_t)DAT_0048072c + tile_start * 2);
                 }
             }
             tile_start++;
             px++;
-            tile_w = *(int *)((int)DAT_00481b54 + rec_off);
+            tile_w = *(int *)((intptr_t)DAT_00481b54 + rec_off);
         }
-        tile_h = *(int *)((int)DAT_00481b54 + rec_off + 4);
+        tile_h = *(int *)((intptr_t)DAT_00481b54 + rec_off + 4);
     }
 }
 
@@ -2372,12 +2380,12 @@ void FUN_00419af0(int param_1, int param_2)
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
 
     /* Check tile at position is solid */
-    unsigned char tile_at = *(unsigned char *)((param_2 << shift) + (int)DAT_0048782c + param_1);
-    if (*(char *)((unsigned int)tile_at * 0x20 + (int)DAT_00487928) != '\x01') return;
+    unsigned char tile_at = *(unsigned char *)((param_2 << shift) + (intptr_t)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)tile_at * 0x20 + (intptr_t)DAT_00487928) != '\x01') return;
 
     /* Check tile 6 rows below is open and < 0x80 */
-    unsigned char tile_below = *(unsigned char *)(((param_2 + 6) << shift) + (int)DAT_0048782c + param_1);
-    char *below_type = (char *)((unsigned int)tile_below * 0x20 + (int)DAT_00487928);
+    unsigned char tile_below = *(unsigned char *)(((param_2 + 6) << shift) + (intptr_t)DAT_0048782c + param_1);
+    char *below_type = (char *)((unsigned int)tile_below * 0x20 + (intptr_t)DAT_00487928);
     if (below_type[0] != '\0' || below_type[4] != '\0') return;
     if (tile_below >= 0x80) return;
 
@@ -2385,9 +2393,9 @@ void FUN_00419af0(int param_1, int param_2)
     int idx = 0;
     if (DAT_004808d4 > 0) {
         while (idx < DAT_004808d4) {
-            int ex = *(int *)((int)DAT_00480738 + idx * 8);
+            int ex = *(int *)((intptr_t)DAT_00480738 + idx * 8);
             if (ex - DAT_00480878 < param_1 && param_1 < ex + DAT_00480878) {
-                int ey = *(int *)((int)DAT_00480738 + 4 + idx * 8);
+                int ey = *(int *)((intptr_t)DAT_00480738 + 4 + idx * 8);
                 if (ey - DAT_00480878 < param_2 && param_2 < ey + DAT_00480878) {
                     idx = DAT_004808d4 + 4;
                 }
@@ -2403,22 +2411,22 @@ void FUN_00419af0(int param_1, int param_2)
     if (idx != DAT_004808d4) return;
 
     /* Clearance check 1: area around creature */
-    int sh = *(int *)((int)DAT_00481b54 + 4 + sprite * 0xc);
-    int sw = *(int *)((int)DAT_00481b54 + sprite * 0xc);
+    int sh = *(int *)((intptr_t)DAT_00481b54 + 4 + sprite * 0xc);
+    int sw = *(int *)((intptr_t)DAT_00481b54 + sprite * 0xc);
     if (FUN_00418ed0(param_1 - sw / 2, param_2 - sh, sw, sh, 8, 8, '\0') != 1) return;
 
     /* Clearance check 2: area above creature (0x46 pixels) */
-    sw = *(int *)((int)DAT_00481b54 + sprite * 0xc);
+    sw = *(int *)((intptr_t)DAT_00481b54 + sprite * 0xc);
     if (FUN_00418ed0(param_1 - sw / 2,
-                     param_2 - *(int *)((int)DAT_00481b54 + 4 + sprite * 0xc) - 0x46,
+                     param_2 - *(int *)((intptr_t)DAT_00481b54 + 4 + sprite * 0xc) - 0x46,
                      sw, 0x46, 8, 8, '\0') != 1) return;
 
     /* Place creature sprite */
     FUN_00418c50(param_1, param_2);
 
     /* Record position */
-    *(int *)((int)DAT_00480738 + DAT_004808d4 * 8) = param_1;
-    *(int *)((int)DAT_00480738 + 4 + DAT_004808d4 * 8) = param_2;
+    *(int *)((intptr_t)DAT_00480738 + DAT_004808d4 * 8) = param_1;
+    *(int *)((intptr_t)DAT_00480738 + 4 + DAT_004808d4 * 8) = param_2;
     DAT_004808d4++;
 }
 
@@ -2427,9 +2435,9 @@ void FUN_00419f60(void)
 {
     DAT_004808d4 = 0;
     for (int i = 0; i < DAT_004808dc; i++) {
-        if (*(int *)((int)DAT_00480730 + i * 0xc + 8) == 0) {
-            FUN_00419af0(*(int *)((int)DAT_00480730 + i * 0xc),
-                         *(int *)((int)DAT_00480730 + i * 0xc + 4));
+        if (*(int *)((intptr_t)DAT_00480730 + i * 0xc + 8) == 0) {
+            FUN_00419af0(*(int *)((intptr_t)DAT_00480730 + i * 0xc),
+                         *(int *)((intptr_t)DAT_00480730 + i * 0xc + 4));
         }
     }
 }
@@ -2469,7 +2477,6 @@ void FUN_00415060(char *param_1)
     int same_count = 0;   /* consecutive same-letter counter */
     int prev = 0;         /* previous/current letter index (0-25) */
     int out_pos = 0;      /* output string position */
-    int found = 0;        /* starting letter found flag */
 
     /* Pick starting letter using cumulative frequency distribution */
     unsigned int r1 = rand() & 0x3ff;
@@ -2478,7 +2485,6 @@ void FUN_00415060(char *param_1)
 
     for (int i = 0; i < 26; i++) {
         if ((int)(r2 + r1 * 0x400) % total < DAT_00487888[i]) {
-            found = 1;
             param_1[0] = (char)i + 'A';
             prev = i;
             out_pos = 1;
@@ -2573,11 +2579,12 @@ static void Blit_Text_To_Signs(int start_pos)
     int pos = start_pos;
     for (int row = 0; row < 16; row++) {
         for (int col = 0; col < 64; col++) {
-            char tile = *(char *)((int)DAT_0048782c + pos);
-            if ((tile == (char)0xD3 || tile == (char)0xD8)) {
-                short pixel = *(short *)((int)DAT_004818e4 + text_idx * 2);
+            char tile = *(char *)((intptr_t)DAT_0048782c + pos);
+            if (tile == tou_binary::char_bits(0xD3u) ||
+                tile == tou_binary::char_bits(0xD8u)) {
+                short pixel = *(short *)((intptr_t)DAT_004818e4 + text_idx * 2);
                 if (pixel != 0) {
-                    *(short *)((int)DAT_00481f50 + pos * 2) = pixel;
+                    *(short *)((intptr_t)DAT_00481f50 + pos * 2) = pixel;
                 }
             }
             text_idx++;
@@ -2607,20 +2614,20 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
     /* Check bounds and tile validity */
     if (param_2 >= (int)DAT_004879f4 - 0x0D) return;
 
-    unsigned char tile_at = *(unsigned char *)((param_2 << shift) + (int)DAT_0048782c + param_1);
-    if (*(char *)((unsigned int)tile_at * 0x20 + (int)DAT_00487928) != '\x01') return;
+    unsigned char tile_at = *(unsigned char *)((param_2 << shift) + (intptr_t)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)tile_at * 0x20 + (intptr_t)DAT_00487928) != '\x01') return;
 
-    unsigned char tile_below = *(unsigned char *)(((param_2 + 0x0C) << shift) + (int)DAT_0048782c + param_1);
-    if (*(char *)((unsigned int)tile_below * 0x20 + (int)DAT_00487928) != '\0') return;
+    unsigned char tile_below = *(unsigned char *)(((param_2 + 0x0C) << shift) + (intptr_t)DAT_0048782c + param_1);
+    if (*(char *)((unsigned int)tile_below * 0x20 + (intptr_t)DAT_00487928) != '\0') return;
     if (tile_below >= 0x80) return;
 
     /* Distance check against existing pickups */
     int idx = 0;
     if (DAT_004808d8 > 0) {
         while (idx < DAT_004808d8) {
-            int ex = *(int *)((int)DAT_00480734 + idx * 0xc);
+            int ex = *(int *)((intptr_t)DAT_00480734 + idx * 0xc);
             if (ex - DAT_0048087c < param_1 && param_1 < ex + DAT_0048087c) {
-                int ey = *(int *)((int)DAT_00480734 + idx * 0xc + 4);
+                int ey = *(int *)((intptr_t)DAT_00480734 + idx * 0xc + 4);
                 if (ey - DAT_0048087c < param_2 && param_2 < ey + DAT_0048087c) {
                     idx = DAT_004808d8 + 4;
                 }
@@ -2636,7 +2643,7 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
     if (idx != DAT_004808d8) return;
 
     /* Clearance check 1 */
-    int *info = (int *)((int)DAT_00481b54 + sprite * 0xc);
+    int *info = (int *)((intptr_t)DAT_00481b54 + sprite * 0xc);
     int sw = info[0];
     int sh = info[1];
     if (FUN_00418ed0(param_1 - sw / 2, (param_2 - sh) - 0x1e, sw, sh + 0x1e, 0x10, 0x10, '\0') != 1)
@@ -2646,7 +2653,7 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
     if (FUN_00419010(param_1, (unsigned int)(param_2 + 0x0C), sprite) != 1) return;
 
     /* Clearance check 2 */
-    info = (int *)((int)DAT_00481b54 + sprite * 0xc);
+    info = (int *)((intptr_t)DAT_00481b54 + sprite * 0xc);
     sw = info[0];
     sh = info[1];
     if (FUN_00418ed0(param_1 - sw / 2, (param_2 - sh) + 0x0C, sw, sh, 8, 8, '\x01') != 1) return;
@@ -2664,8 +2671,7 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
 
         FUN_00415060(gen_name);
 
-        int *spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
-        int sprite_w = spr_info[0];
+        int *spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
         int sprite_h = spr_info[1];
         int name_y_offset; /* Y offset for generated name text */
 
@@ -2678,11 +2684,11 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
 
             if (DAT_00481b44[sign_idx] == '\x02') {
                 /* SIGNA type: replace Markov name with random number */
-                sprintf(gen_name, "%d", rand());
+                snprintf(gen_name, sizeof(gen_name), "%d", rand());
             }
 
             /* Copy sign name string (16 bytes per entry) */
-            strncpy(sign_name, &DAT_00481a44[sign_idx * 16], 16);
+            memcpy(sign_name, &DAT_00481a44[sign_idx * 16], 16);
             sign_name[16] = '\0';
 
             char sign_type = DAT_00481b44[sign_idx];
@@ -2699,14 +2705,14 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
             }
 
             /* Render sign name text */
-            spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
             int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
                            ((param_2 - sign_y_offset) << shift) - spr_info[0] / 2;
             Render_And_Blit_Sign_Text(sign_name, text_pos);
         }
 
         /* Render generated name text */
-        spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+        spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
         int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + orig_x +
                        ((param_2 - name_y_offset) << shift) - spr_info[0] / 2;
         Render_And_Blit_Sign_Text(gen_name, text_pos);
@@ -2724,7 +2730,7 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
             strncpy(sign_name, &name_table_1[name_idx], 31);
             sign_name[31] = '\0';
 
-            int *spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            int *spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
             int sprite_h = spr_info[1];
             int sprite_w = spr_info[0];
             int y_offset = sprite_h - (unsigned int)(unsigned char)DAT_00481a32;
@@ -2736,14 +2742,14 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
         } else {
             /* Two name entries — render both text lines */
             char text_line[32];
-            int *spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            int *spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
             int sprite_h = spr_info[1];
             int y_base = sprite_h - (unsigned int)(unsigned char)DAT_00481a32;
 
             /* First text line (above: y_base - 5) */
             strncpy(text_line, &name_table_2[name_idx], 31);
             text_line[31] = '\0';
-            spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
             int text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
                            ((param_2 - (y_base - 5)) << shift) - spr_info[0] / 2;
             Render_And_Blit_Sign_Text(text_line, text_pos);
@@ -2751,7 +2757,7 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
             /* Second text line (below: y_base + 5) */
             strncpy(text_line, &name_table_1[*param_3 * 0x20], 31);
             text_line[31] = '\0';
-            spr_info = (int *)((int)DAT_00481b54 + (int)DAT_004808cc * 0xc);
+            spr_info = (int *)((intptr_t)DAT_00481b54 + (int)DAT_004808cc * 0xc);
             text_pos = (unsigned int)(unsigned char)DAT_00481a31 + param_1 +
                        ((param_2 - (y_base + 5)) << shift) - spr_info[0] / 2;
             Render_And_Blit_Sign_Text(text_line, text_pos);
@@ -2760,8 +2766,8 @@ void FUN_00419110(int param_1, int param_2, int *param_3)
     }
 
     /* Record position */
-    *(int *)((int)DAT_00480734 + DAT_004808d8 * 0xc) = orig_x;
-    *(int *)((int)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = param_2;
+    *(int *)((intptr_t)DAT_00480734 + DAT_004808d8 * 0xc) = orig_x;
+    *(int *)((intptr_t)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = param_2;
     DAT_004808d8++;
 }
 
@@ -2772,9 +2778,9 @@ void FUN_00419fb0(void)
     DAT_004808d8 = 0;
 
     for (int i = 0; i < DAT_004808dc; i++) {
-        if (*(int *)((int)DAT_00480730 + i * 0xc + 8) == 1) {
-            FUN_00419110(*(int *)((int)DAT_00480730 + i * 0xc),
-                         *(int *)((int)DAT_00480730 + i * 0xc + 4),
+        if (*(int *)((intptr_t)DAT_00480730 + i * 0xc + 8) == 1) {
+            FUN_00419110(*(int *)((intptr_t)DAT_00480730 + i * 0xc),
+                         *(int *)((intptr_t)DAT_00480730 + i * 0xc + 4),
                          &local_4);
         }
     }
@@ -2812,11 +2818,11 @@ void FUN_00419860(void)
 
         /* Validate: tile at pos is solid, tile 0x1C rows below is open and < 0x80 */
         if (y >= (int)DAT_004879f4 - 0x1e) continue;
-        unsigned char tile_at = *(unsigned char *)((y << shift) + (int)DAT_0048782c + x);
-        if (*(char *)((unsigned int)tile_at * 0x20 + (int)DAT_00487928) != '\x01') continue;
+        unsigned char tile_at = *(unsigned char *)((y << shift) + (intptr_t)DAT_0048782c + x);
+        if (*(char *)((unsigned int)tile_at * 0x20 + (intptr_t)DAT_00487928) != '\x01') continue;
 
-        unsigned char tile_below = *(unsigned char *)(((y + 0x1C) << shift) + (int)DAT_0048782c + x);
-        if (*(char *)((unsigned int)tile_below * 0x20 + (int)DAT_00487928) != '\0') continue;
+        unsigned char tile_below = *(unsigned char *)(((y + 0x1C) << shift) + (intptr_t)DAT_0048782c + x);
+        if (*(char *)((unsigned int)tile_below * 0x20 + (intptr_t)DAT_00487928) != '\0') continue;
         if (tile_below >= 0x80) continue;
 
         /* Pick random treasure sprite */
@@ -2827,8 +2833,8 @@ void FUN_00419860(void)
         int idx = 0;
         if (DAT_004808d8 > 0) {
             while (idx < DAT_004808d8) {
-                int *rec = (int *)((int)DAT_00480734 + idx * 0xc);
-                if (*(int *)((int)DAT_00480734 + idx * 0xc + 8) == sprite &&
+                int *rec = (int *)((intptr_t)DAT_00480734 + idx * 0xc);
+                if (*(int *)((intptr_t)DAT_00480734 + idx * 0xc + 8) == sprite &&
                     rec[0] - 300 < x && x < rec[0] + 300 &&
                     rec[1] - 300 < y && y < rec[1] + 300) {
                     idx = DAT_004808d8 + 4;
@@ -2839,8 +2845,8 @@ void FUN_00419860(void)
         if (idx != DAT_004808d8) continue;
 
         /* Clearance check 1 */
-        int sh = *(int *)((int)DAT_00481b54 + 4 + sprite * 0xc);
-        int sw = *(int *)((int)DAT_00481b54 + sprite * 0xc);
+        int sh = *(int *)((intptr_t)DAT_00481b54 + 4 + sprite * 0xc);
+        int sw = *(int *)((intptr_t)DAT_00481b54 + sprite * 0xc);
         if (FUN_00418ed0(x - sw / 2, (y - sh) - 0x1e, sw, sh + 0x1e, 0x10, 0x10, '\0') != 1)
             continue;
 
@@ -2848,7 +2854,7 @@ void FUN_00419860(void)
         if (FUN_00419010(x, (unsigned int)(y + 0x1C), sprite) != 1) continue;
 
         /* Clearance check 2 */
-        int *info = (int *)((int)DAT_00481b54 + sprite * 0xc);
+        int *info = (int *)((intptr_t)DAT_00481b54 + sprite * 0xc);
         sh = info[1];
         sw = info[0];
         if (FUN_00418ed0(x - sw / 2, (y - sh) + 0x1C, sw, sh, 8, 8, '\x01') != 1) continue;
@@ -2857,9 +2863,9 @@ void FUN_00419860(void)
         FUN_00418d50(x, y + 0x1C, sprite, 'R', 'W');
 
         /* Record position */
-        *(int *)((int)DAT_00480734 + 8 + DAT_004808d8 * 0xc) = sprite;
-        *(int *)((int)DAT_00480734 + DAT_004808d8 * 0xc) = x;
-        *(int *)((int)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = y;
+        *(int *)((intptr_t)DAT_00480734 + 8 + DAT_004808d8 * 0xc) = sprite;
+        *(int *)((intptr_t)DAT_00480734 + DAT_004808d8 * 0xc) = x;
+        *(int *)((intptr_t)DAT_00480734 + 4 + DAT_004808d8 * 0xc) = y;
         DAT_004808d8++;
     }
 }
@@ -2871,7 +2877,8 @@ int FUN_004143e0(int width, int height)
     LOG("[GG] FUN_004143e0: width=%d height=%d, themes=%d\n", width, height, DAT_00486484);
 
     if (DAT_00486484 == 0) {
-        sprintf(DAT_00489d7c, "GG Error : No GG themes!");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                 "GG Error : No GG themes!");
         return 0;
     }
 
@@ -2880,7 +2887,7 @@ int FUN_004143e0(int width, int height)
     /* Search for theme matching DAT_0048396e */
     int theme_idx = -1;
     for (int i = 0; i < DAT_00486484; i++) {
-        if (_stricmp((const char *)DAT_00486488[i], DAT_0048396e) == 0) {
+        if (SDL_strcasecmp((const char *)DAT_00486488[i], DAT_0048396e) == 0) {
             theme_idx = i;
             break;
         }
@@ -2934,13 +2941,19 @@ int FUN_004143e0(int width, int height)
     int result = FUN_00416320();
     if (result == 0) {
         if (DAT_004808d0 == 3)
-            sprintf(DAT_00489d7c, "GG Error : Wrong type JPG or not found in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Wrong type JPG or not found in \"%s\"", DAT_00480740);
         if (DAT_004808d0 == 1)
-            sprintf(DAT_00489d7c, "GG Error : Wrong type TGA in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Wrong type TGA in \"%s\"", DAT_00480740);
         if (DAT_004808d0 == 2)
-            sprintf(DAT_00489d7c, "GG Error : Could not find or access important TGA in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Could not find or access important TGA in \"%s\"",
+                     DAT_00480740);
         if (DAT_004808d0 == 4)
-            sprintf(DAT_00489d7c, "GG Error : Graphics take too much memory in \"%s\"", DAT_00480740);
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "GG Error : Graphics take too much memory in \"%s\"",
+                     DAT_00480740);
         return 0;
     }
 
@@ -3019,7 +3032,7 @@ int FUN_004143e0(int width, int height)
     unsigned char shift = (unsigned char)DAT_00487a18 & 0x1F;
     for (int y = DAT_00480724; y < DAT_00480728; y++) {
         for (int x = DAT_0048071c; x < DAT_00480720; x++) {
-            unsigned char *tile = (unsigned char *)((int)DAT_0048782c + (y << shift) + x);
+            unsigned char *tile = (unsigned char *)((intptr_t)DAT_0048782c + (y << shift) + x);
             if (*tile > 0x7F) {
                 *tile += 0x80;
             }

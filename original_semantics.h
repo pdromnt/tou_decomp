@@ -1,10 +1,20 @@
-#ifndef TOU_BINARY_COMPAT_H
-#define TOU_BINARY_COMPAT_H
+#ifndef TOU_ORIGINAL_SEMANTICS_H
+#define TOU_ORIGINAL_SEMANTICS_H
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 namespace tou_binary {
+
+/* Preserve an original byte pattern when recovered code treats it as a signed
+ * plain char. The two-step conversion is intentional and host-safe. */
+inline char char_bits(uint8_t value)
+{
+    char result;
+    memcpy(&result, &value, sizeof(result));
+    return result;
+}
 
 uint8_t load_u8(const void *base, size_t offset);
 uint16_t load_u16(const void *base, size_t offset);
@@ -41,5 +51,6 @@ extern "C" int TOU_Rand(void);
 extern "C" void TOU_Srand(unsigned int seed);
 extern "C" uint32_t TOU_RandState(void);
 extern "C" uint64_t TOU_RandCallCount(void);
+extern "C" void TOU_RestoreRandState(uint32_t state, uint64_t call_count);
 
 #endif

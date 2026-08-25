@@ -1,6 +1,8 @@
 #ifndef TOU_TYPES_H
 #define TOU_TYPES_H
 
+#include "audio_backend.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <type_traits>
@@ -15,7 +17,10 @@ enum RuntimePoolCapacity {
     TROOPER_CAPACITY = 400,
     PROJECTILE_CAPACITY = 200,
     PARTICLE_CAPACITY = 2000,
-    DEBRIS_ITEM_CAPACITY = 100
+    DEBRIS_ITEM_CAPACITY = 100,
+    EDGE_RECORD_CAPACITY = 1500,
+    FLUID_SOURCE_CAPACITY = 5000,
+    MAP_EDGE_CAPACITY = 5000
 };
 
 static_assert(GAMEPLAY_PLAYER_CAPACITY <= PLAYER_STORAGE_CAPACITY,
@@ -331,10 +336,11 @@ static_assert(offsetof(PlayerData, death_count) == 0x498, "PlayerData::death_cou
 static_assert(offsetof(PlayerData, sound_timer) == 0x4A8, "PlayerData::sound_timer offset");
 
 typedef struct {
-    unsigned int handle;    /* FSOUND_SAMPLE* cast to uint */
+    AudioSampleHandle handle;
     unsigned char volume;
     unsigned char padding[3];
 } SoundEntry;
+static_assert(sizeof(SoundEntry) == 8, "SoundEntry size");
 
 typedef struct {
     int pixel_offset;
@@ -361,7 +367,9 @@ typedef struct {
     int linked_item;    /* 0x28 */
     unsigned char render_mode; /* 0x2C */
     unsigned char _pad3[3];
-    int extra_data;     /* 0x30 */
-} MenuItem; /* 0x34 = 52 bytes, max 350 items in g_GameViewData */
+    /* Original x86 field was a 32-bit pointer/value at 0x30. This runtime
+     * descriptor is host-owned, so it must retain full pointers on x64/ARM64. */
+    intptr_t extra_data;
+} MenuItem; /* host-sized descriptor, max 350 items in g_GameViewData */
 
 #endif /* TOU_TYPES_H */

@@ -17,7 +17,7 @@
  * and sets up the menu sub-state. Returns 1 on success, 0 on failure.
  *
  * Despite the name, this is NOT a loop — it's an init function.
- * The "loop" is the main message loop in WinMain, with Game_State_Manager
+ * The "loop" is the SDL application loop, with Game_State_Manager
  * dispatching to FUN_00425fe0 when g_GameState=0/1 and g_SubState=4 (MENU). */
 int Menu_Init_And_Loop(void)
 {
@@ -29,8 +29,8 @@ int Menu_Init_And_Loop(void)
     /* Modern presentation is decoupled from the verified 640x480 renderer.
      * The selected resolution resizes the window instead of reallocating game
      * buffers whose dimensions are part of the recovered runtime contract. */
-    if (g_NumDisplayModes > 0 && DAT_00483724[1] >= g_NumDisplayModes)
-        DAT_00483724[1] = 5;
+    if (g_NumDisplayModes > 0 && g_GameConfig.values.resolution_index >= g_NumDisplayModes)
+        g_GameConfig.values.resolution_index = 5;
     DAT_00487640[1] = 5;
     DAT_00487640[2] = 5;
     g_DisplayWidth = 640;
@@ -63,7 +63,7 @@ int Menu_Init_And_Loop(void)
             g_NeedsRedraw = 1;
         }
 
-        g_TimerStart = timeGetTime();
+        g_TimerStart = Platform_GetTicks();
         g_TimerAux   = 0;
         return 1;
     }
@@ -85,7 +85,7 @@ int Load_Level_Resources(void)
     char *levelName;
 
     /* Set up flags for local mode.
-     * Team mode / player count come from config blob (options.cfg). */
+     * Team mode / player count come from the compatibility config record. */
     DAT_0048396d = 0;      /* not a generated map */
     DAT_00483960 = 0;      /* no swap file */
     DAT_004892e4 = 0;      /* no random mirror */
@@ -170,7 +170,7 @@ int Load_Level_Resources(void)
         return 0;
     }
 
-    /* Load per-level sky image (.SWP) if sky rendering is enabled.
+    /* Load per-level sky image (.swp) if sky rendering is enabled.
      * The level config blob sets DAT_00483960=1 for levels with sky. */
     if (DAT_00483960 == '\x01') {
         Load_SWP_Sky(levelName);
@@ -206,14 +206,17 @@ gg_level_ready:
             player->team = g_GameConfig.values.player_team[i];
         }
     }
+    Netplay_PreparePlayersBeforeInit();
 
     /* FUN_0041b010() - Ship/player init */
     FUN_0041b010();
+    Netplay_FinalizePlayersAfterInit();
 
     /* FUN_004249c0() - Ship sprite loading (fatal on failure in original) */
     result = FUN_004249c0();
     if (result != 1) {
-        sprintf(DAT_00489d7c, "Could not load ships!");
+        snprintf(DAT_00489d7c, sizeof(DAT_00489d7c), "%s",
+                 Text_Get("error.could_not_load_ships"));
         return 0;
     }
 
@@ -274,6 +277,9 @@ gg_level_ready:
     /* Visibility map: full rebuild for init */
     FUN_00449040('\x01');
 
+    SimulationState_Reset();
+    Netplay_OnLevelLoaded();
+
     return 1;
 }
 
@@ -282,7 +288,8 @@ gg_level_ready:
  * with random team, erase turrets from tilemap, then init each turret. */
 void FUN_004102b0(void)
 {
-    int iVar1, iVar2;
+    int iVar1;
+    int iVar2;
     unsigned int uVar3;
     int iVar4, iVar5;
     int shift = (unsigned char)DAT_00487a18 & 0x1f;
@@ -290,14 +297,14 @@ void FUN_004102b0(void)
     /* Pass 1: count turret-capable tiles (step by 3 in X, -3 in Y) */
     DAT_00489280 = 0;
     if (DAT_00481f48 != 0) {
-        Mem_Free((void *)DAT_00481f48);
+        Mem_Free(DAT_00481f48);
     }
     for (iVar5 = (int)DAT_004879f4 - 1; iVar5 > 0; iVar5 -= 3) {
         iVar1 = 0;
         if (0 < (int)DAT_004879f0) {
             do {
-                unsigned char tile = *(unsigned char *)((int)DAT_0048782c + (iVar5 << shift) + iVar1);
-                if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
+                unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + (iVar5 << shift) + iVar1);
+                if (*(char *)((intptr_t)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
                     DAT_00489280++;
                 }
                 iVar1 += 3;
@@ -307,7 +314,7 @@ void FUN_004102b0(void)
 
     /* Allocate turret array (8 bytes per entry + 10000 overhead) */
     DAT_00489280 += 10000;
-    DAT_00481f48 = (int)Mem_Alloc(DAT_00489280 * 8);
+    DAT_00481f48 = static_cast<uint8_t *>(Mem_Alloc(DAT_00489280 * 8));
     DAT_0048927c = 0;
     g_MemoryTracker += DAT_00489280 * 8;
 
@@ -317,14 +324,14 @@ void FUN_004102b0(void)
         if (0 < (int)DAT_004879f0) {
             do {
                 iVar2 = (iVar5 << shift);
-                unsigned char tile = *(unsigned char *)((int)DAT_0048782c + iVar2 + iVar4);
-                if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
+                unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + iVar2 + iVar4);
+                if (*(char *)((intptr_t)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
                     *(int *)(DAT_00481f48 + DAT_0048927c * 8) = iVar2 + iVar4;
                     *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 5) = 0;
                     *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 6) = 0;
                     uVar3 = (unsigned int)rand() & 0x80000003;
                     if ((int)uVar3 < 0) {
-                        uVar3 = (uVar3 - 1 | 0xFFFFFFFC) + 1;
+                        uVar3 = ((uVar3 - 1) | 0xFFFFFFFC) + 1;
                     }
                     *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 4) = (char)uVar3;
                     *(char *)(DAT_00481f48 + DAT_0048927c * 8 + 7) = 0;
@@ -342,11 +349,12 @@ void FUN_004102b0(void)
             iVar4 = 0;
             if (0 < (int)DAT_004879f0) {
                 do {
-                    iVar2 = (iVar5 << shift) + (int)DAT_0048782c;
-                    unsigned char tile = *(unsigned char *)(iVar2 + iVar4);
-                    if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
-                        *(unsigned char *)(iVar2 + iVar4) = 0;
-                        *(unsigned short *)((int)DAT_00481f50 + ((iVar5 << shift) + iVar4) * 2) = 0;
+                    intptr_t tilemap_row =
+                        (iVar5 << shift) + (intptr_t)DAT_0048782c;
+                    unsigned char tile = *(unsigned char *)(tilemap_row + iVar4);
+                    if (*(char *)((intptr_t)DAT_00487928 + (unsigned int)tile * 0x20 + 4) != 0) {
+                        *(unsigned char *)(tilemap_row + iVar4) = 0;
+                        *(unsigned short *)((intptr_t)DAT_00481f50 + ((iVar5 << shift) + iVar4) * 2) = 0;
                     }
                     iVar4++;
                 } while (iVar4 < (int)DAT_004879f0);
@@ -392,11 +400,11 @@ void FUN_0041bc50(void)
             if (7 < (int)DAT_004879f0 - 7) {
                 unsigned int angle = 0x38;
                 do {
-                    unsigned char tile_cur = *(unsigned char *)((int)DAT_0048782c + iVar7);
-                    unsigned char tile_above = *(unsigned char *)((int)DAT_0048782c - DAT_00487a00 + iVar7);
+                    unsigned char tile_cur = *(unsigned char *)((intptr_t)DAT_0048782c + iVar7);
+                    unsigned char tile_above = *(unsigned char *)((intptr_t)DAT_0048782c - DAT_00487a00 + iVar7);
 
                     /* Current tile must be wall-type */
-                    int is_wall = (*(char *)((int)DAT_00487928 + (unsigned int)tile_cur * 0x20 + 4) == 1)
+                    int is_wall = (*(char *)((intptr_t)DAT_00487928 + (unsigned int)tile_cur * 0x20 + 4) == 1)
                                || tile_cur == 0xF || tile_cur == 0x10
                                || tile_cur == 0x11 || tile_cur == 0x13 || tile_cur == 0x12;
 
@@ -404,18 +412,18 @@ void FUN_0041bc50(void)
                     int above_open = (tile_above != 0xF && tile_above != 0x11
                                    && tile_above != 0x13 && tile_above != 0x12
                                    && tile_above != 0x10
-                                   && *(char *)((int)DAT_00487928 + (unsigned int)tile_above * 0x20 + 4) == 0
-                                   && *(char *)((int)DAT_00487928 + (unsigned int)tile_above * 0x20 + 0xB) == 0);
+                                   && *(char *)((intptr_t)DAT_00487928 + (unsigned int)tile_above * 0x20 + 4) == 0
+                                   && *(char *)((intptr_t)DAT_00487928 + (unsigned int)tile_above * 0x20 + 0xB) == 0);
 
                     if (is_wall && above_open) {
-                        *(int *)((int)DAT_00487820 + iVar3 * 0x1c) = col;
-                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 4) = row;
-                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 8) = 0;
-                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 0xc) = 0;
-                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 0x18) = 0;
+                        *(int *)((intptr_t)DAT_00487820 + iVar3 * 0x1c) = col;
+                        *(int *)((intptr_t)DAT_00487820 + DAT_004892c8 * 0x1c + 4) = row;
+                        *(int *)((intptr_t)DAT_00487820 + DAT_004892c8 * 0x1c + 8) = 0;
+                        *(int *)((intptr_t)DAT_00487820 + DAT_004892c8 * 0x1c + 0xc) = 0;
+                        *(int *)((intptr_t)DAT_00487820 + DAT_004892c8 * 0x1c + 0x18) = 0;
                         /* Get facing angle from math LUT */
-                        *(int *)((int)DAT_00487820 + DAT_004892c8 * 0x1c + 0x14) =
-                            (*(int *)((int)DAT_00487ab0 + (angle & 0x7FF) * 4) >> 10) & 0x7FF;
+                        *(int *)((intptr_t)DAT_00487820 + DAT_004892c8 * 0x1c + 0x14) =
+                            (*(int *)((intptr_t)DAT_00487ab0 + (angle & 0x7FF) * 4) >> 10) & 0x7FF;
                         iVar3 = DAT_004892c8 + 1;
                         DAT_004892c8 = iVar3;
                         if (iVar3 > 49999) goto done;
@@ -433,8 +441,8 @@ void FUN_0041bc50(void)
 done:
     /* Set terminator flags */
     if (DAT_004892c8 > 0) {
-        *(char *)((int)DAT_00487820 + 0x10) = 0;
-        *(char *)((int)DAT_00487820 + DAT_004892c8 * 0x1c - 0xb) = 0;
+        *(char *)((intptr_t)DAT_00487820 + 0x10) = 0;
+        *(char *)((intptr_t)DAT_00487820 + DAT_004892c8 * 0x1c - 0xb) = 0;
     }
 
     FUN_00453230();
@@ -496,7 +504,7 @@ void FUN_00451500(void)
     }
 
     if (count == 0) {
-        DAT_004892a4 = (char)0xFF;
+        DAT_004892a4 = tou_binary::char_bits(0xFFu);
         DAT_004892a5 = 1;
         return;
     }
@@ -550,44 +558,44 @@ void FUN_0041a370(void)
     if (DAT_00487928) {
         switch (DAT_00483754[0]) {
         case 0:
-            *(char *)((int)DAT_00487928 + 0x4b) = 0;
-            *(char *)((int)DAT_00487928 + 0x4c) = 1;
-            *(char *)((int)DAT_00487928 + 0x46) = 1;
-            *(char *)((int)DAT_00487928 + 0x4d) = 1;
-            *(char *)((int)DAT_00487928 + 0x26b) = 0;
-            *(char *)((int)DAT_00487928 + 0x26c) = 1;
-            *(char *)((int)DAT_00487928 + 0x266) = 1;
-            *(char *)((int)DAT_00487928 + 0x26d) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x4b) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x4c) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x46) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x4d) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x26b) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26c) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x266) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x26d) = 1;
             break;
         case 1:
-            *(char *)((int)DAT_00487928 + 0x4b) = 0;
-            *(char *)((int)DAT_00487928 + 0x4c) = 0;
-            *(char *)((int)DAT_00487928 + 0x46) = 1;
-            *(char *)((int)DAT_00487928 + 0x4d) = 1;
-            *(char *)((int)DAT_00487928 + 0x26b) = 0;
-            *(char *)((int)DAT_00487928 + 0x26c) = 0;
-            *(char *)((int)DAT_00487928 + 0x266) = 1;
-            *(char *)((int)DAT_00487928 + 0x26d) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x4b) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x4c) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x46) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x4d) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x26b) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26c) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x266) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x26d) = 1;
             break;
         case 2:
-            *(char *)((int)DAT_00487928 + 0x46) = 0;
-            *(char *)((int)DAT_00487928 + 0x4b) = 0;
-            *(char *)((int)DAT_00487928 + 0x4c) = 1;
-            *(char *)((int)DAT_00487928 + 0x4d) = 0;
-            *(char *)((int)DAT_00487928 + 0x266) = 0;
-            *(char *)((int)DAT_00487928 + 0x26b) = 0;
-            *(char *)((int)DAT_00487928 + 0x26c) = 1;
-            *(char *)((int)DAT_00487928 + 0x26d) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x46) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x4b) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x4c) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x4d) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x266) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26b) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26c) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x26d) = 0;
             break;
         case 3:
-            *(char *)((int)DAT_00487928 + 0x46) = 0;
-            *(char *)((int)DAT_00487928 + 0x4b) = 1;
-            *(char *)((int)DAT_00487928 + 0x4c) = 0;
-            *(char *)((int)DAT_00487928 + 0x4d) = 0;
-            *(char *)((int)DAT_00487928 + 0x266) = 0;
-            *(char *)((int)DAT_00487928 + 0x26b) = 1;
-            *(char *)((int)DAT_00487928 + 0x26c) = 0;
-            *(char *)((int)DAT_00487928 + 0x26d) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x46) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x4b) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x4c) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x4d) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x266) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26b) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x26c) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26d) = 0;
             break;
         }
     }
@@ -619,54 +627,54 @@ after_team:
     if (DAT_00487928) {
         if (DAT_00483836 == 2) {
             /* Turrets disabled: higher entity spawn thresholds and stats */
-            *(char *)((int)DAT_00487928 + 0x1ee) = 0x40;
-            *(char *)((int)DAT_00487928 + 0x20e) = 0x40;
-            *(char *)((int)DAT_00487928 + 0x26e) = 0x40;
-            *(char *)((int)DAT_00487928 + 0x22e) = 0x40;
-            *(char *)((int)DAT_00487928 + 0x24e) = 0x40;
-            *(char *)((int)DAT_00487928 + 0x80f) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x82f) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x84f) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x86f) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x88f) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x8af) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x8cf) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x8ef) = 0xf;
-            *(char *)((int)DAT_00487928 + 0x812) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x832) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x852) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x872) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x892) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x8b2) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x8d2) = 0x11;
-            *(char *)((int)DAT_00487928 + 0x8f2) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x1ee) = 0x40;
+            *(char *)((intptr_t)DAT_00487928 + 0x20e) = 0x40;
+            *(char *)((intptr_t)DAT_00487928 + 0x26e) = 0x40;
+            *(char *)((intptr_t)DAT_00487928 + 0x22e) = 0x40;
+            *(char *)((intptr_t)DAT_00487928 + 0x24e) = 0x40;
+            *(char *)((intptr_t)DAT_00487928 + 0x80f) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x82f) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x84f) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x86f) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x88f) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x8af) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x8cf) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x8ef) = 0xf;
+            *(char *)((intptr_t)DAT_00487928 + 0x812) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x832) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x852) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x872) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x892) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x8b2) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x8d2) = 0x11;
+            *(char *)((intptr_t)DAT_00487928 + 0x8f2) = 0x11;
         } else {
             /* Turrets enabled: lower entity stats + extended entity range init */
-            *(char *)((int)DAT_00487928 + 0x1ee) = 0;
-            *(char *)((int)DAT_00487928 + 0x20e) = 0;
-            *(char *)((int)DAT_00487928 + 0x26e) = 0;
-            *(char *)((int)DAT_00487928 + 0x22e) = 0;
-            *(char *)((int)DAT_00487928 + 0x24e) = 0;
-            *(char *)((int)DAT_00487928 + 0x80f) = 1;
-            *(char *)((int)DAT_00487928 + 0x82f) = 1;
-            *(char *)((int)DAT_00487928 + 0x84f) = 1;
-            *(char *)((int)DAT_00487928 + 0x86f) = 1;
-            *(char *)((int)DAT_00487928 + 0x88f) = 1;
-            *(char *)((int)DAT_00487928 + 0x8af) = 1;
-            *(char *)((int)DAT_00487928 + 0x8cf) = 1;
-            *(char *)((int)DAT_00487928 + 0x8ef) = 1;
-            *(char *)((int)DAT_00487928 + 0x812) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x832) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x852) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x872) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x892) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x8b2) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x8d2) = 0xc;
-            *(char *)((int)DAT_00487928 + 0x8f2) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x1ee) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x20e) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x26e) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x22e) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x24e) = 0;
+            *(char *)((intptr_t)DAT_00487928 + 0x80f) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x82f) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x84f) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x86f) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x88f) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x8af) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x8cf) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x8ef) = 1;
+            *(char *)((intptr_t)DAT_00487928 + 0x812) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x832) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x852) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x872) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x892) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x8b2) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x8d2) = 0xc;
+            *(char *)((intptr_t)DAT_00487928 + 0x8f2) = 0xc;
             /* Extended entity range: tiles 100-115 fire rate and damage */
             for (int j = 0xc80; j < 0xe80; j += 0x20) {
-                *(char *)((int)DAT_00487928 + j + 0xf) = 1;
-                *(char *)((int)DAT_00487928 + j + 0x12) = 0xc;
+                *(char *)((intptr_t)DAT_00487928 + j + 0xf) = 1;
+                *(char *)((intptr_t)DAT_00487928 + j + 0x12) = 0xc;
             }
         }
     }
@@ -689,12 +697,12 @@ void FUN_0041d2e0(void)
 {
     int shift = (unsigned char)DAT_00487a18 & 0x1f;
     int stride_diff = DAT_00487a00 - (int)DAT_004879f0;
-    int tilemap = (int)DAT_0048782c;
-    int etable = (int)DAT_00487928;
+    intptr_t tilemap = (intptr_t)DAT_0048782c;
+    intptr_t etable = (intptr_t)DAT_00487928;
 
     int row = 7;
     int count = 0;
-    DAT_00489254 = 0;
+    g_MapEdgeCount = 0;
     int idx = (7 << shift) + 7;
 
     if (7 < (int)DAT_004879f4 - 7) {
@@ -716,13 +724,13 @@ void FUN_0041d2e0(void)
                                      || (*(char *)(etable + (unsigned int)t_right * 0x20) == 1)
                                      || (*(char *)(etable + (unsigned int)t_below * 0x20) == 1);
 
-                        if (has_solid && count < 5000) {
-                            *(int *)((int)DAT_00489e84 + count * 0x10) = col << 18;
-                            *(int *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 4) = row << 18;
-                            *(char *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 8) =
+                        if (has_solid && count < MAP_EDGE_CAPACITY) {
+                            *(int *)((intptr_t)DAT_00489e84 + count * 0x10) = col << 18;
+                            *(int *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 4) = row << 18;
+                            *(char *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 8) =
                                 *(char *)(etable + (unsigned int)*(unsigned char *)(tilemap + idx) * 0x20 + 0x19);
-                            count = DAT_00489254 + 1;
-                            DAT_00489254 = count;
+                            count = g_MapEdgeCount + 1;
+                            g_MapEdgeCount = count;
                         }
                     }
                     idx++;
@@ -792,20 +800,6 @@ void FUN_0041aea0(void)
         /* Set heading to 0 (pointing right) */
         player->heading = 0;
 
-        /* Default key bindings (overwritten by FUN_0041a8c0 from config blob).
-         * These serve as initial fallback values during level loading. */
-        if (i == 0) {
-            const uint8_t defaults[7] = {0xCB, 0xCD, 0xC8, 0x36, 0x9D, 0x35, 0xD0};
-            memcpy(player->key_scan_codes, defaults, sizeof(defaults));
-        } else {
-            /* Player 2+ defaults: WASD + space/lctrl/lshift */
-            const uint8_t defaults[7] = {0x1E, 0x20, 0x11, 0x39, 0x1D, 0x2A, 0x1F};
-            memcpy(player->key_scan_codes, defaults, sizeof(defaults));
-        }
-
-        /* Mark as human player (0 = human, nonzero = AI) */
-        player->ai_level = 0;
-
         /* Initialize energy to max */
         player->shield_value = DAT_00483830;
 
@@ -814,8 +808,8 @@ void FUN_0041aea0(void)
         int py = player->position_y >> 18;
         int shift = (unsigned char)DAT_00487a18 & 0x1f;
         int tile_offset = (py << shift) + px;
-        unsigned char tile = *(unsigned char *)((int)DAT_0048782c + tile_offset);
-        if (*(char *)((int)DAT_00487928 + (unsigned int)tile * 0x20 + 4) == 1) {
+        unsigned char tile = *(unsigned char *)((intptr_t)DAT_0048782c + tile_offset);
+        if (*(char *)((intptr_t)DAT_00487928 + (unsigned int)tile * 0x20 + 4) == 1) {
             player->scratch_49f = 0x3f;
         } else {
             player->scratch_49f = 0;
@@ -839,10 +833,10 @@ void FUN_00449040(char param)
         cells = (DAT_00487a08 - 2) * (DAT_00487a04 - 2);
     }
 
-    int shadow_buf = (int)DAT_00489ea4;
+    intptr_t shadow_buf = (intptr_t)DAT_00489ea4;
     int shift = (unsigned char)DAT_00487a18 & 0x1f;
-    int tilemap = (int)DAT_0048782c;
-    int etable = (int)DAT_00487928;
+    intptr_t tilemap = (intptr_t)DAT_0048782c;
+    intptr_t etable = (intptr_t)DAT_00487928;
 
     if (shadow_buf == 0 || tilemap == 0 || etable == 0) return;
 
@@ -979,9 +973,6 @@ int DAT_00481d2c = 0xA0;
 int DAT_00481d30 = 0xA0;
 int DAT_00481d34 = 0xA0;
 
-/* ===== Entity spawning globals ===== */
-unsigned char DAT_00483962 = 0;       /* team base probability % */
-
 int           DAT_00489270 = 0;       /* wall segment count */
 int           DAT_004892d4 = 0;       /* spawn point count */
 int           DAT_004892d8 = 0;       /* decoration count */
@@ -989,13 +980,13 @@ int           DAT_004892dc = 0;       /* misc counter */
 int           DAT_004892e0 = 0;       /* misc counter */
 int           DAT_0048929c = 0;       /* misc counter */
 int           DAT_004892c0 = 0;       /* misc counter */
-int           DAT_00489258 = 0;       /* misc counter */
+int           g_FluidSourceCount = 0;       /* was DAT_00489258 */
 char          DAT_004892a4 = 0;       /* team victory flag */
 char          DAT_004892a5 = 0;       /* activation flag */
 void         *DAT_00489e80 = NULL;    /* wall segment array */
 
 /* ===== Init function globals ===== */
-/* Difficulty / Team / Config (from options.cfg config blob at 0x48372x-0x48375x) */
+/* Difficulty / Team / Config (compatibility record at 0x48372x-0x48375x) */
 int           DAT_004892a8 = 0;       /* difficulty constant 1 (round tick limit) */
 int           DAT_004892ac = 0;       /* difficulty constant 2 */
 
@@ -1008,18 +999,18 @@ int           DAT_00489284 = 0;       /* turret init counter */
 int           DAT_004892c8 = 0;       /* trooper spawn point count */
 int           DAT_004892cc = 1;       /* trooper spawn flag */
 int           DAT_00487834[12] = {0}; /* entity tracking counters */
-float         DAT_004892d0 = 0.0f;    /* water level / weather */
+float         DAT_004892d0 = 0.0f;    /* per-tick level bombing rate */
 
-/* Float constants from .rdata (0x475620-0x47562B) for water level calculation */
-static const union { unsigned int u; float f; } _water_scale_0 = { 0x3651b717u };
-static const union { unsigned int u; float f; } _water_scale_1 = { 0x370bcf65u };
-static const union { unsigned int u; float f; } _water_scale_2 = { 0x37d1b717u };
-#define WATER_SCALE_0 (_water_scale_0.f)
-#define WATER_SCALE_1 (_water_scale_1.f)
-#define WATER_SCALE_2 (_water_scale_2.f)
+/* Original level-bombing rates selected for the current map. */
+static const union { unsigned int u; float f; } _bombing_rate_low = { 0x3651b717u };
+static const union { unsigned int u; float f; } _bombing_rate_medium = { 0x370bcf65u };
+static const union { unsigned int u; float f; } _bombing_rate_high = { 0x37d1b717u };
+#define BOMBING_RATE_LOW (_bombing_rate_low.f)
+#define BOMBING_RATE_MEDIUM (_bombing_rate_medium.f)
+#define BOMBING_RATE_HIGH (_bombing_rate_high.f)
 
 /* Ship filenames (from binary at 0x0047BE90..0x0047BEFC) */
-static const char *ship_dir = "ships\\";
+static const char *ship_dir = "ships/";
 static const char *ship_files[9] = {
     "peru.shp",  /* type 0 - DAT_0047bef0 */
     "batm.shp",  /* type 1 - DAT_0047bee4 */
@@ -1053,7 +1044,7 @@ void FUN_0041b010(void)
             /* Random angle (0..2047) */
             angle = rand() & 0x800007FF;
             if ((int)angle < 0) {
-                angle = (angle - 1 | 0xFFFFF800) + 1;
+                angle = ((angle - 1) | 0xFFFFF800) + 1;
             }
             player->heading = static_cast<int32_t>(angle);
 
@@ -1168,7 +1159,7 @@ void FUN_0041b010(void)
                 unsigned char ship_idx = player->weapon_slots[
                     static_cast<int8_t>(player->weapon_type)];
                 unsigned char max_team = *(unsigned char *)(
-                    (int)DAT_00487abc + 0x7D + (unsigned int)ship_idx * 0x218);
+                    (intptr_t)DAT_00487abc + 0x7D + (unsigned int)ship_idx * 0x218);
                 if (max_team < player->weapon_mark) {
                     player->weapon_mark = max_team;
                 }
@@ -1267,7 +1258,7 @@ void FUN_0041b5d0(void)
         g_SpectatorCameraX = ((int)DAT_004879f0 / 2) * FIXED_SCALE;
         g_SpectatorCameraY = ((int)DAT_004879f4 / 2) * FIXED_SCALE;
     }
-    if (DAT_00483724[2] == 2) {
+    if (g_GameConfig.values.display_reserved == 2) {
         local_4 = 4;  /* Force 4-player layout */
     }
 
@@ -1339,7 +1330,7 @@ void FUN_0041b5d0(void)
     }
 
     /* Pass 5: aspect ratio correction for mode 1 */
-    if (DAT_00483724[2] == 1 && DAT_00487808 > 0) {
+    if (g_GameConfig.values.display_reserved == 1 && DAT_00487808 > 0) {
         for (i = 0; i < DAT_00487808; i++) {
             PlayerData *player = Player_Get(DAT_004877f8[i]);
             int field_488 = player->viewport_height;
@@ -1708,7 +1699,10 @@ int FUN_004249c0(void)
         }
 
         /* Read and validate header byte */
-        fread(&header_byte, 1, 1, f);
+        if (fread(&header_byte, 1, 1, f) != 1) {
+            fclose(f);
+            return 0;
+        }
         if (header_byte != 0) {
             LOG("[SHIP] ERROR: Invalid header byte in %s\n", path);
             fclose(f);
@@ -1720,7 +1714,10 @@ int FUN_004249c0(void)
             int j;
             char *name_dest = (char *)DAT_0048780c + stats_offset;
             for (j = 0; j < 0x1F; j++) {
-                fread(&name_dest[j], 1, 1, f);
+                if (fread(&name_dest[j], 1, 1, f) != 1) {
+                    fclose(f);
+                    return 0;
+                }
                 if (name_dest[j] == '\0') break;
             }
             name_dest[j] = '\0';
@@ -1733,7 +1730,10 @@ int FUN_004249c0(void)
         }
 
         /* Read 14 bytes of ship stats */
-        fread(stats_buf, 1, 14, f);
+        if (fread(stats_buf, 1, 14, f) != 14) {
+            fclose(f);
+            return 0;
+        }
 
         if (DAT_0048780c) {
             char *sp = (char *)DAT_0048780c + stats_offset;
@@ -1762,14 +1762,22 @@ int FUN_004249c0(void)
         int total_pixels = 0;
         for (int frame = 0; frame < 32; frame++) {
             /* 12-byte frame header (mostly padding/unused) */
-            fread(frame_header, 1, 12, f);
+            if (fread(frame_header, 1, 12, f) != 12) {
+                fclose(f);
+                return 0;
+            }
 
             /* Frame dimensions (2 bytes each, little-endian) */
-            fread(&frame_w, 2, 1, f);
-            fread(&frame_h, 2, 1, f);
+            if (fread(&frame_w, 2, 1, f) != 1 || fread(&frame_h, 2, 1, f) != 1) {
+                fclose(f);
+                return 0;
+            }
 
             /* 2 bytes padding */
-            fread(&frame_pad, 2, 1, f);
+            if (fread(&frame_pad, 2, 1, f) != 1) {
+                fclose(f);
+                return 0;
+            }
 
             /* Store dimensions in metadata area */
             *(int *)((char *)DAT_00487aac + 100000 + meta_offset) = (int)(frame_w & 0xFFFF);
@@ -1781,7 +1789,10 @@ int FUN_004249c0(void)
 
             rgb_buf = (unsigned char *)DAT_00481cf8;
             if (rgb_size > 0) {
-                fread(rgb_buf, 1, rgb_size, f);
+                if (fread(rgb_buf, 1, (size_t)rgb_size, f) != (size_t)rgb_size) {
+                    fclose(f);
+                    return 0;
+                }
             }
 
             /* Convert RGB24 → RGB565 into DAT_00487aac */
@@ -1824,7 +1835,7 @@ int FUN_004249c0(void)
         }
 
         /* COMPAT: Convert ship pixels from X1R5G5B5 → RGB565 for display.
-         * Original ran fullscreen DDraw which handled this in hardware.
+         * Original fullscreen presentation handled this in hardware.
          * Our compat renderer uses RGB565 throughout. */
         {
             int px_count = total_pixels;
@@ -1867,9 +1878,9 @@ int FUN_004249c0(void)
  * Checks player proximity if param != 0. Records paint location in DAT_00489e84. */
 void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
 {
-    unsigned int uVar2 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + 0x4659);
-    unsigned int uVar3 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x4659);
-    int iVar8 = param_1 - (unsigned int)(*(unsigned char *)((int)DAT_00489e8c + 0x4659) >> 1);
+    unsigned int uVar2 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + 0x4659);
+    unsigned int uVar3 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x4659);
+    int iVar8 = param_1 - (unsigned int)(*(unsigned char *)((intptr_t)DAT_00489e8c + 0x4659) >> 1);
     int iVar6 = (param_2 - uVar3) + -2;
 
     if (-1 < param_2) {
@@ -1893,27 +1904,27 @@ void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
 
         /* Check tile property byte at offset 0x18 in entity table entry */
         if (*(char *)((unsigned int)*(unsigned char *)((param_2 << ((unsigned char)DAT_00487a18 & 0x1f)) +
-            (int)DAT_0048782c + param_1) * 0x20 + 0x18 + (int)DAT_00487928) == '\0') {
+            (intptr_t)DAT_0048782c + param_1) * 0x20 + 0x18 + (intptr_t)DAT_00487928) == '\0') {
 
             unsigned char uVar7;
             int frameOff;
             if (param_3 == 0) {
                 uVar7 = 0x1c;
-                frameOff = *(int *)((int)DAT_00489234 + 0x11964);
+                frameOff = *(int *)((intptr_t)DAT_00489234 + 0x11964);
             } else if (param_3 == 1) {
                 uVar7 = 0x1d;
-                frameOff = *(int *)((int)DAT_00489234 + 0x11af4);
+                frameOff = *(int *)((intptr_t)DAT_00489234 + 0x11af4);
             } else if (param_3 == 2) {
                 uVar7 = 0x1e;
-                frameOff = *(int *)((int)DAT_00489234 + 0x11c84);
+                frameOff = *(int *)((intptr_t)DAT_00489234 + 0x11c84);
             } else {
                 uVar7 = 2;
-                frameOff = *(int *)((int)DAT_00489234 + 0x11e14);
+                frameOff = *(int *)((intptr_t)DAT_00489234 + 0x11e14);
             }
 
             int local_c2 = 0;
             int tileIdx = (iVar6 << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
-            int iVar11 = (int)DAT_00489e8c;
+            intptr_t iVar11 = (intptr_t)DAT_00489e8c;
             if (uVar3 != 0) {
                 do {
                     int iVar9 = 0;
@@ -1923,13 +1934,13 @@ void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
                             if (((iVar10 < (int)DAT_004879f0) && (0 < iVar10)) &&
                                ((iVar6 < (int)DAT_004879f4 &&
                                 (((0 < iVar6 &&
-                                  (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + tileIdx) * 0x20 +
-                                   (int)DAT_00487928) == '\x01')) &&
-                                  (*(short *)((int)DAT_00487ab4 + frameOff * 2) != 0)))))) {
-                                short sVar1 = *(short *)((int)DAT_00487ab4 + frameOff * 2);
-                                *(short *)((int)DAT_00481f50 + tileIdx * 2) = sVar1;
-                                *(unsigned char *)((int)DAT_0048782c + tileIdx) = uVar7;
-                                iVar11 = (int)DAT_00489e8c;
+                                  (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + tileIdx) * 0x20 +
+                                   (intptr_t)DAT_00487928) == '\x01')) &&
+                                  (*(short *)((intptr_t)DAT_00487ab4 + frameOff * 2) != 0)))))) {
+                                short sVar1 = *(short *)((intptr_t)DAT_00487ab4 + frameOff * 2);
+                                *(short *)((intptr_t)DAT_00481f50 + tileIdx * 2) = sVar1;
+                                *(unsigned char *)((intptr_t)DAT_0048782c + tileIdx) = uVar7;
+                                iVar11 = (intptr_t)DAT_00489e8c;
                             }
                             frameOff = frameOff + 1;
                             tileIdx = tileIdx + 1;
@@ -1941,15 +1952,15 @@ void FUN_00440ba0(int param_1, int param_2, int param_3, char param_4)
                     tileIdx = tileIdx + (DAT_00487a00 - (int)uVar2);
                     local_c2 = local_c2 + 1;
                     iVar6 = iVar6 + 1;
-                } while (local_c2 < (int)(unsigned int)*(unsigned char *)((int)DAT_00489e88 + 0x4659));
+                } while (local_c2 < (int)(unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + 0x4659));
             }
 
             /* Record paint location in array */
-            if (DAT_00489254 < 5000) {
-                *(int *)((int)DAT_00489e84 + DAT_00489254 * 0x10) = param_1;
-                *(int *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 4) = param_2;
-                *(unsigned char *)((int)DAT_00489e84 + DAT_00489254 * 0x10 + 8) = (unsigned char)param_3;
-                DAT_00489254 = DAT_00489254 + 1;
+            if (g_MapEdgeCount < MAP_EDGE_CAPACITY) {
+                *(int *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10) = param_1;
+                *(int *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 4) = param_2;
+                *(unsigned char *)((intptr_t)DAT_00489e84 + g_MapEdgeCount * 0x10 + 8) = (unsigned char)param_3;
+                g_MapEdgeCount = g_MapEdgeCount + 1;
             }
         }
     }
@@ -1976,32 +1987,30 @@ void FUN_00457c70(int param_1)
     unsigned int local_4;
 
     cVar3 = (char)param_1 + -0x10;
-    uVar4 = (unsigned int)*(unsigned char *)(param_1 * 0x20 + 0x1a + (int)DAT_00489e80);
-    piVar1 = (int *)(param_1 * 0x20 + (int)DAT_00489e80);
-    uVar5 = (unsigned int)*(unsigned char *)((int)DAT_00489e8c + uVar4);
-    local_8 = (unsigned int)*(unsigned char *)((int)DAT_00489e88 + uVar4);
-    if (*(unsigned char *)((int)piVar1 + 0x15) < 4) {
+    uVar4 = (unsigned int)*(unsigned char *)(param_1 * 0x20 + 0x1a + (intptr_t)DAT_00489e80);
+    piVar1 = (int *)(param_1 * 0x20 + (intptr_t)DAT_00489e80);
+    uVar5 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e8c + uVar4);
+    local_8 = (unsigned int)*(unsigned char *)((intptr_t)DAT_00489e88 + uVar4);
+    if (*(unsigned char *)((intptr_t)piVar1 + 0x15) < 4) {
         iVar9 = (int)uVar5 >> 1;
-        switch (*(unsigned char *)((int)piVar1 + 0x15)) {
+        switch (*(unsigned char *)((intptr_t)piVar1 + 0x15)) {
         case 0:
             iVar8 = (piVar1[2] >> 0x12) + piVar1[1];
             if ((int)DAT_004879f4 + -7 < (int)(iVar8 + local_8)) {
                 local_8 = ((int)DAT_004879f4 - iVar8) - 7;
             }
             iVar8 = ((iVar8 << ((unsigned char)DAT_00487a18 & 0x1f)) - iVar9) + *piVar1;
-            iVar9 = *(int *)((int)DAT_00489234 + uVar4 * 4);
+            iVar9 = *(int *)((intptr_t)DAT_00489234 + uVar4 * 4);
             uVar4 = uVar5;
-            iVar7 = (int)DAT_0048782c;
             if (0 < (int)local_8) {
                 do {
                     for (; uVar4 != 0; uVar4 = uVar4 - 1) {
-                        sVar2 = *(short *)((int)DAT_00487ab4 + iVar9 * 2);
+                        sVar2 = *(short *)((intptr_t)DAT_00487ab4 + iVar9 * 2);
                         if ((sVar2 != 0) &&
-                           (*(char *)((unsigned int)*(unsigned char *)(iVar7 + iVar8) * 0x20 +
-                            (int)DAT_00487928) == '\x01')) {
-                            *(char *)(iVar7 + iVar8) = cVar3;
-                            *(short *)((int)DAT_00481f50 + iVar8 * 2) = sVar2;
-                            iVar7 = (int)DAT_0048782c;
+                           (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar8) * 0x20 +
+                            (intptr_t)DAT_00487928) == '\x01')) {
+                            *(char *)((intptr_t)DAT_0048782c + iVar8) = cVar3;
+                            *(short *)((intptr_t)DAT_00481f50 + iVar8 * 2) = sVar2;
                         }
                         iVar9 = iVar9 + 1;
                         iVar8 = iVar8 + 1;
@@ -2020,20 +2029,18 @@ void FUN_00457c70(int param_1)
             }
             local_c = 0;
             iVar8 = ((piVar1[1] - iVar9) << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
-            iVar9 = (int)DAT_0048782c;
             if (uVar5 != 0) {
                 do {
                     if (0 < (int)local_8) {
-                        iVar7 = (*(int *)((int)DAT_00489234 + uVar4 * 4) + local_c) * 2;
+                        iVar7 = (*(int *)((intptr_t)DAT_00489234 + uVar4 * 4) + local_c) * 2;
                         uVar6 = local_8;
                         do {
-                            sVar2 = *(short *)(iVar7 + (int)DAT_00487ab4);
+                            sVar2 = *(short *)(iVar7 + (intptr_t)DAT_00487ab4);
                             if ((sVar2 != 0) &&
-                               (*(char *)((unsigned int)*(unsigned char *)(iVar9 + iVar8) * 0x20 +
-                                (int)DAT_00487928) == '\x01')) {
-                                *(char *)(iVar9 + iVar8) = cVar3;
-                                *(short *)((int)DAT_00481f50 + iVar8 * 2) = sVar2;
-                                iVar9 = (int)DAT_0048782c;
+                               (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar8) * 0x20 +
+                                (intptr_t)DAT_00487928) == '\x01')) {
+                                *(char *)((intptr_t)DAT_0048782c + iVar8) = cVar3;
+                                *(short *)((intptr_t)DAT_00481f50 + iVar8 * 2) = sVar2;
                             }
                             iVar7 = iVar7 + (int)uVar5 * 2;
                             iVar8 = iVar8 + 1;
@@ -2047,7 +2054,7 @@ void FUN_00457c70(int param_1)
             }
             break;
         case 2:
-            iVar8 = *(int *)((int)DAT_00489234 + uVar4 * 4);
+            iVar8 = *(int *)((intptr_t)DAT_00489234 + uVar4 * 4);
             iVar7 = piVar1[1] - (piVar1[2] >> 0x12);
             local_4 = iVar7 - 6;
             if (5 < (int)(iVar7 - (int)local_8)) {
@@ -2055,17 +2062,15 @@ void FUN_00457c70(int param_1)
             }
             iVar9 = ((iVar7 << ((unsigned char)DAT_00487a18 & 0x1f)) - iVar9) + *piVar1;
             uVar4 = uVar5;
-            iVar7 = (int)DAT_0048782c;
             if (0 < (int)local_4) {
                 do {
                     for (; uVar4 != 0; uVar4 = uVar4 - 1) {
-                        sVar2 = *(short *)((int)DAT_00487ab4 + iVar8 * 2);
+                        sVar2 = *(short *)((intptr_t)DAT_00487ab4 + iVar8 * 2);
                         if ((sVar2 != 0) &&
-                           (*(char *)((unsigned int)*(unsigned char *)(iVar7 + iVar9) * 0x20 +
-                            (int)DAT_00487928) == '\x01')) {
-                            *(char *)(iVar7 + iVar9) = cVar3;
-                            *(short *)((int)DAT_00481f50 + iVar9 * 2) = sVar2;
-                            iVar7 = (int)DAT_0048782c;
+                           (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar9) * 0x20 +
+                            (intptr_t)DAT_00487928) == '\x01')) {
+                            *(char *)((intptr_t)DAT_0048782c + iVar9) = cVar3;
+                            *(short *)((intptr_t)DAT_00481f50 + iVar9 * 2) = sVar2;
                         }
                         iVar8 = iVar8 + 1;
                         iVar9 = iVar9 + 1;
@@ -2084,20 +2089,18 @@ void FUN_00457c70(int param_1)
             }
             local_c = 0;
             iVar8 = ((piVar1[1] - iVar9) << ((unsigned char)DAT_00487a18 & 0x1f)) + iVar8;
-            iVar9 = (int)DAT_0048782c;
             if (uVar5 != 0) {
                 do {
                     if (0 < (int)uVar6) {
-                        iVar7 = (*(int *)((int)DAT_00489234 + uVar4 * 4) + local_c) * 2;
+                        iVar7 = (*(int *)((intptr_t)DAT_00489234 + uVar4 * 4) + local_c) * 2;
                         local_4 = uVar6;
                         do {
-                            sVar2 = *(short *)(iVar7 + (int)DAT_00487ab4);
+                            sVar2 = *(short *)(iVar7 + (intptr_t)DAT_00487ab4);
                             if ((sVar2 != 0) &&
-                               (*(char *)((unsigned int)*(unsigned char *)(iVar9 + iVar8) * 0x20 +
-                                (int)DAT_00487928) == '\x01')) {
-                                *(char *)(iVar9 + iVar8) = cVar3;
-                                *(short *)((int)DAT_00481f50 + iVar8 * 2) = sVar2;
-                                iVar9 = (int)DAT_0048782c;
+                               (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar8) * 0x20 +
+                                (intptr_t)DAT_00487928) == '\x01')) {
+                                *(char *)((intptr_t)DAT_0048782c + iVar8) = cVar3;
+                                *(short *)((intptr_t)DAT_00481f50 + iVar8 * 2) = sVar2;
                             }
                             iVar7 = iVar7 + (int)uVar5 * 2;
                             iVar8 = iVar8 + -1;
@@ -2123,19 +2126,19 @@ void FUN_00407080(int x, int y, unsigned char index, unsigned char type)
     unsigned int angle;
 
     if (DAT_00489264 < 0x19) {
-        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20) = x;
-        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 4) = y;
-        *(unsigned char *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0x14) = index;
-        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0xc) = 0;
-        *(int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 8) = 0;
+        *(int *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20) = x;
+        *(int *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20 + 4) = y;
+        *(unsigned char *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20 + 0x14) = index;
+        *(int *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20 + 0xc) = 0;
+        *(int *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20 + 8) = 0;
 
         angle = rand();
         angle = angle & 0x800007FF;
         if ((int)angle < 0) {
-            angle = (angle - 1 | 0xFFFFF800) + 1;
+            angle = ((angle - 1) | 0xFFFFF800) + 1;
         }
-        *(unsigned int *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0x10) = angle;
-        *(unsigned char *)((int)DAT_00487780 + DAT_00489264 * 0x20 + 0x15) = type;
+        *(unsigned int *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20 + 0x10) = angle;
+        *(unsigned char *)((intptr_t)DAT_00487780 + DAT_00489264 * 0x20 + 0x15) = type;
         DAT_00489264 = DAT_00489264 + 1;
     }
 }
@@ -2156,11 +2159,11 @@ void FUN_00407140(int x, int y, unsigned char type)
 
         iVar1 = rand();
         debris->motion_variant =
-            (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 5 + (int)g_EntityConfig) - 1));
+            (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 5 + (intptr_t)g_EntityConfig) - 1));
 
         iVar1 = rand();
         debris->sprite_frame =
-            (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 4 + (int)g_EntityConfig) - 1));
+            (char)(iVar1 % (int)(*(unsigned char *)((unsigned int)type * 8 + 4 + (intptr_t)g_EntityConfig) - 1));
 
         g_DebrisItemCount = g_DebrisItemCount + 1;
     }
@@ -2223,7 +2226,7 @@ void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsig
     int *piVar2;
     int iVar3;
     unsigned short uVar4;
-    int iVar5;
+    intptr_t iVar5;
     unsigned char bVar6;
     unsigned short uVar7;
     int iVar8;
@@ -2274,39 +2277,39 @@ void FUN_00406d20(int x, int y, char type, int health, unsigned char team, unsig
         /* Stamp sprite footprint onto tilemap */
         uVar4 = 0;
         piVar2 = (int *)projectile;
-        iVar1 = *(int *)((unsigned int)projectile->type * 0x20 + (int)DAT_00487818);
-        int frame_off = *(int *)((int)DAT_00489234 + iVar1 * 4);
-        bVar6 = *(unsigned char *)((int)DAT_00489e8c + iVar1);
+        iVar1 = *(int *)((unsigned int)projectile->type * 0x20 + (intptr_t)DAT_00487818);
+        int frame_off = *(int *)((intptr_t)DAT_00489234 + iVar1 * 4);
+        bVar6 = *(unsigned char *)((intptr_t)DAT_00489e8c + iVar1);
         iVar9 = (*piVar2 >> 0x12) - (unsigned int)(bVar6 >> 1);
-        iVar8 = (piVar2[1] >> 0x12) - (unsigned int)(*(unsigned char *)((int)DAT_00489e88 + iVar1) >> 1);
+        iVar8 = (piVar2[1] >> 0x12) - (unsigned int)(*(unsigned char *)((intptr_t)DAT_00489e88 + iVar1) >> 1);
         iVar3 = (iVar8 << ((unsigned char)DAT_00487a18 & 0x1F)) + iVar9;
 
-        if (*(unsigned char *)((int)DAT_00489e88 + iVar1) != 0) {
+        if (*(unsigned char *)((intptr_t)DAT_00489e88 + iVar1) != 0) {
             do {
                 uVar7 = 0;
                 if (bVar6 != 0) {
                     do {
-                        if ((*(char *)((int)DAT_00489e94 + frame_off) != 0) &&
+                        if ((*(char *)((intptr_t)DAT_00489e94 + frame_off) != 0) &&
                             ((int)((unsigned int)uVar7 + iVar9) > 0) &&
                             ((unsigned int)uVar7 + iVar9 < (unsigned int)DAT_004879f0) &&
                             ((int)((unsigned int)uVar4 + iVar8) > 0) &&
                             ((unsigned int)uVar4 + iVar8 < (unsigned int)DAT_004879f4)) {
-                            iVar5 = (int)DAT_00487928 +
-                                (unsigned int)*(unsigned char *)((int)DAT_0048782c + iVar3) * 0x20;
+                            iVar5 = (intptr_t)DAT_00487928 +
+                                (unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + iVar3) * 0x20;
                             if (*(char *)(iVar5 + 0xb) == 0 && *(char *)(iVar5 + 0xa) == 0) {
-                                *(unsigned char *)((int)DAT_0048782c + iVar3) =
+                                *(unsigned char *)((intptr_t)DAT_0048782c + iVar3) =
                                     *(unsigned char *)(iVar5 + 8);
                             }
                         }
                         frame_off = frame_off + 1;
                         iVar3 = iVar3 + 1;
                         uVar7 = uVar7 + 1;
-                    } while (uVar7 < *(unsigned char *)((int)DAT_00489e8c + iVar1));
+                    } while (uVar7 < *(unsigned char *)((intptr_t)DAT_00489e8c + iVar1));
                 }
-                bVar6 = *(unsigned char *)((int)DAT_00489e8c + iVar1);
+                bVar6 = *(unsigned char *)((intptr_t)DAT_00489e8c + iVar1);
                 iVar3 = iVar3 + (DAT_00487a00 - (unsigned int)bVar6);
                 uVar4 = uVar4 + 1;
-            } while (uVar4 < *(unsigned char *)((int)DAT_00489e88 + iVar1));
+            } while (uVar4 < *(unsigned char *)((intptr_t)DAT_00489e88 + iVar1));
         }
         g_ProjectileCount = g_ProjectileCount + 1;
     }
@@ -2321,7 +2324,7 @@ void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, 
     unsigned int uVar4;
 
     if ((int)DAT_00489270 < 0x10) {
-        int base = (int)DAT_00489e80 + DAT_00489270 * 0x20;
+        intptr_t base = (intptr_t)DAT_00489e80 + DAT_00489270 * 0x20;
 
         *(int *)(base + 0x00) = x;
         *(int *)(base + 0x04) = y;
@@ -2330,12 +2333,12 @@ void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, 
         *(int *)(base + 0x08) = 0;
         *(unsigned char *)(base + 0x16) = 0;
         *(unsigned char *)(base + 0x17) = sprite;
-        *(int *)(base + 0x0c) = *(int *)((unsigned int)sprite * 0x10 + 0x0c + (int)g_PhysicsParams);
+        *(int *)(base + 0x0c) = *(int *)((unsigned int)sprite * 0x10 + 0x0c + (intptr_t)g_PhysicsParams);
         *(int *)(base + 0x10) = 0;
 
         uVar4 = DAT_00489270 & 0x80000003;
         if ((int)uVar4 < 0) {
-            uVar4 = (uVar4 - 1 | 0xFFFFFFFC) + 1;
+            uVar4 = ((uVar4 - 1) | 0xFFFFFFFC) + 1;
         }
         *(char *)(base + 0x18) = (char)uVar4;
         *(unsigned char *)(base + 0x1b) = 0xFF;
@@ -2350,7 +2353,7 @@ void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, 
         if (facing == 0 || facing == 2) {
             int *piVar1 = (int *)(base);
             iVar2 = *piVar1;
-            uVar4 = (unsigned int)(*(unsigned char *)((int)DAT_00489e8c +
+            uVar4 = (unsigned int)(*(unsigned char *)((intptr_t)DAT_00489e8c +
                 (unsigned int)*(unsigned char *)(base + 0x1a)) >> 1);
             if ((int)(iVar2 - uVar4) < 2) return;
             if (DAT_00487a00 - 2 <= (int)(iVar2 + uVar4)) return;
@@ -2360,7 +2363,7 @@ void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, 
         if (facing == 1 || facing == 3) {
             iVar2 = *(int *)(base + 4);
             uVar4 = (unsigned int)(*(unsigned char *)(
-                (unsigned int)*(unsigned char *)(base + 0x1a) + (int)DAT_00489e8c) >> 1);
+                (unsigned int)*(unsigned char *)(base + 0x1a) + (intptr_t)DAT_00489e8c) >> 1);
             if ((int)(iVar2 - uVar4) < 2) return;
             if ((int)DAT_004879f4 - 2 <= (int)(iVar2 + uVar4)) return;
         }
@@ -2378,7 +2381,8 @@ void FUN_00407400(int x, int y, char facing, unsigned char sprite, char mirror, 
  * This is the function that makes entities visible in the game world. */
 void FUN_0041bfe0(void)
 {
-    int iVar3, iVar4, iVar9, iVar10, iVar11, iVar15;
+    int iVar3, iVar4, iVar9, iVar10, iVar15;
+    intptr_t iVar11;
     unsigned int uVar5, uVar6;
     unsigned char bVar7;
     char cVar8, cVar14;
@@ -2413,8 +2417,8 @@ void FUN_0041bfe0(void)
     DAT_00489270 = 0;
     g_TrooperCount = 0;
     g_EntityCount = 0;
-    DAT_00489258 = 0;
-    DAT_0048925c = 0;
+    g_FluidSourceCount = 0;
+    g_FireParticleCount = 0;
     DAT_0048926c = 0;
     g_ParticleCount = 0;
     DAT_0048929c = 0;
@@ -2450,8 +2454,8 @@ void FUN_0041bfe0(void)
                 iVar3 = rand();
                 iVar3 = iVar3 % ((int)DAT_004879f4 - 0xe) + 7;
             } while (*(char *)((unsigned int)*(unsigned char *)(
-                (iVar3 << ((unsigned char)DAT_00487a18 & 0x1F)) + (int)DAT_0048782c + iVar9) *
-                0x20 + (int)DAT_00487928) == 0);
+                (iVar3 << ((unsigned char)DAT_00487a18 & 0x1F)) + (intptr_t)DAT_0048782c + iVar9) *
+                0x20 + (intptr_t)DAT_00487928) == 0);
 
             cVar14 = 0;
             uVar13 = 3;
@@ -2460,7 +2464,7 @@ void FUN_0041bfe0(void)
             uVar5 = rand();
             uVar5 = uVar5 & 0x80000001;
             if ((int)uVar5 < 0) {
-                uVar5 = (uVar5 - 1 | 0xFFFFFFFE) + 1;
+                uVar5 = ((uVar5 - 1) | 0xFFFFFFFE) + 1;
             }
             FUN_00407210(iVar9 * FIXED_SCALE, iVar3 * FIXED_SCALE, 0, 0,
                          (char)uVar5 * 2 - 1, iVar4, uVar13, cVar14);
@@ -2496,8 +2500,8 @@ void FUN_0041bfe0(void)
                 iVar3 = rand();
                 iVar3 = iVar3 % ((int)DAT_004879f4 - 0xe) + 7;
             } while (*(char *)((unsigned int)*(unsigned char *)(
-                (iVar3 << ((unsigned char)DAT_00487a18 & 0x1F)) + (int)DAT_0048782c + iVar9) *
-                0x20 + (int)DAT_00487928) == 0);
+                (iVar3 << ((unsigned char)DAT_00487a18 & 0x1F)) + (intptr_t)DAT_0048782c + iVar9) *
+                0x20 + (intptr_t)DAT_00487928) == 0);
 
             bVar7 = 0;
             uVar13 = 3;
@@ -2517,7 +2521,7 @@ void FUN_0041bfe0(void)
 
     /* ===== Phase 5: Process entity placements from level file ===== */
     iVar15 = 0;
-    iVar11 = (int)DAT_00487828;
+    iVar11 = (intptr_t)DAT_00487828;
 
     while (iVar15 < DAT_00489278) {
         iVar3 = iVar15 * 0x14;
@@ -2539,7 +2543,7 @@ void FUN_0041bfe0(void)
                     iVar9,
                     *(unsigned char *)(iVar3 + 0xb + iVar11),
                     *(unsigned char *)(iVar3 + 0xc + iVar11));
-                iVar11 = (int)DAT_00487828;
+                iVar11 = (intptr_t)DAT_00487828;
             }
             break;
 
@@ -2553,13 +2557,13 @@ void FUN_0041bfe0(void)
                     *(unsigned char *)(iVar3 + 9 + iVar11),
                     *(char *)(iVar3 + 0xd + iVar11),
                     *(unsigned char *)(iVar3 + 0xb + iVar11));
-                iVar11 = (int)DAT_00487828;
+                iVar11 = (intptr_t)DAT_00487828;
 
                 /* Check for linked wall pair */
-                if (*(char *)(iVar3 + 10 + (int)DAT_00487828) == 1 && DAT_00489270 < 0x10) {
-                    int wx = *(int *)(iVar3 + (int)DAT_00487828);
-                    int wy = *(int *)(iVar3 + 4 + (int)DAT_00487828);
-                    bVar7 = (*(char *)(iVar3 + 0xc + (int)DAT_00487828) + 2) & 3;
+                if (*(char *)(iVar3 + 10 + (intptr_t)DAT_00487828) == 1 && DAT_00489270 < 0x10) {
+                    int wx = *(int *)(iVar3 + (intptr_t)DAT_00487828);
+                    int wy = *(int *)(iVar3 + 4 + (intptr_t)DAT_00487828);
+                    bVar7 = (*(char *)(iVar3 + 0xc + (intptr_t)DAT_00487828) + 2) & 3;
 
                     if (bVar7 == 0) wy = wy + 1;
                     else if (bVar7 == 1) wx = wx + 1;
@@ -2567,16 +2571,16 @@ void FUN_0041bfe0(void)
                     else if (bVar7 == 3) wx = wx - 1;
 
                     FUN_00407400(wx, wy, bVar7,
-                        *(unsigned char *)(iVar3 + 9 + (int)DAT_00487828),
-                        *(char *)(iVar3 + 0xd + (int)DAT_00487828),
-                        *(unsigned char *)(iVar3 + 0xb + (int)DAT_00487828));
+                        *(unsigned char *)(iVar3 + 9 + (intptr_t)DAT_00487828),
+                        *(char *)(iVar3 + 0xd + (intptr_t)DAT_00487828),
+                        *(unsigned char *)(iVar3 + 0xb + (intptr_t)DAT_00487828));
 
                     /* Link the two wall segments */
-                    *(char *)((int)DAT_00489e80 + DAT_00489270 * 0x20 - 5) =
+                    *(char *)((intptr_t)DAT_00489e80 + DAT_00489270 * 0x20 - 5) =
                         (char)DAT_00489270 - 2;
-                    *(char *)((int)DAT_00489e80 + DAT_00489270 * 0x20 - 0x25) =
+                    *(char *)((intptr_t)DAT_00489e80 + DAT_00489270 * 0x20 - 0x25) =
                         (char)DAT_00489270 - 1;
-                    iVar11 = (int)DAT_00487828;
+                    iVar11 = (intptr_t)DAT_00487828;
                 }
             }
             break;
@@ -2587,26 +2591,26 @@ void FUN_0041bfe0(void)
             case 0:
                 /* Decoration type 0 */
                 if (DAT_004892d8 < 0x78) {
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10) =
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10) =
                         *(int *)(iVar3 + iVar11);
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
-                        *(int *)(iVar3 + 4 + (int)DAT_00487828);
-                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 0;
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 8) =
-                        (int)((unsigned int)*(unsigned char *)(iVar3 + 10 + (int)DAT_00487828) * 0x800) >> 3;
-                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xd) =
-                        *(unsigned char *)(iVar3 + 0xb + (int)DAT_00487828);
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
+                        *(int *)(iVar3 + 4 + (intptr_t)DAT_00487828);
+                    *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 0;
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 8) =
+                        (int)((unsigned int)*(unsigned char *)(iVar3 + 10 + (intptr_t)DAT_00487828) * 0x800) >> 3;
+                    *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xd) =
+                        *(unsigned char *)(iVar3 + 0xb + (intptr_t)DAT_00487828);
 
-                    switch (*(unsigned char *)(iVar3 + 0xc + (int)DAT_00487828)) {
-                    case 0: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 0x1e; break;
-                    case 1: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 10; break;
-                    case 2: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 4; break;
-                    case 3: *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 2; break;
+                    switch (*(unsigned char *)(iVar3 + 0xc + (intptr_t)DAT_00487828)) {
+                    case 0: *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 0x1e; break;
+                    case 1: *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 10; break;
+                    case 2: *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 4; break;
+                    case 3: *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 2; break;
                     }
 
                     DAT_004892d8 = DAT_004892d8 + 1;
                     iVar15++;
-                    iVar11 = (int)DAT_00487828;
+                    iVar11 = (intptr_t)DAT_00487828;
                     continue;  /* skip the iVar15++ at end */
                 }
                 break;
@@ -2614,18 +2618,18 @@ void FUN_0041bfe0(void)
             case 1:
                 /* Decoration type 1 */
                 if (DAT_004892d8 < 0x78) {
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10) =
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10) =
                         *(int *)(iVar3 + iVar11);
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
-                        *(int *)(iVar3 + 4 + (int)DAT_00487828);
-                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 1;
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 8) =
-                        (int)((unsigned int)*(unsigned char *)(iVar3 + 10 + (int)DAT_00487828) * 0x800) >> 3;
-                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xd) =
-                        *(unsigned char *)(iVar3 + 0xb + (int)DAT_00487828);
-                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 1;
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
+                        *(int *)(iVar3 + 4 + (intptr_t)DAT_00487828);
+                    *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 1;
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 8) =
+                        (int)((unsigned int)*(unsigned char *)(iVar3 + 10 + (intptr_t)DAT_00487828) * 0x800) >> 3;
+                    *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xd) =
+                        *(unsigned char *)(iVar3 + 0xb + (intptr_t)DAT_00487828);
+                    *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xe) = 1;
                     DAT_004892d8 = DAT_004892d8 + 1;
-                    iVar11 = (int)DAT_00487828;
+                    iVar11 = (intptr_t)DAT_00487828;
                 }
                 break;
 
@@ -2635,11 +2639,11 @@ void FUN_0041bfe0(void)
                     Entity *entity = &g_EntityPool[g_EntityCount];
 
                     entity->position_x = *(int *)(iVar3 + iVar11) << 0x12;
-                    entity->position_y = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
+                    entity->position_y = *(int *)(iVar3 + 4 + (intptr_t)DAT_00487828) << 0x12;
                     entity->velocity_x = 0;
                     entity->velocity_y = 0;
-                    entity->previous_x = *(int *)(iVar3 + (int)DAT_00487828) << 0x12;
-                    entity->previous_y = *(int *)(iVar3 + 4 + (int)DAT_00487828) << 0x12;
+                    entity->previous_x = *(int *)(iVar3 + (intptr_t)DAT_00487828) << 0x12;
+                    entity->previous_y = *(int *)(iVar3 + 4 + (intptr_t)DAT_00487828) << 0x12;
                     entity->motion_x_10 = 0;
                     entity->motion_y_14 = 0;
                     entity->type = 0x19;
@@ -2651,27 +2655,27 @@ void FUN_0041bfe0(void)
                     entity->owner = 0xFF;
                     entity->health_or_damage_28 = 0;
 
-                    unsigned char etype = *(unsigned char *)(iVar3 + 10 + (int)DAT_00487828);
+                    unsigned char etype = *(unsigned char *)(iVar3 + 10 + (intptr_t)DAT_00487828);
                     entity->gravity_or_motion_38 =
-                        *(int *)((int)DAT_00487abc + 0x34e0 + (unsigned int)etype * 4);
+                        *(int *)((intptr_t)DAT_00487abc + 0x34e0 + (unsigned int)etype * 4);
                     entity->damage_44 =
-                        *(int *)((int)DAT_00487abc + 0x351c + (unsigned int)etype * 4);
+                        *(int *)((intptr_t)DAT_00487abc + 0x351c + (unsigned int)etype * 4);
                     entity->scratch_48 = 0;
                     entity->palette_value =
-                        *(int *)((int)DAT_00487abc + 0x354c + (unsigned int)etype * 4);
+                        *(int *)((intptr_t)DAT_00487abc + 0x354c + (unsigned int)etype * 4);
                     entity->animation_frame = 0;
                     entity->subtype = etype;
-                    entity->callback_address = *(int *)((int)DAT_00487abc + 0x3458);
+                    entity->callback_address = *(int *)((intptr_t)DAT_00487abc + 0x3458);
                     entity->counter_3c = 0;
                     entity->timer_5c = 0;
 
                     g_EntityCount = g_EntityCount + 1;
-                    iVar11 = (int)DAT_00487828;
+                    iVar11 = (intptr_t)DAT_00487828;
 
                     if (etype == 0) {
                         entity->scratch_2c = 1;
                         entity->auxiliary_26 = 0;
-                        iVar11 = (int)DAT_00487828;
+                        iVar11 = (intptr_t)DAT_00487828;
                     }
                 }
                 break;
@@ -2691,13 +2695,13 @@ void FUN_0041bfe0(void)
             case 4:
                 /* Turret decoration */
                 if (DAT_00483834 != 0 && DAT_004892d8 < 0x78) {
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10) =
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10) =
                         (*(int *)(iVar3 + iVar11) / 3) * 3;
-                    *(int *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
-                        (*(int *)(iVar3 + 4 + (int)DAT_00487828) / 3) * 3;
-                    *(unsigned char *)((int)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 2;
+                    *(int *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 4) =
+                        (*(int *)(iVar3 + 4 + (intptr_t)DAT_00487828) / 3) * 3;
+                    *(unsigned char *)((intptr_t)DAT_00487aa0 + DAT_004892d8 * 0x10 + 0xc) = 2;
                     DAT_004892d8 = DAT_004892d8 + 1;
-                    iVar11 = (int)DAT_00487828;
+                    iVar11 = (intptr_t)DAT_00487828;
                 }
                 break;
             }
@@ -2706,14 +2710,14 @@ void FUN_0041bfe0(void)
         case 3:
             /* Spawn point */
             if (DAT_004892d4 < 0xfa) {
-                *(int *)((int)DAT_004876a0 + DAT_004892d4 * 0xc) =
+                *(int *)((intptr_t)DAT_004876a0 + DAT_004892d4 * 0xc) =
                     *(int *)(iVar3 + iVar11);
-                *(int *)((int)DAT_004876a0 + 4 + DAT_004892d4 * 0xc) =
-                    *(int *)(iVar3 + 4 + (int)DAT_00487828);
-                *(unsigned char *)((int)DAT_004876a0 + 8 + DAT_004892d4 * 0xc) =
-                    *(unsigned char *)(iVar3 + 9 + (int)DAT_00487828);
+                *(int *)((intptr_t)DAT_004876a0 + 4 + DAT_004892d4 * 0xc) =
+                    *(int *)(iVar3 + 4 + (intptr_t)DAT_00487828);
+                *(unsigned char *)((intptr_t)DAT_004876a0 + 8 + DAT_004892d4 * 0xc) =
+                    *(unsigned char *)(iVar3 + 9 + (intptr_t)DAT_00487828);
                 DAT_004892d4 = DAT_004892d4 + 1;
-                iVar11 = (int)DAT_00487828;
+                iVar11 = (intptr_t)DAT_00487828;
             }
             break;
 
@@ -2733,7 +2737,7 @@ void FUN_0041bfe0(void)
             int *piVar1 = (int *)(iVar11 + iVar15 * 0x14);
             FUN_00407080(piVar1[0] << 0x12, piVar1[1] << 0x12, cVar14,
                          *(unsigned char *)(iVar11 + 10 + iVar15 * 0x14));
-            iVar11 = (int)DAT_00487828;
+            iVar11 = (intptr_t)DAT_00487828;
             break;
         }
         }
@@ -2741,18 +2745,18 @@ void FUN_0041bfe0(void)
         iVar15++;
     }
 
-    /* ===== Phase 6: Post-placement water level ===== */
+    /* ===== Phase 6: Select this level's bombing rate ===== */
     DAT_004892d0 = 0.0f;
     if (DAT_00483735 == 2 ||
         (DAT_00483735 == 1 && (rand() % 100 < (int)(unsigned int)DAT_00483962))) {
         iVar11 = rand() % 6;
         DAT_004892d0 = (float)DAT_004879f0;
         if (iVar11 == 0) {
-            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_2;
+            DAT_004892d0 = DAT_004892d0 * BOMBING_RATE_HIGH;
         } else if (iVar11 == 1) {
-            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_1;
+            DAT_004892d0 = DAT_004892d0 * BOMBING_RATE_MEDIUM;
         } else if (iVar11 == 2) {
-            DAT_004892d0 = DAT_004892d0 * WATER_SCALE_0;
+            DAT_004892d0 = DAT_004892d0 * BOMBING_RATE_LOW;
         } else {
             DAT_004892d0 = 0.0f;
         }
@@ -2828,13 +2832,13 @@ retry_spawn:
                             uVar6 = rand();
                             uVar6 = uVar6 & 0x8000003F;
                             if ((int)uVar6 < 0) {
-                                uVar6 = (uVar6 - 1 | 0xFFFFFFC0) + 1;
+                                uVar6 = ((uVar6 - 1) | 0xFFFFFFC0) + 1;
                             }
                             iVar9 = aiStackY_1ea0[iVar4] - uVar6 + 0x20;
                             uVar6 = rand();
                             uVar6 = uVar6 & 0x8000003F;
                             if ((int)uVar6 < 0) {
-                                uVar6 = (uVar6 - 1 | 0xFFFFFFC0) + 1;
+                                uVar6 = ((uVar6 - 1) | 0xFFFFFFC0) + 1;
                             }
                             iVar4 = aiStackY_1ca0[iVar4] - uVar6 + 0x20;
                             if (iVar9 < 0) iVar9 = 0;
@@ -2843,8 +2847,8 @@ retry_spawn:
                             if ((int)DAT_004879f4 <= iVar4) iVar4 = (int)DAT_004879f4 - 1;
                         }
                     } while (*(char *)((unsigned int)*(unsigned char *)(
-                        (iVar4 << ((unsigned char)DAT_00487a18 & 0x1F)) + (int)DAT_0048782c + iVar9) *
-                        0x20 + (int)DAT_00487928) == 0);
+                        (iVar4 << ((unsigned char)DAT_00487a18 & 0x1F)) + (intptr_t)DAT_0048782c + iVar9) *
+                        0x20 + (intptr_t)DAT_00487928) == 0);
 
                     aiStackY_58[uVar5] = iVar9;
                     aiStackY_48[uVar5] = iVar4;
@@ -2897,8 +2901,8 @@ retry_spawn:
                         int failed = 0;
                         for (iVar4 = 0; iVar4 < 0x40 && !failed; iVar4 += 4) {
                             for (iVar10 = 0; iVar10 < 0x20; iVar10 += 4) {
-                                if (*(char *)((unsigned int)*(unsigned char *)((int)DAT_0048782c + scan) *
-                                    0x20 + (int)DAT_00487928) == 0) {
+                                if (*(char *)((unsigned int)*(unsigned char *)((intptr_t)DAT_0048782c + scan) *
+                                    0x20 + (intptr_t)DAT_00487928) == 0) {
                                     failed = 1;
                                     break;
                                 }
@@ -2923,12 +2927,12 @@ retry_spawn:
                 for (iVar15 = 0; iVar15 < 4; iVar15++) {
                     if (DAT_004892d4 < 0xfa) {
                         iVar3 = rand();
-                        *(int *)((int)DAT_004876a0 + DAT_004892d4 * 0xc) =
+                        *(int *)((intptr_t)DAT_004876a0 + DAT_004892d4 * 0xc) =
                             iVar3 % 0x60 - 0x30 + aiStackY_8c[iVar11];
                         iVar3 = rand();
-                        *(int *)((int)DAT_004876a0 + 4 + DAT_004892d4 * 0xc) =
+                        *(int *)((intptr_t)DAT_004876a0 + 4 + DAT_004892d4 * 0xc) =
                             iVar3 % 0x60 - 0x30 + aiStackY_7c[iVar11];
-                        *(char *)((int)DAT_004876a0 + 8 + DAT_004892d4 * 0xc) = (char)iVar11;
+                        *(char *)((intptr_t)DAT_004876a0 + 8 + DAT_004892d4 * 0xc) = (char)iVar11;
                         DAT_004892d4 = DAT_004892d4 + 1;
                     }
                 }

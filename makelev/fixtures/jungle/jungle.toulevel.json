@@ -1,0 +1,36 @@
+{
+  "format": "tou-level-project",
+  "version": 1,
+  "mode": "normal",
+  "assets": {
+    "visual": "jungle.jpg",
+    "attributes": "jungle.tga",
+    "parallax": "parallax.jpg"
+  },
+  "metadata": {
+    "maker": "Hannu Kankaanpää",
+    "email": "hkankaan@cc.hut.fi"
+  },
+  "rules": {
+    "parallax": true,
+    "civilians": 10,
+    "bombing": 5,
+    "waterRgb": [0, 120, 157],
+    "disableRunningWater": true,
+    "gravityTenths": 10,
+    "resistanceTenths": 10,
+    "collisionDamageTenths": 5,
+    "bouncingTenths": 5,
+    "ambient": 1,
+    "parallaxAftertouch": 2
+  },
+  "gg": {
+    "theme": "the earth",
+    "shape": true,
+    "repairDensity": 20,
+    "stuffDensity": 20,
+    "signDensity": 20,
+    "randomSeed": 54321,
+    "signTexts": []
+  }
+}

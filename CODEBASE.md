@@ -2,30 +2,34 @@
 
 ## Read This First
 
-This is a 32-bit, behavior-first reconstruction of a Windows game. It is not yet
-a conventional modern C++ project. Raw offsets and original addresses often
-encode facts that have not been safely expressed as types.
+This is a behavior-first reconstruction of a 32-bit Windows game that now builds
+as native x86, x64, and ARM64 code on modern desktop platforms. It is not yet a
+conventional modern C++ project. Raw offsets and original addresses often encode
+facts that have not been safely expressed as types.
 
 The safest cleanup rule is: **name and isolate understood behavior before
 changing its representation**. A build passing does not prove gameplay parity.
 
 ## Runtime Shape
 
-`WinMain` initializes platform services and game data, then enters the main game
-loop. The broad flow is:
+SDL's portable `main()` initializes platform services and game data, then enters
+the main game loop. SDL3 owns the window, event queue, keyboard, mouse, dialogs,
+and presentation. The broad flow is:
 
 ```text
-winmain.cpp
+main.cpp
   -> initialization and asset/config loading
   -> menu or match state
   -> input, simulation, entity callbacks, effects
   -> software rendering into a backend-neutral RGB565 framebuffer
-  -> platform presentation through the selected render backend
-  -> audio through the dynamically loaded FMOD library
+  -> SDL presentation
+  -> audio through the SDL_mixer backend
 ```
 
-The project deliberately remains 32-bit because original pointer sizes,
-structure strides, overflow, and x87 behavior are part of the reconstruction.
+Recovered 32-bit values deliberately remain fixed-width even on 64-bit hosts.
+Original addresses are guest identity keys rather than native pointers, record
+layouts retain their verified sizes, and wrapping arithmetic, RNG, and float
+conversion live behind compatibility helpers.
 
 ## Rendering Boundary
 
@@ -35,50 +39,101 @@ that typed buffer and a single active `Viewport` record. Lifted renderer bodies
 may still create local integer views where preserving original 32-bit pointer
 arithmetic matters; those views no longer leak through subsystem call sites.
 
-`RenderBackend` owns platform presentation. The current DirectDraw backend is
-fully contained in `gfx_ddraw.cpp`: device initialization, surface lifecycle,
-surface restoration, RGB565-to-ARGB conversion, aspect-ratio scaling, and the
-final window blit. Simulation and software rendering code do not access
-DirectDraw objects. A future SDL backend can consume the same `Framebuffer`
-without changing gameplay rendering.
+`RenderBackend` owns platform presentation. `gfx_sdl.cpp` uploads the unchanged
+framebuffer to a streaming SDL texture. Simulation and software rendering code
+do not access SDL renderer objects directly.
 
 ## Source Map
 
 | Module | Responsibility |
 | --- | --- |
-| `winmain.cpp` | Windows entry point, focus handling, window/input ownership |
+| `main.cpp` | Portable SDL entry point and application lifecycle |
+| `platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
+| `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
+| `input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
+| `simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
+| `replay.cpp` | Local command/snapshot recording and deterministic playback diagnostics |
+| `netplay.cpp` | Direct-IP LAN beta protocol and delayed command exchange |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
-| `config.h` | Byte-exact typed `options.cfg` layout and recovered field aliases |
+| `config.h` | Byte-exact compatibility layout used by recovered runtime code |
+| `settings.cpp` | Typed, validated JSON settings and legacy-config migration |
 | `menu.cpp` | Menu behavior, player setup, rendering helpers, config interaction |
-| `sim.cpp` | Main simulation dispatcher and legacy entity behavior fallback |
-| `entity.cpp` | Player ships, AI, physics, weapons, collisions, entity lifecycle |
+| `sim.cpp` | Ordered subsystem updates, particles, fluids, turrets, pickups, and legacy entity fallback |
+| `entity.cpp` | Player ships, ship AI, physics, weapons, collisions, and entity lifecycle |
 | `entity_callbacks.cpp` | Recovered original-address callbacks for weapons/effects |
-| `binary_compat.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
+| `original_semantics.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
 | `effects.cpp` | Explosions, particles, lighting, terrain effects |
 | `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
-| `render_backend.cpp` | Active presentation-backend interface and dispatch |
-| `gfx_ddraw.cpp` | DirectDraw device, surfaces, RGB conversion, scaling, presentation |
+| `render_backend.cpp` | Presentation-backend interface and SDL dispatch |
+| `gfx_sdl.cpp` | SDL streaming texture and framebuffer presentation |
 | `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
 | `assets.cpp` | Font and image asset loading |
 | `level.cpp` | `.lev` loading and swap/height-map data |
 | `gg_gen.cpp` | Procedural GG level/theme generation |
-| `sound.cpp` | Music, effects, positional sound, FMOD-facing game logic |
-| `fmod_loader.c` | Runtime loading of the bundled legacy `fmod.dll` |
+| `sound.cpp` | Recovered music selection, sample table, and sound lifecycle |
+| `audio_backend.h` | Narrow channel/sample/music interface used by game logic |
+| `audio_sdl.cpp` | Primary SDL_mixer backend with legacy volume/pan semantics |
 | `intro.cpp` | Intro presentation |
 | `memory.cpp` | Recovered allocation and shared-memory helpers |
-| `math.cpp` | Small math compatibility helpers |
+| `math.cpp` | Original fixed-point trigonometry table and safe math compatibility helpers |
 | `utils.cpp` | Optional debug logging |
 | `tou.h` | Aggregate include retained while source files migrate to narrower headers |
 | `types.h` | Shared recovered structures |
 | `gfx.h` | Graphics, assets, typed framebuffer/viewport, effects, and HUD declarations |
-| `input.h` | DirectInput and keyboard/mouse declarations |
-| `sound.h` | FMOD-facing audio declarations |
+| `input.h` | Shared legacy scan-code state and keyboard/mouse declarations |
+| `sound.h` | Game-facing sound and positional-audio declarations |
 | `level.h` | Level data, loading, and GG generator declarations |
 | `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
 | `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
-| `compat.h` | Legacy Windows and DirectX API-level includes |
+| `platform.h` | Portable window, events, timing, dialogs, and display services |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
+| `terrain_properties.h` | Byte-exact terrain-property record shape without guessed broad semantics |
+| `sprite_atlas.h` | Width-preserving read view over the legacy parallel sprite descriptor tables |
+| `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
+| `docs/GG_LEVELS.md` | GG authoring model, theme assets, seeds, and runtime generation |
+| `docs/LEVEL_PALETTE.json` | Machine-readable attribute colors and placement-marker families |
+| `tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
+| `makelev/` | Native level library, CLI/compiler, SDL3 attribute painter, and fixtures |
+| `docs/SPRITE_FORMAT.md` | Recovered `.gfx` frame stream and pixel encodings |
+| `docs/SHIP_FORMAT.md` | Recovered `.SHP` metadata, stats, and sprite-frame layout |
+| `docs/TERRAIN_PROPERTIES.md` | Evidence ledger for the 256 x 0x20 terrain-property table |
+| `docs/LAN_BETA.md` | Direct-IP beta launch, scope, limitations, and bug-report data |
+| `docs/REPLAY_DIAGNOSTICS.md` | Replay recording/playback and snapshot boundary |
+
+## Simulation Boundaries
+
+The original update order remains centralized in `gameloop.cpp`. The following
+named entry points identify recovered subsystem boundaries without changing
+their relative order:
+
+- `TrooperSystem_Update`
+- `TurretSystem_UpdateTargeting`
+- `PickupSystem_Update`
+- `ExplosionSystem_UpdateLegacy`
+- `TrapDoorSystem_Update`
+- `FluidSystem_Update`
+- `ParticleSystem_Update`
+- `FireParticleSystem_Update`
+
+Ship intelligence is bounded inside `entity.cpp` by `AI_UpdateShip` and
+`AI_ScanNearbyThreats`. These names describe observed responsibility; they do
+not authorize reordering RNG calls, pool iteration, callbacks, or state writes.
+Physical source-file extraction can happen later, once deterministic replay can
+prove that a move did not change behavior.
+
+## Multiplayer Boundary
+
+Network play sits below SDL and above the recovered simulation. Physical keys
+become the original seven logical action bits, which can then come from local
+input, replay, or `netplay.cpp` without changing entity update order. The LAN
+beta uses conservative delayed TCP lockstep, host RNG sequencing, and periodic
+snapshot-derived hashes. Presentation state remains local. See
+`docs/LAN_BETA.md`; `BACKLOG.md` keeps the remaining product/UI work explicit.
+
+The beta is deliberately diagnostic: a disconnect or hash mismatch pauses the
+match. It does not yet apply snapshot correction or claim a fully authoritative
+host-state transport.
 
 ## Runtime Data
 
@@ -93,23 +148,28 @@ The executable expects these paths relative to its working directory:
 | `sfx/` | Weapon, UI, ship, and environment sounds |
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
-| `options.cfg` | User configuration generated beside the executable on first run |
-| `fmod.dll` | Legacy audio runtime loaded dynamically at startup |
+| `help/` | Original HTML help, restyled for the decomp release |
+| `lang/` | UTF-8 language catalogs; English is the per-key fallback |
+| `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
 `scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local
-`options.cfg` are intentionally excluded. Keep it synchronized when adding a
-new required runtime path.
+`settings.json` and legacy `options.cfg` files are intentionally excluded. The
+compiler/editor ship as a clean `level-editor/` runtime directory containing
+the two tools and focused format documentation, never the `makelev/` source
+tree. Keep the packaging script synchronized when adding a required runtime
+path.
 
 ## Binary-Compatibility Layer
 
-`binary_compat.*` exists because mathematically similar modern C++ is not always
+`original_semantics.*` exists because mathematically similar modern C++ is not always
 behaviorally equivalent to the original executable. It provides:
 
 - explicit little-endian reads and writes into recovered records;
 - defined 32-bit wrapping arithmetic and signed right shifts;
 - the original embedded MSVC `rand`/`srand` algorithm and call counter;
-- x87-style float-to-integer conversion on 32-bit x86.
+- the original x87 float-to-integer sequence on 32-bit x86, with an explicit
+  truncation equivalent on hosts without x87.
 
 `tou.h` maps normal `rand` and `srand` calls to this implementation. Do not
 replace it with the host CRT or a C++ random engine.
@@ -182,11 +242,17 @@ operations into independent field assignments can change behavior.
 
 ## Config Ownership
 
-`options.cfg` has one canonical, packed `GameConfig` representation in
-`config.h`. Its typed layout is exactly 6408 bytes; the extra window-mode byte
-remains appended for compatibility with decomp-generated saves. Recovered
-`DAT_004837xx` names are aliases into that same record, so menu writes, runtime
-reads, loading, and saving cannot drift into stale copies anymore.
+`settings.cpp` owns the versioned, human-readable `settings.json` format. Its
+normal `UserSettings` model contains only user-facing choices, validates values,
+and maps them into recovered runtime state at the load/save boundary. Writes use
+a same-directory temporary file followed by replacement.
+
+`GameConfig` in `config.h` remains a 6405-byte compatibility record because
+recovered menu and gameplay code still address that layout directly. It is no
+longer the persistence format. If JSON is absent, a compatible legacy
+`options.cfg` is imported once and retained as a backup; after that JSON is
+authoritative. Recovered `DAT_004837xx` names remain aliases into `GameConfig`,
+so menu writes and runtime reads cannot drift into stale copies.
 
 `g_ConfigBlob` remains as a byte view for menu descriptors and fields whose
 semantics are not proven yet. It is not separate storage. Offset assertions in
@@ -197,20 +263,49 @@ The ten bytes at original addresses `0x483963..0x48396c` are per-level physics
 tuning, not part of the saved record. They now live in `LevelPhysicsTuning`;
 the old reconstruction wrote them past the end of the config allocation.
 
+## Localization and Fonts
+
+`localization.cpp` loads UTF-8 catalogs from `lang/`, overlays the selected
+language on authoritative English, and temporarily binds recovered numeric menu
+slots to readable catalog keys. New code should use `Text_Get()` directly.
+
+The renderer decodes UTF-8 into TOU's original byte-sized bitmap glyph table.
+The original four atlases are never rewritten: `tools/generate_latin_fonts.py`
+builds separate Latin supplements for Spanish and Brazilian Portuguese from
+the original letter shapes. Regenerate catalogs with
+`tools/generate_localization.py` and validate them with
+`tools/validate_localization.py`. `tools/bootstrap_translations.py` can fill
+new catalog gaps for human review; it is an opt-in maintainer helper and never
+runs in builds or CI.
+
 ## Building and Cleaning
 
 ```powershell
-mingw32-make -j8
-mingw32-make clean
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 8
 ```
 
-The Makefile compiles every C/C++ source as 32-bit and embeds `icon.ico` through
-`tou.rc`. Generated objects, executables, logs, and `dist/` packages are ignored
-by Git.
+The primary CMake build fetches pinned SDL3 and SDL_mixer, links them statically,
+and builds for the host architecture. Windows builds embed `icon.ico` through
+`tou.rc`; other platforms do not compile the Windows resource file. Maintained
+game source is compiled with warnings treated as errors. Generated build trees,
+objects, executables, logs, and `dist/` packages are ignored by Git.
 
-`.github/workflows/build.yml` repeats the 32-bit build and PE architecture check
-on pushes and pull requests. It is build-only; publishing remains exclusive to
-the manually dispatched release workflow.
+The pinned SDL source receives one documented build-time patch on Windows:
+SDL's legacy `timeBeginPeriod` hook and unconditional WinMM link are removed.
+SDL's modern high-resolution waitable-timer path remains active. MSVC builds
+also link the C/C++ runtime statically, keeping release archives self-contained.
+
+`.github/workflows/build.yml` builds Windows x86 parity plus native Windows,
+Linux, and macOS x64/ARM64 targets on pushes and pull requests. It stages the
+complete runtime and checks each produced architecture. It is build-only;
+publishing remains exclusive to the manually dispatched release workflow,
+which creates one archive per platform and architecture.
+
+Windows release packages are ZIP files. Linux and macOS packages are `.tar.gz`
+archives so executable permissions survive extraction. macOS is packaged as a
+native `TOU.app` bundle with its icon and all runtime assets under
+`Contents/Resources`.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it

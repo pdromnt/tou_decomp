@@ -4,7 +4,7 @@
  *            Handle_Menu_State=004611D0, Game_Update_Render=00461710
  */
 #include "tou.h"
-#include <dinput.h>
+#include "platform.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -22,8 +22,7 @@ int  g_SpectatorCameraX = 0;
 int  g_SpectatorCameraY = 0;
 char g_InputMode   = 0;              /* 004877E4 */
 int  DAT_004877e8  = 0;              /* alt X accumulator */
-char g_DirectInputMouseXSeen = 0;     /* windowed-mode fallback guard */
-DWORD        DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
+uint32_t     DAT_00489ee8 = 0;       /* Key repeat cooldown timestamp */
 unsigned int DAT_00489eec = 0;       /* Last pressed key scan code */
 
 /* Gameplay tick timing and counters */
@@ -31,86 +30,10 @@ char  DAT_00489288 = 0;              /* sub-frame counter (0-7, wraps) */
 
 /* Pause menu state (unused — original binary has no visible pause menu selection) */
 
-/* ===== Input_Update (00462560) - Mouse polling via DirectInput ===== */
-void Input_Update(void)
-{
-    DIDEVICEOBJECTDATA didod;
-    DWORD dwElements;
-    HRESULT hr;
-
-    g_DirectInputMouseXSeen = 0;
-
-    if (lpDI_Mouse == NULL)
-        return;
-
-    while (1) {
-        dwElements = 1;
-        hr = lpDI_Mouse->GetDeviceData(sizeof(DIDEVICEOBJECTDATA), &didod, &dwElements, 0);
-
-        if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-            if (lpDI_Mouse != NULL) {
-                if (g_bIsActive != 0) {
-                    lpDI_Mouse->Acquire();
-                } else {
-                    lpDI_Mouse->Unacquire();
-                }
-            }
-            return;
-        }
-
-        if (FAILED(hr))
-            return;
-
-        if (dwElements == 0)
-            break;
-
-        switch (didod.dwOfs) {
-        case DIMOFS_X:                          /* 0x00 */
-            g_DirectInputMouseXSeen = 1;
-            if (g_InputMode == 1) {
-                DAT_004877e8 += didod.dwData * 0x80;
-            } else if (g_InputMode == 0) {
-                g_MouseDeltaX += didod.dwData * 0x80000;
-            }
-            break;
-
-        case DIMOFS_Y:                          /* 0x04 */
-            if (g_InputMode == 0) {
-                g_MouseDeltaY += didod.dwData * 0x80000;
-            }
-            break;
-
-        case DIMOFS_BUTTON0:                    /* 0x0C */
-            if ((didod.dwData & 0x80) == 0) {
-                /* Button released */
-                if (g_MouseButtons & 1) {
-                    g_MouseButtons ^= 1;
-                }
-            } else {
-                /* Button pressed */
-                g_MouseButtons |= 1;
-            }
-            break;
-
-        case DIMOFS_BUTTON1:                    /* 0x0D */
-            if ((didod.dwData & 0x80) == 0) {
-                if (g_MouseButtons & 2) {
-                    g_MouseButtons ^= 2;
-                }
-            } else {
-                g_MouseButtons |= 2;
-            }
-            break;
-        }
-    }
-}
-
 /* ===== Game_State_Manager (00461260) ===== */
 void Game_State_Manager(void)
 {
     int iVar2;
-    HRESULT mouse_hr;
-    HRESULT keyboard_hr;
 
     switch (g_GameState) {
     case GAME_STATE_RENDER_GAMEPLAY:
@@ -133,8 +56,8 @@ void Game_State_Manager(void)
             iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
-                MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
-                DestroyWindow(hWnd_Main);
+                Platform_ShowError(STR_ERR_RENDER_MODE);
+                Request_App_Quit();
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
             }
@@ -142,7 +65,7 @@ void Game_State_Manager(void)
         DAT_004877b1 = 1;
         DAT_004877bd = 0;       /* clear mouse button latch on menu entry */
         g_MouseButtons = 0;
-        g_FrameTimer = timeGetTime();
+        g_FrameTimer = Platform_GetTicks();
 
         /* Music: If coming from state 0x98 (new game after intro),
          * skip FUN_0040e130 since music is already playing from intro.
@@ -160,30 +83,7 @@ void Game_State_Manager(void)
             GameState_Transition(GAME_STATE_SHUTDOWN);
         }
 
-        /* COMPAT: Ensure window has foreground/focus after DDraw operations.
-         * Original ran DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN which auto-maintained
-         * foreground. In windowed DDSCL_NORMAL mode, DDraw surface creation
-         * (FUN_0042fc40) can cause the window to lose foreground, making
-         * DISCL_FOREGROUND DirectInput devices lose acquisition. Force the
-         * window to foreground so keyboard/mouse work immediately. */
-        BringWindowToTop(hWnd_Main);
-        SetForegroundWindow(hWnd_Main);
-        SetActiveWindow(hWnd_Main);
-        SetFocus(hWnd_Main);
-
-        mouse_hr = DI_OK;
-        keyboard_hr = DI_OK;
-        if (lpDI_Mouse != NULL)
-            mouse_hr = lpDI_Mouse->Acquire();
-        if (lpDI_Keyboard != NULL)
-            keyboard_hr = lpDI_Keyboard->Acquire();
-
-        g_bIsActive = (GetForegroundWindow() == hWnd_Main) ? 1 : 0;
-        LOG("[MENU TRANSITION] foreground=%p self=%p focus=%p active=%d "
-            "mouse=0x%08lX keyboard=0x%08lX page=%u\n",
-            GetForegroundWindow(), hWnd_Main, GetFocus(), g_bIsActive,
-            (unsigned long)mouse_hr, (unsigned long)keyboard_hr,
-            (unsigned int)DAT_004877a4);
+        g_bIsActive = 1;
 
         FUN_00425fe0();
         return;
@@ -220,8 +120,8 @@ void Game_State_Manager(void)
             iVar2 = RenderBackend_Configure(g_DisplayWidth, g_DisplayHeight);
             if (iVar2 == 0) {
                 RenderBackend_Shutdown();
-                MessageBoxA(hWnd_Main, STR_ERR_DDRAW_MODE, STR_TITLE, MB_ICONERROR);
-                DestroyWindow(hWnd_Main);
+                Platform_ShowError(STR_ERR_RENDER_MODE);
+                Request_App_Quit();
                 GameState_Transition(GAME_STATE_SHUTDOWN);
                 return;
             }
@@ -229,15 +129,15 @@ void Game_State_Manager(void)
         DAT_004877b1 = 1;
         DAT_004877bd = 0;       /* clear mouse button latch on menu entry */
         g_MouseButtons = 0;
-        g_FrameTimer  = timeGetTime();
-        DAT_004892b8  = timeGetTime();
+        g_FrameTimer  = Platform_GetTicks();
+        DAT_004892b8  = Platform_GetTicks();
         g_IntroSplashIndex = 0;
         GameState_Transition(GAME_STATE_INTRO_RUN);
         DAT_004877a4  = 0x97;
         Load_Background_To_Buffer(1);
         FUN_0040e130();
         FUN_0045d7d0();
-        /* Fall through to case 0x97 */
+        /* fall through */
 
     case GAME_STATE_INTRO_RUN:
         Intro_Sequence();
@@ -257,8 +157,7 @@ void Game_State_Manager(void)
         return;
 
     case GAME_STATE_SHUTDOWN:
-        Cleanup_Sound();
-        PostMessageA(hWnd_Main, WM_DESTROY, 0, 0);
+        Request_App_Quit();
         GameState_Transition(GAME_STATE_STOPPED);
         return;
 
@@ -307,7 +206,7 @@ void FUN_0045e1f0(void)
 static void Gameplay_Tick(void)
 {
     unsigned int tick_interval;
-    DWORD now;
+    uint32_t now;
     int catch_up;
     int tick;
 
@@ -318,20 +217,19 @@ static void Gameplay_Tick(void)
     FUN_0045e1f0();
 
     /* Wait until at least one tick interval has elapsed.
-     * Original used a pure busy-wait (100% CPU). We use Sleep(0) which
+     * Original used a pure busy-wait (100% CPU). We use a zero-delay yield which
      * yields the current time-slice but returns as soon as the thread
-     * can run again — near-microsecond precision with timeBeginPeriod(1)
-     * active, without burning 100% CPU. Sleep(1) was too coarse even
+     * can run again without burning 100% CPU. A one-millisecond delay was too coarse even
      * with 1ms timer resolution, causing ~1-2ms timing overshoot per
      * frame that accumulated into uneven frame spacing. */
-    now = timeGetTime();
+    now = Platform_GetTicks();
     while ((now - g_TimerAux * tick_interval) - g_TimerStart < tick_interval) {
-        Sleep(0);
-        now = timeGetTime();
+        Platform_Delay(0);
+        now = Platform_GetTicks();
     }
 
     /* Calculate how many ticks to catch up (max 9) */
-    now = timeGetTime();
+    now = Platform_GetTicks();
     catch_up = (int)((now - g_TimerAux * tick_interval - g_TimerStart) / tick_interval);
     if (catch_up > 9) {
         g_TimerStart += (catch_up - 9) * tick_interval;
@@ -340,6 +238,10 @@ static void Gameplay_Tick(void)
 
     /* Execute each tick */
     for (tick = 0; tick < catch_up; tick++) {
+        if (!Netplay_PrepareSimulationTick(SimulationState_Tick() + 1))
+            break;
+        if (!Replay_PrepareSimulationTick(SimulationState_Tick() + 1))
+            break;
         g_TimerAux++;
 
         /* Sub-frame counter: 0→1→2→...→7→0 */
@@ -362,39 +264,59 @@ static void Gameplay_Tick(void)
 
         /* ---- Subsystem calls ---- */
         FUN_00460d50();                          /* 1-RoundTimer */
+        Memory_Trace_Check("1-RoundTimer");
         FUN_004609e0();                          /* 2-SpatialGrid */
+        Memory_Trace_Check("2-SpatialGrid");
         if ((DAT_00489288 & 1) == 0) {
             FUN_00460660();                      /* 3-CollisionBitmap (half-rate) */
+            Memory_Trace_Check("3-CollisionBitmap");
         }
         FUN_00460ac0();                          /* 4-RelocateEdge */
+        Memory_Trace_Check("4-RelocateEdge");
         FUN_00413720();                          /* 5-Spawner */
+        Memory_Trace_Check("5-Spawner");
         FUN_00454340();                          /* 6-Emitters */
+        Memory_Trace_Check("6-Emitters");
         FUN_0044b0b0();                          /* 7-EntityBehavior */
+        Memory_Trace_Check("7-EntityBehavior");
         FUN_00434310();                          /* 8-DebrisAnim */
-        FUN_004527e0();                          /* 9-Projectiles */
+        Memory_Trace_Check("8-DebrisAnim");
+        ParticleSystem_Update();                 /* 9-Animated particles */
+        Memory_Trace_Check("9-AnimatedParticles");
 
         /* Inline: effect/particle rotation and timer decrement */
         {
             int i;
             for (i = 0; i < DAT_00489264; i++) {
-                int base = (int)DAT_00487780 + i * 0x20;
-                *(unsigned int *)(base + 0x10) = (*(unsigned int *)(base + 0x10) + 0x10) & 0x7FF;
-                if (*(int *)(base + 0x08) > 0) (*(int *)(base + 0x08))--;
-                if (*(int *)(base + 0x0C) > 0) (*(int *)(base + 0x0C))--;
+                uint8_t *base = static_cast<uint8_t *>(DAT_00487780) + i * 0x20;
+                unsigned int *angle = reinterpret_cast<unsigned int *>(base + 0x10);
+                int *timer_a = reinterpret_cast<int *>(base + 0x08);
+                int *timer_b = reinterpret_cast<int *>(base + 0x0C);
+                *angle = (*angle + 0x10) & 0x7FF;
+                if (*timer_a > 0) (*timer_a)--;
+                if (*timer_b > 0) (*timer_b)--;
             }
         }
 
-        FUN_00454b00();                          /* 11-Turrets */
-        FUN_00458010();                          /* 12-TurretLOS */
-        FUN_00453cd0();                          /* 13-ParticlePhys */
-        FUN_00455d50();                          /* 14-BulletCollide */
-        FUN_004571f0();                          /* 15-Explosion */
+        TrooperSystem_Update();                  /* 11-Troopers/cars */
+        Memory_Trace_Check("11-Troopers");
+        TurretSystem_UpdateTargeting();          /* 12-Turret LOS and firing */
+        Memory_Trace_Check("12-TurretTargeting");
+        FireParticleSystem_Update();             /* 13-Fire/smoke particles */
+        Memory_Trace_Check("13-FireParticles");
+        PickupSystem_Update();                   /* 14-Pickups */
+        Memory_Trace_Check("14-Pickups");
+        ExplosionSystem_UpdateLegacy();          /* 15-Legacy explosions */
+        Memory_Trace_Check("15-Explosions");
         FUN_00453a80();                          /* 16-ItemAI */
-        FUN_004573e0();                          /* 17-TrapDoor */
+        Memory_Trace_Check("16-ItemAI");
+        TrapDoorSystem_Update();                 /* 17-Trap doors */
+        Memory_Trace_Check("17-TrapDoors");
 
         /* Conditional: turret sound */
         if (DAT_00483834 != 0) {
             FUN_004133d0('\0');                   /* 18-TurretBehavior */
+            Memory_Trace_Check("18-TurretBehavior");
         }
 
         /* Conditional: trooper-related + round-end check */
@@ -405,11 +327,18 @@ static void Gameplay_Tick(void)
             if (DAT_00489288 == 0) {
                 /* Every 8th tick: round-end check causes early return */
                 FUN_00453230();                  /* 20-WaypointCheck */
+                {
+                    const uint64_t checksum = SimulationState_OnTickComplete();
+                    Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
+                    Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
+                }
                 return;
             }
         }
-        FUN_0045fc00();                          /* 21-FluidSpread */
+        FluidSystem_Update();                    /* 21-Fluid spread */
+        Memory_Trace_Check("21-FluidSpread");
         FUN_0045e2c0();                          /* 22-Deaths */
+        Memory_Trace_Check("22-Deaths");
 
         /* Inline: health clamping for specific game modes */
         if (DAT_004892a8 == 1) {
@@ -436,9 +365,9 @@ static void Gameplay_Tick(void)
                 /* Check tile at trooper position */
                 int tx = trooper->position_x >> 0x12;
                 int ty = trooper->position_y >> 0x12;
-                int tile_idx = *(unsigned char *)((int)DAT_0048782c +
-                    (ty << (DAT_00487a18 & 0x1f)) + tx);
-                if (*(char *)((int)DAT_00487928 + tile_idx * 0x20 + 1) == '\x01') {
+                const uint8_t tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
+                    (ty << (DAT_00487a18 & 0x1f)) + tx];
+                if (TerrainProperty_Read(tile_idx, 0x01) == 1) {
                     trooper->animation_state_24 = 0;
                 } else {
                     char stale = (char)trooper->animation_state_24;
@@ -448,17 +377,22 @@ static void Gameplay_Tick(void)
                 }
             }
         }
+        {
+            const uint64_t checksum = SimulationState_OnTickComplete();
+            Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
+            Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
+        }
     }  /* end tick loop */
 }
 
 /* ===== Game_Update_Render (00461710) - Gameplay frame ===== */
 /* Main gameplay loop: keyboard input, game state updates, rendering.
- * Called from WinMain when g_GameState == 0.
+ * Called from the SDL application loop when g_GameState == 0.
  *
- * Original: reads DirectInput keyboard, processes game keys (ESC, Enter,
+ * Original: reads keyboard state, processes game keys (ESC, Enter,
  * configurable bindings), runs Gameplay_Tick when g_SubState == 0,
  * handles state transitions (pause, round end, game over),
- * then renders via FUN_00407720 → DDraw blit/flip.
+ * then renders via the software framebuffer presentation path.
  *
  * g_SubState values in gameplay:
  *   0 = active play (runs Gameplay_Tick)
@@ -470,18 +404,7 @@ static void Gameplay_Tick(void)
  *   101 = game over */
 void Game_Update_Render(void)
 {
-    /* ---- Read keyboard via DirectInput ---- */
-    if (g_ProcessInput != 0 && lpDI_Keyboard != NULL) {
-        HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
-        if (FAILED(hr)) {
-            if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-                lpDI_Keyboard->Acquire();
-            }
-            memset(g_KeyboardState, 0, 256);
-        }
-    }
-
-    /* NOTE: Cursor sync (GetCursorPos/ScreenToClient) moved to WinMain main loop
+    /* NOTE: Cursor sync is handled by the SDL main loop
      * so it runs for ALL game states, not just g_GameState==0. */
 
     /* ---- Input processing ---- */
@@ -494,7 +417,7 @@ void Game_Update_Render(void)
         if ((g_KeyboardState[DAT_00489eec] & 0x80) == 0) {
             DAT_00489ee8 = 0;
         }
-        DWORD now_input = timeGetTime();
+        uint32_t now_input = Platform_GetTicks();
 
         /* Complete the otherwise partial zero-human fallback as a spectator
          * view. This camera is not inserted into the human-player table. */
@@ -520,39 +443,41 @@ void Game_Update_Render(void)
         /* State 4: Level preview / stats screen.
          * First level (counter == 0): skip straight to gameplay.
          * Subsequent levels: show stats overlay, wait for Enter/F10. */
-        if (g_SubState == GAMEPLAY_LEVEL_PREVIEW) {
+        if (g_SubState == GAMEPLAY_LEVEL_PREVIEW && Netplay_LocalSessionControlsAllowed()) {
             if ((unsigned char)DAT_0048693c == 0) {
                 /* First level — no stats to show, start immediately */
                 g_SubState = GAMEPLAY_ACTIVE;
                 g_NeedsRedraw = 2;
-                g_TimerStart = timeGetTime();
+                g_TimerStart = Platform_GetTicks();
                 g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+                g_FrameTimer = Platform_GetTicks();
             } else {
                 if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                     *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
+                    Netplay_BroadcastGameplayStateNow();
                 }
                 if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     DAT_00489ee8 = now_input + 500;
                     DAT_00489eec = 0x1C;
                     g_SubState = GAMEPLAY_ACTIVE;
                     g_NeedsRedraw = 2;
-                    g_TimerStart = timeGetTime();
+                    g_TimerStart = Platform_GetTicks();
                     g_TimerAux = 0;
-                    g_FrameTimer = timeGetTime();
+                    g_FrameTimer = Platform_GetTicks();
                 }
             }
         }
 
         /* State 2: ESC pause menu — F10/Enter/ESC.
          * Sprite 0x37 panel: "F10 Exit to menu / Enter Next level / Esc Back to the game" */
-        if (g_SubState == GAMEPLAY_EXIT_MENU) {
+        if (g_SubState == GAMEPLAY_EXIT_MENU && Netplay_LocalSessionControlsAllowed()) {
             /* F10 (scan 0x44): exit to menu */
             if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
                 g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
+                Netplay_BroadcastGameplayStateNow();
             }
             /* Enter (scan 0x1C): next level */
             if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
@@ -561,12 +486,13 @@ void Game_Update_Render(void)
                 g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
                 g_NeedsRedraw = 1;
+                Netplay_BroadcastGameplayStateNow();
             }
         }
 
         /* P key (configurable) — toggle pause.
          * Only when g_SubState < 2 (not during ESC-menu or transitions). */
-        if (g_SubState < GAMEPLAY_EXIT_MENU) {
+        if (g_SubState < GAMEPLAY_EXIT_MENU && !Netplay_IsMatchActive()) {
             unsigned char pause_key = DAT_004837ba;
             if ((g_KeyboardState[pause_key] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 g_SubState = (g_SubState == GAMEPLAY_ACTIVE)
@@ -574,15 +500,16 @@ void Game_Update_Render(void)
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = (unsigned int)pause_key;
                 g_NeedsRedraw = 1;
-                g_TimerStart = timeGetTime();
+                g_TimerStart = Platform_GetTicks();
                 g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+                g_FrameTimer = Platform_GetTicks();
             }
         }
 
         /* ESC (scan 0x01) — toggle between active (0) and ESC menu (2).
          * Excluded from states 3 and 4. */
-        if (g_SubState != GAMEPLAY_ROUND_COMPLETE &&
+        if (Netplay_LocalSessionControlsAllowed() &&
+            g_SubState != GAMEPLAY_ROUND_COMPLETE &&
             g_SubState != GAMEPLAY_LEVEL_PREVIEW) {
             if ((g_KeyboardState[0x01] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 g_SubState = (g_SubState != GAMEPLAY_EXIT_MENU)
@@ -590,9 +517,9 @@ void Game_Update_Render(void)
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = 0x01;
                 g_NeedsRedraw = 1;
-                g_TimerStart = timeGetTime();
+                g_TimerStart = Platform_GetTicks();
                 g_TimerAux = 0;
-                g_FrameTimer = timeGetTime();
+                g_FrameTimer = Platform_GetTicks();
             }
         }
 
@@ -634,7 +561,7 @@ void Game_Update_Render(void)
             /* Increment win counter for the winning team (teams 1-4) */
             unsigned char winner = (unsigned char)DAT_004892a4;
             if (winner >= 1 && winner <= 4) {
-                ((unsigned char *)&DAT_0048693c)[winner]++;
+                g_TeamWins[winner - 1]++;
             }
         }
         DAT_004892a5 = 0;
@@ -680,7 +607,7 @@ void Game_Update_Render(void)
     case GAMEPLAY_LEVEL_PREVIEW:
         /* Update timing but don't run simulation */
         {
-            DWORD now = timeGetTime();
+            uint32_t now = Platform_GetTicks();
             DAT_004877f0 = now - g_FrameTimer;
             g_FrameTimer = now;
         }
@@ -689,7 +616,7 @@ void Game_Update_Render(void)
     default:
         /* Other states (paused, round end, etc.) - update timing */
         {
-            DWORD now = timeGetTime();
+            uint32_t now = Platform_GetTicks();
             DAT_004877f0 = now - g_FrameTimer;
             g_FrameTimer = now;
         }
@@ -773,13 +700,13 @@ void Free_Game_Resources(void)
      * to the next level or persist in the menu (e.g. fluid bubbles). */
     g_EntityCount = 0;   /* emitter/complex particle count */
     g_ParticleCount = 0;   /* fire particle count */
-    DAT_00489258 = 0;   /* fluid source count */
+    g_FluidSourceCount = 0;   /* fluid source count */
     g_DebrisItemCount = 0;   /* bullet count */
     DAT_0048926c = 0;   /* item/pickup count */
     DAT_00489270 = 0;   /* trap/door count */
     DAT_00489274 = 0;   /* turret/static entity count */
     DAT_004892d8 = 0;   /* spawner/emitter def count */
     g_TrooperCount = 0;   /* trooper count */
-    DAT_00489254 = 0;   /* edge entity count */
+    g_MapEdgeCount = 0;   /* edge entity count */
     DAT_004892a8 = 0;   /* round timer */
 }

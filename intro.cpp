@@ -134,7 +134,7 @@ static void Spawn_Entities(int max_count, int y_base, int y_range, int vel_max)
         entity->palette_value += 300;
 
         int ttl_rand = rand();
-        DWORD ttl_time = timeGetTime();
+        uint32_t ttl_time = Platform_GetTicks();
         entity->health_or_damage_28 = ttl_rand % 1000 + 1000 + (int)ttl_time;
 
         int num_frames = (int)type_base[entity_type * 0x218 + 0x126];
@@ -149,7 +149,7 @@ static void Spawn_Entities(int max_count, int y_base, int y_range, int vel_max)
 /* Gravity, movement, animation frame advance, TTL-based removal */
 static void Update_Entities(void)
 {
-    DWORD currentTime = timeGetTime();
+    uint32_t currentTime = Platform_GetTicks();
     unsigned char *type_base = (unsigned char *)DAT_00487abc;
 
     int i = 0;
@@ -240,17 +240,19 @@ static void Update_Particles(void)
 /* ===== Intro_Sequence (0045C720) ===== */
 void Intro_Sequence(void)
 {
-    static const DWORD Durations[] = {3200, 8200, 10640};
+    /* Verified against original assembly at 0045C720: frame 1 precedes frame 0.
+     * The apparently reversed splash order is intentional binary behavior. */
+    static const uint32_t Durations[] = {3200, 8200, 10640};
 
     /* Intro finished (splash index >= 3) - do nothing */
     if (g_IntroSplashIndex >= 3) {
         return;
     }
 
-    /* Check for skip via keyboard (DirectInput in original, simplified here) */
-    if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) ||
-        (GetAsyncKeyState(VK_SPACE) & 0x8000) ||
-        (GetAsyncKeyState(VK_RETURN) & 0x8000)) {
+    /* Legacy scan-code state is populated by the SDL adapter. */
+    if ((g_KeyboardState[0x01] & 0x80) ||
+        (g_KeyboardState[0x39] & 0x80) ||
+        (g_KeyboardState[0x1C] & 0x80)) {
         /* Clear intro particles/entities so they don't bleed into menu */
         g_ParticleCount = 0;  /* particle count */
         g_EntityCount = 0;  /* entity count */
@@ -259,7 +261,7 @@ void Intro_Sequence(void)
         return;
     }
 
-    DWORD currentTime = timeGetTime();
+    uint32_t currentTime = Platform_GetTicks();
 
     /* Check if current splash duration has elapsed */
     if (currentTime > (DAT_004892b8 + Durations[g_IntroSplashIndex])) {
@@ -297,7 +299,7 @@ void Intro_Sequence(void)
     }
 
     /* Update timing */
-    DWORD now = timeGetTime();
+    uint32_t now = Platform_GetTicks();
     DAT_004877f0 = now - g_FrameTimer;
     g_FrameTimer = now;
 
@@ -310,18 +312,18 @@ void Intro_Sequence(void)
     Render_Frame();
 
     /* COMPAT: Frame rate limiter (~60fps).
-     * Original used DDraw exclusive fullscreen with flip chain which
+     * Original used an exclusive fullscreen flip chain which
      * was vsync-locked. Windowed mode runs uncapped, causing frame-count
      * based animation timers (particle +0x12) to advance way too fast. */
     {
-        static DWORD lastFrameTime = 0;
-        DWORD frameEnd = timeGetTime();
+        static uint32_t lastFrameTime = 0;
+        uint32_t frameEnd = Platform_GetTicks();
         if (lastFrameTime != 0) {
-            DWORD elapsed = frameEnd - lastFrameTime;
+            uint32_t elapsed = frameEnd - lastFrameTime;
             if (elapsed < 16) {
-                Sleep(16 - elapsed);
+                Platform_Delay(16 - elapsed);
             }
         }
-        lastFrameTime = timeGetTime();
+        lastFrameTime = Platform_GetTicks();
     }
 }

@@ -1,7 +1,7 @@
 #ifndef TOU_LEVEL_H
 #define TOU_LEVEL_H
 
-#include "compat.h"
+#include <stdint.h>
 
 typedef struct LevelPhysicsTuning {
     unsigned char spawn_timer;
@@ -63,10 +63,10 @@ extern int           DAT_004808b8;       /* creature count */
 extern int           DAT_004808c8;       /* pickup count */
 extern int           DAT_004808cc;       /* current sprite index for entity placement */
 extern int           DAT_004808b0;       /* treasure count */
-extern char          DAT_004839ee;       /* entity enable flag */
-extern char          DAT_004839ef;       /* creature density */
-extern short         DAT_004839f0;       /* treasure/pickup config */
-extern DWORD         DAT_004839f4;       /* progress timer */
+extern char          DAT_004839ee;       /* custom GG shape flag */
+extern char          DAT_004839ef;       /* custom GG repair density */
+extern short         DAT_004839f0;       /* custom GG stuff/sign densities */
+extern uint32_t      DAT_004839f4;       /* custom GG random seed */
 extern char          DAT_00481a40;       /* beach style flag */
 extern char          DAT_00481a41;       /* texture darkness */
 extern int           DAT_00481a34;       /* fixed width */
@@ -100,6 +100,8 @@ extern void                 *DAT_00481f50;      /* background RGB565 pixel data 
 extern void                 *DAT_00487828;      /* entity placement data (20 bytes each) */
 extern int                   DAT_00489278;      /* entity placement count */
 extern unsigned char         DAT_00483860[];     /* tile type table from .lev (0x39c bytes) */
+#define DAT_00483961 (DAT_00483860[0x101])       /* level civilian density % */
+#define DAT_00483962 (DAT_00483860[0x102])       /* level bombing probability % */
 extern void                 *DAT_00487814;      /* coarse grid buffer */
 extern void                 *DAT_00489ea4;      /* shadow grid buffer 1 */
 extern void                 *DAT_00489ea8;      /* shadow grid buffer 2 */
@@ -112,11 +114,12 @@ extern char                  DAT_0048396d;      /* generated-map flag */
 extern char                  DAT_00483960;      /* swap-file enabled flag */
 extern char                 *DAT_00486938;      /* current level name pointer */
 extern int                   DAT_0048693c;      /* current level index (low byte used) */
+extern unsigned char         g_TeamWins[4];     /* per-team accumulated round wins */
 extern char                  DAT_004892e4;      /* random mirror flag */
 extern char                  DAT_004892e5;      /* difficulty flag (ship select) */
-extern char                  DAT_00489d7c[];     /* error string buffer (256 bytes) */
+extern char                  DAT_00489d7c[256];  /* error string buffer */
 extern void                 *DAT_00487aa4;      /* large game state buffer */
-extern int                   DAT_00489254;      /* edge count */
+extern int                   g_MapEdgeCount;      /* was DAT_00489254 */
 extern void                 *DAT_00489e84;      /* edge record array */
 extern PlayerData           *DAT_00487810;      /* player/ship runtime record storage */
 static inline PlayerData *Player_Get(int index)
@@ -142,6 +145,8 @@ extern void                 *DAT_00487928;      /* entity type table (0x10000 by
 
 /* ===== Function Prototypes: level.cpp ===== */
 int  Load_Level_File(const char *level_name);
+int  Load_Level_File_Path(const char *path);
+int  Save_Level_Preview_Bmp(const char *path);
 void FUN_00421310(void);             /* per-level water color computation + LUT rebuild */
 void FUN_0045af70(void);             /* build 8 water color LUT tables */
 void Assign_Water_Tile_Colors(void); /* set DAT_0048384c on all water tiles in DAT_00481f50 */

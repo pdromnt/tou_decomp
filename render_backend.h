@@ -21,9 +21,16 @@ typedef struct Viewport {
     int screen_x;
 } Viewport;
 
+typedef struct PresentationRect {
+    int left;
+    int top;
+    int right;
+    int bottom;
+} PresentationRect;
+
 typedef struct RenderBackend {
     const char *name;
-    int  (*initialize)(void *window_handle);
+    int  (*initialize)(void);
     int  (*configure)(int width, int height);
     void (*shutdown)(void);
     void (*restore)(void);
@@ -32,9 +39,9 @@ typedef struct RenderBackend {
     void (*release_game_surface)(void);
 } RenderBackend;
 
-extern const RenderBackend g_DirectDrawRenderBackend;
+extern const RenderBackend g_SdlRenderBackend;
 
-int  RenderBackend_Initialize(void *window_handle);
+int  RenderBackend_Initialize(void);
 int  RenderBackend_Configure(int width, int height);
 void RenderBackend_Shutdown(void);
 void RenderBackend_Restore(void);

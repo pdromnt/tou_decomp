@@ -1,6 +1,6 @@
 #include "entity_callbacks.h"
 
-#include "binary_compat.h"
+#include "original_semantics.h"
 #include "tou.h"
 
 #include <stdio.h>
@@ -213,26 +213,37 @@ void collision_troopers(int entity_index)
     if (g_TrooperPool == NULL) return;
     uint8_t *projectile = entity_at(entity_index);
     const uint8_t owner = tou_binary::load_u8(projectile, 0x22);
-    const uint8_t team = owner >= 0x50u && owner <= 0x63u ? owner - 0x50u : 0xfbu;
+    const uint8_t projectile_team = owner >= 0x50u && owner < 0x64u
+        ? static_cast<uint8_t>(owner - 0x50u) : 0xfbu;
     const int32_t x = tou_binary::load_i32(projectile, 0x00);
     const int32_t y = tou_binary::load_i32(projectile, 0x08);
+    const int32_t damage = tou_binary::load_i32(projectile, 0x44);
     for (int i = 0; i < g_TrooperCount; ++i) {
         TrooperRecord *trooper = &g_TrooperPool[i];
-        const uint8_t velocity_y_low =
-            reinterpret_cast<const uint8_t *>(&trooper->velocity_y)[0];
-        if (trooper->movement_speed < 0 || velocity_y_low == owner) continue;
+        if (trooper->health_28 < 0 || trooper->team == projectile_team) continue;
         const int32_t tx = trooper->position_x;
         const int32_t ty = trooper->position_y;
         if (!(tx - 0x140000 < x && x < tx + 0x140000 &&
               ty - 0x1c0000 < y && y < ty + FIXED_SCALE)) continue;
         DAT_00481e8f = 3;
-        trooper->health_28 -= tou_binary::load_i32(projectile, 0x44);
-        /* The original intentionally writes a dword at +0x2c, spanning the
-         * byte flags and the first byte of aim_angle_30. Keep this packed view. */
-        tou_binary::store_i32(trooper, 0x2c, 1);
-        if (trooper->kind_25 == 1u && team != trooper->team &&
-            tou_binary::load_i32(projectile, 0x44) > 0x7d000) {
-            trooper->aim_angle_30 = tou_binary::load_i32(projectile, 0x18) < 0 ? -1 : 1;
+        trooper->health_28 = tou_binary::sub_wrap_i32(trooper->health_28, damage);
+        trooper->palette_2c = 1;
+        if (trooper->kind_25 == 1u && DAT_0048782c != NULL && DAT_00487928 != NULL &&
+            damage > 0x7d000) {
+            const int tx_tile = tou_binary::sar_i32(tx, 0x12);
+            const int ty_tile = tou_binary::sar_i32(ty, 0x12);
+            const uint8_t below = static_cast<uint8_t *>(DAT_0048782c)[
+                tx_tile + (ty_tile + 1) * DAT_00487a00];
+            if (tile_property(below, 1) == 0u) {
+                if (x < tx) {
+                    trooper->movement_mode_2d = 2;
+                    trooper->velocity_x = 0x1b800;
+                } else {
+                    trooper->movement_mode_2d = 1;
+                    trooper->velocity_x = -0x1b800;
+                }
+                trooper->velocity_y = -0x7d000;
+            }
         }
         return;
     }
@@ -593,8 +604,8 @@ uint8_t *spawn_config_entity(uint8_t type, uint8_t subtype, int32_t x, int32_t y
 void spawn_edge_particle(int32_t x, int32_t y, int32_t vx, int32_t vy,
                          uint8_t sprite, uint8_t owner)
 {
-    if (DAT_0048925c >= 0x5dc || DAT_00481f2c == NULL) return;
-    uint8_t *particle = static_cast<uint8_t *>(DAT_00481f2c) + DAT_0048925c++ * 0x20;
+    if (g_FireParticleCount >= EDGE_RECORD_CAPACITY || DAT_00481f2c == NULL) return;
+    uint8_t *particle = static_cast<uint8_t *>(DAT_00481f2c) + g_FireParticleCount++ * 0x20;
     tou_binary::store_i32(particle, 0x00, x);
     tou_binary::store_i32(particle, 0x04, y);
     tou_binary::store_i32(particle, 0x08, vx);
@@ -1032,10 +1043,10 @@ void callback_roman_candle_00446130(int entity_index)
                 int dir = (game_rand() & 0x1ff) + 0x300;
                 int vx = (game_rand() % 30 + 15) * sc[dir] >> 6;
                 int vy = (game_rand() % 30 + 15) * sc[dir + 0x200] >> 6;
-                int before = DAT_0048925c;
+                int before = g_FireParticleCount;
                 spawn_edge_particle(x, smoke_y, vx, vy,
                     static_cast<uint8_t>(game_rand() & 1), 0xff);
-                if (DAT_0048925c > before)
+                if (g_FireParticleCount > before)
                     tou_binary::store_u8(static_cast<uint8_t *>(DAT_00481f2c) + before * 0x20, 0x11, 4);
             }
         }
@@ -1136,11 +1147,11 @@ void callback_etna_00447a70(int entity_index)
             int32_t *sc = static_cast<int32_t *>(DAT_00487ab0);
             int vx = (game_rand() % 30 + 15) * sc[dir] >> 6;
             int vy = (game_rand() % 30 + 15) * sc[dir + 0x200] >> 6;
-            int before = DAT_0048925c;
+            int before = g_FireParticleCount;
             spawn_edge_particle(tou_binary::load_i32(entity, 0),
                                 tou_binary::load_i32(entity, 8) - 0x1c0000,
                                 vx, vy, static_cast<uint8_t>(game_rand() & 1), 0xff);
-            if (DAT_0048925c > before)
+            if (g_FireParticleCount > before)
                 tou_binary::store_u8(static_cast<uint8_t *>(DAT_00481f2c) + before * 0x20, 0x11, 2);
         }
         tou_binary::store_i32(entity, 0x3c, tou_binary::load_i32(entity, 0x3c) + 1);
@@ -2459,9 +2470,9 @@ void EntityCallbacks_Init(void)
         {0x1c, 0x00440e20u}, {0x1d, 0x0043c0b0u}, {0x1e, 0x0043c0b0u},
         {0x1f, 0x0043b370u}, {0x22, 0x004442f0u}, {0x23, 0x004457b0u},
         {0x24, 0x00447a70u}, {0x25, 0x00446130u}, {0x26, 0x0043dbd0u},
-        {0x27, 0x0043e070u}, {0x28, 0x0043e890u}, {0x29, 0x0043e890u},
+        {0x27, kCallbackKometBomb}, {0x28, 0x0043e890u}, {0x29, 0x0043e890u},
         {0x2a, 0x0043e890u}, {0x2b, 0x00439b90u}, {0x2c, 0x0043f990u},
-        {0x2d, 0x0043f990u}, {0x2e, 0x00432220u}, {0x64, 0x004309f0u},
+        {0x2d, 0x0043f990u}, {0x2e, kCallbackSmokingNalle}, {0x64, 0x004309f0u},
         {0x65, 0x00430480u}, {0x66, 0x004427e0u}, {0x67, 0x00430480u},
         {0x69, 0x00438010u}, {0x6a, 0x00439b90u}, {0x6b, 0x0043a4b0u},
         {0x6c, 0x004309f0u}, {0x6d, 0x004309f0u}

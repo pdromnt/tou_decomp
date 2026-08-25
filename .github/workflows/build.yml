@@ -13,27 +13,204 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  windows:
+  localization:
+    name: Validate localization catalogs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Validate UTF-8 catalogs and English extraction
+        run: python3 tools/validate_localization.py
+
+  windows-x86-parity:
+    name: Windows x86 (legacy parity)
     runs-on: windows-latest
 
     steps:
       - name: Check out source
         uses: actions/checkout@v6
 
-      - name: Install 32-bit MinGW
+      - name: Install 32-bit MinGW and CMake
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW32
           update: true
           install: >-
-            make
             mingw-w64-i686-binutils
+            mingw-w64-i686-cmake
             mingw-w64-i686-gcc
+            mingw-w64-i686-ninja
 
-      - name: Build game
+      - name: Build and stage game
         shell: msys2 {0}
-        run: make -j2
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel 2
+          cmake --install build --prefix stage
 
       - name: Verify 32-bit executable
         shell: msys2 {0}
-        run: objdump -f TOU.exe | grep -q "file format pei-i386"
+        run: |
+          objdump -f stage/TOU.exe | grep -q "file format pei-i386"
+          objdump -f stage/level-editor/tou-level-editor.exe | grep -q "file format pei-i386"
+          test -f stage/level-editor/level-editor-icon.png
+
+      - name: Upload staged build
+        uses: actions/upload-artifact@v7
+        with:
+          name: tou-windows-x86
+          path: stage
+          if-no-files-found: error
+
+  native:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            platform: windows-x64
+            cmake_arch: x64
+            expected_machine: "0x8664"
+          - name: Windows ARM64
+            runner: windows-11-arm
+            platform: windows-arm64
+            cmake_arch: ARM64
+            expected_machine: "0xAA64"
+          - name: Linux x64
+            runner: ubuntu-24.04
+            platform: linux-x64
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - name: macOS Intel
+            runner: macos-15-intel
+            platform: macos-x64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            platform: macos-arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config build-essential \
+            libasound2-dev libpulse-dev libaudio-dev libjack-dev libsndio-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev libudev-dev
+
+      - name: Configure Windows build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure Unix build
+        if: runner.os != 'Windows'
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build game
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Stage runtime
+        run: cmake --install build --config Release --prefix stage
+
+      - name: Verify native architecture
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          executable=stage/TOU
+          editor=stage/level-editor/tou-level-editor
+          case "${{ matrix.platform }}" in
+            macos-*)
+              executable=stage/TOU.app/Contents/MacOS/TOU
+              editor="stage/level-editor/TOU Level Editor.app/Contents/MacOS/TOU Level Editor"
+              ;;
+          esac
+          case "${{ matrix.platform }}" in
+            linux-*)
+              test -f stage/level-editor/level-editor-icon.png
+              test -f stage/level-editor/tou-level-editor.desktop
+              ;;
+          esac
+          file "$executable"
+          file "$editor"
+          case "${{ matrix.platform }}" in
+            linux-x64)
+              file "$executable" | grep -q 'x86-64'
+              file "$editor" | grep -q 'x86-64'
+              ;;
+            linux-arm64)
+              file "$executable" | grep -Eq 'ARM aarch64|ARM64'
+              file "$editor" | grep -Eq 'ARM aarch64|ARM64'
+              ;;
+            macos-x64)
+              file "$executable" | grep -q 'x86_64'
+              file "$editor" | grep -q 'x86_64'
+              ;;
+            macos-arm64)
+              file "$executable" | grep -q 'arm64'
+              file "$editor" | grep -q 'arm64'
+              ;;
+          esac
+
+      - name: Verify macOS app bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          test -f stage/TOU.app/Contents/Info.plist
+          test -f stage/TOU.app/Contents/Resources/icon.icns
+          test -f "stage/level-editor/TOU Level Editor.app/Contents/Info.plist"
+          test -f "stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor.icns"
+          test -f "stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor-icon.png"
+          for directory in data ggstuff help lang levels music sfx ships swap; do
+            test -d "stage/TOU.app/Contents/Resources/$directory"
+          done
+
+      - name: Verify Windows executable architecture
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $expected = [Convert]::ToUInt16(
+            '${{ matrix.expected_machine }}'.Substring(2), 16)
+          $executables = @(
+            'stage/TOU.exe',
+            'stage/level-editor/tou-level-editor.exe'
+          )
+          foreach ($path in $executables) {
+            $executable = Resolve-Path -LiteralPath $path -ErrorAction Stop
+            $stream = [System.IO.File]::OpenRead($executable)
+            $reader = [System.IO.BinaryReader]::new($stream)
+            try {
+              $stream.Position = 0x3c
+              $peOffset = $reader.ReadInt32()
+              $stream.Position = $peOffset + 4
+              $machine = $reader.ReadUInt16()
+            } finally {
+              $reader.Dispose()
+              $stream.Dispose()
+            }
+            if ($machine -ne $expected) {
+              throw ('Wrong PE machine for {0}: expected 0x{1:X4}, found 0x{2:X4}' `
+                -f $path, $expected, $machine)
+            }
+          }
+          if (-not (Test-Path -LiteralPath stage/level-editor/level-editor-icon.png `
+              -PathType Leaf)) {
+            throw 'Missing staged level editor icon'
+          }
+
+      - name: Upload staged build
+        uses: actions/upload-artifact@v7
+        with:
+          name: tou-${{ matrix.platform }}
+          path: stage
+          if-no-files-found: error

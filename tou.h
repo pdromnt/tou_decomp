@@ -3,10 +3,12 @@
 
 #include <stdlib.h>
 
-#include "compat.h"
 #include "fixed_point.h"
-#include "fmod.h"
-#include "binary_compat.h"
+#include "terrain_properties.h"
+#include "sprite_atlas.h"
+#include "platform.h"
+#include "audio_backend.h"
+#include "original_semantics.h"
 #include "entity_callbacks.h"
 
 #include "types.h"
@@ -17,6 +19,10 @@
 #include "sound.h"
 #include "level.h"
 #include "gamestate.h"
+#include "localization.h"
+#include "simulation_state.h"
+#include "netplay.h"
+#include "replay.h"
 
 /* Use the original executable's embedded MSVC6 RNG instead of host CRT state. */
 #define rand  TOU_Rand

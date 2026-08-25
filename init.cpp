@@ -1,24 +1,18 @@
 /*
- * init.cpp - System initialization, DirectInput, game config
+ * init.cpp - System initialization and game config
  * Addresses: System_Init_Check=0041D480, Early_Init_Vars=0041EAD0,
- *            Init_DirectInput=004620F0, Init_Game_Config=004207C0
+ *            Init_Game_Config=004207C0
  */
 #include "tou.h"
-#define INITGUID
-#include <dinput.h>
+#include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
+#include <SDL3/SDL_filesystem.h>
 #include <ctype.h>
+#include <math.h>
 
 /* ===== Globals defined in this module ===== */
-
-/* DirectInput */
-LPDIRECTINPUT        lpDI           = NULL;  /* 00489ED4 */
-LPDIRECTINPUTDEVICE  lpDI_Keyboard  = NULL;  /* 00489EE4 */
-LPDIRECTINPUTDEVICE  lpDI_Mouse     = NULL;  /* 00489EC0 */
-HANDLE               hMouseEvent    = NULL;  /* 00489EE0 */
 
 /* Display mode struct: {flags, current_mode, desired_mode, ...} */
 unsigned char DAT_00487640[4] = {0, 0xFF, 5, 0};
@@ -37,15 +31,15 @@ int g_ModeHeights[16];   /* 00483C44 */
 
 /* Misc init globals */
 int          g_SoundEnabled = 0;     /* 00487649 */
-DWORD        g_FrameTimer   = 0;     /* 004877F4 */
+uint32_t     g_FrameTimer   = 0;     /* 004877F4 */
 unsigned char DAT_004877b1  = 0;
 unsigned char DAT_004877a4  = 0;
-DWORD        DAT_004892b8   = 0;
+uint32_t     DAT_004892b8   = 0;
 GameConfig g_GameConfig = {};       /* original config range 00481F58-0048385F */
 
 /* Helper for recovered menu descriptors that still store original absolute
  * config addresses. All named config fields alias this same byte-exact record. */
-#define CFG_ADDR(a) ((int)(uintptr_t)&g_ConfigBlob[(a) - 0x481F58])
+#define CFG_ADDR(a) ((intptr_t)&g_ConfigBlob[GameConfigOffsetFromOriginalAddress(a)])
 
 /* Tournament/network mode globals */
 int DAT_0048764b = 0;
@@ -69,7 +63,7 @@ void         *g_GameViewData = NULL;  /* 00481D40 */
 char        **g_KeyNameTable = NULL;  /* 00481D88 */
 unsigned char g_KeyOrderTable[47] = {0}; /* 00481D48 */
 unsigned char DAT_00481d84   = 0;
-unsigned char DAT_004877a8   = 0;
+int           DAT_004877a8   = 0;
 unsigned char DAT_004877bc   = 0;
 unsigned char DAT_004877bd   = 0;
 unsigned char DAT_004877c4   = 0;
@@ -80,9 +74,10 @@ int           DAT_00487824   = 0;
 unsigned char g_WindowMode = 0;
 int           DAT_00487784   = 0;
 int           DAT_00489e9c   = 0;
-unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - DirectInput keyboard state */
+unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - saved scan-code state */
 unsigned char DAT_004877e5   = 0;  /* input event trigger */
 unsigned char DAT_004877e6   = 0;  /* input mode item index */
+static unsigned char s_KeyCapturePreviousState[256] = {0};
 float         DAT_004877d4   = 0.0f;  /* scroll position (0.0 - 1.0) */
 int           DAT_004877d8   = 0;  /* scrollbar area width */
 int           DAT_004877dc   = 0;  /* scrollbar area top */
@@ -115,9 +110,109 @@ void *DAT_00486488[LEVEL_CATALOG_CAPACITY] = {0};  /* GG theme directory names *
 static char s_HoverLevelName[128]   = "";
 static char s_HoverLevelAuthor[128] = "";
 static char s_HoverLevelEmail[128]  = "";
-static char s_HoverLevelType[32]    = "";
+static char s_HoverLevelType[96]    = "";
 static int  s_HoveredLevelIdx       = -1;
 static void Update_Level_Hover_Metadata(int level_idx);
+
+/* Modern LAN setup uses otherwise-free high menu pages while retaining the
+ * original menu renderer and click routing. Join fields use explicit edit
+ * mode so mouse-up cannot accidentally finish keyboard capture. */
+enum LanEditField { LAN_EDIT_NONE, LAN_EDIT_HOST, LAN_EDIT_PORT };
+static char s_LanJoinHost[64] = "127.0.0.1";
+static char s_LanJoinPort[6] = "27015";
+static char s_LanHostDisplay[72] = "127.0.0.1";
+static char s_LanPortDisplay[16] = "27015";
+static char s_LanStatus[160] = "";
+static char s_LanTeamText[32] = "Team 1";
+static char s_LanRoster[96] = "";
+static unsigned char s_LanPreviousKeys[256] = {0};
+static int s_LanTeam = 1;
+static LanEditField s_LanEditField = LAN_EDIT_NONE;
+static bool s_LanAttemptedConnection = false;
+static void Build_Lan_Menu_Page(void);
+static void Build_Lan_Join_Page(void);
+
+static void Update_Lan_Menu_Dynamic_Text(void)
+{
+    snprintf(s_LanTeamText, sizeof(s_LanTeamText), Text_Get("lan.team_format"), s_LanTeam);
+    snprintf(s_LanHostDisplay, sizeof(s_LanHostDisplay), "%s%s",
+             s_LanJoinHost, s_LanEditField == LAN_EDIT_HOST ? "_" : "");
+    snprintf(s_LanPortDisplay, sizeof(s_LanPortDisplay), "%s%s",
+             s_LanJoinPort, s_LanEditField == LAN_EDIT_PORT ? "_" : "");
+    const char *status = Netplay_IsEnabled() || s_LanAttemptedConnection
+        ? Netplay_Status()
+        : (DAT_004877a4 == 0xF6 ? Text_Get("lan.join_prompt")
+                               : Text_Get("lan.landing_prompt"));
+    if (strcmp(s_LanStatus, status) != 0) {
+        snprintf(s_LanStatus, sizeof(s_LanStatus), "%s", status);
+        if (DAT_004877a4 == 0xF9 || DAT_004877a4 == 0xF6)
+            DAT_004877b1 = 1;
+    }
+    char roster[sizeof(s_LanRoster)] = "";
+    if (Netplay_IsHost()) {
+        char players[64];
+        Netplay_FormatRoster(players, sizeof(players));
+        snprintf(roster, sizeof(roster), Text_Get("lan.roster_format"),
+                 Netplay_ConnectedPlayerCount(), players);
+    }
+    if (strcmp(s_LanRoster, roster) != 0) {
+        snprintf(s_LanRoster, sizeof(s_LanRoster), "%s", roster);
+        if (DAT_004877a4 == 0xF9)
+            DAT_004877b1 = 1;
+    }
+}
+
+static void Update_Lan_Address_Input(void)
+{
+    if (DAT_004877a4 != 0xF6 || Netplay_IsEnabled() ||
+        s_LanEditField == LAN_EDIT_NONE) {
+        memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+        Update_Lan_Menu_Dynamic_Text();
+        return;
+    }
+
+    char typed = 0;
+    const unsigned char digit_scans[10] = {0x0B, 0x02, 0x03, 0x04, 0x05,
+                                            0x06, 0x07, 0x08, 0x09, 0x0A};
+    for (int digit = 0; digit < 10; ++digit) {
+        const unsigned char scan = digit_scans[digit];
+        if ((g_KeyboardState[scan] & 0x80) && !(s_LanPreviousKeys[scan] & 0x80))
+            typed = static_cast<char>('0' + digit);
+    }
+    static const unsigned char letter_scans[26] = {
+        0x1E,0x30,0x2E,0x20,0x12,0x21,0x22,0x23,0x17,0x24,0x25,0x26,0x32,
+        0x31,0x18,0x19,0x10,0x13,0x1F,0x14,0x16,0x2F,0x11,0x2D,0x15,0x2C
+    };
+    for (int letter = 0; letter < 26; ++letter) {
+        const unsigned char scan = letter_scans[letter];
+        if ((g_KeyboardState[scan] & 0x80) && !(s_LanPreviousKeys[scan] & 0x80))
+            typed = static_cast<char>('a' + letter);
+    }
+    if ((g_KeyboardState[0x34] & 0x80) && !(s_LanPreviousKeys[0x34] & 0x80)) typed = '.';
+    if ((g_KeyboardState[0x0C] & 0x80) && !(s_LanPreviousKeys[0x0C] & 0x80)) typed = '-';
+    char *value = s_LanEditField == LAN_EDIT_HOST ? s_LanJoinHost : s_LanJoinPort;
+    const size_t capacity = s_LanEditField == LAN_EDIT_HOST
+        ? sizeof(s_LanJoinHost) : sizeof(s_LanJoinPort);
+    if (s_LanEditField == LAN_EDIT_PORT && (typed < '0' || typed > '9'))
+        typed = 0;
+
+    size_t length = strlen(value);
+    if ((g_KeyboardState[0x0E] & 0x80) && !(s_LanPreviousKeys[0x0E] & 0x80)) {
+        if (length != 0) {
+            value[--length] = 0;
+            DAT_004877b1 = 1;
+        }
+    } else if ((g_KeyboardState[0x1C] & 0x80) && !(s_LanPreviousKeys[0x1C] & 0x80)) {
+        s_LanEditField = LAN_EDIT_NONE;
+        DAT_004877b1 = 1;
+    } else if (typed != 0 && length + 1 < capacity) {
+        value[length] = typed;
+        value[length + 1] = 0;
+        DAT_004877b1 = 1;
+    }
+    memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+    Update_Lan_Menu_Dynamic_Text();
+}
 
 /* Music scanner */
 int   DAT_00485fcc = 0;         /* music file count */
@@ -552,7 +647,7 @@ void FUN_0041eae0(void)
 /* Searches for the next valid key binding for player 'index'.
  * Scans from current position to 0x2f, then wraps from 0 to start.
  * Checks per-player availability (g_ConfigBlob+0x4B6, stride 0x3c)
- * and global availability (g_ConfigBlob+0x1804). */
+ * and global availability (`global_weapon_enabled`). */
 void FUN_004265e0(int index)
 {
     unsigned int start = (unsigned int)(unsigned char)DAT_004836ce[index];
@@ -634,6 +729,7 @@ void FUN_0041f900(void)
 {
     int *w = (int *)DAT_00487818;
     unsigned char *wb = (unsigned char *)DAT_00487818;
+    unsigned char *entity_types = static_cast<unsigned char *>(DAT_00487abc);
 
     /* Weapon type 0: basic bullet */
     w[0] = 400;
@@ -641,7 +737,7 @@ void FUN_0041f900(void)
     w[2] = 0x70;
     w[3] = 0x34bc;
     wb[0x10] = 0x18;
-    w[5] = *(int *)((int)DAT_00487abc + 0x88);
+    w[5] = *reinterpret_cast<int *>(entity_types + 0x88);
     wb[0x18] = 0x10;
 
     /* Weapon type 1: heavy shot */
@@ -650,7 +746,7 @@ void FUN_0041f900(void)
     w[10] = 0x134;
     w[11] = 13000;
     wb[0x30] = 0x20;
-    w[13] = *(int *)((int)DAT_00487abc + 0x88);
+    w[13] = *reinterpret_cast<int *>(entity_types + 0x88);
     wb[0x38] = 0x10;
 
     /* Weapon type 2: guided missile */
@@ -659,7 +755,7 @@ void FUN_0041f900(void)
     w[18] = 0x76;
     w[19] = 0x30d4;
     wb[0x50] = 0x1c;
-    w[21] = *(int *)((int)DAT_00487abc + 0x2850);
+    w[21] = *reinterpret_cast<int *>(entity_types + 0x2850);
     wb[0x58] = 0x10;
 
     /* Weapon type 3: slow homing */
@@ -668,7 +764,7 @@ void FUN_0041f900(void)
     w[26] = 0xb6;
     w[27] = 11000;
     wb[0x70] = 3;
-    w[29] = *(int *)((int)DAT_00487abc + 0x2a8);
+    w[29] = *reinterpret_cast<int *>(entity_types + 0x2a8);
     wb[0x78] = 0x60;
 
     /* Weapon type 4: spread shot */
@@ -677,7 +773,7 @@ void FUN_0041f900(void)
     w[34] = 0x8c;
     w[35] = 0x2cec;
     wb[0x90] = 0x0c;
-    w[37] = *(int *)((int)DAT_00487abc + 0x2424);
+    w[37] = *reinterpret_cast<int *>(entity_types + 0x2424);
     wb[0x98] = 0x10;
 
     /* Weapon type 5: rapid fire */
@@ -686,7 +782,7 @@ void FUN_0041f900(void)
     w[42] = 0x62;
     w[43] = 14000;
     wb[0xB0] = 0x20;
-    w[45] = *(int *)((int)DAT_00487abc + 0x88);
+    w[45] = *reinterpret_cast<int *>(entity_types + 0x88);
     wb[0xB8] = 0x10;
 
     /* Weapon type 6: laser */
@@ -707,9 +803,11 @@ void FUN_0041f900(void)
     w[61] = 0;
     wb[0xF8] = 0;
 }
+static const size_t MENU_DYNAMIC_TEXT_CAPACITY = 128;
+
 /* ===== FUN_0042d8b0 - Session/UI init (0042D8B0) ===== */
 /* Initializes game state for menu, allocates and fills the key name table
- * (256 DirectInput scan code → display string) and menu string table (~350 entries).
+ * (256 legacy scan code to display string) and menu string table (~350 entries).
  * Sets palette[3] = 0x7FF0 (gold) BEFORE sprite loading - critical for variant 3 color. */
 void FUN_0042d8b0(void)
 {
@@ -731,14 +829,15 @@ void FUN_0042d8b0(void)
     g_InputMode     = 0;             /* DAT_004877e4 */
     DAT_004877e8    = 0;
     DAT_004877cc    = 0;
-    g_FrameTimer    = timeGetTime(); /* _DAT_004877f4 */
+    g_FrameTimer    = Platform_GetTicks(); /* _DAT_004877f4 */
     DAT_004877ec    = 0;
 
-    /* --- Allocate game view data (0x4718 = 18200 bytes) --- */
-    g_GameViewData = Mem_Alloc(0x4718);
+    /* The original used 350 x86 descriptors of 52 bytes. extra_data now has
+     * host pointer width, so allocate using the native descriptor size. */
+    g_GameViewData = Mem_Alloc(350u * sizeof(MenuItem));
 
     /* --- Key sort/priority table (DAT_00481d48..00481d76) --- */
-    /* Maps an ordering index to DirectInput scan codes */
+    /* Maps an ordering index to saved scan codes. */
     static const unsigned char key_order[47] = {
         0x12, 0x0F, 0x16, 0x06, 0x05, 0x0C, 0x18, 0x01,  /* E,Tab,U,5,4,-,O,Esc */
         0x24, 0x11, 0x15, 0x22, 0x25, 0x10, 0x23, 0x13,  /* J,W,Y,G,K,Q,H,R */
@@ -750,8 +849,8 @@ void FUN_0042d8b0(void)
     memcpy(g_KeyOrderTable, key_order, 47);
     DAT_00481d84 = 0x2F;  /* DIK_V */
 
-    /* --- Key name table (256 entries, one per DirectInput scan code) --- */
-    g_KeyNameTable = (char **)Mem_Alloc(0x400);  /* 256 * 4 = 1024 bytes */
+    /* --- Key name table (256 entries, one per saved scan code) --- */
+    g_KeyNameTable = (char **)Mem_Alloc(256u * sizeof(*g_KeyNameTable));
 
     /* Default: all keys show "???" */
     for (i = 0; i < 256; i++)
@@ -872,15 +971,15 @@ void FUN_0042d8b0(void)
     g_KeyNameTable[0xDC] = (char *)"Right winkey";
     g_KeyNameTable[0xDD] = (char *)"Application key";
 
-    /* --- Menu string table (350 entries) --- */
-    g_MenuStrings = (char **)Mem_Alloc(0x578);  /* 350 * 4 = 1400 bytes */
+    /* --- Menu string table (legacy 350 entries plus modern UI additions) --- */
+    g_MenuStrings = (char **)Mem_Alloc(MENU_STRING_CAPACITY * sizeof(*g_MenuStrings));
 
     /* Allocate 50-byte dynamic buffers for player/stats entries */
-    pvVar = Mem_Alloc(0x32);
+    pvVar = Mem_Alloc(MENU_DYNAMIC_TEXT_CAPACITY);
     g_MenuStrings[0x65] = (char *)pvVar;  /* entry 101 - dynamic text */
-    for (i = 0x1C4; i < 0x230; i += 4) {
-        pvVar = Mem_Alloc(0x32);
-        *(void **)((char *)g_MenuStrings + i) = pvVar;  /* entries [113]-[139] */
+    for (i = 0x71; i <= 0x8B; ++i) {
+        pvVar = Mem_Alloc(MENU_DYNAMIC_TEXT_CAPACITY);
+        g_MenuStrings[i] = (char *)pvVar;
     }
 
     /* Main menu */
@@ -1025,7 +1124,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x8D] = (char *)"Music volume";
     g_MenuStrings[0x8E] = (char *)"Effect volume";
     g_MenuStrings[0x8F] = (char *)"Base holding";
-    g_MenuStrings[0x90] = (char *)"Allow MP3 music";
     g_MenuStrings[0x91] = (char *)"Starting weapon";
     g_MenuStrings[0x92] = (char *)"Last";
     g_MenuStrings[0x93] = (char *)"Random";
@@ -1159,12 +1257,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0xFD] = (char *)"Wall bounciness";
     g_MenuStrings[0xFE] = (char *)"More misc";
     g_MenuStrings[0xFF] = (char *)"Quick help";
-    g_MenuStrings[0x100] = (char *)"Output type:  ";
-    g_MenuStrings[0x101] = (char *)"Direct Sound";
-    g_MenuStrings[0x102] = (char *)"Waveout";
-    g_MenuStrings[0x103] = (char *)"A3D";
-    g_MenuStrings[0x104] = (char *)"No sound";
-    g_MenuStrings[0x105] = (char *)"Sound driver";
     g_MenuStrings[0x106] = (char *)"LOS style";
     g_MenuStrings[0x107] = (char *)"Resolution up";
     g_MenuStrings[0x108] = (char *)"Resolution down";
@@ -1182,7 +1274,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x114] = (char *)"Some";
     g_MenuStrings[0x115] = (char *)"Normal";
     g_MenuStrings[0x116] = (char *)"Lots";
-    g_MenuStrings[0x117] = (char *)"Sound channels:  ";
     g_MenuStrings[0x118] = (char *)"Let's kill!";
     g_MenuStrings[0x119] = (char *)"Skill:";
     g_MenuStrings[0x11A] = (char *)"Mission:";
@@ -1208,8 +1299,6 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x12A] = (char *)"Transparent";
     g_MenuStrings[0x12B] = (char *)"Normal";
     g_MenuStrings[0x12C] = (char *)"Opaque";
-    g_MenuStrings[0x12D] = (char *)"   You must restart TOU";
-    g_MenuStrings[0x12E] = (char *)"after you change this";
     g_MenuStrings[0x12F] = (char *)"0";
     g_MenuStrings[0x130] = (char *)"1";
     g_MenuStrings[0x131] = (char *)"2";
@@ -1248,6 +1337,29 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x14D] = (char *)"Mode";
     g_MenuStrings[0x14E] = (char *)"Windowed";
     g_MenuStrings[0x14F] = (char *)"Fullscreen";
+    g_MenuStrings[0x150] = (char *)"Language";
+    g_MenuStrings[0x151] = (char *)"English";
+    g_MenuStrings[0x152] = (char *)"Espa\xC3\xB1ol";
+    g_MenuStrings[0x153] = (char *)"Portugu\xC3\xAAs (Brasil)";
+    g_MenuStrings[0x154] = (char *)"Suomi";
+    g_MenuStrings[0x155] = (char *)"Local deathmatch";
+    g_MenuStrings[0x156] = (char *)"LAN deathmatch";
+    g_MenuStrings[0x157] = (char *)"Host LAN match";
+    g_MenuStrings[0x158] = (char *)"Join LAN match";
+    g_MenuStrings[0x159] = (char *)"Host / IP";
+    g_MenuStrings[0x15A] = (char *)"Team";
+    g_MenuStrings[0x15B] = (char *)"Start LAN match";
+    g_MenuStrings[0x15C] = (char *)"Cancel session";
+    g_MenuStrings[0x15D] = (char *)"LAN lobby";
+    g_MenuStrings[0x15E] = s_LanHostDisplay;
+    g_MenuStrings[0x15F] = s_LanStatus;
+    g_MenuStrings[0x160] = s_LanTeamText;
+    g_MenuStrings[0x161] = (char *)"Port";
+    g_MenuStrings[0x162] = s_LanPortDisplay;
+    g_MenuStrings[0x163] = (char *)"Connect";
+    g_MenuStrings[0x164] = s_LanRoster;
+
+    Localization_BindLegacyMenuStrings(g_MenuStrings, MENU_STRING_CAPACITY);
 }
 
 /* ===== FUN_004236f0 - Sprite color variant generator (004236F0) ===== */
@@ -1493,41 +1605,54 @@ static int FUN_004236f0(int sprite_index, int color_param)
  * Fills DAT_00487ab4 (pixels), DAT_00489234 (offsets), DAT_00489e8c (widths), DAT_00489e88 (heights). */
 int FUN_00423150(void)
 {
-    FILE *f = fopen("data\\all3.gfx", "rb");
+    FILE *f = fopen("data/all3.gfx", "rb");
     if (!f) return 0;
 
     int max_spr_idx = 0;
-    int spr_count = 0;
     unsigned char type_byte;
     while (fread(&type_byte, 1, 1, f) == 1) {
         unsigned short sprite_index;
-        fread(&sprite_index, 1, 2, f);
+        if (fread(&sprite_index, 1, 2, f) != 2) {
+            fclose(f);
+            return 0;
+        }
 
         /* Skip 12 bytes */
-        fread((unsigned char *)DAT_00481cf8, 1, 12, f);
+        if (fread((unsigned char *)DAT_00481cf8, 1, 12, f) != 12) {
+            fclose(f);
+            return 0;
+        }
 
         unsigned short spr_w, spr_h;
-        fread(&spr_w, 1, 2, f);
-        fread(&spr_h, 1, 2, f);
+        if (fread(&spr_w, 1, 2, f) != 2 || fread(&spr_h, 1, 2, f) != 2) {
+            fclose(f);
+            return 0;
+        }
 
         /* Skip 2 bytes */
-        fread((unsigned char *)DAT_00481cf8, 1, 2, f);
+        if (fread((unsigned char *)DAT_00481cf8, 1, 2, f) != 2) {
+            fclose(f);
+            return 0;
+        }
 
         /* Read RGB24 pixel data into temp buffer */
         int pixel_count = (int)spr_w * (int)spr_h;
-        fread((unsigned char *)DAT_00481cf8, 1, pixel_count * 3, f);
+        size_t pixel_bytes = (size_t)pixel_count * 3;
+        if (fread((unsigned char *)DAT_00481cf8, 1, pixel_bytes, f) != pixel_bytes) {
+            fclose(f);
+            return 0;
+        }
 
         /* Store dimensions */
         ((unsigned char *)DAT_00489e8c)[sprite_index] = (unsigned char)spr_w;
         ((unsigned char *)DAT_00489e88)[sprite_index] = (unsigned char)spr_h;
         if ((int)sprite_index > max_spr_idx) max_spr_idx = (int)sprite_index;
-        spr_count++;
 
         switch (type_byte) {
         case 0: case 1: {
             /* BGR24 -> RGB565 conversion.
              * all3.gfx stores pixels as BGR (byte0=B, byte1=G, byte2=R).
-             * Original binary encoded to X1R5G5B5 for DirectDraw surfaces.
+             * Original binary encoded to X1R5G5B5 display pixels.
              * We encode to RGB565 to match our compat rendering pipeline. */
             ((int *)DAT_00489234)[sprite_index] = DAT_00481d28;
             unsigned char *src = (unsigned char *)DAT_00481cf8;
@@ -1595,7 +1720,7 @@ int FUN_00423150(void)
  * Per type: 6 x 20-byte animation frame blocks, 7-byte header, 6 x 16-byte animation property blocks. */
 static int FUN_004254b0(void)
 {
-    FILE *f = fopen("data\\loadtime.dat", "rb");
+    FILE *f = fopen("data/loadtime.dat", "rb");
     if (!f) return 0;
 
     unsigned char tmp[20];
@@ -1605,11 +1730,17 @@ static int FUN_004254b0(void)
     while (offset < 0x11030) {
         /* 6 animation frame data blocks, 20 bytes each, at type+4 */
         for (int a = 0; a < 6; a++) {
-            fread(base + offset + 4 + a * 0x14, 1, 0x14, f);
+            if (fread(base + offset + 4 + a * 0x14, 1, 0x14, f) != 0x14) {
+                fclose(f);
+                return 0;
+            }
         }
 
         /* 7-byte header */
-        fread(tmp, 1, 7, f);
+        if (fread(tmp, 1, 7, f) != 7) {
+            fclose(f);
+            return 0;
+        }
         base[offset + 0x7C] = tmp[0];
         base[offset + 0x7D] = tmp[1];
         *(int *)(base + offset + 0x80) = (int)tmp[3] * (int)tmp[3] * 100;
@@ -1618,7 +1749,10 @@ static int FUN_004254b0(void)
 
         /* 6 animation property blocks, 16 bytes each */
         for (int a = 0; a < 6; a++) {
-            fread(tmp, 1, 16, f);
+            if (fread(tmp, 1, 16, f) != 16) {
+                fclose(f);
+                return 0;
+            }
             int anim_base = offset + 0xAC + a * 4;
 
             *(int *)(base + offset + 0x88 + a * 4) = (int)tmp[0] - 0x80;
@@ -1655,12 +1789,15 @@ int FUN_004252d0(void)
     unsigned char buf[0x300];  /* 768 bytes = 256 RGB triplets */
 
     /* --- Load pal.col → DAT_00487aa8 (particle/effect palette) --- */
-    FILE *f = fopen("data\\pal.col", "rb");
+    FILE *f = fopen("data/pal.col", "rb");
     if (!f) {
-        LOG("[LOAD] ERROR: Could not open data\\pal.col\n");
+        LOG("[LOAD] ERROR: Could not open data/pal.col\n");
         return 0;
     }
-    fread(buf, 1, 0x300, f);
+    if (fread(buf, 1, 0x300, f) != 0x300) {
+        fclose(f);
+        return 0;
+    }
     fclose(f);
 
     {
@@ -1678,12 +1815,15 @@ int FUN_004252d0(void)
         }
     }
     /* --- Load shipal.col → DAT_00481f4c (ship palette) --- */
-    f = fopen("data\\shipal.col", "rb");
+    f = fopen("data/shipal.col", "rb");
     if (!f) {
-        LOG("[LOAD] ERROR: Could not open data\\shipal.col\n");
+        LOG("[LOAD] ERROR: Could not open data/shipal.col\n");
         return 0;
     }
-    fread(buf, 1, 0x300, f);
+    if (fread(buf, 1, 0x300, f) != 0x300) {
+        fclose(f);
+        return 0;
+    }
     fclose(f);
 
     {
@@ -1729,9 +1869,11 @@ int FUN_00422740(void)
 
     /* Load ballistic arc lookup table from taulu2.tau */
     {
-        FILE *f = fopen("data\\taulu2.tau", "rb");
+        FILE *f = fopen("data/taulu2.tau", "rb");
         if (f) {
-            fread(DAT_00489e90, 1, 0x82D0, f);
+            size_t bytes_read = fread(DAT_00489e90, 1, 0x82D0, f);
+            if (bytes_read != 0x82D0)
+                LOG("[LOAD] WARNING: data/taulu2.tau is truncated\n");
             fclose(f);
         }
     }
@@ -1740,15 +1882,17 @@ int FUN_00422740(void)
     /* File contains big-endian 16-bit values: 26 starting letter CDF entries,
      * then 26x26 transition matrix CDF entries. */
     {
-        FILE *f = fopen("data\\names.dat", "rb");
+        FILE *f = fopen("data/names.dat", "rb");
         if (f) {
             unsigned char buf[2];
             for (int i = 0; i < 26; i++) {
-                fread(buf, 1, 2, f);
+                if (fread(buf, 1, 2, f) != 2)
+                    break;
                 DAT_00487888[i] = (int)buf[0] * 256 + (int)buf[1];
             }
             for (int i = 0; i < 676; i++) {
-                fread(buf, 1, 2, f);
+                if (fread(buf, 1, 2, f) != 2)
+                    break;
                 DAT_004892ec[i] = (int)buf[0] * 256 + (int)buf[1];
             }
             fclose(f);
@@ -1962,18 +2106,37 @@ static void FUN_00413d40(const char *name, const char *tiledata, const char *ext
     DAT_00485088++;
 }
 
-/* ===== FUN_00413e70 — Scan Music Files by Extension (00413E70) ===== */
-/* Scans for music files matching the given pattern (e.g. "music\\*.mp3").
- * Each found file gets a 256-byte name buffer. */
-static void FUN_00413e70(const char *pattern)
+static int Path_Is_Directory(const char *directory, const char *name)
 {
-    WIN32_FIND_DATAA fd;
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
-    if (hFind == INVALID_HANDLE_VALUE) return;
+    char path[512];
+    SDL_PathInfo info;
+    int written = snprintf(path, sizeof(path), "%s/%s", directory, name);
+    return written > 0 && written < (int)sizeof(path) &&
+           SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+}
 
-    do {
-        /* Skip directories */
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+static int Compare_Path_Entries(const void *left, const void *right)
+{
+    const char *const *left_name = static_cast<const char *const *>(left);
+    const char *const *right_name = static_cast<const char *const *>(right);
+    return SDL_strcasecmp(*left_name, *right_name);
+}
+
+/* ===== FUN_00413e70 — Scan Music Files by Extension (00413E70) ===== */
+/* Scans the music directory for files matching an extension pattern.
+ * Each found file gets a 256-byte name buffer. */
+static void FUN_00413e70(const char *extension_pattern)
+{
+    int count = 0;
+    char **entries = SDL_GlobDirectory("music", extension_pattern,
+                                       SDL_GLOB_CASEINSENSITIVE, &count);
+    if (entries == NULL)
+        return;
+    qsort(entries, count, sizeof(*entries), Compare_Path_Entries);
+
+    for (int i = 0; i < count; i++) {
+        if (Path_Is_Directory("music", entries[i]))
+            continue;
         if (DAT_00485fcc >= MUSIC_CATALOG_CAPACITY) {
             LOG("[MUSIC] catalog full; ignoring remaining files\n");
             break;
@@ -1983,44 +2146,45 @@ static void FUN_00413e70(const char *pattern)
         void *buf = Mem_Alloc(0x100);
         g_MemoryTracker += 0x100;
         DAT_00485fd4[DAT_00485fcc] = buf;
-        strcpy((char *)buf, fd.cFileName);
+        strcpy((char *)buf, entries[i]);
         DAT_00485fcc++;
-    } while (FindNextFileA(hFind, &fd));
+    }
 
-    FindClose(hFind);
+    SDL_free(entries);
 }
 
 /* ===== FUN_00414060 — Level File Scanner (00414060) ===== */
-/* Scans levels\ directory for .lev files and ggstuff\ for GG themes.
+/* Scans levels/ for .lev files and ggstuff/ for GG themes.
  * Returns 1 if any levels found, 0 if none. */
 int FUN_00414060(void)
 {
-    WIN32_FIND_DATAA fd;
     char pathbuf[512];
     char header[0x400];
 
     DAT_00485088 = 0;
 
-    /* Phase 1: Scan for levels\*.lev files */
-    HANDLE hFind = FindFirstFileA("levels\\*.lev", &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            /* Skip directories */
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+    /* Phase 1: Scan for level files. */
+    int level_count = 0;
+    char **level_entries = SDL_GlobDirectory("levels", "*.lev",
+                                             SDL_GLOB_CASEINSENSITIVE,
+                                             &level_count);
+    if (level_entries != NULL) {
+        qsort(level_entries, level_count, sizeof(*level_entries), Compare_Path_Entries);
+        for (int entry = 0; entry < level_count; entry++) {
+            if (Path_Is_Directory("levels", level_entries[entry]))
+                continue;
 
             /* Strip ".lev" extension to get the level title (original uses
              * MFC CFileFind::GetFileTitle which returns name without extension).
              * Load_Level_File appends ".lev" when building the file path. */
             {
                 char title[256];
-                strcpy(title, fd.cFileName);
+                strcpy(title, level_entries[entry]);
                 char *dot = strrchr(title, '.');
                 if (dot) *dot = '\0';
 
-                /* Build full path: "levels\<title>.LEV" for header validation */
-                strcpy(pathbuf, "levels\\");
-                strcat(pathbuf, title);
-                strcat(pathbuf, ".LEV");
+                /* Use the discovered filename so case-sensitive filesystems work. */
+                snprintf(pathbuf, sizeof(pathbuf), "levels/%s", level_entries[entry]);
 
                 /* Open file and read header */
                 FILE *fp = fopen(pathbuf, "rb");
@@ -2043,36 +2207,34 @@ int FUN_00414060(void)
                     }
                 }
             }
-        } while (FindNextFileA(hFind, &fd));
-        FindClose(hFind);
+        }
+        SDL_free(level_entries);
     }
 
-    /* Phase 2: Scan for ggstuff\*.* (GG theme directories) */
+    /* Phase 2: Scan for GG theme directories. */
     DAT_00486484 = 0;
-    hFind = FindFirstFileA("ggstuff\\*.*", &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            /* Only directories (skip . and ..) */
-            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
-            if (fd.cFileName[0] == '.') continue;
+    int theme_count = 0;
+    char **theme_entries = SDL_GlobDirectory("ggstuff", "*", 0, &theme_count);
+    if (theme_entries != NULL) {
+        qsort(theme_entries, theme_count, sizeof(*theme_entries), Compare_Path_Entries);
+        for (int entry = 0; entry < theme_count; entry++) {
+            if (!Path_Is_Directory("ggstuff", theme_entries[entry]))
+                continue;
+            if (theme_entries[entry][0] == '.')
+                continue;
             if (DAT_00486484 >= LEVEL_CATALOG_CAPACITY) {
                 LOG("[GG] theme catalog full; ignoring remaining directories\n");
                 break;
             }
 
-            /* Check if it's a valid GG directory (has subdirectories) */
-            char subpath[512];
-            strcpy(subpath, "ggstuff\\");
-            strcat(subpath, fd.cFileName);
-
             /* Allocate name buffer for GG theme */
             void *buf = Mem_Alloc(0x100);
             g_MemoryTracker += 0x100;
             DAT_00486488[DAT_00486484] = buf;
-            strcpy((char *)buf, fd.cFileName);
+            strcpy((char *)buf, theme_entries[entry]);
             DAT_00486484++;
-        } while (FindNextFileA(hFind, &fd));
-        FindClose(hFind);
+        }
+        SDL_free(theme_entries);
     }
 
     /* Phase 3: Process GG themes — generate levels from each theme */
@@ -2094,7 +2256,7 @@ int FUN_00414060(void)
 
     /* If round count is still the default (1) and we have multiple levels,
      * set it to the actual level count so all levels play through. Once the
-     * user saves via the menu, their preference persists in options.cfg. */
+     * user saves via the menu, their preference persists in settings.json. */
     if (g_GameConfig.values.active_level_count == 1 && DAT_00485088 > 1) {
         g_GameConfig.values.active_level_count =
             (DAT_00485088 <= 255) ? (unsigned char)DAT_00485088 : 255;
@@ -2120,18 +2282,10 @@ void FUN_00413f70(void)
 {
     DAT_00485fcc = 0;
 
-    /* Scan for various music formats (MP3/WMA/ASF/OGG only if audio streaming enabled) */
-    if (DAT_00483720[2] != '\0') {
-        FUN_00413e70("music\\*.mp3");
-        FUN_00413e70("music\\*.wma");
-        FUN_00413e70("music\\*.asf");
-        FUN_00413e70("music\\*.ogg");
-    }
-    /* Always scan for tracker formats */
-    FUN_00413e70("music\\*.it");
-    FUN_00413e70("music\\*.xm");
-    FUN_00413e70("music\\*.s3m");
-    FUN_00413e70("music\\*.mod");
+    /* SDL_mixer handles compressed music on every supported platform. The old
+     * opt-in streaming gate and tracker/backend matrix no longer apply. */
+    FUN_00413e70("*.ogg");
+    FUN_00413e70("*.mp3");
 
     if (DAT_00485fcc != 0) {
         /* Default to random track */
@@ -2192,17 +2346,17 @@ void FUN_0041e4a0(void)
     DAT_00481c58[5]    = 0x28;
     DAT_00481c58[0xb]  = 0x14;
     DAT_00481c58[0x11] = 0x32;
-    DAT_00481c58[0x12] = (char)0x96;
+    DAT_00481c58[0x12] = tou_binary::char_bits(0x96u);
     DAT_00481c58[0x14] = 0x1e;
-    DAT_00481c58[0x15] = (char)200;
+    DAT_00481c58[0x15] = tou_binary::char_bits(200u);
     DAT_00481c58[0x1d] = 0x46;
-    DAT_00481c58[0x23] = (char)0xa0;
+    DAT_00481c58[0x23] = tou_binary::char_bits(0xA0u);
     DAT_00481c58[0x24] = 0x1e;
     DAT_00481c58[0x25] = 0x23;
     DAT_00481c58[0x26] = 0x19;
     DAT_00481c58[0x27] = 0x23;
     DAT_00481c58[0x28] = 0x28;
-    DAT_00481c58[0x2e] = (char)0x8c;
+    DAT_00481c58[0x2e] = tou_binary::char_bits(0x8Cu);
 }
 
 /* ===== FUN_00425fe0 - Main game/menu render loop (00425FE0) ===== */
@@ -2210,8 +2364,8 @@ void FUN_0041e4a0(void)
  * Handles one-shot init (menu page build + background load),
  * keyboard polling, input processing, and rendering.
  *
- * Original performs DDraw lock/copy/unlock/flip for rendering.
- * COMPAT: Uses Render_Frame() instead (RGB565→ARGB8888 windowed blit). */
+ * Original performs a locked-surface copy/flip for rendering.
+ * The SDL path presents the RGB565 frame through Render_Frame(). */
 void FUN_00425fe0(void)
 {
     /* ---- One-shot init when DAT_004877b1 is set (by Game_State_Manager case 0x03) ---- */
@@ -2247,55 +2401,10 @@ void FUN_00425fe0(void)
         DAT_004877e8   = 0;
         DAT_004877ec   = 0;
 
-        /* COMPAT: Restore the window's normal active/focused state after the
-         * menu surface is rebuilt. Avoid TOPMOST toggling here: that causes a
-         * synthetic deactivate/reactivate cycle and can leave DirectInput
-         * waiting for the next mouse click. */
-        BringWindowToTop(hWnd_Main);
-        SetForegroundWindow(hWnd_Main);
-        SetActiveWindow(hWnd_Main);
-        SetFocus(hWnd_Main);
-
-        /* COMPAT: Temporarily capture the mouse on the post-match scoreboard.
-         * The window is already foreground/focused and both cursor coordinate
-         * systems agree, but Windows still withholds motion until a click
-         * after the DDraw transition. WM_MOUSEMOVE releases this capture on
-         * the first real movement. */
-        if (DAT_004877a4 == 0x13) {
-            HWND captured = SetCapture(hWnd_Main);
-            LOG("[SCOREBOARD CURSOR] capture previous=%p current=%p active=%d "
-                "foreground=%p focus=%p logical=(%d,%d) palette=%04X/%04X/%04X\n",
-                captured, GetCapture(), g_bIsActive, GetForegroundWindow(), GetFocus(),
-                g_MouseDeltaX >> 18, g_MouseDeltaY >> 18,
-                DAT_00483838[0], DAT_00483838[1], DAT_00483838[2]);
-        }
     }
 
     /* ---- Reset per-frame click state ---- */
     DAT_004877bc = 0;
-
-    /* ---- Poll keyboard via DirectInput ---- */
-    if (lpDI_Keyboard != NULL) {
-        HRESULT hr = lpDI_Keyboard->GetDeviceState(256, g_KeyboardState);
-        if (FAILED(hr)) {
-            if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-                lpDI_Keyboard->Acquire();
-            }
-            memset(g_KeyboardState, 0, 256);
-        }
-    }
-
-    /* COMPAT: Acquire the DirectInput mouse device.
-     * In the original fullscreen game, the mouse stayed acquired because the
-     * fullscreen window always had foreground (DISCL_FOREGROUND). In windowed
-     * mode, the mouse can lose acquisition during DDraw surface recreation
-     * (state transitions via case 0x03). Input_Update's error recovery calls
-     * Acquire() on DIERR_NOTACQUIRED, but the device may still be unacquired
-     * when FUN_00425fe0 runs. Explicitly acquire here so DirectInput mouse
-     * events are available for Input_Update on subsequent frames. */
-    if (lpDI_Mouse != NULL) {
-        lpDI_Mouse->Acquire();
-    }
 
     /* ---- F12 (scan 0x58): immediate exit ---- */
     if ((g_KeyboardState[0x58] & 0x80) != 0) {
@@ -2303,57 +2412,61 @@ void FUN_00425fe0(void)
         DAT_004877a4 = 0xFE;
     }
 
-    /* COMPAT: Sync game cursor and mouse buttons from Windows for windowed mode.
-     * Original used exclusive fullscreen with hidden system cursor;
-     * the game rendered its own cursor sprite at (g_MouseDeltaX>>18, g_MouseDeltaY>>18).
-     * In windowed mode, DirectInput reports relative deltas which desync from the
-     * visible Windows cursor, and DirectInput mouse device can lose acquisition
-     * during state transitions (DDraw surface recreation, etc.), causing
-     * g_MouseButtons to become stale. Use Win32 API for both position and buttons. */
+    /* Sync the game cursor and mouse buttons from SDL. */
     {
-        POINT pt;
-        RECT client;
-        GetCursorPos(&pt);
-        ScreenToClient(hWnd_Main, &pt);
-        GetClientRect(hWnd_Main, &client);
-        /* The original freezes DAT_004877B4/B8 while a slider is active and
-         * records horizontal motion in DAT_004877E8 instead.  Keeping the
-         * absolute cursor synced during a drag made the palette popup wander
-         * away from its click origin. */
-        if (g_bIsActive && g_InputMode == 0 && PtInRect(&client, pt)) {
+        int pointer_x = 0;
+        int pointer_y = 0;
+        unsigned char pointer_buttons = 0;
+        int pointer_inside = Input_GetMouseState(&pointer_x, &pointer_y,
+                                                 &pointer_buttons);
+        if (g_bIsActive && g_InputMode == 0 && pointer_inside) {
             int game_x, game_y;
-            Client_To_Game_Coordinates(pt.x, pt.y, &game_x, &game_y);
+            Client_To_Game_Coordinates(pointer_x, pointer_y, &game_x, &game_y);
             g_MouseDeltaX = game_x << 18;
             g_MouseDeltaY = game_y << 18;
         }
-        g_MouseButtons = 0;
-        if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g_MouseButtons |= 1;
-        if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g_MouseButtons |= 2;
+        g_MouseButtons = (char)pointer_buttons;
 
-        /* COMPAT: Fallback slider delta from cursor position.
-         * Input_Update accumulates DAT_004877e8 from DirectInput mouse
-         * relative events, but DInput mouse can lose acquisition in
-         * windowed mode.  As a safety net, also accumulate from the
-         * Win32 absolute cursor delta so sliders work even if DInput
-         * mouse is not reporting events. */
+        /* Sliders retain their click anchor and consume horizontal motion. */
         static int s_lastCursorX = -1;
         if (g_InputMode == 1) {
-            /* DirectInput normally supplied this delta earlier in the frame.
-             * Only use the Win32 path when no DInput X event arrived, or the
-             * same physical movement is counted twice. */
-            if (s_lastCursorX >= 0 && !g_DirectInputMouseXSeen) {
-                int dx = pt.x - s_lastCursorX;
+            if (s_lastCursorX >= 0) {
+                int dx = pointer_x - s_lastCursorX;
                 DAT_004877e8 += dx * 0x80;
             }
-            s_lastCursorX = pt.x;
+            s_lastCursorX = pointer_x;
         } else {
             s_lastCursorX = -1;
         }
     }
 
     /* ---- Input processing ---- */
+    /* Capture only a new key press after the row was clicked.  Snapshotting
+     * the state when capture begins prevents an already-held key from being
+     * accepted before the user has seen the '?' prompt. */
+    const bool key_capture_active = g_InputMode == 2;
+    if (key_capture_active) {
+        int selected_scan_code = 0x100;
+        for (int scan_code = 0; scan_code < 0x100; scan_code++) {
+            if ((g_KeyboardState[scan_code] & 0x80) != 0 &&
+                (s_KeyCapturePreviousState[scan_code] & 0x80) == 0)
+                selected_scan_code = scan_code;
+        }
+
+        if (selected_scan_code != 0x100) {
+            DAT_004877e8 = (selected_scan_code == 0x01)
+                ? 0x100 : selected_scan_code;
+            DAT_004877e5 = 1;
+            if (selected_scan_code == 0x01)
+                DAT_004877bd |= 8;
+        } else {
+            memcpy(s_KeyCapturePreviousState, g_KeyboardState,
+                   sizeof(s_KeyCapturePreviousState));
+        }
+    }
+
     /* Mode 0: arrow keys move viewport. Mode 1: arrow keys adjust drag delta.
-     * Both modes share the click/release detection code below. */
+     * All modes share the click/release detection code below. */
     if (g_InputMode == 0) {
         /* Arrow key viewport movement (time-based speed) */
         int spd = (int)DAT_004877f0;
@@ -2371,27 +2484,31 @@ void FUN_00425fe0(void)
     /* ---- Shared click/release detection (runs for mode 0 AND mode 1) ---- */
 
     /* Primary click: Right Ctrl (0x9D) OR Left Mouse Button */
-    if (((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
+    if (!key_capture_active &&
+        ((g_KeyboardState[0x9D] & 0x80) != 0 || (g_MouseButtons & 1) != 0) &&
         (DAT_004877bd & 1) == 0) {
         DAT_004877bc |= 1;
         DAT_004877bd |= 1;
     }
 
     /* Secondary click: Right Shift (0x36) OR Right Mouse Button */
-    if (((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
+    if (!key_capture_active &&
+        ((g_KeyboardState[0x36] & 0x80) != 0 || (g_MouseButtons & 2) != 0) &&
         (DAT_004877bd & 2) == 0) {
         DAT_004877bc |= 2;
         DAT_004877bd |= 2;
     }
 
     /* Middle button: scan 0x30 (B key) */
-    if ((g_KeyboardState[0x30] & 0x80) != 0 && (DAT_004877bd & 4) == 0) {
+    if (!key_capture_active && (g_KeyboardState[0x30] & 0x80) != 0 &&
+        (DAT_004877bd & 4) == 0) {
         DAT_004877bc |= 4;
         DAT_004877bd |= 4;
     }
 
     /* ESC (scan 0x01): Navigate back or center view */
-    if ((g_KeyboardState[0x01] & 0x80) != 0 && (DAT_004877bd & 8) == 0) {
+    if (!key_capture_active && (g_KeyboardState[0x01] & 0x80) != 0 &&
+        (DAT_004877bd & 8) == 0) {
         if (DAT_004877a4 == 0 &&
             (g_MouseDeltaX != 0x5000000 || g_MouseDeltaY != 0x5b80000)) {
             /* Main menu, not centered → center the viewport */
@@ -2399,6 +2516,9 @@ void FUN_00425fe0(void)
             g_MouseDeltaY = 0x5b80000;
         } else {
             /* Navigate to parent page (DAT_004877c9 = back page) */
+            if (Netplay_IsEnabled() && DAT_004877c9 == 0 &&
+                DAT_004877a4 >= 0x13 && DAT_004877a4 <= 0x15)
+                Netplay_CancelSession();
             DAT_004877b1 = 1;
             DAT_004877a4 = DAT_004877c9;
         }
@@ -2415,7 +2535,7 @@ void FUN_00425fe0(void)
      * Marks input as processed when BOTH RCtrl and LMB are released,
      * creating a button-up signal for FUN_00426650 to apply slider deltas. */
     if ((g_KeyboardState[0x9D] & 0x80) == 0) {
-        if ((g_MouseButtons & 1) == 0) {
+        if (!key_capture_active && (g_MouseButtons & 1) == 0) {
             DAT_004877e5 = 1;
         }
         if ((g_MouseButtons & 1) == 0 && (DAT_004877bd & 1) != 0) {
@@ -2453,41 +2573,42 @@ void FUN_00425fe0(void)
     FUN_00426650();
 
     /* ---- Render frame to screen ---- */
-    /* COMPAT: Replaces original DDraw lock → FUN_00428650 → unlock → Blt/Flip */
+    /* Present the recovered software frame through SDL. */
     Render_Frame();
 
     /* ---- COMPAT: Frame rate limiter (~60fps) ---- */
-    /* Original used DDraw exclusive fullscreen with vsync-locked flip chain.
-     * In windowed mode we need explicit frame limiting. */
+    /* The original fullscreen flip chain supplied pacing. Menus still need an
+     * explicit limiter independent of the gameplay fixed-step loop. */
     {
-        static DWORD lastFrame = 0;
-        DWORD end = timeGetTime();
+        static uint32_t lastFrame = 0;
+        uint32_t end = Platform_GetTicks();
         if (lastFrame != 0) {
-            DWORD elapsed = end - lastFrame;
-            if (elapsed < 16) Sleep(16 - elapsed);
+            uint32_t elapsed = end - lastFrame;
+            if (elapsed < 16) Platform_Delay(16 - elapsed);
         }
-        lastFrame = timeGetTime();
+        lastFrame = Platform_GetTicks();
     }
 }
 
-/* ===== FUN_004644af - sprintf-like string formatter (004644AF) ===== */
+/* ===== FUN_004644af - bounded string formatter (004644AF) ===== */
 #include <stdarg.h>
-void FUN_004644af(char *dest, const unsigned char *format, ...)
+void FUN_004644af_bounded(char *dest, size_t capacity,
+                          const unsigned char *format, ...)
 {
-    if (!dest || !format) return;
+    if (!dest || capacity == 0 || !format) return;
     va_list args;
     va_start(args, format);
-    vsprintf(dest, (const char *)format, args);
+    vsnprintf(dest, capacity, (const char *)format, args);
     va_end(args);
 }
 
-/* ===== FUN_00425840 — Match-End / Briefing Page Builder (00425840) ===== */
-/* Page builder for menu case 0x1D. This page is never reached by any
- * menu entry in the shipped build — unused briefing/tournament-end
- * content that was cut before release. The body is empty; we leave
- * the hook in place so any stray jump to 0x1D just produces a blank
- * page rather than a crash. Do NOT wire a menu item to nav_target
- * 0x1D: it will land here and render the unused page. */
+/* ===== FUN_00425840 — Cut Campaign Briefing Builder (00425840) ===== */
+/* The retail function is a substantial 408-instruction campaign UI, not an
+ * empty hook. It selects one of 15 briefing/epilogue states, portraits, player
+ * count, difficulty, mission progression, and the start action. The released
+ * game has no reachable entry into that state and omits its sp1..sp14 levels,
+ * so restoration needs to be treated as a separate feature rather than wired
+ * blindly into the normal menu. See docs/CAMPAIGN_FORENSICS.md. */
 void FUN_00425840(void)
 {
 }
@@ -2537,7 +2658,8 @@ int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
     static char weapon_name_buf[21];  /* 20 chars + null terminator */
     if (render_mode == 6 && DAT_00487abc != NULL) {
         /* string_idx = weapon index. Read name from weapon config table. */
-        char *raw_name = (char *)((int)DAT_00487abc + (int)(unsigned int)string_idx * 0x218 + 4);
+        char *raw_name = static_cast<char *>(DAT_00487abc) +
+                         (unsigned int)string_idx * 0x218 + 4;
         memcpy(weapon_name_buf, raw_name, 20);
         weapon_name_buf[20] = '\0';
         /* Trim trailing spaces */
@@ -2550,7 +2672,8 @@ int FUN_00430200(int param_x, int param_y, int string_idx, int color_style,
     if (str) {
         const char *sp = str;
         while (*sp) {
-            unsigned char c = (unsigned char)*sp++;
+            unsigned char c = '?';
+            sp = Text_NextGlyph(sp, &c);
             if (c == ' ') {
                 text_width += Font_Char_Table[font_idx * 256 + 32].width;
             } else {
@@ -2631,7 +2754,7 @@ void FUN_0042ff80(int param_x, int param_y, int sprite_idx,
 }
 
 /* ===== FUN_0042fc90 - Set extra data on last item (0042FC90) ===== */
-void FUN_0042fc90(int value)
+void FUN_0042fc90(intptr_t value)
 {
     if (DAT_004877a8 > 0) {
         MenuItem *items = (MenuItem *)g_GameViewData;
@@ -2709,6 +2832,7 @@ int FUN_0042fdf0(int param_y)
  * persists for the immediate aftermath of the reset click, not across
  * unrelated navigations back to Options. */
 static char s_ResetDefaultsNotice = 0;
+static unsigned char s_LanguageIndex = 0;
 
 /* Strip trailing \r / \n / whitespace from a string in place. Helper
  * for the .lev / info.txt readers in Update_Level_Hover_Metadata. */
@@ -2736,7 +2860,7 @@ static void Read_GG_Theme_Info(const char *theme_name,
     if (!theme_name || !theme_name[0]) return;
 
     char path[300];
-    int n = snprintf(path, sizeof(path), "ggstuff\\%s\\info.txt", theme_name);
+    int n = snprintf(path, sizeof(path), "ggstuff/%s/info.txt", theme_name);
     if (n <= 0 || n >= (int)sizeof(path)) return;
 
     FILE *fp = fopen(path, "r");
@@ -2770,11 +2894,9 @@ static void Read_GG_Theme_Info(const char *theme_name,
         Trim_Trailing_Whitespace(line);
 
         if (want == 1) {
-            strncpy(maker_out, line, maker_sz - 1);
-            maker_out[maker_sz - 1] = '\0';
+            snprintf(maker_out, maker_sz, "%s", line);
         } else {
-            strncpy(email_out, line, email_sz - 1);
-            email_out[email_sz - 1] = '\0';
+            snprintf(email_out, email_sz, "%s", line);
         }
 
         /* Early exit once both are filled. */
@@ -2830,8 +2952,12 @@ static void Update_Level_Hover_Metadata(int level_idx)
 
     const char *name = (const char *)DAT_00485090[level_idx];
     int is_gg = (DAT_00485ea0[level_idx] == 2);
-    const char *kind_label = is_gg ? "GG THEME" : "LEVEL";
-    const char *type_value = is_gg ? "GG THEME" : "NORMAL LEVEL";
+    const char *name_format = Text_Get(is_gg ? "levels.hover.gg_name_format" :
+                                               "levels.hover.level_name_format");
+    const char *author_format = Text_Get(is_gg ? "levels.hover.gg_author_format" :
+                                                 "levels.hover.level_author_format");
+    const char *type_value = Text_Get(is_gg ? "levels.hover.type.gg_theme" :
+                                              "levels.hover.type.normal_level");
 
     char author_tmp[128] = "";
     char email_tmp[128]  = "";
@@ -2843,12 +2969,11 @@ static void Update_Level_Hover_Metadata(int level_idx)
     } else {
         const char *cached_author = (const char *)DAT_00485540[level_idx];
         if (cached_author) {
-            strncpy(author_tmp, cached_author, sizeof(author_tmp) - 1);
-            author_tmp[sizeof(author_tmp) - 1] = '\0';
+            snprintf(author_tmp, sizeof(author_tmp), "%s", cached_author);
         }
         if (name && name[0]) {
             char path[300];
-            int n = snprintf(path, sizeof(path), "levels\\%s.LEV", name);
+            int n = snprintf(path, sizeof(path), "levels/%s.lev", name);
             if (n > 0 && n < (int)sizeof(path)) {
                 FILE *fp = fopen(path, "rb");
                 if (fp) {
@@ -2863,14 +2988,14 @@ static void Update_Level_Hover_Metadata(int level_idx)
         }
     }
 
-    snprintf(s_HoverLevelName,   sizeof(s_HoverLevelName),
-             "%s NAME: %s",   kind_label, name ? name : "");
+    snprintf(s_HoverLevelName, sizeof(s_HoverLevelName),
+             name_format, name ? name : "");
     snprintf(s_HoverLevelAuthor, sizeof(s_HoverLevelAuthor),
-             "%s AUTHOR: %s", kind_label, author_tmp);
+             author_format, author_tmp);
     snprintf(s_HoverLevelEmail,  sizeof(s_HoverLevelEmail),
-             "AUTHOR'S EMAIL: %s", email_tmp);
+             Text_Get("levels.hover.author_email_format"), email_tmp);
     snprintf(s_HoverLevelType,   sizeof(s_HoverLevelType),
-             "LEVEL TYPE: %s", type_value);
+             Text_Get("levels.hover.level_type_format"), type_value);
 }
 
 /* Builds the Options submenu item layout. Extracted so both the
@@ -2890,18 +3015,84 @@ static void Build_Options_Menu_Page(void)
     FUN_00430200(0, 0x11c, 0xfe, 2, 0, 1, 0, 1, 0x1b);     /* "Network" → page 0x1B */
     FUN_00430200(0, 0x13e, 0xe, 2, 0, 1, 0, 1, 8);         /* "Keys" → page 8 */
     FUN_00430200(0, 0x160, 0x3f, 2, 0, 1, 0, 1, 0xc);      /* "Name" → page 0xC */
-    FUN_00430200(0, 0x182, 0x147, 2, 0, 1, 0, 1, 0xFD);    /* "Reset defaults" → case 0xFD action */
-    FUN_00430200(0, 0x1B6, 0xf, 2, 0, 1, 0, 1, 0);         /* "Back" → main menu (extra y-gap is the navigation separator) */
-
-    /* Transient reset-defaults notice (small yellow text, centered, not
-     * clickable). Style mirrors the copyright-line pattern at the bottom
-     * of the main menu page (font_idx 3 = tiny, alignment 2 = center). */
-    if (s_ResetDefaultsNotice) {
-        FUN_00430200(0, 0x1D0, 0x148, 1, 3, 0, 0, 2, 0xff);
-    }
+    FUN_00430200(0, 0x182, 0x150, 2, 2, 2, 0, 4, 0xff);    /* "Language" label */
+    FUN_00430200(0, 0x182, 0x151, 2, 2, 1, 0x36, 5, 0xff); /* current language */
+    FUN_0042fc90((intptr_t)&s_LanguageIndex);
+    FUN_00430200(0, 0x1A4, s_ResetDefaultsNotice ? 0x148 : 0x147,
+                 2, 0, 1, 0, 1, 0xFD);                     /* reset/confirmation */
+    FUN_00430200(0, 0x1C2, 0xf, 2, 0, 1, 0, 1, 0);         /* "Back" → main menu */
 
     g_FrameIndex = 1;
     DAT_004877c9 = 0;  /* ESC → main menu */
+    DAT_004877b1 = 0;
+}
+
+static void Build_Lan_Menu_Page(void)
+{
+    Update_Lan_Menu_Dynamic_Text();
+    FUN_00430200(0, 0x28, 0x15D, 1, 0, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x58, 0x15F, 2, 3, 0, 0, 1, 0xff);
+
+    if (!Netplay_IsEnabled()) {
+        FUN_00430200(0, 0xa0, 0x157, 2, 2, 1, 0, 1, 0xFA);
+        FUN_00430200(0, 0xd0, 0x158, 2, 2, 1, 0, 1, 0xF6);
+        FUN_00430200(0, 0x180, 0x0F, 2, 0, 1, 0, 1, 0xF8);
+        DAT_004877c9 = 0xF8;
+    } else {
+        if (Netplay_IsHost()) {
+            FUN_00430200(0, 0x90, 0x164, 1, 2, 0, 0, 1, 0xff);
+            FUN_00430200(0, 0xd0, 0x15B, 2, 2, 1, 0, 1, 0x1E);
+        } else {
+            FUN_00430200(0, 0x9c, 0x160, 1, 2, 0, 0, 1, 0xff);
+        }
+        FUN_00430200(0, 0x110, 0x15C, 2, 2, 1, 0, 1, 0xF7);
+        DAT_004877c9 = 0xF7;
+    }
+    g_FrameIndex = 0;
+    DAT_004877b1 = 0;
+}
+
+/* Pick the most readable of two existing bitmap fonts that fits a fixed-width
+ * menu column. This keeps translated result text legible without allowing long
+ * player/team award names to run off the 640-pixel logical canvas. */
+static int Menu_Fitting_Font(int string_idx, int preferred_font,
+                             int fallback_font, int max_width)
+{
+    const char *str = NULL;
+    int width = 0;
+
+    if (g_MenuStrings && string_idx >= 0 &&
+        string_idx < MENU_STRING_CAPACITY)
+        str = g_MenuStrings[string_idx];
+
+    if (!str)
+        return preferred_font;
+
+    const char *cursor = str;
+    while (*cursor) {
+        unsigned char glyph = '?';
+        cursor = Text_NextGlyph(cursor, &glyph);
+        width += Font_Char_Table[preferred_font * 256 + glyph].width;
+    }
+
+    return width <= max_width ? preferred_font : fallback_font;
+}
+
+static void Build_Lan_Join_Page(void)
+{
+    Update_Lan_Menu_Dynamic_Text();
+    FUN_00430200(0, 0x28, 0x158, 1, 0, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x52, 0x15F, 2, 3, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x80, 0x159, 2, 2, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x9c, 0x15E, 1, 2, 1, 0, 1, 0xF5);
+    FUN_00430200(0, 0xc0, 0x161, 2, 2, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0xdc, 0x162, 1, 2, 1, 0, 1, 0xF4);
+    FUN_00430200(0, 0x100, 0x15A, 2, 2, 0, 0, 1, 0xff);
+    FUN_00430200(0, 0x11c, 0x160, 1, 2, 1, 0, 1, 0xFC);
+    FUN_00430200(0, 0x14c, 0x163, 2, 2, 1, 0, 1, 0xFB);
+    FUN_00430200(0, 0x180, 0x0F, 2, 0, 1, 0, 1, 0xF9);
+    DAT_004877c9 = 0xF9;
+    g_FrameIndex = 0;
     DAT_004877b1 = 0;
 }
 
@@ -2921,13 +3112,11 @@ static void Build_Options_Menu_Page(void)
  *      without adding items. Most transition to a different g_GameState
  *      or explicitly redirect DAT_004877a4 to a real page so the renderer
  *      has something to draw. An action case that neither transitions nor
- *      redirects leaves the user stranded on an item-less page — see the
- *      0x1D booby trap below.
+ *      redirects leaves the user stranded on an item-less page.
  *
- * BEWARE: case 0x1D is an UNUSED briefing/match-end page left in the
- * shipped binary. Never wire a new menu entry to nav_target 0x1D — use a
- * high unused ID (e.g. 0xFD) and add a new case that redirects to a real
- * page if your entry is an action rather than a page.
+ * Case 0x1D is the cut campaign briefing page. Its original builder and
+ * mission assets are not restored; see docs/CAMPAIGN_FORENSICS.md before
+ * changing that state graph.
  *
  * Item count is reset at the top of this function via DAT_004877a8 = 0. */
 void FUN_0042a470(void)
@@ -2947,7 +3136,7 @@ void FUN_0042a470(void)
     case 0x00: /* Main menu page */
         FUN_0042ff80(0xe6, 0x20, 0x13, 0, 0, 0, 0xff);          /* title bar sprite */
         FUN_00430200(0, 0x7d, 7, 0, 0, 0, 0, 1, 0xff);          /* "Tunnels Of the Underworld" */
-        FUN_00430200(0, 0xaa, 1, 2, 0, 1, 0, 1, 3);             /* "Team deathmatch" → page 3 */
+        FUN_00430200(0, 0xaa, 1, 2, 0, 1, 0, 1, 0xF8);          /* "Team deathmatch" → local/LAN chooser */
         FUN_00430200(0, 200, 2, 2, 0, 1, 0, 1, 0x11);           /* "Levels" → page 0x11 */
         FUN_00430200(0, 0xe6, 3, 2, 0, 1, 0, 1, 0x12);          /* "Players" → page 0x12 */
         FUN_00430200(0, 0x104, 4, 2, 0, 1, 0, 1, 1);            /* "Options" → page 1 */
@@ -2985,9 +3174,85 @@ void FUN_0042a470(void)
         return;
 
     case 0x03: /* Start game - transition to gameplay */
+        /* Local Deathmatch is a hard session boundary. Restore any temporary
+         * LAN player count, teams, ships, and client key mapping first even if
+         * the previous network session ended through an unusual exit path. */
+        if (Netplay_IsEnabled())
+            Netplay_CancelSession();
         DAT_0048764a = 0;
         GameState_Transition(GAME_STATE_QUICK_RESTART);
         DAT_004877b1 = 0;
+        return;
+
+    case 0xF8: /* Team deathmatch: local or LAN */
+        FUN_00430200(0, 0x40, 1, 1, 0, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x92, 0x155, 2, 2, 1, 0, 1, 0x03);
+        FUN_00430200(0, 0xc2, 0x156, 2, 2, 1, 0, 1, 0xF9);
+        FUN_00430200(0, 0x168, 0x0F, 2, 0, 1, 0, 1, 0x00);
+        DAT_004877c9 = 0x00;
+        g_FrameIndex = 0;
+        DAT_004877b1 = 0;
+        return;
+
+    case 0xF9: /* LAN setup/lobby */
+        s_LanEditField = LAN_EDIT_NONE;
+        Build_Lan_Menu_Page();
+        return;
+
+    case 0xF6: /* LAN join setup */
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xFA: /* Host LAN session */
+        s_LanAttemptedConnection = true;
+        Netplay_StartHostSession(27015, 1);
+        DAT_004877a4 = 0xF9;
+        Build_Lan_Menu_Page();
+        return;
+
+    case 0xFB: /* Join LAN session */
+    {
+        char endpoint[80];
+        snprintf(endpoint, sizeof(endpoint), "%s:%s", s_LanJoinHost, s_LanJoinPort);
+        s_LanAttemptedConnection = true;
+        s_LanEditField = LAN_EDIT_NONE;
+        Netplay_StartClientSession(endpoint, s_LanTeam);
+        DAT_004877a4 = Netplay_IsEnabled() ? 0xF9 : 0xF6;
+        if (Netplay_IsEnabled())
+            Build_Lan_Menu_Page();
+        else
+            Build_Lan_Join_Page();
+        return;
+    }
+
+    case 0xFC: /* Toggle LAN team */
+        s_LanTeam = s_LanTeam == 1 ? 2 : 1;
+        DAT_004877a4 = 0xF6;
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xF5: /* Edit LAN host/IP */
+        s_LanJoinHost[0] = 0;
+        s_LanEditField = LAN_EDIT_HOST;
+        memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+        DAT_004877a4 = 0xF6;
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xF4: /* Edit LAN port */
+        s_LanJoinPort[0] = 0;
+        s_LanEditField = LAN_EDIT_PORT;
+        memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
+        DAT_004877a4 = 0xF6;
+        Build_Lan_Join_Page();
+        return;
+
+    case 0xF7: /* Cancel LAN session */
+        Netplay_CancelSession();
+        s_LanAttemptedConnection = false;
+        s_LanEditField = LAN_EDIT_NONE;
+        DAT_004877a4 = 0xF9;
+        Build_Lan_Menu_Page();
         return;
 
     case 0x04: /* Video settings */
@@ -2999,7 +3264,7 @@ void FUN_0042a470(void)
         FUN_0042fcf0();
         FUN_00430200(0, iVar7, 0x14D, 2, 2, 2, 0, 4, 0xff);        /* "Mode" label */
         iVar3 = FUN_00430200(0, iVar7, 0x14E, 2, 2, 1, 0x35, 5, 0xff);
-        FUN_0042fc90((int)(uintptr_t)&g_WindowMode);
+        FUN_0042fc90((intptr_t)&g_WindowMode);
         FUN_0042fcf0();
         iVar7 = iVar7 + iVar3;
         FUN_00430200(0, iVar7, 0x40, 2, 2, 2, 0, 4, 0xff);        /* "Detail" label */
@@ -3067,42 +3332,42 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x05: /* Controls */
-        FUN_00430200(0, 0x28, 0xb, 1, 0, 0, 0, 1, 0xff);           /* "Controls" heading */
-        FUN_00430200(0, 0x50, 0x26, 2, 2, 2, 0, 4, 0xff);          /* "Mouse sens" label */
+    case 0x05: /* Event */
+        FUN_00430200(0, 0x28, 0xb, 1, 0, 0, 0, 1, 0xff);           /* "Event" heading */
+        FUN_00430200(0, 0x50, 0x26, 2, 2, 2, 0, 4, 0xff);          /* "Civilians" label */
         iVar3 = FUN_00430200(0, 0x50, 0x113, 2, 2, 1, 0x27, 5, 0xff);
         iVar3 = iVar3 + 0x50;
         FUN_0042fc90(CFG_ADDR(0x483734));
         FUN_0042fcf0();
-        FUN_00430200(0, iVar3, 0x30, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar3, 0x30, 2, 2, 2, 0, 4, 0xff);         /* "Bombing" label */
         iVar4 = FUN_00430200(0, iVar3, 0x110, 2, 2, 1, 4, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483735));
         FUN_0042fcf0();
         iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
         iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
-        FUN_00430200(0, iVar7, 0x96, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar7, 0x96, 2, 2, 2, 0, 4, 0xff);         /* random turrets */
         iVar3 = FUN_00430200(0, iVar7, 0xcb, 2, 2, 1, 0x27, 5, 0xff);
         iVar7 = iVar7 + iVar3;
         FUN_0042fc90(CFG_ADDR(0x483736));
         FUN_0042fcf0();
-        FUN_00430200(0, iVar7, 0x97, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar7, 0x97, 2, 2, 2, 0, 4, 0xff);         /* random troopers */
         iVar4 = FUN_00430200(0, iVar7, 0xcb, 2, 2, 1, 0x27, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483737));
         FUN_0042fcf0();
         iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 8);
         iVar3 = iVar7 + iVar4 + 0x10 + iVar3;
-        FUN_00430200(0, iVar3, 0xb9, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar3, 0xb9, 2, 2, 2, 0, 4, 0xff);         /* gates */
         iVar7 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
         iVar3 = iVar3 + iVar7;
         FUN_0042fc90(CFG_ADDR(0x483756));
         FUN_0042fcf0();
-        FUN_00430200(0, iVar3, 0xba, 2, 2, 2, 0, 4, 0xff);         /* label */
+        FUN_00430200(0, iVar3, 0xba, 2, 2, 2, 0, 4, 0xff);         /* level turrets */
         iVar4 = FUN_00430200(0, iVar3, 0x22, 2, 2, 1, 1, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483757));
         FUN_0042fcf0();
         iVar7 = FUN_0042fdf0(iVar3 + iVar4 + 8);
         iVar7 = iVar3 + iVar4 + 0x10 + iVar7;
-        FUN_00430200(0, iVar7, 0xca, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, iVar7, 0xca, 2, 2, 2, 0, 4, 0xff);         /* bonus amount */
         FUN_00430200(0, iVar7, 0xcf, 2, 2, 1, 0x27, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x48375a));
         FUN_0042fcf0();
@@ -3116,13 +3381,13 @@ void FUN_0042a470(void)
         FUN_00430200(0, 0x28, 0xc, 1, 0, 0, 0, 1, 0xff);           /* heading */
         /* Copy game mode names into dynamic menu strings */
         if (g_MenuStrings) {
-            strcpy(g_MenuStrings[0x71], "Custom");
-            strcpy(g_MenuStrings[0x72], "Quite normal");
-            strcpy(g_MenuStrings[0x73], "Turret wars");
-            strcpy(g_MenuStrings[0x74], "Cyberdeath");
-            strcpy(g_MenuStrings[0x75], "Quick rounds");
-            strcpy(g_MenuStrings[0x76], "Subspace trench");
-            strcpy(g_MenuStrings[0x77], "Base defending");
+            snprintf(g_MenuStrings[0x71], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.custom"));
+            snprintf(g_MenuStrings[0x72], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.quite_normal"));
+            snprintf(g_MenuStrings[0x73], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.turret_wars"));
+            snprintf(g_MenuStrings[0x74], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.cyberdeath"));
+            snprintf(g_MenuStrings[0x75], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.quick_rounds"));
+            snprintf(g_MenuStrings[0x76], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.subspace_trench"));
+            snprintf(g_MenuStrings[0x77], MENU_DYNAMIC_TEXT_CAPACITY, "%s", Text_Get("menu.game_mode.base_defending"));
         }
         FUN_00430200(0, 100, 0x95, 0, 2, 2, 0, 4, 0xff);           /* "Game type" label */
         iVar7 = FUN_00430200(0, 100, 0x71, 0, 2, 1, 0x30, 5, 0xff); /* game mode value */
@@ -3239,7 +3504,7 @@ void FUN_0042a470(void)
         do {
             FUN_00430200(0, iVar3, iVar7, 2, 2, 2, 6, 4, 0xff);    /* weapon name (render_mode 6) */
             FUN_00430200(0, iVar3, 0x24, 2, 2, 1, 1, 5, 0xff);     /* On/Off toggle */
-            FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);               /* config: g_ConfigBlob[0x1804 + weapon] */
+            FUN_0042fc90(CFG_ADDR(0x48375c) + iVar7);               /* global weapon flag */
             items = (MenuItem *)g_GameViewData;
             items[DAT_004877a8 - 1].flag1 = (unsigned char)0xFB;
             items[DAT_004877a8 - 1].height = iVar7;                 /* weapon index for toggle */
@@ -3322,26 +3587,6 @@ void FUN_0042a470(void)
         iVar3 = FUN_00430200(0, iVar4, 0x22, 2, 2, 1, 0xe, 5, 0xff);
         FUN_0042fc90(CFG_ADDR(0x483721));
         FUN_0042fcf0();
-        iVar7 = FUN_0042fdf0(iVar4 + iVar3 + 10);
-        iVar7 = iVar4 + iVar3 + 0x14 + iVar7;
-        FUN_00430200(0, iVar7, 0x90, 2, 2, 2, 0, 4, 0xff);         /* label */
-        iVar4 = FUN_00430200(0, iVar7, 0x22, 2, 2, 1, 1, 5, 0xff);
-        FUN_0042fc90(CFG_ADDR(0x483722));
-        FUN_0042fcf0();
-        iVar3 = FUN_0042fdf0(iVar7 + iVar4 + 10);
-        iVar3 = iVar7 + iVar4 + 0x14 + iVar3;
-        FUN_00430200(0, iVar3, 0x100, 2, 2, 2, 0, 4, 0xff);        /* label */
-        iVar7 = FUN_00430200(0, iVar3, 0x101, 2, 2, 1, 0x27, 5, 0xff);
-        iVar3 = iVar3 + iVar7;
-        FUN_0042fc90(CFG_ADDR(0x483723));
-        FUN_0042fcf0();
-        FUN_00430200(0, iVar3, 0x117, 2, 2, 2, 0, 4, 0xff);        /* label */
-        iVar7 = FUN_00430200(0, iVar3, 0, 2, 2, 1, 5, 5, 0xff);
-        FUN_0042fc90(CFG_ADDR(0x483724));
-        FUN_0042fcf0();
-        iVar3 = iVar3 + iVar7 + 10;
-        iVar7 = FUN_00430200(0, iVar3, 0x12d, 0, 1, 0, 0, 4, 0xff); /* info line 1 */
-        FUN_00430200(0, iVar3 + iVar7, 0x12e, 0, 1, 0, 0, 4, 0xff); /* info line 2 */
         FUN_00430200(0, 0x1a4, 0xf, 2, 0, 1, 0, 1, 1);             /* "Back" → Options */
         DAT_004877c9 = 1;
         g_FrameIndex = 1;
@@ -3491,8 +3736,8 @@ void FUN_0042a470(void)
         FUN_0042fc90(CFG_ADDR(0x481f58));
         FUN_0042fcf0();
         if (g_MenuStrings && g_MenuStrings[0x71])
-            FUN_004644af(g_MenuStrings[0x71],
-                (const unsigned char *)"You have %d levels and %d GG themes",
+            FUN_004644af_bounded(g_MenuStrings[0x71], MENU_DYNAMIC_TEXT_CAPACITY,
+                (const unsigned char *)Text_Get("levels.summary_format"),
                 DAT_0048508c, DAT_00486484);
         FUN_00430200(10, 0x1cc, 0x71, 1, 3, 0, 0, 0, 0xff);        /* level count info */
 
@@ -3575,18 +3820,17 @@ void FUN_0042a470(void)
 
         /* Result text based on match outcome */
         if (g_MenuStrings && g_MenuStrings[0x65]) {
-            unsigned char *teamScores = (unsigned char *)&DAT_0048693c;
             if (DAT_00487640[3] == 3) {
-                FUN_004644af(g_MenuStrings[0x65],
-                    (const unsigned char *)"Draw!");
+                FUN_004644af_bounded(g_MenuStrings[0x65], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.draw"));
             } else if (DAT_00487640[3] == 2) {
-                FUN_004644af(g_MenuStrings[0x65],
-                    (const unsigned char *)"Team %d and team %d win with a draw!",
+                FUN_004644af_bounded(g_MenuStrings[0x65], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.team_draw_format"),
                     (int)(unsigned char)DAT_00487644[0] + 1,
                     (int)(unsigned char)DAT_00487644[1] + 1);
             } else {
-                FUN_004644af(g_MenuStrings[0x65],
-                    (const unsigned char *)"Team %d wins!",
+                FUN_004644af_bounded(g_MenuStrings[0x65], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.team_wins_format"),
                     (int)(unsigned char)DAT_00487644[0] + 1);
             }
         }
@@ -3597,24 +3841,24 @@ void FUN_0042a470(void)
             int strIdx = 0x71;
             int rowY = 0xb9;
             for (int team = 0; team < 3; team++) {
-                unsigned char teamWins = ((unsigned char *)&DAT_0048693c)[team + 1];
+                unsigned char teamWins = g_TeamWins[team];
                 unsigned int color = (teamWins != DAT_00487648) ? 3 : 0;
 
                 /* Column 1: Wins (from DAT_0048693c bytes 1-3) */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af(g_MenuStrings[strIdx],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
                         (const unsigned char *)"%d", (int)teamWins);
                 FUN_00430200(0xb1, rowY, strIdx, color, 0, 0, 0, 0, 0xff);
 
                 /* Column 2: Frags (from DAT_00486944) */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af(g_MenuStrings[strIdx + 1],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], MENU_DYNAMIC_TEXT_CAPACITY,
                         (const unsigned char *)"%d", DAT_00486944[team]);
                 FUN_00430200(0x12d, rowY, strIdx + 1, color, 0, 0, 0, 0, 0xff);
 
                 /* Column 3: Deaths (from DAT_00486954) */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 2])
-                    FUN_004644af(g_MenuStrings[strIdx + 2],
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], MENU_DYNAMIC_TEXT_CAPACITY,
                         (const unsigned char *)"%d", DAT_00486954[team]);
                 FUN_00430200(0x1b4, rowY, strIdx + 2, color, 0, 0, 0, 0, 0xff);
 
@@ -3624,8 +3868,8 @@ void FUN_0042a470(void)
 
             /* "Debris killed: %d" — strIdx = 0x7A after loop */
             if (g_MenuStrings && g_MenuStrings[strIdx])
-                FUN_004644af(g_MenuStrings[strIdx],
-                    (const unsigned char *)"Debris killed: %d", DAT_00486964);
+                FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                    (const unsigned char *)Text_Get("results.debris_killed_format"), DAT_00486964);
             FUN_00430200(0x28, 0x136, strIdx, 1, 2, 0, 0, 0, 0xff);
 
             /* "Game elapsed: %d hours, %d minutes, %d seconds" — strIdx+1 = 0x7B */
@@ -3635,8 +3879,8 @@ void FUN_0042a470(void)
                 int minutes = (int)((totalSec % 3600) / 60);
                 int seconds = (int)(totalSec % 60);
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af(g_MenuStrings[strIdx + 1],
-                        (const unsigned char *)"Game elapsed: %d hours, %d minutes, %d seconds",
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], MENU_DYNAMIC_TEXT_CAPACITY,
+                        (const unsigned char *)Text_Get("results.elapsed_format"),
                         hours, minutes, seconds);
             }
             FUN_00430200(0x28, 0x156, strIdx + 1, 1, 1, 0, 0, 0, 0xff);
@@ -3702,13 +3946,13 @@ void FUN_0042a470(void)
                     char *awardName = (char *)&DAT_00487368[1 + a * 0x20];
                     int playerNum = (int)(unsigned char)DAT_004874c9[a] + 1;
                     if (g_MenuStrings && g_MenuStrings[awardBufIdx])
-                        FUN_004644af(g_MenuStrings[awardBufIdx],
-                            (const unsigned char *)"%s (Player %d)",
+                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                            (const unsigned char *)Text_Get("results.player_award_format"),
                             awardName, playerNum);
-                    /* Small font keeps two-digit 64-player labels inside the
-                     * 640-pixel logical canvas. Headers retain the original
-                     * larger presentation. */
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x31, 0, 0xff);
+                    /* Prefer the readable 12-pixel font. Only exceptionally
+                     * long translations fall back to the narrow 11-pixel one. */
+                    int awardFont = Menu_Fitting_Font(awardBufIdx, 1, 3, 0x140 - 8);
+                    FUN_00430200(0x138, iVar3, awardBufIdx, 0, awardFont, 0, 0x31, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -3722,10 +3966,11 @@ void FUN_0042a470(void)
                     char *awardName = (char *)&DAT_004874d4[1 + a * 0x20];
                     int teamNum = (int)(unsigned char)DAT_00487635[a] + 1;
                     if (g_MenuStrings && g_MenuStrings[awardBufIdx])
-                        FUN_004644af(g_MenuStrings[awardBufIdx],
-                            (const unsigned char *)"%s (Team %d)",
+                        FUN_004644af_bounded(g_MenuStrings[awardBufIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                            (const unsigned char *)Text_Get("results.team_award_format"),
                             awardName, teamNum);
-                    FUN_00430200(0x140, iVar3, awardBufIdx, 0, 3, 0, 0x32, 0, 0xff);
+                    int awardFont = Menu_Fitting_Font(awardBufIdx, 1, 3, 0x140 - 8);
+                    FUN_00430200(0x138, iVar3, awardBufIdx, 0, awardFont, 0, 0x32, 0, 0xff);
                     awardBufIdx++;
                     iVar3 += 0x14;
                 }
@@ -3742,14 +3987,14 @@ void FUN_0042a470(void)
         return;
     }
 
-    case 0x16: /* Color customization - team 1 */
+    case 0x16: /* Inaccessible campaign-unlock page: unlock missions 0..4 */
         FUN_00430200(0x78, 0x7d, 0xe2, 0, 0, 0, 0, 1, 0xff);
         FUN_00430200(10, 10, 0xe6, 2, 0, 1, 0, 0, 0x17);
         FUN_00430200(0x78, 0xe1, 0xe5, 1, 2, 0, 0, 1, 0xff);
         FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
         { /* Enforce minimum color values */
-            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
-            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            int *p = g_GameConfig.values.setup_limits;
+            int *end = p + 6;
             while (p < end) {
                 for (int j = 0; j < 3; j++) {
                     if (*p < 4) *p = 4;
@@ -3760,14 +4005,14 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x17: /* Color customization - team 2 */
+    case 0x17: /* Inaccessible campaign-unlock page: unlock missions 0..8 */
         FUN_00430200(0x78, 200, 0xe3, 0, 0, 0, 0, 1, 0xff);
         FUN_00430200(0x140, 0xe1, 0xe6, 2, 0, 1, 0, 0, 0x18);
         FUN_00430200(0x78, 0xe1, 0x5b, 1, 2, 0, 0, 1, 0xff);
         FUN_00430200(0, 0x168, 0xf, 2, 0, 1, 0, 1, 0);
         {
-            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
-            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            int *p = g_GameConfig.values.setup_limits;
+            int *end = p + 6;
             while (p < end) {
                 for (int j = 0; j < 3; j++) {
                     if (*p < 8) *p = 8;
@@ -3778,14 +4023,14 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x18: /* Color customization - confirm */
+    case 0x18: /* Inaccessible campaign-unlock page: unlock missions 0..14 */
         FUN_00430200(0x78, 0x7d, 0xe4, 0, 0, 0, 0, 1, 0xff);
         FUN_00430200(0x78, 0x96, 0xe7, 2, 2, 0, 0, 1, 0xff);
         FUN_00430200(0x78, 200, 0xe8, 1, 2, 0, 0, 1, 0xff);
         FUN_00430200(0x78, 0xdc, 0xe9, 1, 2, 0, 0, 1, 0xff);
         {
-            int *p = (int *)&g_ConfigBlob[0x483808 - 0x481F58];
-            int *end = (int *)&g_ConfigBlob[0x483820 - 0x481F58];
+            int *p = g_GameConfig.values.setup_limits;
+            int *end = p + 6;
             while (p < end) {
                 for (int j = 0; j < 3; j++) {
                     if (*p < 0xe) *p = 0xe;
@@ -3897,13 +4142,17 @@ void FUN_0042a470(void)
         DAT_004877b1 = 0;
         return;
 
-    case 0x1D: /* Unused briefing / match-end page — never reached by shipped UI.
-                * FUN_00425840 is an empty hook; see its definition. */
+    case 0x1D: /* Cut campaign briefing page; see docs/CAMPAIGN_FORENSICS.md. */
         FUN_00425840();
         DAT_004877b1 = 0;
         return;
 
     case 0x1E: /* Start match */
+        if (!Netplay_HostStartMatch()) {
+            DAT_004877a4 = 0xF9;
+            Build_Lan_Menu_Page();
+            return;
+        }
         DAT_0048764a = 1;
         GameState_Transition(GAME_STATE_QUICK_RESTART);
         DAT_004877b1 = 0;
@@ -4023,6 +4272,9 @@ void FUN_00427df0(int param_1, char param_2)
 
     /* Navigation: if nav_target != 0xFF, switch to that page */
     if (item->nav_target != 0xFF) {
+        if (Netplay_IsEnabled() && item->nav_target == 0 &&
+            DAT_004877a4 >= 0x13 && DAT_004877a4 <= 0x15)
+            Netplay_CancelSession();
         DAT_004877a4 = item->nav_target;
         DAT_004877b1 = 1;
         return;
@@ -4169,7 +4421,9 @@ void FUN_00427df0(int param_1, char param_2)
     case 7: /* Key-bind capture mode */
         g_InputMode = 2;
         DAT_004877e6 = (unsigned char)param_1;
-        DAT_004877e8 = (int)*data;
+        DAT_004877e8 = 0;
+        memcpy(s_KeyCapturePreviousState, g_KeyboardState,
+               sizeof(s_KeyCapturePreviousState));
         return;
 
     case 8: { /* Level/map cycle */
@@ -4209,17 +4463,17 @@ void FUN_00427df0(int param_1, char param_2)
         *data = val;
         if (val == 0xFF) {
             *data = (unsigned char)(g_NumDisplayModes - 1);
-            DAT_00483724[1] = *data;
+            g_GameConfig.values.resolution_index = *data;
             Apply_Display_Settings();
             return;
         }
         if ((int)(unsigned int)val >= g_NumDisplayModes) {
             *data = 0;
-            DAT_00483724[1] = *data;
+            g_GameConfig.values.resolution_index = *data;
             Apply_Display_Settings();
             return;
         }
-        DAT_00483724[1] = *data;
+        g_GameConfig.values.resolution_index = *data;
         Apply_Display_Settings();
         break;
     }
@@ -4319,59 +4573,52 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2B: { /* Increment game counter */
-        int *counter = &g_GameConfig.values.setup_counter;
-        (*counter)++;
+        g_GameConfig.values.setup_counter++;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2C: { /* Decrement game counter */
-        int *counter = &g_GameConfig.values.setup_counter;
-        (*counter)--;
+        g_GameConfig.values.setup_counter--;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2D: { /* Cycle game mode (DAT_004837e8: 0-2) */
-        int *mode = &g_GameConfig.values.setup_mode;
-        int *counter = &g_GameConfig.values.setup_counter;
         if (cVar9 == -1) {
-            (*mode)--;
-            *counter = 0;
-            if (*mode < 0) {
-                *mode = 2;
+            g_GameConfig.values.setup_mode--;
+            g_GameConfig.values.setup_counter = 0;
+            if (g_GameConfig.values.setup_mode < 0) {
+                g_GameConfig.values.setup_mode = 2;
                 DAT_004877b1 = 1;
                 return;
             }
         } else {
-            (*mode)++;
-            if (*mode > 2) {
-                *mode = 0;
+            g_GameConfig.values.setup_mode++;
+            if (g_GameConfig.values.setup_mode > 2) {
+                g_GameConfig.values.setup_mode = 0;
             }
         }
-        *counter = 0;
+        g_GameConfig.values.setup_counter = 0;
         DAT_004877b1 = 1;
         return;
     }
 
     case 0x2E: { /* Modify game config array value */
-        int *mode = &g_GameConfig.values.setup_mode;
-        int *toggle = &g_GameConfig.values.setup_toggle;
-        int *configArr = g_GameConfig.values.setup_values;
-        int *limitArr = g_GameConfig.values.setup_limits;
-        int *counter = &g_GameConfig.values.setup_counter;
-        int idx = *mode + *toggle * 3;
+        int idx = g_GameConfig.values.setup_mode +
+            g_GameConfig.values.setup_toggle * 3;
         if (cVar9 == -1) {
-            if (configArr[idx] > 0) {
-                configArr[idx]--;
-                *counter = 0;
+            if (g_GameConfig.values.setup_values[idx] > 0) {
+                g_GameConfig.values.setup_values[idx]--;
+                g_GameConfig.values.setup_counter = 0;
                 DAT_004877b1 = 1;
                 return;
             }
         } else {
-            if (configArr[idx] < limitArr[idx]) {
-                configArr[idx]++;
-                *counter = 0;
+            if (g_GameConfig.values.setup_values[idx] <
+                g_GameConfig.values.setup_limits[idx]) {
+                g_GameConfig.values.setup_values[idx]++;
+                g_GameConfig.values.setup_counter = 0;
                 DAT_004877b1 = 1;
                 return;
             }
@@ -4380,10 +4627,9 @@ void FUN_00427df0(int param_1, char param_2)
     }
 
     case 0x2F: { /* Toggle team selection (DAT_004837e4) */
-        int *toggle = &g_GameConfig.values.setup_toggle;
-        int *counter = &g_GameConfig.values.setup_counter;
-        *toggle = (*toggle == 0) ? 1 : 0;
-        *counter = 0;
+        g_GameConfig.values.setup_toggle =
+            (g_GameConfig.values.setup_toggle == 0) ? 1 : 0;
+        g_GameConfig.values.setup_counter = 0;
         DAT_004877b1 = 1;
         return;
     }
@@ -4396,11 +4642,44 @@ void FUN_00427df0(int param_1, char param_2)
         break;
     }
 
+    case 0x36: { /* Runtime language */
+        int index = (int)*data + (int)cVar9;
+        const int count = Localization_GetLanguageCount();
+        if (index < 0) index = count - 1;
+        if (index >= count) index = 0;
+        const char *code = Localization_GetLanguageCode(index);
+        if (Localization_SetLanguage(code)) {
+            *data = (unsigned char)index;
+            Settings_SetLanguage(code);
+            Settings_SaveJson();
+            s_HoveredLevelIdx = -2;
+        }
+        DAT_004877b1 = 1;
+        break;
+    }
+
     /* case 0x33 now enters slider mode (handled in slider handler below) */
 
     default:
         break;
     }
+
+    if (data == &g_GameConfig.values.music_enabled ||
+        data == &g_GameConfig.values.sound_enabled ||
+        data == &g_GameConfig.values.music_volume ||
+        data == &g_GameConfig.values.sound_volume) {
+        Apply_Audio_Settings();
+    }
+}
+
+static unsigned char Adjust_Percent_Value(unsigned char current, int delta)
+{
+    int value = (int)current + delta;
+    if (value > 0)
+        value %= 101;
+    else if (value < 0)
+        value += (1 - (value + 1) / 101) * 101;
+    return (unsigned char)value;
 }
 
 /* ===== FUN_00427a70 - Slider drag apply (00427A70) ===== */
@@ -4440,12 +4719,7 @@ void FUN_00427a70(int param_1)
     }
 
     case 0x0E: { /* Range 0-100 (0x65) */
-        int v = (int)*data + delta;
-        if (v > 0)
-            v = v % 0x65;
-        else if (v < 0)
-            v = v + (1 - (v + 1) / 0x65) * 0x65;
-        *data = (unsigned char)v;
+        *data = Adjust_Percent_Value(*data, delta);
         break;
     }
 
@@ -4534,6 +4808,11 @@ void FUN_00427a70(int param_1)
     default:
         break;
     }
+
+    if (data == &g_GameConfig.values.music_volume ||
+        data == &g_GameConfig.values.sound_volume) {
+        Apply_Audio_Settings();
+    }
 }
 
 /* ===== FUN_00426650 - Game/menu logic tick (00426650) ===== */
@@ -4543,11 +4822,31 @@ void FUN_00427a70(int param_1)
 void FUN_00426650(void)
 {
     /* Update frame delta time */
-    DWORD now = timeGetTime();
+    uint32_t now = Platform_GetTicks();
     DAT_004877f0 = now - g_FrameTimer;
     g_FrameTimer = now;
     if (DAT_004877f0 > 1000) {
         DAT_004877f0 = 1000;
+    }
+
+    Update_Lan_Address_Input();
+
+    /* Preview audio sliders while they are being dragged instead of waiting
+     * for button release. FUN_00427a70 commits the same value afterward. */
+    if (g_InputMode == 1 && g_GameViewData &&
+        (unsigned char)DAT_004877e6 < DAT_004877a8) {
+        MenuItem *active_item = &((MenuItem *)g_GameViewData)[(unsigned char)DAT_004877e6];
+        unsigned char *active_data = (unsigned char *)(uintptr_t)active_item->extra_data;
+        if (active_data != NULL) {
+            int preview = Adjust_Percent_Value(*active_data, DAT_004877e8 >> 10);
+            if (active_data == &g_GameConfig.values.music_volume &&
+                g_GameConfig.values.music_enabled) {
+                Audio_SetMusicVolume((preview * 255) / 100);
+            } else if (active_data == &g_GameConfig.values.sound_volume) {
+                Audio_SetSfxMasterVolume(g_GameConfig.values.sound_enabled ?
+                                         (preview * 255) / 100 : 0);
+            }
+        }
     }
 
     /* Scrollbar drag interaction: when left mouse held within scrollbar track,
@@ -4599,7 +4898,7 @@ void FUN_00426650(void)
                 /* Type 8 = level cycling item, font 1, color 2, clickable, render mode 1 */
                 FUN_00430200(0, yPos, 0, 2, 1, 1, 8, 1, 0xff);
                 /* Link to indirection table entry (address of the int slot) */
-                FUN_0042fc90((int)(uintptr_t)&levelOrder[scrollOff + i]);
+                FUN_0042fc90((intptr_t)&levelOrder[scrollOff + i]);
 
                 /* Set x-position and width on the just-created item */
                 if (g_GameViewData && DAT_004877a8 > 0) {
@@ -4658,7 +4957,7 @@ void FUN_00426650(void)
 
             /* Column 1: Player number (render_mode 0x1A = display text, non-clickable) */
             if (g_MenuStrings && g_MenuStrings[strIdx + (int)i])
-                sprintf(g_MenuStrings[strIdx + (int)i], "%d", pidx + 1);
+                snprintf(g_MenuStrings[strIdx + (int)i], MENU_DYNAMIC_TEXT_CAPACITY, "%d", pidx + 1);
             FUN_00430200(0x3C, yPos, strIdx + (int)i, 2, 2, 0, 0x1A, 0, 0xff);
 
             /* Column 2: Color swatch (render_mode 0x1B, clickable=1) */
@@ -4671,7 +4970,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].height = 0x23;    /* label height */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 + 0xA0)); /* color: 0x466+i */
+            FUN_0042fc90((intptr_t)(puVar22 + 0xA0)); /* color: 0x466+i */
 
             /* Column 3: Team number (render_mode 0x1C, cycle 0-2) */
             FUN_00430200(0xBC, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);      /* label */
@@ -4682,7 +4981,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].width = 0x35;     /* label width */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)puVar22);          /* team: 0x3C6+i */
+            FUN_0042fc90((intptr_t)puVar22);          /* team: 0x3C6+i */
 
             /* Column 4: Ship type (render_mode 0x1D, cycle 0-8) */
             FUN_00430200(0x100, yPos - 6, 0xE6, 2, 0, 2, 0, 0, 0xff); /* label (font 0) */
@@ -4694,7 +4993,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].height = 0x23;    /* label height */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 + 0x50)); /* ship: 0x416+i */
+            FUN_0042fc90((intptr_t)(puVar22 + 0x50)); /* ship: 0x416+i */
 
             /* Column 5: Visible (render_mode 0x1E, toggle 0/1) */
             FUN_00430200(0x140, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);     /* label */
@@ -4705,7 +5004,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 2].width = 0x35;     /* label width */
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 - 0x50)); /* visible: 0x376+i */
+            FUN_0042fc90((intptr_t)(puVar22 - 0x50)); /* visible: 0x376+i */
 
             /* Column 6: Computer (render_mode 0x1F, cycle 0-4) */
             FUN_00430200(0x1A2, yPos, 0xE6, 2, 2, 2, 0, 0, 0xff);    /* label */
@@ -4717,7 +5016,7 @@ void FUN_00426650(void)
                 ditems[DAT_004877a8 - 1].width = 0;        /* value width */
                 ditems[DAT_004877a8 - 1].flag1 = (unsigned char)pidx; /* player index */
             }
-            FUN_0042fc90((int)(uintptr_t)(puVar22 - 0xA0)); /* CPU: 0x326+i */
+            FUN_0042fc90((intptr_t)(puVar22 - 0xA0)); /* CPU: 0x326+i */
 
             puVar22++;
             yPos += 0x1E;  /* 30px row height */
@@ -4751,7 +5050,8 @@ void FUN_00426650(void)
             for (unsigned int row = 0; row < maxVisible; row++) {
                 /* Column 1: Player number */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af(g_MenuStrings[strIdx], (const unsigned char *)"%d", playerNum);
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                                         (const unsigned char *)"%d", playerNum);
                 FUN_00430200(0x3C, yPos, strIdx, 1, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 2: Ship type+1 (read from player data offset 0x2C) */
@@ -4759,18 +5059,21 @@ void FUN_00426650(void)
                 if (DAT_00487810)
                     shipVal = Player_Get(playerDataOff / 0x598)->team;
                 if (g_MenuStrings && g_MenuStrings[strIdx + 1])
-                    FUN_004644af(g_MenuStrings[strIdx + 1], (const unsigned char *)"%d", shipVal + 1);
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 1], MENU_DYNAMIC_TEXT_CAPACITY,
+                                         (const unsigned char *)"%d", shipVal + 1);
                 FUN_00430200(0xAA, yPos, strIdx + 1, shipVal + 6, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 3: Kills */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 2])
-                    FUN_004644af(g_MenuStrings[strIdx + 2], (const unsigned char *)"%d",
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 2], MENU_DYNAMIC_TEXT_CAPACITY,
+                                         (const unsigned char *)"%d",
                                  DAT_00486968[scrollOff + (int)row]);
                 FUN_00430200(0x118, yPos, strIdx + 2, 1, 0, 0, 0x1A, 0, 0xFF);
 
                 /* Column 4: Deaths */
                 if (g_MenuStrings && g_MenuStrings[strIdx + 3])
-                    FUN_004644af(g_MenuStrings[strIdx + 3], (const unsigned char *)"%d",
+                    FUN_004644af_bounded(g_MenuStrings[strIdx + 3], MENU_DYNAMIC_TEXT_CAPACITY,
+                                         (const unsigned char *)"%d",
                                  DAT_00486aa8[scrollOff + (int)row]);
                 FUN_00430200(0x17C, yPos, strIdx + 3, 1, 0, 0, 0x1A, 0, 0xFF);
 
@@ -4826,7 +5129,8 @@ void FUN_00426650(void)
             for (unsigned int row = 0; row < maxVisible; row++) {
                 /* Player number label */
                 if (g_MenuStrings && g_MenuStrings[strIdx])
-                    FUN_004644af(g_MenuStrings[strIdx], (const unsigned char *)"%d", playerNum);
+                    FUN_004644af_bounded(g_MenuStrings[strIdx], MENU_DYNAMIC_TEXT_CAPACITY,
+                                         (const unsigned char *)"%d", playerNum);
                 FUN_00430200(0x14, yPos, strIdx, 2, 2, 0, 0x1A, 0, 0xFF);
                 strIdx++;
 
@@ -4853,7 +5157,7 @@ void FUN_00426650(void)
                             ditems[DAT_004877a8 - 1].color_style = k;
                         }
                     }
-                    FUN_0042fc90((int)(uintptr_t)actionMapBase);
+                    FUN_0042fc90((intptr_t)actionMapBase);
 
                     col++;
                     if (col > 0x10) { /* 17 columns per row */
@@ -4872,19 +5176,15 @@ void FUN_00426650(void)
     }
 
     /* Click sound effect */
-    /* Original: plays FMOD sound when any mouse button pressed,
+    /* Original: plays a UI sound when any mouse button is pressed,
      * if not in input mode, sound enabled, and sound config allows. */
     if (DAT_004877bc != 0 && g_InputMode == 0 && DAT_004877ec == 0
         && g_SoundEnabled != 0 && g_SoundTable != NULL) {
         /* Click sound: index 0x55 (85) in 300-entry sound table.
          * Previous code used 0x155 (341) which was out of bounds (300 max). */
         int snd_idx = 0x55;
-        if (*(int *)((int)g_SoundTable + snd_idx * 8) != 0) {
-            int ch = FSOUND_PlaySoundEx(-1,
-                (FSOUND_SAMPLE *)(*(int *)((int)g_SoundTable + snd_idx * 8)), NULL, 1);
-            FSOUND_SetVolume(ch, 0x80);
-            FSOUND_SetPan(ch, 0x80);
-            FSOUND_SetPaused(ch, 0);
+        if (g_SoundTable[snd_idx].handle != 0) {
+            Audio_PlaySample(g_SoundTable[snd_idx].handle, 0x80, 0x80);
         }
     }
     DAT_004877ec = 0;
@@ -4897,6 +5197,34 @@ void FUN_00426650(void)
         int cursor_x = g_MouseDeltaX >> 18;
         int cursor_y = g_MouseDeltaY >> 18;
         int levelMetadataHovered = 0;
+
+        /* A completed key capture belongs to the row that started it, not to
+         * whichever row happens to be under the cursor now.  The old
+         * reconstruction committed this inside the hover loop, so moving the
+         * mouse (or simply sitting on a padded row edge) silently discarded
+         * the new binding and left capture mode stuck. */
+        if (DAT_004877e5 == 1 && g_InputMode == 2) {
+            int capture_index = (int)(unsigned int)DAT_004877e6;
+            if (DAT_004877e8 < 0x100 &&
+                capture_index >= 0 && capture_index < DAT_004877a8) {
+                MenuItem *capture_item = &items[capture_index];
+                MenuItem *binding_item = capture_item;
+                if (binding_item->render_mode != 7 &&
+                    capture_item->linked_item != 20000 &&
+                    capture_item->linked_item >= 0 &&
+                    capture_item->linked_item < DAT_004877a8) {
+                    binding_item = &items[capture_item->linked_item];
+                }
+                if (binding_item->render_mode == 7 && binding_item->extra_data != 0) {
+                    *(unsigned char *)(uintptr_t)binding_item->extra_data =
+                        (unsigned char)DAT_004877e8;
+                }
+            }
+            DAT_004877e8 = 0;
+            g_InputMode = 0;
+            DAT_004877e5 = 0;
+        }
+
         for (int i = 0; i < DAT_004877a8; i++) {
             MenuItem *item = &items[i];
 
@@ -5356,8 +5684,12 @@ void FUN_0045c300(void)
         /* Clear ship type table (64 bytes at blob offset 0x416) */
         memset(g_GameConfig.values.player_ship, 0, GAME_CONFIG_PLAYER_CAPACITY);
         /* Original preset clears the 50 weapon flags plus the following ten
-         * ship-state bytes as one 60-byte span. Preserve that cross-field write. */
-        memset(&g_ConfigBlob[0x1804], 0, 60);
+         * ship-state bytes as one 60-byte span. Preserve it without old offsets. */
+        memset(g_GameConfig.values.global_weapon_enabled, 0,
+               sizeof(g_GameConfig.values.global_weapon_enabled));
+        memset(g_GameConfig.values.ship_taken, 0,
+               sizeof(g_GameConfig.values.ship_taken));
+        g_GameConfig.values.reserved_183c[0] = 0;
         ((unsigned char *)&DAT_00483758)[2] = 0;
         return;
     }
@@ -5409,16 +5741,16 @@ void FUN_0041a8c0(void)
     /* 1. Set sub-state flags */
     g_SubState2 = 1;
     /* Original sets desired display mode from config:
-     *   DAT_00487640[2] = DAT_00483724[1];
+     *   DAT_00487640[2] = g_GameConfig.values.resolution_index;
      * This triggers a resolution switch in Menu_Init_And_Loop. The original
      * game runs fullscreen and supports runtime resolution changes. Our windowed
      * decomp allocates Software_Buffer for 640x480 at init and can't resize it,
      * so switching to e.g. 800x600 causes a buffer overflow in rendering.
      * Skip the mode change; keep current mode. */
-    /* DAT_00487640[2] = DAT_00483724[1]; */
+    /* DAT_00487640[2] = g_GameConfig.values.resolution_index; */
     *(char *)&DAT_0048693c = 0;   /* clear level index low byte */
     DAT_00487640[0] = 0;
-    DAT_004892b8 = timeGetTime();
+    DAT_004892b8 = Platform_GetTicks();
 
     /* 2. Sky/fade color switch */
     switch (DAT_00483731) {
@@ -5432,9 +5764,13 @@ void FUN_0041a8c0(void)
         FUN_0045adc0();
     }
 
-    /* 3. Save and reload the one canonical config record. */
-    Save_Options_Config();
-    Load_Options_Config();
+    /* 3. Save and reload the one canonical config record in local play.
+     * A LAN match uses a temporary host-authored record; persisting it here
+     * corrupts the player's normal split-screen count, teams, and controls. */
+    if (!Netplay_IsMatchActive()) {
+        Save_Options_Config();
+        Load_Options_Config();
+    }
     DAT_004892e5 = 0;
 
     /* 4. Apply game mode presets (only when not mid-match — the match-time
@@ -5446,7 +5782,7 @@ void FUN_0041a8c0(void)
 
     /* 5. Clear per-team stat counters (4 entries each) */
     for (i = 0; i < 4; i++) {
-        ((unsigned char *)&DAT_0048693c)[i + 1] = 0;
+        g_TeamWins[i] = 0;
         DAT_00486944[i] = 0;
         DAT_00486954[i] = 0;
     }
@@ -5543,7 +5879,7 @@ void FUN_0041a8c0(void)
      * DAT_00487810 is allocated in Init_Memory_Pools, always valid here. */
     {
         /* 12. Copy key bindings from config blob to player data (+0xAC..+0xB2).
-         * Key binding block: 8 bytes per player at blob offset 0x186A.
+         * Key binding block: 8 bytes per player in the typed config.
          * Maps to player offsets +0xAC..+0xB2 in a remapped order. */
         for (i = 0; i < (int)DAT_00489244; i++) {
             PlayerData *player = Player_Get(i);
@@ -5566,7 +5902,7 @@ void FUN_0041a8c0(void)
 
         /* 14. Build per-player ship type availability list.
          * For each player, iterate 47 possible ship types.
-         * If globally enabled (blob[0x1804+type]) AND per-player enabled,
+         * If globally enabled AND per-player enabled,
          * add to available list at player data +0x3C. */
         for (i = 0; i < (int)DAT_00489240; i++) {
             PlayerData *player = Player_Get(i);
@@ -5609,7 +5945,7 @@ void FUN_0041a8c0(void)
  * Player awards: Most valuable, Most violent, Survivor, Most moving,
  *   Most explosive, Base builder award, Most useless, Greedy award
  * Team awards: The best, Odd award, Greedy award, Most violent, Explosive award
- * Sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D (tournament end). */
+ * Sets DAT_004877a4 to 0x13 (scoreboard) or 0x1D (cut campaign briefing). */
 
 /* Helper: add a player award entry */
 static void AddPlayerAward(const char *name, int winner_idx)
@@ -5634,24 +5970,28 @@ static void AddTeamAward(const char *name, int winner_idx)
 void FUN_0041d740(void)
 {
     unsigned char saved_cfg_820 = (unsigned char)DAT_00483820;
-    unsigned char saved_cfg_725 = DAT_00483724[1];
+    unsigned char saved_cfg_725 = g_GameConfig.values.resolution_index;
     unsigned char saved_cfg_732 = DAT_00483732;
     unsigned char saved_cfg_72d = DAT_0048372d;
 
-    Load_Options_Config();
+    /* LAN temporarily owns the authoritative player/team configuration.
+     * Reloading local settings here would replace it underneath the results
+     * screens and make later restoration depend on stale disk state. */
+    if (!Netplay_IsEnabled())
+        Load_Options_Config();
 
     if (DAT_0048764a == 0) {
         /* Not tournament mode - restore pre-load values */
         DAT_00483820 = (unsigned short)saved_cfg_820;
         DAT_00483732 = saved_cfg_732;
-        DAT_00483724[1] = saved_cfg_725;
+        g_GameConfig.values.resolution_index = saved_cfg_725;
         DAT_0048372d = saved_cfg_72d;
 
         /* --- Find highest team score across 3 teams --- */
         unsigned char highest_score = 0;
         DAT_00487648 = 0;
         for (int i = 0; i < 3; i++) {
-            unsigned char score = ((unsigned char *)&DAT_0048693c)[i + 1];
+            unsigned char score = g_TeamWins[i];
             if (score > highest_score) {
                 highest_score = score;
                 DAT_00487648 = score;
@@ -5661,7 +6001,7 @@ void FUN_0041d740(void)
         /* --- Find all teams tied at highest score --- */
         DAT_00487640[3] = 0;  /* winning team count */
         for (int i = 0; i < 3; i++) {
-            if (((unsigned char *)&DAT_0048693c)[i + 1] == highest_score) {
+            if (g_TeamWins[i] == highest_score) {
                 DAT_00487644[DAT_00487640[3]] = (char)i;
                 DAT_00487640[3]++;
             }
@@ -5700,7 +6040,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most valuable", best_idx);
+                AddPlayerAward(Text_Get("awards.most_valuable"), best_idx);
             }
         }
 
@@ -5723,7 +6063,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most violent", best_idx);
+                AddPlayerAward(Text_Get("awards.most_violent"), best_idx);
             }
         }
 
@@ -5746,7 +6086,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Survivor", best_idx);
+                AddPlayerAward(Text_Get("awards.survivor"), best_idx);
             }
         }
 
@@ -5769,7 +6109,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most moving", best_idx);
+                AddPlayerAward(Text_Get("awards.most_moving"), best_idx);
             }
         }
 
@@ -5792,7 +6132,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most explosive", best_idx);
+                AddPlayerAward(Text_Get("awards.most_explosive"), best_idx);
             }
         }
 
@@ -5815,7 +6155,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Base builder award", best_idx);
+                AddPlayerAward(Text_Get("awards.base_builder"), best_idx);
             }
         }
 
@@ -5838,7 +6178,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Most useless", best_idx);
+                AddPlayerAward(Text_Get("awards.most_useless"), best_idx);
             }
         }
 
@@ -5860,7 +6200,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_idx != 0xff) {
-                AddPlayerAward("Greedy award", best_idx);
+                AddPlayerAward(Text_Get("awards.greedy"), best_idx);
             }
         }
 
@@ -5937,7 +6277,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("The best", best_team);
+                AddTeamAward(Text_Get("awards.the_best"), best_team);
             }
         }
 
@@ -5947,7 +6287,7 @@ void FUN_0041d740(void)
             if (r == 0) {
                 unsigned int team = rand() % 4;
                 if (team_player_count[team] != 0) {
-                    AddTeamAward("Odd award", team);
+                    AddTeamAward(Text_Get("awards.odd"), team);
                 }
             }
         }
@@ -5976,7 +6316,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("Greedy award", best_team);
+                AddTeamAward(Text_Get("awards.greedy"), best_team);
             }
         }
 
@@ -6004,7 +6344,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("Most violent", best_team);
+                AddTeamAward(Text_Get("awards.most_violent"), best_team);
             }
         }
 
@@ -6032,7 +6372,7 @@ void FUN_0041d740(void)
                 }
             }
             if (best_team != 0xff) {
-                AddTeamAward("Explosive award", best_team);
+                AddTeamAward(Text_Get("awards.explosive"), best_team);
             }
         }
 
@@ -6042,11 +6382,11 @@ void FUN_0041d740(void)
     else {
         /* Tournament mode */
         DAT_004877a4 = 0x1d;
-        DAT_0048764b = (((unsigned char *)&DAT_0048693c)[1] != 0) ? 2 : 1;
+        DAT_0048764b = (g_TeamWins[0] != 0) ? 2 : 1;
     }
 
     /* Record elapsed time */
-    DAT_004892bc = timeGetTime() - DAT_004892b8;
+    DAT_004892bc = Platform_GetTicks() - DAT_004892b8;
 }
 
 /* ===== Early_Init_Vars (0041EAD0) ===== */
@@ -6072,8 +6412,8 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.level_flags[2] = 0x32;
 
     /* === Level indirection table (200 ints at offset 4) ===
-     * Original zeros this, relying on options.cfg for saved level order.
-     * Sequential default ensures levels play in scanned order without options.cfg. */
+     * Original zeros this, relying on saved config for the level order.
+     * Sequential default ensures levels play in scanned order without a save. */
     {
         for (int i = 0; i < 200; i++)
             g_GameConfig.values.level_order[i] = i;
@@ -6100,9 +6440,6 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.sound_enabled = 1;
     g_GameConfig.values.music_volume = 0x5a;
     g_GameConfig.values.sound_volume = 0x46;
-    g_GameConfig.values.sound_flags[0] = 1;
-    g_GameConfig.values.sound_flags[1] = 0;
-    g_GameConfig.values.display_flags = 0x40;
     g_GameConfig.values.resolution_index = 5;
     g_GameConfig.values.display_reserved = 0;
     g_GameConfig.values.display_detail = 1;
@@ -6119,10 +6456,10 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.fog_wobble = 1;
     g_GameConfig.values.sky_color_mode = 1;
     g_GameConfig.values.saved_color_option = -1;
-    g_GameConfig.values.critter_spawns = 0;
-    g_GameConfig.values.team_base_placement = 0;
-    g_GameConfig.values.debris_difficulty = 0;
-    g_GameConfig.values.trooper_difficulty = 0;
+    g_GameConfig.values.civilians = 0;
+    g_GameConfig.values.bombing = 0;
+    g_GameConfig.values.random_turrets_at_start = 0;
+    g_GameConfig.values.random_troopers_at_start = 0;
     g_GameConfig.values.game_mode = 0;
     g_GameConfig.values.game_mode_preset = 0;
     g_GameConfig.values.initial_lives = 3;
@@ -6150,34 +6487,27 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.entity_flags[3] = 1;
     g_GameConfig.values.sky_settings = 0x02010303;
 
-    /* === Ship availability flags (50 bytes at offset 0x1804, all enabled) === */
+    /* === Ship availability flags (50 bytes, all enabled) === */
     memset(g_GameConfig.values.global_weapon_enabled, 1,
            sizeof(g_GameConfig.values.global_weapon_enabled));
 
-    /* === Ship stats / per-ship data (zeroed) === */
-    /* _DAT_0048378e (offset 0x1836): 4 bytes */
-    memset(&g_ConfigBlob[0x1836], 0, 4);
-    /* _DAT_00483792 (offset 0x183A): 4 bytes */
-    memset(&g_ConfigBlob[0x183A], 0, 4);
-    /* _DAT_00483796 (offset 0x183E): 4 bytes */
-    memset(&g_ConfigBlob[0x183E], 0, 4);
-    /* _DAT_0048379a (offset 0x1842): 4 bytes */
-    memset(&g_ConfigBlob[0x1842], 0, 4);
-    /* _DAT_0048379e (offset 0x1846): 4 bytes */
-    memset(&g_ConfigBlob[0x1846], 0, 4);
-    /* DAT_004837e4 (offset 0x188C) */
+    /* === Ship stats / per-ship data (20 recovered bytes, zeroed) === */
+    memset(g_GameConfig.values.ship_taken, 0,
+           sizeof(g_GameConfig.values.ship_taken));
+    memset(g_GameConfig.values.reserved_183c, 0, 11);
+
     g_GameConfig.values.setup_toggle = 0;
     g_GameConfig.values.setup_mode = 1;
     g_GameConfig.values.setup_counter = 0;
 
     /* === Two parallel stat tables (6 ints each, zeroed) === */
-    /* Table at offset 0x1898 (DAT_004837f0) and 0x18B0 (DAT_00483808) */
+    /* Recovered parallel setup value/limit tables. */
     memset(g_GameConfig.values.setup_values, 0,
            sizeof(g_GameConfig.values.setup_values));
     memset(g_GameConfig.values.setup_limits, 0,
            sizeof(g_GameConfig.values.setup_limits));
 
-    /* === Default key bindings (DirectInput scan codes) === */
+    /* === Default key bindings (legacy scan codes) === */
     g_GameConfig.values.pause_key = 0x19;
     g_GameConfig.values.camera_key = 0x40;
     g_GameConfig.values.menu_keys[0] = 0xc9;
@@ -6199,7 +6529,7 @@ void Set_Config_Defaults(void)
     g_GameConfig.values.team_colors[2] = 0x6508;
     g_GameConfig.values.team_colors[3] = 0x4a52;
 
-    /* === Physics/render constants (int-sized at offsets 0x18E8+) === */
+    /* === Physics/render constants === */
     g_GameConfig.values.water_red = 0x1f;
     g_GameConfig.values.water_green = 0x40;
     g_GameConfig.values.water_blue = 9;
@@ -6216,7 +6546,7 @@ void Init_Game_Config(void)
 {
     Set_Config_Defaults();
 
-    /* Load saved config from options.cfg (overwrites defaults above) */
+    /* Load settings.json, or migrate a compatible legacy options.cfg once. */
     Load_Options_Config();
 
     /* Older reconstructed saves wrote an all-zero team palette block.  These
@@ -6241,7 +6571,7 @@ void Init_Game_Config(void)
 /* ===== Reset_Config_To_Defaults =====
  * Called from the Options menu "Reset defaults" action (main menu
  * switch case 0xFD). Restores hardcoded defaults in g_ConfigBlob,
- * persists them to options.cfg so the reset survives a restart, and
+ * persists them to settings.json so the reset survives a restart, and
  * syncs the runtime globals that hold aliased copies of blob fields.
  *
  * Mirrors Init_Game_Config's boot sequence except it writes to disk
@@ -6249,77 +6579,97 @@ void Init_Game_Config(void)
  * here too so the post-reset state matches a fresh boot exactly. */
 void Reset_Config_To_Defaults(void)
 {
+    /* A fresh process starts with zeroed storage before applying defaults.
+     * Recreate that state exactly instead of overlaying defaults on top of
+     * stale values that Set_Config_Defaults intentionally does not mention. */
+    memset(&g_GameConfig, 0, sizeof(g_GameConfig));
     Set_Config_Defaults();
     DAT_00483838[3] = 0x6739;
+
+    Settings_SetLanguage("en");
+    Localization_SetLanguage("en");
+    s_LanguageIndex = (unsigned char)Localization_GetLanguageIndex();
+
+    snprintf(s_LanJoinHost, sizeof(s_LanJoinHost), "%s", "127.0.0.1");
+    snprintf(s_LanJoinPort, sizeof(s_LanJoinPort), "%s", "27015");
+    s_LanTeam = 1;
+    s_LanEditField = LAN_EDIT_NONE;
+    s_LanAttemptedConnection = false;
+
     Save_Options_Config();
+    Apply_Audio_Settings();
+    Apply_Display_Settings();
+}
+
+/* Reads the old packed record only for one-time settings.json migration. */
+static bool Load_Legacy_Options_Config(void)
+{
+    FILE *fp = fopen("options.cfg", "rb");
+    if (fp == NULL) return false;
+
+    fseek(fp, 0, SEEK_END);
+    const long fileSize = ftell(fp);
+    rewind(fp);
+
+    const long configSize = static_cast<long>(sizeof(g_GameConfig));
+    if (fileSize != configSize && fileSize != configSize + 1) {
+        LOG("[CFG] Ignoring incompatible options.cfg (%ld bytes, expected %ld or %ld)\n",
+            fileSize, configSize, configSize + 1);
+        fclose(fp);
+        return false;
+    }
+
+    if (fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp) !=
+        sizeof(g_GameConfig)) {
+        fclose(fp);
+        return false;
+    }
+
+    unsigned char savedWindowMode = 0;
+    if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
+        g_WindowMode = savedWindowMode;
+    fclose(fp);
+    return true;
 }
 
 /* ===== Load_Options_Config (0042F360) ===== */
-/* Reads 6408 bytes from options.cfg into g_ConfigBlob.
- * Original uses CRT _open/_read/_close; we use fopen for portability. */
+/* Compatibility entry point: JSON is authoritative after first migration. */
 void Load_Options_Config(void)
 {
-    FILE *fp = fopen("options.cfg", "rb");
-    if (fp != NULL) {
-        fread(&g_GameConfig, 1, sizeof(g_GameConfig), fp);
-        unsigned char savedWindowMode = 0;
-        if (fread(&savedWindowMode, 1, 1, fp) == 1 && savedWindowMode <= 1)
-            g_WindowMode = savedWindowMode;
-        fclose(fp);
+    const SettingsLoadResult result = Settings_LoadJson();
+    if (result == SETTINGS_LOAD_MISSING && Load_Legacy_Options_Config()) {
+        if (Settings_SaveJson())
+            LOG("[CFG] Migrated options.cfg to settings.json\n");
+        else
+            LOG("[CFG] Loaded options.cfg but could not write settings.json\n");
     }
 }
 
 /* ===== Save_Options_Config (0042F320) ===== */
-/* Writes 6408 bytes from g_ConfigBlob to options.cfg. */
+/* Compatibility entry point used throughout recovered menu code. */
 void Save_Options_Config(void)
 {
-    FILE *fp = fopen("options.cfg", "wb");
-    if (fp != NULL) {
-        fwrite(&g_GameConfig, 1, sizeof(g_GameConfig), fp);
-        fwrite(&g_WindowMode, 1, 1, fp);
-        fclose(fp);
-    }
-}
-
-/* ===== Init_Math_Tables (00425780) ===== */
-/* Generates sin LUT with 1.25x entries for cosine offset access */
-void Init_Math_Tables(int *buffer, unsigned int count)
-{
-    unsigned int total = count + (count >> 2); /* count * 1.25 */
-    double two_pi = 6.283185307179586;
-
-    for (unsigned int i = 0; i < total; i++) {
-        double angle = ((double)i / (double)count) * two_pi;
-        buffer[i] = (int)(sin(angle) * 524288.0); /* scale = 2^19 = 0x80000 */
-    }
+    Settings_SaveJson();
 }
 
 /* ===== System_Init_Check (0041D480) ===== */
 /* Returns: 1=success, 0=file-not-found, 2=no-levels */
 int System_Init_Check(void)
 {
-    DWORD dwTime;
+    uint32_t dwTime;
     int iVar2;
 
-    dwTime = timeGetTime();
+    dwTime = Platform_GetTicks();
     srand(dwTime);  /* FUN_00464409 = srand */
 
     Init_Memory_Pools();
     Init_Math_Tables((int *)DAT_00487ab0, 0x800);
     Init_Game_Config();
 
-    g_LoadedBgIndex = (char)0xFF;
-    g_SoundEnabled = 1;
+    g_LoadedBgIndex = tou_binary::char_bits(0xFFu);
+    iVar2 = Init_Sound_Hardware();
+    g_SoundEnabled = iVar2 != 0;
 
-    /* Check sound config - byte+3: 3=NOSOUND */
-    if (DAT_00483720[3] != 3) {
-        iVar2 = Init_Sound_Hardware();
-        if (iVar2 != 0)
-            goto MainInit;
-    }
-    g_SoundEnabled = 0;
-
-MainInit:
     FUN_0041eae0();  /* Entity table init */
     FUN_0045a060();  /* Color LUT generation */
     FUN_0045b2a0();  /* Blend LUT generation */
@@ -6372,6 +6722,8 @@ MainInit:
      * it so downstream init (FUN_0042d8b0, FUN_00422740) sees populated font
      * tables. Do not move Load_Fonts into later functions — menu page builds
      * call back into the font metrics during FUN_0042d8b0. */
+    Localization_Init(Settings_GetLanguage());
+    s_LanguageIndex = (unsigned char)Localization_GetLanguageIndex();
     Load_Fonts();
     FUN_0042d8b0();
 
@@ -6416,87 +6768,4 @@ MainInit:
     DAT_0048764a = 0;
 
     return 1;
-}
-
-/* ===== Init_DirectInput (004620F0) ===== */
-int Init_DirectInput(void)
-{
-    HRESULT hr;
-    DIPROPDWORD dipdw;
-
-    /* 1. Create DirectInput interface */
-    hr = DirectInputCreateA(GetModuleHandle(NULL), DIRECTINPUT_VERSION, &lpDI, NULL);
-    if (FAILED(hr)) {
-        return 0;
-    }
-
-    /* 2. Keyboard setup */
-    hr = lpDI->CreateDevice(GUID_SysKeyboard, &lpDI_Keyboard, NULL);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Keyboard->SetDataFormat(&c_dfDIKeyboard);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Keyboard->SetCooperativeLevel(hWnd_Main, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Keyboard->Acquire();
-    if (FAILED(hr)) goto cleanup;
-
-    /* 3. Mouse setup */
-    hr = lpDI->CreateDevice(GUID_SysMouse, &lpDI_Mouse, NULL);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Mouse->SetDataFormat(&c_dfDIMouse);
-    if (FAILED(hr)) goto cleanup;
-
-    hr = lpDI_Mouse->SetCooperativeLevel(hWnd_Main, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    if (FAILED(hr)) goto cleanup;
-
-    /* 4. Mouse event notification */
-    hMouseEvent = CreateEventA(NULL, FALSE, FALSE, NULL);
-    if (hMouseEvent == NULL) {
-        goto cleanup;
-    }
-
-    hr = lpDI_Mouse->SetEventNotification(hMouseEvent);
-    if (FAILED(hr)) goto cleanup;
-
-    /* 5. Set mouse buffer size to 16 entries */
-    dipdw.diph.dwSize       = sizeof(DIPROPDWORD);
-    dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-    dipdw.diph.dwObj        = 0;
-    dipdw.diph.dwHow        = DIPH_DEVICE;
-    dipdw.dwData            = 16;
-
-    hr = lpDI_Mouse->SetProperty(DIPROP_BUFFERSIZE, &dipdw.diph);
-    if (FAILED(hr)) goto cleanup;
-
-    /* Acquire mouse (original relies on Input_Update re-acquire path,
-     * but acquiring here avoids losing the first frame of input) */
-    lpDI_Mouse->Acquire();
-
-    return 1;
-
-cleanup:
-    /* Release everything on failure */
-    if (lpDI_Mouse != NULL) {
-        lpDI_Mouse->Unacquire();
-        lpDI_Mouse->Release();
-        lpDI_Mouse = NULL;
-    }
-    if (lpDI_Keyboard != NULL) {
-        lpDI_Keyboard->Unacquire();
-        lpDI_Keyboard->Release();
-        lpDI_Keyboard = NULL;
-    }
-    if (lpDI != NULL) {
-        lpDI->Release();
-        lpDI = NULL;
-    }
-    if (hMouseEvent != NULL) {
-        CloseHandle(hMouseEvent);
-        hMouseEvent = NULL;
-    }
-    return 0;
 }

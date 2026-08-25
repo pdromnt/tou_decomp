@@ -1,0 +1,2 @@
+/* Explorer and SDL use the executable's embedded application icon. */
+32512 ICON "level-editor.ico"

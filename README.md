@@ -25,70 +25,94 @@ The code is still recognizably a decompilation: original addresses, raw memory
 offsets, and Ghidra-style names remain where changing them without stronger
 types would risk behavior. Cleanup should be incremental and parity-preserving.
 
-See [PLAN.md](PLAN.md) for the completed parity record,
-[CODEBASE.md](CODEBASE.md) for the source map, and [BACKLOG.md](BACKLOG.md) for
-future refactoring and platform work.
+See [CODEBASE.md](CODEBASE.md) for the source map and safe-refactoring guidance,
+and [BACKLOG.md](BACKLOG.md) for the parity contract, current roadmap, and
+remaining work.
 
 ## Running a Release
 
-Extract the complete release archive and run `TOU.exe` from that directory. Do
-not move the executable away from `fmod.dll` or the asset directories. The game
-creates `options.cfg` beside the executable after first run.
+Download the archive matching your operating system and architecture and
+extract it completely. Run `TOU.exe` on Windows, `TOU` on Linux, or
+`TOU.app` on macOS. Do not move the executable or app away from its packaged
+assets. The game creates `settings.json` beside the assets; on macOS it lives in
+`TOU.app/Contents/Resources`.
+
+The original default controls were designed for a Windows keyboard and are
+awkward on a MacBook. macOS players should open **Options → Controls** and
+remap them after the first launch; Right Option and Right Command are practical
+choices for the primary action keys.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
-`Tunnels of Underworld - RE/Decompiled - v0.3` so it cannot be confused with
+`Tunnels of Underworld - RE/Decompiled - v0.6` so it cannot be confused with
 the original executable.
 
-## Building on Windows
+## Building
 
 Requirements:
 
-- 32-bit MinGW-w64 GCC/G++
-- GNU Make (`mingw32-make`)
-- `windres`
-- Windows DirectDraw, DirectInput, and WinMM development libraries
+- A C/C++ compiler for the target platform
+- CMake 3.24 or newer
+- Ninja or GNU Make
 
-Build from the repository root:
+The primary build statically links SDL3 and SDL_mixer and uses them for
+presentation, input, WAV effects, and Ogg Vorbis/MP3 music:
 
 ```powershell
-mingw32-make clean
-mingw32-make -j8
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 8
 ```
 
-The output is `TOU.exe`. `build.bat` performs the same clean build and closes an
-already-running decomp executable first.
+The output is `TOU.exe` on Windows, `TOU` on Linux, or `TOU.app` on macOS.
+Both SDL libraries are fetched at pinned releases and statically linked. A
+32-bit MinGW build remains the closest host to the original executable; x64
+and ARM64 are also supported. Windows packages do not require SDL DLLs or the
+Visual C++ redistributable.
 
-The separate `Build` GitHub Actions workflow performs this 32-bit build for
-every push and pull request. It validates the executable architecture but never
-publishes a release.
+The separate `Build` GitHub Actions workflow builds Windows x86, Windows and
+Linux x64/ARM64, and macOS Intel/Apple Silicon for every push and pull request.
+It validates the executable architecture but never publishes a release.
 
 To create the same archive layout used by CI:
 
 ```powershell
-./scripts/package-release.ps1 -Version local
+cmake --install build --config Release --prefix stage
+./scripts/package-release.ps1 -Version local -Platform windows-x64 `
+  -ExecutablePath ./stage/TOU.exe `
+  -LevelEditorDirectory ./stage/level-editor
 ```
 
 ## Releases
 
 The `Build release` GitHub Actions workflow only runs when started manually.
 Enter the release tag/version (for example `v1.0.0`) when choosing **Run
-workflow**; it builds the game and creates the tagged GitHub Release with the
-package attached. If that tag already exists, the workflow builds its exact
-commit; otherwise it creates the tag at the commit selected when starting the
-workflow. Rerunning an existing release replaces its package. Commits and tag
-pushes do not trigger releases.
+workflow**; it builds all supported desktop targets and creates the tagged
+GitHub Release with seven platform/architecture packages attached. If that tag
+already exists, the workflow builds its exact commit; otherwise it creates the
+tag at the commit selected when starting the workflow. Rerunning an existing
+release replaces its packages. Commits and tag pushes do not trigger releases.
+Windows packages use ZIP; Linux and macOS use `.tar.gz` to preserve executable
+permissions.
 
 ## Longer-Term Direction
 
-Once the recovered code is easier to maintain, likely follow-up work includes
-an SDL renderer/input/audio port, Linux/macOS/browser support, gamepads,
-non-split-screen netplay, and better tooling for `.lev` and GG level formats.
+SDL3 now owns presentation, windowing, input, audio, timing, dialogs, and file
+discovery behind portable platform boundaries. Browser support comes only after
+the native desktop builds are runtime-proven. The release packages now include
+the native `.lev`/GG level editor and compiler. Gamepads and a polished LAN
+lobby remain later work.
+
+An early in-game direct-IP LAN beta is available for two to four players under
+**Team Deathmatch → LAN Deathmatch**. It is intentionally not presented as
+finished multiplayer; see [docs/LAN_BETA.md](docs/LAN_BETA.md) for usage,
+diagnostic launch commands, and current limits.
+The local snapshot/replay diagnostic is documented in
+[docs/REPLAY_DIAGNOSTICS.md](docs/REPLAY_DIAGNOSTICS.md).
 
 ## Contributing
 
 Behavior changes need evidence from the original executable. Pure refactors
-must keep the 32-bit build working and avoid changing fixed-point arithmetic,
-RNG order, callback dispatch, or update order by accident.
+must keep the x86 parity build and native builds working and avoid changing
+fixed-point arithmetic, RNG order, callback dispatch, or update order by accident.
 
 ## Tools Used
 
