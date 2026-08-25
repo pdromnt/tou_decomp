@@ -26,4 +26,3 @@ The snapshot excludes SDL objects, audio channels, menus, text, and local
 viewport geometry. It includes RNG state/call count, players, gameplay pools,
 timers, scoring, fluids, destructible terrain, and the tile map. Payload size,
 level dimensions, pool counts, magic, and version are validated before restore.
-

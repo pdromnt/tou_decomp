@@ -43,7 +43,7 @@ remap them after the first launch; Right Option and Right Command are practical
 choices for the primary action keys.
 
 The decomp supports windowed and fullscreen modes and identifies itself as
-`Tunnels of Underworld - RE/Decompiled - v0.5` so it cannot be confused with
+`Tunnels of Underworld - RE/Decompiled - v0.6` so it cannot be confused with
 the original executable.
 
 ## Building
@@ -98,8 +98,15 @@ permissions.
 SDL3 now owns presentation, windowing, input, audio, timing, dialogs, and file
 discovery behind portable platform boundaries. Browser support comes only after
 the native desktop builds are runtime-proven. The release packages now include
-the native `.lev`/GG level editor and compiler. Gamepads and
-non-split-screen netplay remain later possibilities.
+the native `.lev`/GG level editor and compiler. Gamepads and a polished LAN
+lobby remain later work.
+
+An early in-game direct-IP LAN beta is available for two to four players under
+**Team Deathmatch → LAN Deathmatch**. It is intentionally not presented as
+finished multiplayer; see [docs/LAN_BETA.md](docs/LAN_BETA.md) for usage,
+diagnostic launch commands, and current limits.
+The local snapshot/replay diagnostic is documented in
+[docs/REPLAY_DIAGNOSTICS.md](docs/REPLAY_DIAGNOSTICS.md).
 
 ## Contributing
 

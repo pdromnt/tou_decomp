@@ -32,4 +32,3 @@ name would currently claim more than the binary evidence proves.
 These labels are evidence notes, not permission to coalesce checks. When a
 caller is lifted or renamed, retain its exact byte offset, signedness, branch,
 and original address until assembly/runtime comparison proves a stronger type.
-

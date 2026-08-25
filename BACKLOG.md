@@ -22,7 +22,7 @@ A successful build is not runtime acceptance. Refactors must not change update
 order, RNG order, integer/float behavior, callbacks, collision, terrain,
 physics, effects, scoring, or original single-machine gameplay.
 
-## Current Baseline — v0.5
+## Current Baseline — v0.6
 
 - Weapons and Marks, effects, particles, turrets, enemy ships, cars, infantry,
   civilians, menus, controls, Events, levels, audio, match results, and awards
@@ -215,43 +215,46 @@ legacy tools. Build a native replacement instead of embedding them.
 
 ---
 
-## M4 — Network Simulation Foundation  [P0]
+## M4 — Network Simulation Foundation  [IMPLEMENTED / RUNTIME QA]
 
 This milestone changes no visible multiplayer behavior. It proves a match can
 be driven and observed through stable, portable boundaries.
 
 ### M4.1 — Authoritative match-state inventory
 
-- Inventory players, pools/order, RNG, terrain, fluids, timers, Events, rules,
-  level progression, callbacks, scoring, and every gameplay-affecting global.
-- Exclude renderer, audio channels, menus, SDL objects, local cameras, and text.
-- Give guest callback addresses stable serialized identities.
+- [x] Establish the initial inventory for players, pools/order, RNG, terrain,
+  fluids, timers, Events, rules, level progression, callbacks, and scoring.
+- [ ] Complete the evidence-backed inventory of every gameplay-affecting global.
+- [x] Exclude renderer, audio channels, menus, SDL objects, local cameras, and text.
+- [x] Retain guest callback addresses as stable serialized identities.
 
 ### M4.2 — Command-frame input
 
-- Convert one player's physical input into a compact versioned command per tick.
-- Feed human, AI, replay, and future network commands through the same boundary.
-- Preserve original command application, update, and RNG order.
+- [x] Convert physical input into the original compact seven-bit command per tick.
+- [x] Feed local, replay, and network commands through the same player boundary;
+  AI continues to produce the same final bits at its original update point.
+- [x] Preserve original command application, update, and RNG order.
 
 ### M4.3 — Snapshots and checksums
 
-- Serialize authoritative state without pointers or compiler padding.
-- Add versioned snapshot headers and deterministic per-tick checksums.
-- Prove uninterrupted and save/restore runs remain identical.
+- [x] Serialize authoritative state without SDL/audio/presentation pointers.
+- [x] Add versioned snapshot headers, strict payload validation, simulation ticks,
+  and deterministic configurable checksums.
+- [ ] Prove uninterrupted and save/restore runs remain identical on hands-on maps.
 
 ### M4.4 — Deterministic replay harness
 
-- Record initial snapshot plus command frames.
-- Replay without live input and compare checksums at every tick.
-- Find the first divergence before adding transport.
-- Compare restore/replay behavior across x86, x64, and ARM64.
+- [x] Record initial snapshot plus command frames.
+- [x] Replay without live gameplay input and compare checksums at every tick.
+- [x] Pause and log the first divergent tick.
+- [ ] Compare restore/replay behavior across x86, x64, and ARM64.
 
 Determinism is a diagnostic and recovery tool. LAN v1 uses an authoritative
 host, so cross-architecture peer lockstep is not required.
 
 ---
 
-## M5 — Direct-IP LAN Multiplayer  [P0/P1]
+## M5 — Direct-IP LAN Multiplayer  [CLI BETA / RUNTIME QA]
 
 ### Fixed v1 product scope
 
@@ -268,34 +271,41 @@ host, so cross-architecture peer lockstep is not required.
 
 ### M5.1 — Protocol and compatibility handshake  [P0]
 
-- Select and document the transport/reliability library before implementation.
-- Version every message; enforce sizes, bounds, sequences, ticks, and timeouts.
+- [x] Use portable nonblocking TCP sockets and document the beta tradeoffs.
+- [x] Version every message; enforce magic, sizes, bounds, actions, and ticks.
 - Exchange protocol/build version plus selected level, ship, and
   gameplay-critical asset hashes.
-- Require matching local content; do not download mods or levels.
+- [x] Require a matching ordered level catalog; do not download mods or levels.
+- [ ] Extend compatibility hashing from catalog identity to selected level and
+  every gameplay-critical asset byte.
 - Reject mismatches, invalid profiles/ships/teams, AI-enabled sessions, full
   sessions, and malformed packets with explicit reasons.
 
-### M5.2 — Host/join session UI  [P1]
+### M5.2 — Host/join session UI  [BETA / P1]
 
 ```text
-Main menu -> LAN Multiplayer -> Host / Join
+Main menu -> Team Deathmatch -> Local Deathmatch / LAN Deathmatch
 
-Host: choose rules/levels -> open session -> choose team -> ready -> Start
-Client: enter IP:port -> compatibility check -> send profile/ship
-        -> choose team -> ready
+Host: choose rules/levels -> Host session (Team 1) -> inspect roster -> Start
+Client: Join -> enter host/IP and port -> choose team -> compatibility check
+        -> send profile/ship -> wait for host
 ```
 
-- Roster shows connection, team, ship, and ready state.
-- Only the host changes rules/levels or starts the match.
-- Port and recent direct address may be persisted locally; no server browser.
+- [x] Add the Local/LAN split, dedicated editable Join screen, two-team client
+  choice, Host, Connect, Start, Cancel, and live connection status.
+- [x] Only the host changes rules/levels, starts, or uses synchronized `Esc`
+  match controls; `P` and focus loss never pause a LAN match.
+- [x] Show the host a compact connected-player/team roster.
+- [ ] Expand the roster with ship and implicit-ready state and send it to clients.
+- [ ] Optionally persist the recent direct address; no server browser.
 
 ### M5.3 — Authoritative match transport  [P0]
 
-- Clients send command frames, never trusted gameplay outcomes.
-- Host sends canonical roster/rules, initial state, authoritative updates,
-  terrain changes, results, next-level state, and periodic checksums.
-- Begin with conservative LAN input delay and snapshot correction.
+- [x] Clients send command frames, never trusted gameplay outcomes.
+- [x] Host sends canonical roster/rules and an authoritative tick-zero state;
+  periodic state correction and richer authoritative updates remain pending.
+- [x] Begin with conservative LAN input delay and periodic checksums.
+- [ ] Add host snapshot correction after replay/restore runtime acceptance.
 - Handle clean quit, refusal, timeout, host loss, client loss, and return to the
   session screen between host-selected levels.
 
@@ -328,12 +338,14 @@ they block one directly.
 
 ### Safe cleanup  [P2]
 
-- Introduce logical `GameAction` bindings above saved physical scan codes.
-- Centralize math tables and pure vector helpers in a non-conflicting game-math
-  module.
+- [x] Introduce logical `GameAction` bindings above saved physical scan codes.
+- [x] Move the exact original trigonometry-table construction into the dedicated
+  non-conflicting game-math module; add pure vector helpers only when a proven
+  call site can adopt them without changing arithmetic order.
 - Abstract the `all3.gfx` sprite atlas after all access widths are verified.
 - Audit/remove truly unused globals and declarations with linker evidence.
-- Determine whether reversed intro splash order is intentional; fix or document.
+- [x] Verify the reversed intro splash frame order in original assembly and keep
+  it documented as intentional binary behavior.
 - Add focused parity harnesses only when a concrete regression needs internal
   traces. Do not restore a permanent second executable.
 
@@ -346,6 +358,9 @@ they block one directly.
 
 ## Later Possibilities
 
+- Restore the cut single-player campaign if its missing `sp1` through `sp14`
+  levels can be recovered or intentionally recreated; see
+  `docs/CAMPAIGN_FORENSICS.md`.
 - LAN discovery and saved recent servers
 - Reconnect and mid-match join
 - Local prediction and bounded rollback

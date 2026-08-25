@@ -50,7 +50,11 @@ do not access SDL renderer objects directly.
 | `main.cpp` | Portable SDL entry point and application lifecycle |
 | `platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
 | `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
+| `input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
+| `simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
+| `replay.cpp` | Local command/snapshot recording and deterministic playback diagnostics |
+| `netplay.cpp` | Direct-IP LAN beta protocol and delayed command exchange |
 | `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
 | `config.h` | Byte-exact compatibility layout used by recovered runtime code |
 | `settings.cpp` | Typed, validated JSON settings and legacy-config migration |
@@ -58,7 +62,7 @@ do not access SDL renderer objects directly.
 | `sim.cpp` | Ordered subsystem updates, particles, fluids, turrets, pickups, and legacy entity fallback |
 | `entity.cpp` | Player ships, ship AI, physics, weapons, collisions, and entity lifecycle |
 | `entity_callbacks.cpp` | Recovered original-address callbacks for weapons/effects |
-| `binary_compat.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
+| `original_semantics.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
 | `effects.cpp` | Explosions, particles, lighting, terrain effects |
 | `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
 | `render_backend.cpp` | Presentation-backend interface and SDL dispatch |
@@ -72,7 +76,7 @@ do not access SDL renderer objects directly.
 | `audio_sdl.cpp` | Primary SDL_mixer backend with legacy volume/pan semantics |
 | `intro.cpp` | Intro presentation |
 | `memory.cpp` | Recovered allocation and shared-memory helpers |
-| `math.cpp` | Small math compatibility helpers |
+| `math.cpp` | Original fixed-point trigonometry table and safe math compatibility helpers |
 | `utils.cpp` | Optional debug logging |
 | `tou.h` | Aggregate include retained while source files migrate to narrower headers |
 | `types.h` | Shared recovered structures |
@@ -84,13 +88,18 @@ do not access SDL renderer objects directly.
 | `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
 | `platform.h` | Portable window, events, timing, dialogs, and display services |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
+| `terrain_properties.h` | Byte-exact terrain-property record shape without guessed broad semantics |
+| `sprite_atlas.h` | Width-preserving read view over the legacy parallel sprite descriptor tables |
 | `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
 | `docs/GG_LEVELS.md` | GG authoring model, theme assets, seeds, and runtime generation |
 | `docs/LEVEL_PALETTE.json` | Machine-readable attribute colors and placement-marker families |
 | `tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
-| `makelev/` | Native level library, CLI/compiler, SDL3 attribute painter, fixtures, and golden tests |
+| `makelev/` | Native level library, CLI/compiler, SDL3 attribute painter, and fixtures |
 | `docs/SPRITE_FORMAT.md` | Recovered `.gfx` frame stream and pixel encodings |
 | `docs/SHIP_FORMAT.md` | Recovered `.SHP` metadata, stats, and sprite-frame layout |
+| `docs/TERRAIN_PROPERTIES.md` | Evidence ledger for the 256 x 0x20 terrain-property table |
+| `docs/LAN_BETA.md` | Direct-IP beta launch, scope, limitations, and bug-report data |
+| `docs/REPLAY_DIAGNOSTICS.md` | Replay recording/playback and snapshot boundary |
 
 ## Simulation Boundaries
 
@@ -115,11 +124,16 @@ prove that a move did not change behavior.
 
 ## Multiplayer Boundary
 
-Network play must begin below SDL and above the recovered simulation. The next
-foundation is a versioned authoritative-state model, per-tick player commands,
-portable snapshots/checksums, and a deterministic local replay harness. Only
-after replay continuity passes should a transport be connected. `BACKLOG.md`
-milestones M4 and M5 track that sequence.
+Network play sits below SDL and above the recovered simulation. Physical keys
+become the original seven logical action bits, which can then come from local
+input, replay, or `netplay.cpp` without changing entity update order. The LAN
+beta uses conservative delayed TCP lockstep, host RNG sequencing, and periodic
+snapshot-derived hashes. Presentation state remains local. See
+`docs/LAN_BETA.md`; `BACKLOG.md` keeps the remaining product/UI work explicit.
+
+The beta is deliberately diagnostic: a disconnect or hash mismatch pauses the
+match. It does not yet apply snapshot correction or claim a fully authoritative
+host-state transport.
 
 ## Runtime Data
 
@@ -148,7 +162,7 @@ path.
 
 ## Binary-Compatibility Layer
 
-`binary_compat.*` exists because mathematically similar modern C++ is not always
+`original_semantics.*` exists because mathematically similar modern C++ is not always
 behaviorally equivalent to the original executable. It provides:
 
 - explicit little-endian reads and writes into recovered records;
