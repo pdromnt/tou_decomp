@@ -23,6 +23,9 @@ tick. Replay files are tied to the current snapshot/config layout and are not a
 stable release format.
 
 The snapshot excludes SDL objects, audio channels, menus, text, and local
-viewport geometry. It includes RNG state/call count, players, gameplay pools,
-timers, scoring, fluids, destructible terrain, and the tile map. Payload size,
-level dimensions, pool counts, magic, and version are validated before restore.
+viewport geometry. It includes RNG state/call count, players, all mutable
+gameplay pools, turrets, AI waypoints, map edges, entity tracking, schedulers,
+scoring, fluids, destructible terrain, and the tile map. Payload size, level
+dimensions, pool counts, magic, and version are validated before restore. A
+capture -> restore -> capture byte check also guards every recorded initial
+state. See `SIMULATION_STATE.md` for the complete boundary.

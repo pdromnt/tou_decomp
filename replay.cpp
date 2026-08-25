@@ -138,7 +138,8 @@ bool WriteHeader(void)
 {
     if (g_header_written)
         return true;
-    if (!SimulationState_Capture(&g_initial_snapshot)) {
+    if (!SimulationState_Capture(&g_initial_snapshot) ||
+        !SimulationState_ValidateRoundTrip(g_initial_snapshot)) {
         SetReplayStatus("Could not capture initial simulation state");
         return false;
     }

@@ -16,5 +16,6 @@ uint64_t SimulationState_Checksum(void);
 uint64_t SimulationState_OnTickComplete(void);
 bool SimulationState_Capture(std::vector<uint8_t> *snapshot);
 bool SimulationState_Restore(const uint8_t *snapshot, size_t size);
+bool SimulationState_ValidateRoundTrip(const std::vector<uint8_t> &snapshot);
 
 #endif
