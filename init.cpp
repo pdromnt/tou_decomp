@@ -124,11 +124,12 @@ static char s_LanHostDisplay[72] = "127.0.0.1";
 static char s_LanPortDisplay[16] = "27015";
 static char s_LanStatus[160] = "";
 static char s_LanTeamText[32] = "Team 1";
-static char s_LanRoster[96] = "";
+static char s_LanRoster[192] = "";
 static unsigned char s_LanPreviousKeys[256] = {0};
 static int s_LanTeam = 1;
 static LanEditField s_LanEditField = LAN_EDIT_NONE;
 static bool s_LanAttemptedConnection = false;
+static bool s_LanSettingsLoaded = false;
 static void Build_Lan_Menu_Page(void);
 static void Build_Lan_Join_Page(void);
 
@@ -149,8 +150,8 @@ static void Update_Lan_Menu_Dynamic_Text(void)
             DAT_004877b1 = 1;
     }
     char roster[sizeof(s_LanRoster)] = "";
-    if (Netplay_IsHost()) {
-        char players[64];
+    if (Netplay_IsEnabled()) {
+        char players[160];
         Netplay_FormatRoster(players, sizeof(players));
         snprintf(roster, sizeof(roster), Text_Get("lan.roster_format"),
                  Netplay_ConnectedPlayerCount(), players);
@@ -3044,6 +3045,7 @@ static void Build_Lan_Menu_Page(void)
             FUN_00430200(0, 0xd0, 0x15B, 2, 2, 1, 0, 1, 0x1E);
         } else {
             FUN_00430200(0, 0x9c, 0x160, 1, 2, 0, 0, 1, 0xff);
+            FUN_00430200(0, 0xd0, 0x164, 1, 3, 0, 0, 1, 0xff);
         }
         FUN_00430200(0, 0x110, 0x15C, 2, 2, 1, 0, 1, 0xF7);
         DAT_004877c9 = 0xF7;
@@ -3080,6 +3082,14 @@ static int Menu_Fitting_Font(int string_idx, int preferred_font,
 
 static void Build_Lan_Join_Page(void)
 {
+    if (!s_LanSettingsLoaded) {
+        snprintf(s_LanJoinHost, sizeof(s_LanJoinHost), "%s",
+                 Settings_GetRecentLanHost());
+        snprintf(s_LanJoinPort, sizeof(s_LanJoinPort), "%d",
+                 Settings_GetRecentLanPort());
+        s_LanTeam = Settings_GetRecentLanTeam();
+        s_LanSettingsLoaded = true;
+    }
     Update_Lan_Menu_Dynamic_Text();
     FUN_00430200(0, 0x28, 0x158, 1, 0, 0, 0, 1, 0xff);
     FUN_00430200(0, 0x52, 0x15F, 2, 3, 0, 0, 1, 0xff);
@@ -3214,6 +3224,7 @@ void FUN_0042a470(void)
     {
         char endpoint[80];
         snprintf(endpoint, sizeof(endpoint), "%s:%s", s_LanJoinHost, s_LanJoinPort);
+        Settings_RememberLanEndpoint(s_LanJoinHost, atoi(s_LanJoinPort), s_LanTeam);
         s_LanAttemptedConnection = true;
         s_LanEditField = LAN_EDIT_NONE;
         Netplay_StartClientSession(endpoint, s_LanTeam);
@@ -6586,7 +6597,7 @@ void Reset_Config_To_Defaults(void)
     Set_Config_Defaults();
     DAT_00483838[3] = 0x6739;
 
-    Settings_SetLanguage("en");
+    Settings_ResetAuxiliaryDefaults();
     Localization_SetLanguage("en");
     s_LanguageIndex = (unsigned char)Localization_GetLanguageIndex();
 

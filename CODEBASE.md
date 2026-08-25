@@ -100,6 +100,7 @@ do not access SDL renderer objects directly.
 | `docs/TERRAIN_PROPERTIES.md` | Evidence ledger for the 256 x 0x20 terrain-property table |
 | `docs/LAN_BETA.md` | Direct-IP beta launch, scope, limitations, and bug-report data |
 | `docs/REPLAY_DIAGNOSTICS.md` | Replay recording/playback and snapshot boundary |
+| `docs/SIMULATION_STATE.md` | Complete authoritative snapshot inventory and exclusions |
 
 ## Simulation Boundaries
 
@@ -119,8 +120,9 @@ their relative order:
 Ship intelligence is bounded inside `entity.cpp` by `AI_UpdateShip` and
 `AI_ScanNearbyThreats`. These names describe observed responsibility; they do
 not authorize reordering RNG calls, pool iteration, callbacks, or state writes.
-Physical source-file extraction can happen later, once deterministic replay can
-prove that a move did not change behavior.
+Further source-file extraction is safe only in evidence-backed slices. Use the
+snapshot/replay diagnostics to catch ordering or state-boundary changes, then
+obtain hands-on gameplay acceptance before merging the move.
 
 ## Multiplayer Boundary
 
@@ -129,11 +131,14 @@ become the original seven logical action bits, which can then come from local
 input, replay, or `netplay.cpp` without changing entity update order. The LAN
 beta uses conservative delayed TCP lockstep, host RNG sequencing, and periodic
 snapshot-derived hashes. Presentation state remains local. See
-`docs/LAN_BETA.md`; `BACKLOG.md` keeps the remaining product/UI work explicit.
+`docs/LAN_BETA.md`; `BACKLOG.md` contains only active future candidates and the
+rules that constrain new work.
 
-The beta is deliberately diagnostic: a disconnect or hash mismatch pauses the
-match. It does not yet apply snapshot correction or claim a fully authoritative
-host-state transport.
+The beta remains conservative: a peer loss tears down the lockstep session,
+while a checksum mismatch applies a current authoritative host snapshot to the
+divergent client. Handshake compatibility covers simulation build identity,
+normal/GG level content, ships, and gameplay data. It is still delayed TCP
+lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
 ## Runtime Data
 
@@ -148,7 +153,7 @@ The executable expects these paths relative to its working directory:
 | `sfx/` | Weapon, UI, ship, and environment sounds |
 | `ships/` | `.SHP` ship definitions |
 | `swap/` | Precomputed level sky/height-map data |
-| `help/` | Original HTML help, restyled for the decomp release |
+| `help/` | Original gameplay help plus updated runtime, menu, and level-editor guidance |
 | `lang/` | UTF-8 language catalogs; English is the per-key fallback |
 | `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
@@ -296,11 +301,11 @@ SDL's legacy `timeBeginPeriod` hook and unconditional WinMM link are removed.
 SDL's modern high-resolution waitable-timer path remains active. MSVC builds
 also link the C/C++ runtime statically, keeping release archives self-contained.
 
-`.github/workflows/build.yml` builds Windows x86 parity plus native Windows,
-Linux, and macOS x64/ARM64 targets on pushes and pull requests. It stages the
-complete runtime and checks each produced architecture. It is build-only;
-publishing remains exclusive to the manually dispatched release workflow,
-which creates one archive per platform and architecture.
+`.github/workflows/build.yml` builds Windows x86 plus native Windows, Linux,
+and macOS x64/ARM64 targets once per pull request and on direct pushes to
+`main`. It stages the complete runtime and checks each produced architecture.
+It is build-only; publishing remains exclusive to the manually dispatched
+release workflow, which creates one archive per platform and architecture.
 
 Windows release packages are ZIP files. Linux and macOS packages are `.tar.gz`
 archives so executable permissions survive extraction. macOS is packaged as a

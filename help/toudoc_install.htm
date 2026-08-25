@@ -13,48 +13,36 @@
         <tr>
           <td bgcolor="#003366">
             <h1 align="left">2.0 Installation</h1>
-            <p align="left">TOU is a self-extracting package. Click the packed 
-              exe and give the path you want to install the game.</p>
+            <p align="left">Download the release archive for your operating
+              system and architecture, then extract it completely. Run
+              <b>TOU.exe</b> on Windows, <b>TOU</b> on Linux, or
+              <b>TOU.app</b> on macOS. Keep the program with its packaged data,
+              level, music, sound, ship, and help directories.</p>
+            <p>TOU saves modern settings in <b>settings.json</b> beside its
+              assets. In a macOS package this is inside
+              <b>TOU.app/Contents/Resources</b>.</p>
             <h2 align="left"><a name="sysreq">2.1 System Requirements</a></h2>
-            <p align="left">The <b>minimum</b> system for playing TOU:</p>
+            <p align="left">Use the package matching your platform:</p>
             <ul>
-              <li>Pentium 166 MHz</li>
-              <li>32 megabytes of memory</li>
+              <li>Windows x86, x64, or ARM64</li>
+              <li>Linux x64 or ARM64</li>
+              <li>macOS Intel or Apple Silicon</li>
             </ul>
-            <p>The <b>recommended</b> system for playing TOU:</p>
-            <ul>
-              <li>Pentium 400 MHz (needed for WMA musics and if you want lots 
-                of computer pilots in the game)</li>
-              <li>64 megabytes of memory</li>
-            </ul>
+            <p>The game uses SDL3 and SDL_mixer, which are included in release
+              builds. Windows releases do not require separate SDL DLLs or the
+              Visual C++ redistributable.</p>
             <h2><a name="optimize">2.2 TOU doesn't run well on my machine. What 
               to do?</a></h2>
-            <p>Well, there are plenty of things to do:</p>
+            <p>Try these options before reporting a performance problem:</p>
             <ol>
-              <li>Lower the music and effect volumes under
-                <i><a href="toudoc_menus.htm#audio">options / audio</a></i>,
-                or disable either one if desired.</li>
-              <li>Go to <i><a href="toudoc_menus.htm#details">options / details 
-                &amp; video</a> </i>and turn Line-of-sight &quot;off&quot; from 
-                the Line-of-sight: <i>style</i>. Pressing F6 in game will switch 
-                between different line-of-sight styles. However, if you play single 
-                player on hard skill, you are forced to have line-of-sight turned 
-                on.</li>
-              <li>Go to <i><a href="toudoc_menus.htm#details">options / details 
-                &amp; video</a> </i>and turn <i>Running water</i> to &quot;slow&quot; 
-                or &quot;very slow&quot; or &quot;off&quot;.</li>
-              <li>Go to <i><a href="toudoc_menus.htm#details">options / details 
-                &amp; video</a></i> and change the game resolution from the top 
-                of the menu. 512 x 384 works fine even with older machines, if 
-                your display adapter supports it. 320 x 240 is only acceptable 
-                if you play alone, otherwise that resolution is way too small.</li>
-              <li>Go to <i><a href="toudoc_menus.htm#details">options / details 
-                &amp; video</a></i> and turn <i>parallax background</i> to &quot;no&quot; 
-                and turn <i>waves</i> to &quot;no&quot; also</li>
-              <li>Restart your computer and check that there are no other applications 
-                running on the background that take much processor usage.</li>
-              <li>Well, I'm out of tricks. How can you even run Windows on your 
-                machine?</li>
+              <li>Under <i><a href="toudoc_menus.htm#details">Options / Details
+                &amp; Visuals</a></i>, lower the resolution or use Windowed mode.</li>
+              <li>Reduce or disable running water, waves, parallax, particles,
+                shadows, or line of sight.</li>
+              <li>Reduce the number of computer pilots. Large 64-player matches
+                intentionally put much more load on the simulation.</li>
+              <li>If the problem persists, report your operating system,
+                architecture, selected level, player count, and exact steps.</li>
             </ol>
   </td>
         </tr>

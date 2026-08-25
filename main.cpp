@@ -93,7 +93,7 @@ int main(int argc, char **argv)
     if (Has_Argument(argc, argv, "--logging"))
         g_LogEnabled = 1;
 
-    SDL_SetAppMetadata("Tunnels of Underworld", "0.6", "fi.iobox.tou");
+    SDL_SetAppMetadata("Tunnels of Underworld", "0.7", "fi.iobox.tou");
     if (!Platform_SetRuntimeDirectory()) {
         Platform_ShowError("Unable to locate the game data directory.");
         SDL_Quit();

@@ -96,6 +96,12 @@ struct ControlSettings {
     std::array<std::array<int, 8>, 4> players;
 };
 
+struct NetworkSettings {
+    std::string recentHost;
+    int recentPort;
+    int recentTeam;
+};
+
 struct UserSettings {
     int schemaVersion;
     std::string language;
@@ -112,6 +118,7 @@ struct UserSettings {
     AdvancedSettings advanced;
     std::array<int, 50> enabledWeapons;
     ControlSettings controls;
+    NetworkSettings network;
 };
 
 UserSettings Settings_CaptureCurrent(void);
@@ -120,5 +127,10 @@ SettingsLoadResult Settings_LoadJson(void);
 bool Settings_SaveJson(void);
 const char *Settings_GetLanguage(void);
 bool Settings_SetLanguage(const char *language);
+const char *Settings_GetRecentLanHost(void);
+int Settings_GetRecentLanPort(void);
+int Settings_GetRecentLanTeam(void);
+bool Settings_RememberLanEndpoint(const char *host, int port, int team);
+void Settings_ResetAuxiliaryDefaults(void);
 
 #endif

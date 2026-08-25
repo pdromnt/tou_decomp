@@ -2,6 +2,8 @@ name: Build
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
@@ -22,8 +24,8 @@ jobs:
       - name: Validate UTF-8 catalogs and English extraction
         run: python3 tools/validate_localization.py
 
-  windows-x86-parity:
-    name: Windows x86 (legacy parity)
+  windows-x86:
+    name: Windows x86
     runs-on: windows-latest
 
     steps:
