@@ -147,7 +147,7 @@ Initial locales:
 
 ---
 
-## M3 — Level Compiler and Editor  [P0/P1]
+## M3 — Level Compiler and Editor  [IMPLEMENTED / RUNTIME QA]
 
 The repository contains original sample sources, documentation,
 `level converter.exe`, and `COLPICK.EXE`, but not maintainable source for those
@@ -164,8 +164,11 @@ legacy tools. Build a native replacement instead of embedding them.
 - [x] Add a read-only structural inspector/comparator for `.lev` fixtures.
 - [x] Resolve GG cyan-sign RLE semantics against original runtime assembly and
   fix the reconstructed loader to preserve tile `0xFF` sign markers.
-- [ ] Verify every decoded placement parameter against original runtime assembly.
-- Document every unsupported or still-unknown value explicitly.
+- [x] Verify every decoded placement parameter against original runtime assembly,
+  including ranges, turret direction zero/random semantics, gate wall limits,
+  object subtypes, starts, and teleport targets.
+- [x] Document the only remaining intentionally unsupported/unknown case:
+  deliberately forced parallax payloads in custom GG levels.
 
 ### M3.2 — Shared `tou_level` library and CLI  [P0]
 
@@ -177,17 +180,30 @@ legacy tools. Build a native replacement instead of embedding them.
 
 ### M3.3 — Visual editor MVP  [P1]
 
-- [ ] New/open/save project and export `.lev`. (Open, save, and export work;
-  project creation and file dialogs remain.)
+- [x] New/open/save project and export `.lev`, including a native startup flow
+  for opening projects and creating normal or GG projects.
 - [x] Visual and attribute layers with overlay/opacity controls.
-- [ ] Terrain/placement palette replacing COLPICK. (The named terrain painter
-  works; placement authoring remains.)
-- Select, move, configure, and delete spawn points, turrets, gates, repairs,
-  mines, signs, water, and every understood record.
-- Edit metadata, physics, water, civilians, bombing, ambience, parallax, and GG.
-- Validate dimensions, image formats, values, missing assets, and overlapping
+- [x] Terrain/placement palette replacing COLPICK for every currently understood
+  converter marker.
+- [x] Select, move, configure, and delete starts, turrets, gates, generators,
+  mines, bases, water creators, and teleports.
+- [x] Replace hidden mode cycling with clickable tabs and a toolbar; widen and
+  scroll the sidebar; preview correctly tinted/directed turret sprites and gate
+  graphics in both the selector and map.
+- [x] Add higher-level helpers for linked gates and paired teleports; expose
+  terrain repairs/GG sign locations as named attribute-palette entries.
+- [x] Edit metadata, physics, water, civilians, bombing, ambience, parallax,
+  GG settings, and all 16 two-line GG sign records.
+- [x] Create blank GG projects without dummy JPEGs and expose theme, shape,
+  repair/stuff/sign densities, and deterministic seed controls.
+- [x] Add a headless preview path to the actual runtime generator and let the
+  editor invoke it without duplicating or approximating GG behavior.
+- [x] Validate dimensions, image formats, legacy strings, parameter ranges,
+  missing GG assets, wall limits, teleport links, edge clipping, and overlapping
   single-pixel placements before export.
-- Reuse game decoding/rendering rules for preview where practical.
+- [x] Reuse the game generator and RGB565 terrain buffer for GG preview.
+- [x] Scaffold new GG themes from the editor or CLI; authors supply the actual
+  `s1.tga` and `t1.jpg` art assets.
 
 ### M3 acceptance
 

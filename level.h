@@ -63,10 +63,10 @@ extern int           DAT_004808b8;       /* creature count */
 extern int           DAT_004808c8;       /* pickup count */
 extern int           DAT_004808cc;       /* current sprite index for entity placement */
 extern int           DAT_004808b0;       /* treasure count */
-extern char          DAT_004839ee;       /* entity enable flag */
-extern char          DAT_004839ef;       /* creature density */
-extern short         DAT_004839f0;       /* treasure/pickup config */
-extern uint32_t      DAT_004839f4;       /* progress timer */
+extern char          DAT_004839ee;       /* custom GG shape flag */
+extern char          DAT_004839ef;       /* custom GG repair density */
+extern short         DAT_004839f0;       /* custom GG stuff/sign densities */
+extern uint32_t      DAT_004839f4;       /* custom GG random seed */
 extern char          DAT_00481a40;       /* beach style flag */
 extern char          DAT_00481a41;       /* texture darkness */
 extern int           DAT_00481a34;       /* fixed width */
@@ -145,6 +145,8 @@ extern void                 *DAT_00487928;      /* entity type table (0x10000 by
 
 /* ===== Function Prototypes: level.cpp ===== */
 int  Load_Level_File(const char *level_name);
+int  Load_Level_File_Path(const char *path);
+int  Save_Level_Preview_Bmp(const char *path);
 void FUN_00421310(void);             /* per-level water color computation + LUT rebuild */
 void FUN_0045af70(void);             /* build 8 water color LUT tables */
 void Assign_Water_Tile_Colors(void); /* set DAT_0048384c on all water tiles in DAT_00481f50 */

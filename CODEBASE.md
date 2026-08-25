@@ -85,6 +85,7 @@ do not access SDL renderer objects directly.
 | `platform.h` | Portable window, events, timing, dialogs, and display services |
 | `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
 | `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
+| `docs/GG_LEVELS.md` | GG authoring model, theme assets, seeds, and runtime generation |
 | `docs/LEVEL_PALETTE.json` | Machine-readable attribute colors and placement-marker families |
 | `tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
 | `makelev/` | Native level library, CLI/compiler, SDL3 attribute painter, fixtures, and golden tests |
@@ -139,8 +140,11 @@ The executable expects these paths relative to its working directory:
 
 `scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local
-`settings.json` and legacy `options.cfg` files are intentionally excluded. Keep it synchronized when adding a
-new required runtime path.
+`settings.json` and legacy `options.cfg` files are intentionally excluded. The
+compiler/editor ship as a clean `level-editor/` runtime directory containing
+the two tools and focused format documentation, never the `makelev/` source
+tree. Keep the packaging script synchronized when adding a required runtime
+path.
 
 ## Binary-Compatibility Layer
 

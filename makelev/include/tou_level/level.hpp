@@ -113,6 +113,15 @@ struct Comparison {
 
 Project LoadProject(const std::filesystem::path &path);
 void SaveProject(const Project &project, const std::filesystem::path &path);
+Project CreateNormalProject(const std::filesystem::path &project_path,
+                            const std::filesystem::path &visual_path,
+                            const std::filesystem::path &parallax_path = {});
+Project CreateGroundGeneratedProject(const std::filesystem::path &project_path,
+                                     std::uint16_t width,
+                                     std::uint16_t height,
+                                     const std::string &theme);
+Project ImportLevelProject(const std::filesystem::path &level_path,
+                           const std::filesystem::path &project_path);
 LevelData CompileProject(const Project &project);
 
 LevelData ReadLevel(const std::filesystem::path &path);

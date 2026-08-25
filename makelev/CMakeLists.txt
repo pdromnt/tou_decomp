@@ -15,13 +15,20 @@ add_executable(tou-level
 target_compile_features(tou-level PRIVATE cxx_std_17)
 target_link_libraries(tou-level PRIVATE tou_level)
 
-add_executable(tou-level-editor
-    editor/main.cpp
-    ${CMAKE_SOURCE_DIR}/stb_image.c
-)
+if(WIN32)
+    add_executable(tou-level-editor WIN32
+        editor/main.cpp
+        ${CMAKE_SOURCE_DIR}/stb_image.c
+    )
+else()
+    add_executable(tou-level-editor
+        editor/main.cpp
+        ${CMAKE_SOURCE_DIR}/stb_image.c
+    )
+endif()
 target_compile_features(tou-level-editor PRIVATE cxx_std_17)
 target_compile_definitions(tou-level-editor PRIVATE
-    TOU_DEFAULT_LEVEL_PROJECT="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/jungle/jungle.toulevel.json"
+    TOU_ASSET_ROOT="${CMAKE_SOURCE_DIR}"
 )
 target_include_directories(tou-level-editor PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(tou-level-editor PRIVATE
@@ -38,6 +45,19 @@ foreach(TOU_CONFIG DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
         "RUNTIME_OUTPUT_DIRECTORY_${TOU_CONFIG}" "${TOU_LEVEL_TOOL_OUTPUT}"
     )
 endforeach()
+
+install(TARGETS tou-level tou-level-editor
+    RUNTIME DESTINATION level-editor
+)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README.md
+    DESTINATION level-editor
+)
+install(FILES
+    ${CMAKE_SOURCE_DIR}/docs/LEVEL_FORMAT.md
+    ${CMAKE_SOURCE_DIR}/docs/LEVEL_PALETTE.json
+    ${CMAKE_SOURCE_DIR}/docs/GG_LEVELS.md
+    DESTINATION level-editor/docs
+)
 
 if(MSVC)
     target_compile_definitions(tou_level PRIVATE _CRT_SECURE_NO_WARNINGS)

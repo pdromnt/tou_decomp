@@ -22,6 +22,15 @@ static int Has_Argument(int argc, char **argv, const char *argument)
     return 0;
 }
 
+static const char *Argument_Value(int argc, char **argv, const char *argument)
+{
+    for (int i = 1; i + 1 < argc; i++) {
+        if (strcmp(argv[i], argument) == 0)
+            return argv[i + 1];
+    }
+    return NULL;
+}
+
 void GameState_Transition(GameState next_state)
 {
     LOG("[STATE] main %u -> %u\n", (unsigned)g_GameState, (unsigned)next_state);
@@ -107,6 +116,25 @@ int main(int argc, char **argv)
         Platform_DestroyWindow();
         SDL_Quit();
         return 1;
+    }
+
+    const char *preview_level = Argument_Value(argc, argv, "--render-level-preview");
+    const char *preview_output = Argument_Value(argc, argv, "--preview-output");
+    if (preview_level || preview_output) {
+        int result = 1;
+        if (!preview_level || !preview_output ||
+            !Load_Level_File_Path(preview_level) ||
+            !Save_Level_Preview_Bmp(preview_output)) {
+            result = 1;
+        } else {
+            result = 0;
+        }
+        if (DAT_00481f50)
+            Free_Game_Resources();
+        Shutdown_Runtime();
+        Platform_DestroyWindow();
+        SDL_Quit();
+        return result;
     }
 
     Apply_Display_Settings();

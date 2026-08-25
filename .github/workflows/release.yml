@@ -80,6 +80,7 @@ jobs:
           -Version $env:RELEASE_TAG
           -Platform windows-x86
           -ExecutablePath stage/TOU.exe
+          -LevelEditorDirectory stage/level-editor
 
       - name: Upload release archive
         uses: actions/upload-artifact@v7
@@ -202,6 +203,7 @@ jobs:
           -Version $env:RELEASE_TAG
           -Platform ${{ matrix.platform }}
           -ExecutablePath ${{ matrix.executable }}
+          -LevelEditorDirectory stage/level-editor
 
       - name: Upload release archive
         uses: actions/upload-artifact@v7

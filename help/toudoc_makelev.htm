@@ -13,6 +13,19 @@
         <tr>
           <td bgcolor="#003366"> 
             <h1 align="left">9.0 Level making</h1>
+            <div class="workflow-note">
+              <b>New editor workflow:</b> The native tools use a
+              <code>.toulevel.json</code> project file. You do not edit the JSON
+              by hand: the command-line tool creates it, and the editor changes
+              it together with the attribute image. The JSON is source data;
+              the exported <code>.lev</code> is what the game loads. Launching
+              <code>tou-level-editor</code> without arguments presents Open,
+              New Normal, and New GG choices. Open accepts either an editable
+              JSON project or an existing compiled <code>.lev</code>. Importing a
+              level extracts its embedded JPEG payloads and reconstructs the
+              attribute TGA beside a new JSON project. The commands below remain
+              useful for scripts and exact custom dimensions.
+            </div>
             <h4>Important note:</h4>
             <ol>
               <li>All the TGA-pictures (targa) that you need in level making must 
@@ -21,10 +34,45 @@
                 format). And their extension must be JPG, not jpeg.</li>
             </ol>
             <h2><a name="normal">9.1 Making normal levels</a></h2>
-            <p>Maybe the easiest way to learn level making is to look at the jungle.jpg, 
-              jungle.tga, junglep.jpg and jungle.txt in the makelev-directory. 
-              Also check out normal.txt</p>
-            <p>To make a new level, do this:</p>
+            <h3>Native editor: new normal level</h3>
+            <ol>
+              <li>Draw the visible level in Photoshop, Krita, or another image
+                editor and save it as a true-color JPEG. This picture is the
+                final stage artwork.</li>
+              <li>From the TOU directory, create the project. The optional last
+                argument adds a parallax JPEG:</li>
+            </ol>
+            <pre>makelev\bin\tou-level.exe new projects\my-level\my-level.toulevel.json projects\my-level\my-level.jpg [projects\my-level\my-level-parallax.jpg]</pre>
+            <ol start="3">
+              <li>Open <code>my-level.toulevel.json</code> with
+                <code>tou-level-editor</code>.</li>
+              <li>Paint collision and material behavior in <b>Terrain</b>. Add
+                single-point gameplay objects in <b>Objects</b>, and configure
+                the level in <b>Rules</b>.</li>
+              <li>Press <b>Save</b> to update the project and its generated
+                <code>-attributes.tga</code>. Use <b>Check</b> to catch overlaps,
+                invalid links, missing assets, and runtime limits. Press
+                <b>Export</b> to create
+                <code>my-level.lev</code> beside the project.</li>
+              <li>Copy the exported file to <code>levels/my-level.lev</code>,
+                restart TOU so it rescans levels, and test it in a match.</li>
+            </ol>
+            <p>The visible JPEG and attribute map must have identical dimensions.
+              Keep the project JSON, JPEG, attribute TGA, and optional parallax
+              together as the editable source for the level.</p>
+            <p>The editor starts with a 9-pixel terrain brush so dragging is
+              immediately visible. The bottom strip shows the current size and
+              mouse controls for each tab. Use <b>Brush -</b> or <b>[</b> to
+              reduce it as far as the exact 1-pixel brush needed for detail work;
+              right-click picks an existing attribute, middle-drag pans, and the
+              mouse wheel zooms.</p>
+
+            <h3>Legacy source files</h3>
+            <p>The Jungle fixture remains a useful example of the old workflow:
+              <code>jungle.jpg</code>, <code>jungle.tga</code>,
+              <code>junglep.jpg</code>, and <code>jungle.txt</code>. The native
+              project replaces the hand-edited TXT and COLPICK steps.</p>
+            <p>The legacy workflow was:</p>
             <ol>
               <li>Draw the level's graphics and save the picture in jpeg-format. 
                 The extension of this file must be jpg. <b>Example: Jungle.jpg</b></li>
@@ -94,12 +142,26 @@
                 <td width="350"><img src="helpgfx/attrib_right.gif" width="350" height="350"></td>
               </tr>
             </table>
-            <h4>To put turrets, mines, gates etc. in the level:</h4>
-            <p>Use COLPICK.EXE and answer the questions it gives you. After that 
-              you will get the red, green and blue-values that you will put in 
-              your <b>attribute map</b>. Note that just one single pixel of &quot;turret-color&quot; 
-              will make you one turret. If you draw a line with that color, you 
-              will get hundreds of turrets (that overlap annoyingly).</p>
+            <h4>Turrets, mines, gates, and other objects</h4>
+            <p>Use the editor's <b>Objects</b> tab. Each marker is one point in
+              the attribute map; select a type, click to add it, drag to move it,
+              and edit its properties below the list. Do not draw a line of
+              markers unless you genuinely want hundreds of overlapping objects.</p>
+            <p><b>Gates do not have a free-standing sprite that you place in the
+              artwork.</b> The marker is an anchor. At runtime TOU creates a moving
+              wall at that coordinate and renders gate graphics 58/59 over it.
+              <b>Style</b> selects the wall behavior, <b>Facing</b> controls its
+              orientation, <b>Team</b> owns it, and <b>Graphics</b> selects the
+              normal/mirrored gate artwork. <b>Linked pair</b> creates a second,
+              opposite-facing segment one pixel beside the first and links their
+              motion. Leave enough clear space around the anchor for the wall to
+              move. The editor shows graphics 58/59 at that coordinate and keeps
+              the labeled anchor and movement axis visible while it is selected;
+              none of this artwork needs to be painted into the JPEG.</p>
+            <p>The turret preview follows its <b>Style</b>, <b>Team</b>, and
+              <b>Direction</b> properties using the same seven sprite families and
+              team-color transformation as the runtime. Turrets are previewed in
+              both the object selector and at their placed map coordinates.</p>
             <h4>More info on parallax background:</h4>
             <p>Parallax can be any size if it's smaller or equally sized with 
               the actual level. I mean, <i>both</i> width and height must be smaller 
@@ -107,9 +169,10 @@
             <h4><a name="cfg">More info on level's config file:</a></h4>
             <p>The config file has some questions about the level. Just answer 
               them, the config-file is quite well documented.</p>
-            <h4>Converting the level:</h4>
-            <p>Copy all your level files to makelev-directory and start the makelev.exe. 
-              Then give the level's name: <b>Example: jungle.</b></p>
+            <h4>Legacy conversion</h4>
+            <p>The historical converter accepted the old JPG/TGA/TXT set. New
+              projects should use the native editor's <b>Export</b> button or
+              <code>tou-level build project.toulevel.json output.lev</code>.</p>
             <p><b>Maximum level size:</b></p>
             <p>Both width and height must be less than 8000 pixels. By the way, 
               a 8000x8000 map would take 196 megabytes of memory!</p>
@@ -117,6 +180,29 @@
             <p>I strongly suggest keeping your level's width less than 2034 pixels! 
               The heigh can be whatever you want.</p>
             <h2><a name="gg">9.2 Making GG levels</a></h2>
+            <h3>First choose what you are creating</h3>
+            <ul>
+              <li><b>A GG theme</b> is a directory below <code>ggstuff</code>.
+                TOU discovers it directly and can generate different full maps
+                from that theme every match. This is the common way to add a new
+                look to the dynamic GG level list.</li>
+              <li><b>A custom GG level</b> is a <code>.lev</code> recipe that pins
+                dimensions, a theme, a seed/settings set, and an authored
+                constraint map. The game still generates its visible artwork at
+                load time, but the author controls its boundaries and special
+                regions.</li>
+            </ul>
+            <h3>Native editor: new custom GG level</h3>
+            <p>Create a project with a size and an existing theme directory name:</p>
+            <pre>makelev\bin\tou-level.exe new-gg projects\my-gg\my-gg.toulevel.json 1280 720 "the earth"</pre>
+            <p>Open the JSON in the editor. Paint the constraint/attribute map in
+              <b>Terrain</b>, change the theme, shape, densities, and seed in
+              <b>GG</b>, then Save and Export. Add sign records in the GG list
+              and paint <b>GG sign location</b> where each sign may appear. The
+              canvas is the editable behavior/constraint map. Click
+              <b>Preview</b> (or press <b>P</b>) to overlay terrain generated by
+              the actual game runtime. A fixed seed reproduces the same layout;
+              zero asks the runtime for a tick-derived seed.</p>
             <p>If you choose to make a GG level, you don't have to draw the graphics 
               for your level. Only the attribute map and config file are used 
               in GG levels.</p>
@@ -138,6 +224,21 @@
               to write your own texts in signs (otherwise the texts will be randomly 
               generated). Phew, that's about it. I hope you could follow :)</p>
             <h2><a name="ggtheme">9.3 Making themes for GG</a></h2>
+            <h3>Native theme workflow</h3>
+            <ol>
+              <li>Press <b>Ctrl+N</b> in a GG project, or run
+                <code>tou-level new-theme ggstuff "my theme"</code>. This creates
+                the directory and a starter <code>info.txt</code>.</li>
+              <li>Edit its <code>info.txt</code>. That file controls generator and
+                rendering behavior for the theme.</li>
+              <li>Replace at least <code>s1.tga</code> (terrain filler mask) and
+                <code>t1.jpg</code> (ground texture). Use Krita/Photoshop for these
+                assets; the level editor does not attempt to replace an art tool.</li>
+              <li>Start TOU again. The directory itself is discovered as a dynamic
+                GG entry. Test several generated sizes and seeds before shipping.</li>
+              <li>Optionally use the theme name in a custom GG project created by
+                <code>tou-level new-gg</code>.</li>
+            </ol>
             <p>All the tgas you draw here must be 24-bit tgas without compression! 
               And all the jpegs must have the extension &quot;jpg&quot;.</p>
             <p>Make a new directory under ggstuff. It will be your theme's name.</p>

@@ -125,7 +125,8 @@ channel as a discriminator:
 | 190 | Teleport | `R=(team-1)<<6 | (number-1)`; `G=target-1` |
 
 Turret styles entered as 1..7 are stored using the original remap
-`[0, 1, 5, 2, 3, 4, 6]`. Directions are 0..31, with 32 meaning random.
+`[0, 1, 5, 2, 3, 4, 6]`. At runtime direction 0 selects a random frame;
+values 1..32 select one of the 32 fixed orientation frames.
 
 Blue-180 object types are:
 
@@ -135,9 +136,32 @@ Blue-180 object types are:
 | 1 | Flame generator | zero |
 | 2 | Mine | `style-1` |
 | 3 | Base building | `team-1` |
+| 4 | Water creator | zero in the recovered sample/reference marker |
 
 The original converter caps placement output at 1,024 records. Each input
 marker is one exact pixel; antialiasing or a soft brush creates illegal colors.
+
+### Runtime placement semantics
+
+These ranges were checked independently in the original game's machine code,
+including the placement dispatcher at `0041BFE0` and the type-specific entity
+initializers it calls:
+
+| Placement | Runtime parameters |
+| --- | --- |
+| Turret | style `0..6`; armor `0..15` (`15` is indestructible); team `0..3`; direction `0..32` (`0` random) |
+| Gate | motion profile `0..4`; linked/double-segment boolean; team `0..3`; facing `0..3`; mirrored graphic boolean |
+| Smoke | direction `0..7`; size `0..3`; density `0..3` |
+| Flame | no type-specific values |
+| Mine | style `0..7` |
+| Base | team `0..3` |
+| Water creator | no type-specific values |
+| Starting place | team `0..3` |
+| Teleport | unique number `0..63`; team `0..3`; target is another existing teleport number |
+
+A linked gate consumes two of the runtime's maximum 16 wall segments; a normal
+gate consumes one. The editor validates that limit, placement overlap, teleport
+references, and all ranges before export.
 
 ## Placement section
 
@@ -189,6 +213,4 @@ the recovered table in `level.cpp`.
 
 ## Still to verify
 
-- Exact runtime interpretation of every placement parameter, independently of
-  the converter's packing.
 - The original runtime's handling of a deliberately forced GG parallax payload.

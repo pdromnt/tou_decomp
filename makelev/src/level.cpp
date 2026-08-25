@@ -501,6 +501,44 @@ bool IsIgnoredPlacementPadding(const std::vector<std::uint8_t> &bytes,
     return ((offset - records_start) % kPlacementSize) >= 14;
 }
 
+void ValidateConfigFields(const LevelConfig &config,
+                          std::vector<ValidationMessage> &messages) {
+    const auto error = [&messages](const std::string &text) {
+        messages.push_back({ValidationMessage::Severity::Error, text});
+    };
+    const auto check_string = [&error](const char *name,
+                                       const std::string &value,
+                                       std::size_t capacity) {
+        try {
+            if (Utf8ToLatin1(value).size() >= capacity) {
+                error(std::string(name) + " exceeds its " +
+                      std::to_string(capacity - 1U) + " character limit");
+            }
+        } catch (const std::exception &exception) {
+            error(std::string(name) + ": " + exception.what());
+        }
+    };
+    check_string("Maker", config.maker, 0x80);
+    check_string("Email", config.email, 0x80);
+    check_string("GG theme", config.gg_theme, 0x80);
+    if (config.civilians > 100 || config.bombing > 100) {
+        error("Civilians and bombing must be between 0 and 100");
+    }
+    if (config.repair_density > 100 || config.stuff_density > 100 ||
+        config.sign_density > 100) {
+        error("GG densities must be between 0 and 100");
+    }
+    if (config.sign_texts.size() > 16) {
+        error("A level can contain at most 16 sign-text records");
+    }
+    for (std::size_t index = 0; index < config.sign_texts.size(); ++index) {
+        check_string(("Sign " + std::to_string(index + 1U) + " first line").c_str(),
+                     config.sign_texts[index].first, 16);
+        check_string(("Sign " + std::to_string(index + 1U) + " second line").c_str(),
+                     config.sign_texts[index].second, 16);
+    }
+}
+
 }  // namespace
 
 bool Rgb::operator==(const Rgb &other) const {
@@ -658,6 +696,149 @@ void SaveProject(const Project &project, const std::filesystem::path &path) {
     stream << std::setw(2) << root << '\n';
 }
 
+Project CreateNormalProject(const std::filesystem::path &project_path,
+                            const std::filesystem::path &visual_path,
+                            const std::filesystem::path &parallax_path) {
+    const std::filesystem::path absolute_project =
+        std::filesystem::absolute(project_path).lexically_normal();
+    if (std::filesystem::exists(absolute_project)) {
+        throw std::runtime_error("Project already exists: " + absolute_project.string());
+    }
+    const std::filesystem::path absolute_visual =
+        std::filesystem::absolute(visual_path).lexically_normal();
+    const std::vector<std::uint8_t> visual = ReadBytes(absolute_visual);
+    const auto dimensions = JpegDimensions(visual);
+
+    std::string base = absolute_project.filename().string();
+    const std::string suffix = ".toulevel.json";
+    if (base.size() >= suffix.size() &&
+        base.compare(base.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        base.erase(base.size() - suffix.size());
+    } else {
+        base = absolute_project.stem().string();
+    }
+    const std::filesystem::path attributes =
+        absolute_project.parent_path() / (base + "-attributes.tga");
+    if (std::filesystem::exists(attributes)) {
+        throw std::runtime_error("Attribute image already exists: " + attributes.string());
+    }
+    std::filesystem::create_directories(absolute_project.parent_path());
+
+    Project project;
+    project.project_path = absolute_project;
+    project.visual_path = absolute_visual;
+    project.attribute_path = attributes;
+    if (!parallax_path.empty()) {
+        project.parallax_path =
+            std::filesystem::absolute(parallax_path).lexically_normal();
+        static_cast<void>(JpegDimensions(ReadBytes(project.parallax_path)));
+        project.config.parallax = true;
+    }
+
+    LevelData level;
+    level.config = project.config;
+    level.width = dimensions.first;
+    level.height = dimensions.second;
+    level.main_payload = visual;
+    level.attributes.assign(static_cast<std::size_t>(level.width) * level.height, 0);
+    SaveAttributeTga(level, attributes);
+    SaveProject(project, absolute_project);
+    return project;
+}
+
+Project CreateGroundGeneratedProject(const std::filesystem::path &project_path,
+                                     std::uint16_t width,
+                                     std::uint16_t height,
+                                     const std::string &theme) {
+    if (width == 0 || height == 0) {
+        throw std::runtime_error("GG project dimensions must be non-zero");
+    }
+    if (theme.empty()) {
+        throw std::runtime_error("GG project theme must not be empty");
+    }
+    const std::filesystem::path absolute_project =
+        std::filesystem::absolute(project_path).lexically_normal();
+    if (std::filesystem::exists(absolute_project)) {
+        throw std::runtime_error("Project already exists: " + absolute_project.string());
+    }
+    std::string base = absolute_project.filename().string();
+    const std::string suffix = ".toulevel.json";
+    if (base.size() >= suffix.size() &&
+        base.compare(base.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        base.erase(base.size() - suffix.size());
+    } else {
+        base = absolute_project.stem().string();
+    }
+    const std::filesystem::path attributes =
+        absolute_project.parent_path() / (base + "-attributes.tga");
+    if (std::filesystem::exists(attributes)) {
+        throw std::runtime_error("Attribute image already exists: " + attributes.string());
+    }
+    std::filesystem::create_directories(absolute_project.parent_path());
+
+    Project project;
+    project.project_path = absolute_project;
+    project.attribute_path = attributes;
+    project.config.mode = LevelMode::GroundGenerated;
+    project.config.gg_theme = theme;
+
+    LevelData level;
+    level.config = project.config;
+    level.width = width;
+    level.height = height;
+    level.attributes.assign(static_cast<std::size_t>(width) * height, 0);
+    SaveAttributeTga(level, attributes);
+    SaveProject(project, absolute_project);
+    return project;
+}
+
+Project ImportLevelProject(const std::filesystem::path &level_path,
+                           const std::filesystem::path &project_path) {
+    const std::filesystem::path absolute_project =
+        std::filesystem::absolute(project_path).lexically_normal();
+    if (std::filesystem::exists(absolute_project)) {
+        throw std::runtime_error("Project already exists: " + absolute_project.string());
+    }
+    const LevelData level = ReadLevel(level_path);
+    std::string base = absolute_project.filename().string();
+    const std::string suffix = ".toulevel.json";
+    if (base.size() >= suffix.size() &&
+        base.compare(base.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        base.erase(base.size() - suffix.size());
+    } else {
+        base = absolute_project.stem().string();
+    }
+    const std::filesystem::path directory = absolute_project.parent_path();
+    const std::filesystem::path attributes = directory / (base + "-attributes.tga");
+    const std::filesystem::path visual = directory / (base + "-visual.jpg");
+    const std::filesystem::path parallax = directory / (base + "-parallax.jpg");
+    const auto ensure_new = [](const std::filesystem::path &path) {
+        if (!path.empty() && std::filesystem::exists(path)) {
+            throw std::runtime_error("Imported asset already exists: " + path.string());
+        }
+    };
+    ensure_new(attributes);
+    if (level.config.mode == LevelMode::Normal) ensure_new(visual);
+    if (!level.parallax_payload.empty()) ensure_new(parallax);
+    std::filesystem::create_directories(directory);
+
+    Project project;
+    project.project_path = absolute_project;
+    project.attribute_path = attributes;
+    project.config = level.config;
+    if (level.config.mode == LevelMode::Normal) {
+        WriteBytes(visual, level.main_payload);
+        project.visual_path = visual;
+    }
+    if (!level.parallax_payload.empty()) {
+        WriteBytes(parallax, level.parallax_payload);
+        project.parallax_path = parallax;
+    }
+    SaveAttributeTga(level, attributes);
+    SaveProject(project, absolute_project);
+    return project;
+}
+
 LevelData CompileProject(const Project &project) {
     const std::vector<ValidationMessage> messages = ValidateProject(project);
     const auto error = std::find_if(messages.begin(), messages.end(),
@@ -709,7 +890,11 @@ LevelData CompileProject(const Project &project) {
     }
     if (project.config.parallax) {
         level.parallax_payload = ReadBytes(project.parallax_path);
-        static_cast<void>(JpegDimensions(level.parallax_payload));
+        const auto dimensions = JpegDimensions(level.parallax_payload);
+        if (dimensions.first > level.width || dimensions.second > level.height) {
+            throw std::runtime_error(
+                "Parallax JPEG cannot be larger than the level in either dimension");
+        }
     }
     return level;
 }
@@ -852,12 +1037,10 @@ std::vector<ValidationMessage> ValidateProject(const Project &project) {
         messages.push_back({ValidationMessage::Severity::Warning,
                             "Parallax asset is set but parallax is disabled"});
     }
-    if (project.config.civilians > 100 || project.config.bombing > 100) {
-        error("Civilians and bombing must be between 0 and 100");
+    if (project.config.mode == LevelMode::GroundGenerated && project.config.parallax) {
+        error("Custom parallax in GG levels is intentionally unsupported");
     }
-    if (project.config.sign_texts.size() > 16) {
-        error("A level can contain at most 16 sign-text records");
-    }
+    ValidateConfigFields(project.config, messages);
     return messages;
 }
 
@@ -866,6 +1049,10 @@ std::vector<ValidationMessage> ValidateLevel(const LevelData &level) {
     const auto error = [&messages](const std::string &text) {
         messages.push_back({ValidationMessage::Severity::Error, text});
     };
+    const auto warning = [&messages](const std::string &text) {
+        messages.push_back({ValidationMessage::Severity::Warning, text});
+    };
+    ValidateConfigFields(level.config, messages);
     if (level.width == 0 || level.height == 0) {
         error("Level dimensions must be non-zero");
     }
@@ -882,12 +1069,83 @@ std::vector<ValidationMessage> ValidateLevel(const LevelData &level) {
     if (level.config.parallax != !level.parallax_payload.empty()) {
         error("Parallax config and payload disagree");
     }
+    if (level.config.mode == LevelMode::GroundGenerated && level.config.parallax) {
+        error("Custom parallax in GG levels is intentionally unsupported");
+    }
+    std::size_t wall_segments = 0;
+    std::vector<std::pair<std::int32_t, std::int32_t>> occupied;
+    std::array<bool, 64> teleport_numbers{};
     for (const Placement &placement : level.placements) {
         if (placement.x < 0 || placement.y < 0 ||
             placement.x >= level.width || placement.y >= level.height) {
             error("Placement lies outside the attribute map");
+            continue;
+        }
+        if (std::find(occupied.begin(), occupied.end(),
+                      std::make_pair(placement.x, placement.y)) != occupied.end()) {
+            error("Multiple placements overlap at (" +
+                  std::to_string(placement.x) + ", " +
+                  std::to_string(placement.y) + ")");
+        } else {
+            occupied.emplace_back(placement.x, placement.y);
+        }
+        const auto &p = placement.parameters;
+        switch (placement.type) {
+        case PlacementType::Turret:
+            if (p[0] > 6 || p[1] > 15 || p[2] > 3 || p[3] > 32) {
+                error("Turret placement has an out-of-range style, armor, team, or direction");
+            }
+            break;
+        case PlacementType::Gate:
+            if (p[0] > 4 || p[1] > 1 || p[2] > 3 || p[3] > 3 || p[4] > 1) {
+                error("Gate placement has an out-of-range style, pair, team, facing, or mirror value");
+            }
+            wall_segments += p[1] == 0 ? 1U : 2U;
+            break;
+        case PlacementType::Object:
+            if (p[0] > 4 ||
+                (p[0] == 0 && (p[1] > 7 || p[2] > 3 || p[3] > 3)) ||
+                (p[0] == 2 && p[1] > 7) ||
+                (p[0] == 3 && p[1] > 3)) {
+                error("Object placement has an out-of-range type-specific value");
+            }
+            break;
+        case PlacementType::StartingPlace:
+            if (p[0] > 3) error("Starting place has an invalid team");
+            break;
+        case PlacementType::Teleport:
+            if (p[0] > 63 || p[1] > 3) {
+                error("Teleport has an invalid number or team");
+            } else if (teleport_numbers[p[0]]) {
+                error("Teleport number " + std::to_string(p[0] + 1U) +
+                      " is used more than once");
+            } else {
+                teleport_numbers[p[0]] = true;
+            }
+            break;
+        default:
+            error("Placement has an unknown runtime type");
             break;
         }
+    }
+    if (wall_segments > 16) {
+        error("Gates create " + std::to_string(wall_segments) +
+              " wall segments, but the runtime limit is 16");
+    }
+    for (const Placement &placement : level.placements) {
+        if (placement.type == PlacementType::Teleport &&
+            (placement.parameters[2] > 63 ||
+             !teleport_numbers[placement.parameters[2]])) {
+            error("Teleport " + std::to_string(placement.parameters[0] + 1U) +
+                  " targets missing teleport " +
+                  std::to_string(placement.parameters[2] + 1U));
+        }
+    }
+    if (std::none_of(level.placements.begin(), level.placements.end(),
+                     [](const Placement &placement) {
+                         return placement.type == PlacementType::StartingPlace;
+                     })) {
+        warning("Level contains no authored starting places");
     }
     return messages;
 }

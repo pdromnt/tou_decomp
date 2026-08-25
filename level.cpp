@@ -16,6 +16,7 @@
  *   after entities:     RLE tilemap (terminated by 0xFF remap)
  */
 #include "tou.h"
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -331,17 +332,15 @@ void FUN_00421310(void)
 /* Opens a .lev file, verifies the header, extracts tile type table,
  * then delegates to Load_Image_Data for JPEG/entities/tilemap.
  * Returns 1 on success, 0 on failure. */
-int Load_Level_File(const char *level_name)
+int Load_Level_File_Path(const char *path)
 {
-    char path[256];
+    const char *level_name = path;
     FILE *f;
     long file_size;
     unsigned char *file_buf;
     int jpeg_offset, extra_offset, entity_offset;
     int result;
 
-    /* Build path: levels\<name>.lev */
-    snprintf(path, sizeof(path), "levels/%s.lev", level_name);
     f = fopen(path, "rb");
     if (!f) {
         snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
@@ -436,6 +435,39 @@ int Load_Level_File(const char *level_name)
     return result;
 }
 
+int Load_Level_File(const char *level_name)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "levels/%s.lev", level_name);
+    return Load_Level_File_Path(path);
+}
+
+int Save_Level_Preview_Bmp(const char *path)
+{
+    if (!DAT_00481f50 || DAT_004879f0 <= 14 || DAT_004879f4 <= 14)
+        return 0;
+    const int width = (int)DAT_004879f0 - 14;
+    const int height = (int)DAT_004879f4 - 14;
+    SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGB24);
+    if (!surface)
+        return 0;
+    const unsigned short *source = (const unsigned short *)DAT_00481f50;
+    unsigned char *destination = (unsigned char *)surface->pixels;
+    for (int y = 0; y < height; ++y) {
+        unsigned char *row = destination + y * surface->pitch;
+        for (int x = 0; x < width; ++x) {
+            const unsigned short pixel =
+                source[((y + 7) << ((unsigned char)DAT_00487a18 & 0x1f)) + x + 7];
+            row[x * 3] = (unsigned char)(((pixel >> 11) & 0x1f) * 255 / 31);
+            row[x * 3 + 1] = (unsigned char)(((pixel >> 5) & 0x3f) * 255 / 63);
+            row[x * 3 + 2] = (unsigned char)((pixel & 0x1f) * 255 / 31);
+        }
+    }
+    const int result = SDL_SaveBMP(surface, path) ? 1 : 0;
+    SDL_DestroySurface(surface);
+    return result;
+}
+
 
 /* ===== Load_Image_Data (based on Load_Image_Wrapper @ 00420720) ===== */
 /* Processes the embedded JPEG, entity placements, and RLE tilemap.
@@ -456,14 +488,36 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     unsigned char *tilemap;
     int i, row, col;
 
-    /* ---- 1. Decode embedded JPEG background ---- */
+    /* ---- 1. Decode normal JPEG or initialize a custom GG canvas ---- */
     jpeg_data = file_buf + jpeg_offset;
     jpeg_len  = entity_offset - jpeg_offset;
 
-    rgb24 = (unsigned char *)Load_JPEG_From_Memory(jpeg_data, jpeg_len, &img_w, &img_h);
-    if (!rgb24) {
+    if (DAT_0048396d != 0) {
+        /* The original Load_Image_Wrapper reads a four-byte little-endian
+         * width/height payload for custom GG levels. The visible background is
+         * generated later from the decoded constraint map and selected theme. */
+        if (jpeg_len < 4) {
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "Generated level has an invalid dimension payload");
+            return 0;
+        }
+        img_w = (int)jpeg_data[0] | ((int)jpeg_data[1] << 8);
+        img_h = (int)jpeg_data[2] | ((int)jpeg_data[3] << 8);
+        rgb24 = NULL;
+    } else {
+        rgb24 = (unsigned char *)Load_JPEG_From_Memory(
+            jpeg_data, jpeg_len, &img_w, &img_h);
+        if (!rgb24) {
+            snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
+                     "Failed to decode level background JPEG");
+            return 0;
+        }
+    }
+
+    if (img_w <= 0 || img_h <= 0) {
         snprintf(DAT_00489d7c, sizeof(DAT_00489d7c),
-                 "Failed to decode level background JPEG");
+                 "Level has invalid dimensions %dx%d", img_w, img_h);
+        if (rgb24) stbi_image_free(rgb24);
         return 0;
     }
 
@@ -509,24 +563,34 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
     /* Clear tilemap to 0 */
     memset(tilemap, 0, stride * map_h);
 
-    /* ---- 4. Convert RGB24 → RGB565 into stride-aligned positions ---- */
-    /* Place JPEG pixels at interior positions (7,7) to (map_w-8, map_h-8) */
-    for (row = 0; row < img_h; row++) {
-        for (col = 0; col < img_w; col++) {
-            int src_idx = (row * img_w + col) * 3;
-            unsigned char r = rgb24[src_idx + 0];
-            unsigned char g = rgb24[src_idx + 1];
-            unsigned char b = rgb24[src_idx + 2];
-            unsigned short rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-
-            /* Place at border-offset position in stride-aligned buffer */
-            int dst_row = row + 7;
-            int dst_col = col + 7;
-            bg_pixels[(dst_row << shift) + dst_col] = rgb565;
+    /* ---- 4. Initialize the background ---- */
+    if (DAT_0048396d != 0) {
+        /* Binary parity: custom GG starts as dark blue RGB565 (0x0080),
+         * then FUN_004143e0 paints the generated theme over it. */
+        for (row = 0; row < (int)map_h; row++) {
+            for (col = 0; col < (int)map_w; col++) {
+                bg_pixels[(row << shift) + col] = 0x0080;
+            }
         }
-    }
+    } else {
+        /* Place JPEG pixels at interior positions (7,7) to
+         * (map_w-8, map_h-8). */
+        for (row = 0; row < img_h; row++) {
+            for (col = 0; col < img_w; col++) {
+                int src_idx = (row * img_w + col) * 3;
+                unsigned char r = rgb24[src_idx + 0];
+                unsigned char g = rgb24[src_idx + 1];
+                unsigned char b = rgb24[src_idx + 2];
+                unsigned short rgb565 = ((r & 0xF8) << 8) |
+                    ((g & 0xFC) << 3) | (b >> 3);
 
-    stbi_image_free(rgb24);
+                int dst_row = row + 7;
+                int dst_col = col + 7;
+                bg_pixels[(dst_row << shift) + dst_col] = rgb565;
+            }
+        }
+        stbi_image_free(rgb24);
+    }
     /* ---- 5. Parse entity placements ---- */
     {
         unsigned char *ent_section = file_buf + entity_offset;
@@ -621,6 +685,12 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
                     /* Solid tile: black background */
                     bg_pixels[(row << shift) + col] = 0;
                 }
+                if (ent_entry[4] == 0x01) {
+                    /* Retail uses the configured water color for normal levels,
+                     * but leaves GG water dark for the generator to texture. */
+                    bg_pixels[(row << shift) + col] =
+                        DAT_0048396d == 0 ? DAT_0048384c : 0;
+                }
             }
         }
     }
@@ -634,7 +704,34 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
         }
     }
 
-    /* ---- 9. Allocate grid buffers ---- */
+    /* ---- 9. Generate custom GG artwork from the authored constraints ---- */
+    if (DAT_0048396d != 0) {
+        /* These were overlapping globals in the original executable. Keep the
+         * reconstructed standalone GG globals synchronized with the packed
+         * level config before entering the generator. */
+        memcpy(DAT_0048396e, DAT_00483860 + 0x10E, 0x80);
+        DAT_0048396e[0x7F] = '\0';
+        DAT_004839ee = (char)DAT_00483860[0x18E];
+        DAT_004839ef = (char)DAT_00483860[0x18F];
+        DAT_004839f0 = (short)((unsigned short)DAT_00483860[0x190] |
+            ((unsigned short)DAT_00483860[0x191] << 8));
+        DAT_004839f4 = (uint32_t)DAT_00483860[0x194] |
+            ((uint32_t)DAT_00483860[0x195] << 8) |
+            ((uint32_t)DAT_00483860[0x196] << 16) |
+            ((uint32_t)DAT_00483860[0x197] << 24);
+
+        if (DAT_004839f4 == 0) {
+            DAT_004839f4 = Platform_GetTicks();
+        }
+        srand(DAT_004839f4);
+        if (FUN_004143e0(0, 0) == 0) {
+            return 0;
+        }
+        /* The retail binary restores a time-based gameplay RNG after GG. */
+        srand(Platform_GetTicks());
+    }
+
+    /* ---- 10. Allocate grid buffers ---- */
     DAT_00487814 = Mem_Alloc((DAT_004879fc + 1) * (DAT_004879f8 + 1));
     if (DAT_00487814) {
         g_MemoryTracker += (DAT_004879fc + 1) * (DAT_004879f8 + 1);
@@ -652,7 +749,7 @@ int Load_Image_Data(int jpeg_offset, int extra_offset, int entity_offset,
         memset(DAT_00489ea8, 0, (DAT_00487a08 + 1) * (DAT_00487a04 + 1));
     }
 
-    /* ---- 10. Initialize game config defaults (from FUN_00416ad0) ---- */
+    /* ---- 11. Initialize game config defaults (from FUN_00416ad0) ---- */
     /* Original addresses 0x483963-0x48396c are after the saved config range. */
     g_LevelPhysicsTuning.spawn_timer = 0x28;
     g_LevelPhysicsTuning.respawn_delay = 0x3c;

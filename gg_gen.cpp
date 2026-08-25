@@ -122,10 +122,10 @@ int           DAT_00480714;         /* texdark/pardark parsed flags */
 int           DAT_00480718;         /* sign parsed flag */
 
 /* Entity spawning config */
-char          DAT_004839ee;         /* entity enable flag */
-char          DAT_004839ef;         /* creature density */
-short         DAT_004839f0;         /* treasure/pickup config (bytes) */
-uint32_t      DAT_004839f4;         /* progress timer */
+char          DAT_004839ee;         /* custom GG shape flag */
+char          DAT_004839ef;         /* custom GG repair density */
+short         DAT_004839f0;         /* custom GG stuff/sign densities */
+uint32_t      DAT_004839f4;         /* custom GG random seed */
 int           DAT_00480878;         /* creature spawn rate */
 int           DAT_0048087c;         /* pickup spawn rate */
 int           DAT_00480880;         /* treasure spawn rate */

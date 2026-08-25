@@ -1,6 +1,7 @@
 #include "tou_level/level.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -13,6 +14,10 @@ void Usage() {
     std::cout
         << "TOU level compiler\n\n"
         << "Usage:\n"
+        << "  tou-level new <project.toulevel.json> <visual.jpg> [parallax.jpg]\n"
+        << "  tou-level new-gg <project.toulevel.json> <width> <height> <theme>\n"
+        << "  tou-level new-theme <ggstuff-directory> <theme-name>\n"
+        << "  tou-level import <level.lev> <project.toulevel.json>\n"
         << "  tou-level inspect <level.lev>\n"
         << "  tou-level validate <project.toulevel.json>\n"
         << "  tou-level build <project.toulevel.json> <output.lev>\n"
@@ -41,6 +46,63 @@ int main(int argc, char **argv) {
             return 2;
         }
         const std::string command = argv[1];
+        if (command == "new" && (argc == 4 || argc == 5)) {
+            const tou::level::Project project = tou::level::CreateNormalProject(
+                argv[2], argv[3], argc == 5 ? std::filesystem::path(argv[4])
+                                             : std::filesystem::path{});
+            const tou::level::LevelData level = tou::level::CompileProject(project);
+            std::cout << "created " << project.project_path.string() << " ("
+                      << level.width << 'x' << level.height << ")\n";
+            return 0;
+        }
+        if (command == "new-gg" && argc == 6) {
+            const int width = std::stoi(argv[3]);
+            const int height = std::stoi(argv[4]);
+            if (width < 1 || width > 65535 || height < 1 || height > 65535) {
+                throw std::runtime_error("GG dimensions must be between 1 and 65535");
+            }
+            const tou::level::Project project =
+                tou::level::CreateGroundGeneratedProject(
+                    argv[2], static_cast<std::uint16_t>(width),
+                    static_cast<std::uint16_t>(height), argv[5]);
+            std::cout << "created GG project " << project.project_path.string()
+                      << " (" << width << 'x' << height << ", theme "
+                      << project.config.gg_theme << ")\n";
+            return 0;
+        }
+        if (command == "new-theme" && argc == 4) {
+            const std::string name = argv[3];
+            if (name.empty() || name == "." || name == ".." ||
+                name.find('/') != std::string::npos ||
+                name.find('\\') != std::string::npos) {
+                throw std::runtime_error("Theme name must be one directory name");
+            }
+            const std::filesystem::path directory =
+                std::filesystem::path(argv[2]) / name;
+            if (std::filesystem::exists(directory)) {
+                throw std::runtime_error("Theme directory already exists: " +
+                                         directory.string());
+            }
+            std::filesystem::create_directories(directory);
+            std::ofstream info(directory / "info.txt", std::ios::binary);
+            info << "/MAKER\nAnonymous\n/EMAIL\n\n/TEXDARK\n80\n/PARDARK\n96\n"
+                    "/TEXATTR\n1\n/GRASSATTR\n1\n/PICATTR\n1\n/SIGNATTR\n2\n"
+                    "/SIGNCOLOR\n1\n/SIGNTEXT\n10,22\n/FIXEDSIZE\n0,0\n"
+                    "/WATERLEVEL\n0\n/WATERC\n50,50,200\n/BEACHSTYLE\nno\n";
+            if (!info) throw std::runtime_error("Could not create theme info.txt");
+            std::cout << "created GG theme scaffold " << directory.string()
+                      << " (add s1.tga and t1.jpg)\n";
+            return 0;
+        }
+        if (command == "import" && argc == 4) {
+            const tou::level::Project project =
+                tou::level::ImportLevelProject(argv[2], argv[3]);
+            const tou::level::LevelData level = tou::level::CompileProject(project);
+            std::cout << "imported " << std::filesystem::path(argv[2]).string()
+                      << " into " << project.project_path.string() << " ("
+                      << level.width << 'x' << level.height << ")\n";
+            return 0;
+        }
         if (command == "inspect" && argc == 3) {
             const tou::level::LevelData level = tou::level::ReadLevel(argv[2]);
             std::cout << tou::level::ToJson(level) << '\n';

@@ -75,7 +75,10 @@ It validates the executable architecture but never publishes a release.
 To create the same archive layout used by CI:
 
 ```powershell
-./scripts/package-release.ps1 -Version local -Platform windows-x64 -ExecutablePath ./TOU.exe
+cmake --install build --config Release --prefix stage
+./scripts/package-release.ps1 -Version local -Platform windows-x64 `
+  -ExecutablePath ./stage/TOU.exe `
+  -LevelEditorDirectory ./stage/level-editor
 ```
 
 ## Releases
@@ -94,8 +97,9 @@ permissions.
 
 SDL3 now owns presentation, windowing, input, audio, timing, dialogs, and file
 discovery behind portable platform boundaries. Browser support comes only after
-the native desktop builds are runtime-proven. Gamepads, non-split-screen netplay,
-and better tooling for `.lev` and GG level formats remain later possibilities.
+the native desktop builds are runtime-proven. The release packages now include
+the native `.lev`/GG level editor and compiler. Gamepads and
+non-split-screen netplay remain later possibilities.
 
 ## Contributing
 

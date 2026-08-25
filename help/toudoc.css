@@ -197,6 +197,37 @@ h4 {
 p, li, td { color: var(--text); }
 p { margin: 0.65em 0 1em; }
 
+code, pre {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+code {
+  padding: 0.12rem 0.34rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(3, 9, 15, 0.72);
+  color: var(--gold);
+}
+
+pre {
+  max-width: 100%;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(3, 9, 15, 0.82);
+  color: var(--accent-strong);
+}
+
+.workflow-note {
+  margin: 1.25rem 0;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(10, 31, 43, 0.78);
+}
+
 a, a:visited {
   color: var(--accent);
   text-decoration-color: rgba(87, 216, 234, 0.5);

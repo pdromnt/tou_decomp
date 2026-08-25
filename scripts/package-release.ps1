@@ -2,6 +2,7 @@ param(
     [string]$Version = "dev",
     [string]$Platform = "windows-x86",
     [string]$ExecutablePath,
+    [string]$LevelEditorDirectory,
     [string]$OutputDirectory
 )
 
@@ -35,6 +36,10 @@ if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
 }
 $resolvedExecutable = [System.IO.Path]::GetFullPath($ExecutablePath)
 $executableName = [System.IO.Path]::GetFileName($resolvedExecutable)
+if ([string]::IsNullOrWhiteSpace($LevelEditorDirectory)) {
+    $LevelEditorDirectory = Join-Path (Split-Path -Parent $resolvedExecutable) "level-editor"
+}
+$resolvedLevelEditor = [System.IO.Path]::GetFullPath($LevelEditorDirectory)
 
 $requiredDirectories = @(
     "data",
@@ -50,6 +55,32 @@ $requiredDirectories = @(
 
 if (-not (Test-Path -LiteralPath $resolvedExecutable -PathType Leaf)) {
     throw "Required release executable is missing: $resolvedExecutable"
+}
+if (-not (Test-Path -LiteralPath $resolvedLevelEditor -PathType Container)) {
+    throw "Staged level-editor directory is missing: $resolvedLevelEditor"
+}
+
+$toolSuffix = if ($isWindowsPackage) { ".exe" } else { "" }
+$requiredEditorFiles = @(
+    "tou-level$toolSuffix",
+    "tou-level-editor$toolSuffix",
+    "README.md",
+    "docs/LEVEL_FORMAT.md",
+    "docs/LEVEL_PALETTE.json",
+    "docs/GG_LEVELS.md"
+)
+foreach ($relativePath in $requiredEditorFiles) {
+    $editorInput = Join-Path $resolvedLevelEditor $relativePath
+    if (-not (Test-Path -LiteralPath $editorInput -PathType Leaf)) {
+        throw "Required level-editor runtime file is missing: $editorInput"
+    }
+}
+
+$forbiddenEditorDirectories = @("src", "include", "editor", "tests", "fixtures")
+foreach ($directory in $forbiddenEditorDirectories) {
+    if (Test-Path -LiteralPath (Join-Path $resolvedLevelEditor $directory)) {
+        throw "Level-editor staging unexpectedly contains source directory: $directory"
+    }
 }
 
 foreach ($relativePath in $requiredDirectories) {
@@ -103,6 +134,8 @@ if ($isMacPackage) {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot $relativePath) -Destination $packageRoot -Recurse
     }
 }
+Copy-Item -LiteralPath $resolvedLevelEditor `
+    -Destination (Join-Path $packageRoot "level-editor") -Recurse
 
 if ($isWindowsPackage) {
     Compress-Archive -Path (Join-Path $packageRoot "*") `
