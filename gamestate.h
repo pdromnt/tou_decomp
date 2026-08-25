@@ -12,7 +12,7 @@
 /* COMPAT */   #define STR_ERR_RENDER_MODE    "Video renderer configuration failed.\n\nRun with --logging for details."
 /* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."
 /* 0047F14C */ #define STR_ERR_INIT_NOLEVELS  "Tou init failed!\nYou don't have any levels or GG themes!\n\nYou can't run the game without levels.\n\nRead readme.txt for more information."
-/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.6"
+/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.7"
 
 /* ===== Window / App Globals (main.cpp) ===== */
 extern int                   g_bIsActive;       /* 00489EC4 */
