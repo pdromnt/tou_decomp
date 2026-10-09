@@ -70,7 +70,7 @@ extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 
 /* ===== Menu / Session (init.cpp / FUN_0042d8b0) ===== */
-enum { MENU_STRING_CAPACITY = 360 };
+enum { MENU_STRING_CAPACITY = 384 };
 extern char                **g_MenuStrings;     /* 00481D3C - extended legacy menu text table */
 extern void                 *g_GameViewData;    /* 00481D40 - game view item array */
 extern char                **g_KeyNameTable;    /* 00481D88 - 256-entry scan code name table */

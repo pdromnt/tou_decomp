@@ -124,7 +124,7 @@ static char s_LanHostDisplay[72] = "127.0.0.1";
 static char s_LanPortDisplay[16] = "27015";
 static char s_LanStatus[160] = "";
 static char s_LanTeamText[32] = "Team 1";
-static char s_LanRoster[192] = "";
+static char s_LanRoster[1024] = "";
 static unsigned char s_LanPreviousKeys[256] = {0};
 static int s_LanTeam = 1;
 static LanEditField s_LanEditField = LAN_EDIT_NONE;
@@ -151,7 +151,7 @@ static void Update_Lan_Menu_Dynamic_Text(void)
     }
     char roster[sizeof(s_LanRoster)] = "";
     if (Netplay_IsEnabled()) {
-        char players[160];
+        char players[896];
         Netplay_FormatRoster(players, sizeof(players));
         snprintf(roster, sizeof(roster), Text_Get("lan.roster_format"),
                  Netplay_ConnectedPlayerCount(), players);
@@ -1359,6 +1359,8 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x162] = s_LanPortDisplay;
     g_MenuStrings[0x163] = (char *)"Connect";
     g_MenuStrings[0x164] = s_LanRoster;
+    g_MenuStrings[0x165] = (char *)"Play on this computer with friends or CPU pilots.";
+    g_MenuStrings[0x166] = (char *)"Play with 2-4 people on separate computers.";
 
     Localization_BindLegacyMenuStrings(g_MenuStrings, MENU_STRING_CAPACITY);
 }
@@ -3036,26 +3038,112 @@ static void Build_Options_Menu_Page(void)
     DAT_004877b1 = 0;
 }
 
+/* Tiny-font LAN copy uses stable menu slots and wraps at measured glyph widths.
+ * Each page rebuild owns the buffers until the next rebuild. */
+static char s_LanTextLines[16][256];
+static int s_LanTextLineCount = 0;
+
+static int Lan_Text_Width(const char *text)
+{
+    int pen = 0;
+    int drawn_width = 0;
+    while (*text) {
+        unsigned char glyph;
+        text = Text_NextGlyph(text, &glyph);
+        const int width = Font_Char_Table[3 * 256 + glyph].width;
+        if (glyph == ' ') {
+            pen += width;
+        } else if (width > 0) {
+            drawn_width = pen + width;
+            pen = drawn_width + 1; /* Draw_Text_To_Buffer's glyph spacing */
+        }
+    }
+    return drawn_width;
+}
+
+static void Add_Lan_Help_Text(const char *text, int y, int max_lines = 2,
+                              int color = 1)
+{
+    for (int line = 0; *text && line < max_lines && s_LanTextLineCount < 16;
+         ++line, y += 16) {
+        const char *cursor = text;
+        const char *last_space = NULL;
+        int width = 0;
+        while (*cursor) {
+            unsigned char glyph;
+            const char *next = Text_NextGlyph(cursor, &glyph);
+            const int glyph_width = Font_Char_Table[3 * 256 + glyph].width;
+            const int advance = glyph_width +
+                ((glyph != ' ' && glyph_width > 0) ? 1 : 0);
+            if (width + advance > 540 || next - text >= 256)
+                break;
+            if (*cursor == ' ')
+                last_space = cursor;
+            width += advance;
+            cursor = next;
+        }
+        if (*cursor && last_space != NULL)
+            cursor = last_space;
+        if (cursor == text)
+            break;
+        const int index = s_LanTextLineCount++;
+        const size_t length = (size_t)(cursor - text);
+        memcpy(s_LanTextLines[index], text, length);
+        s_LanTextLines[index][length] = 0;
+        g_MenuStrings[0x170 + index] = s_LanTextLines[index];
+        const int previous_count = DAT_004877a8;
+        FUN_00430200(0, y, 0x170 + index, color, 3, 0, 0, 1, 0xff);
+        if (DAT_004877a8 > previous_count) {
+            MenuItem *item = &((MenuItem *)g_GameViewData)[previous_count];
+            item->width = Lan_Text_Width(s_LanTextLines[index]);
+            item->x = (640 - item->width) / 2;
+        }
+        text = cursor;
+        while (*text == ' ')
+            ++text;
+    }
+}
+
 static void Build_Lan_Menu_Page(void)
 {
     Update_Lan_Menu_Dynamic_Text();
-    FUN_00430200(0, 0x28, 0x15D, 1, 0, 0, 0, 1, 0xff);
-    FUN_00430200(0, 0x58, 0x15F, 2, 3, 0, 0, 1, 0xff);
+    s_LanTextLineCount = 0;
+    FUN_00430200(0, 64, 0x15D, 1, 0, 0, 0, 1, 0xff);
+    Add_Lan_Help_Text(s_LanStatus, 108, 2, 2);
 
     if (!Netplay_IsEnabled()) {
-        FUN_00430200(0, 0xa0, 0x157, 2, 2, 1, 0, 1, 0xFA);
-        FUN_00430200(0, 0xd0, 0x158, 2, 2, 1, 0, 1, 0xF6);
-        FUN_00430200(0, 0x180, 0x0F, 2, 0, 1, 0, 1, 0xF8);
+        FUN_00430200(0, 160, 0x157, 2, 2, 1, 0, 1, 0xFA);
+        Add_Lan_Help_Text(Text_Get("lan.help.host"), 192);
+        FUN_00430200(0, 272, 0x158, 2, 2, 1, 0, 1, 0xF6);
+        Add_Lan_Help_Text(Text_Get("lan.help.join"), 304);
+        Add_Lan_Help_Text(Text_Get("lan.help.ship"), 368);
+        FUN_00430200(0, 432, 0x0F, 2, 0, 1, 0, 1, 0xF8);
         DAT_004877c9 = 0xF8;
     } else {
-        if (Netplay_IsHost()) {
-            FUN_00430200(0, 0x90, 0x164, 1, 2, 0, 0, 1, 0xff);
-            FUN_00430200(0, 0xd0, 0x15B, 2, 2, 1, 0, 1, 0x1E);
-        } else {
-            FUN_00430200(0, 0x9c, 0x160, 1, 2, 0, 0, 1, 0xff);
-            FUN_00430200(0, 0xd0, 0x164, 1, 3, 0, 0, 1, 0xff);
+        char count[64];
+        snprintf(count, sizeof(count), Text_Get("lan.player_count_format"),
+                 Netplay_ConnectedPlayerCount());
+        Add_Lan_Help_Text(count, 160, 1, 2);
+        char players[896];
+        Netplay_FormatRoster(players, sizeof(players));
+        char *entry = players;
+        for (int row = 0; *entry && row < 4; ++row) {
+            char *separator = strstr(entry, " | ");
+            if (separator != NULL)
+                *separator = 0;
+            Add_Lan_Help_Text(entry, 192 + row * 24, 1);
+            if (separator == NULL)
+                break;
+            entry = separator + 3;
         }
-        FUN_00430200(0, 0x110, 0x15C, 2, 2, 1, 0, 1, 0xF7);
+        if (Netplay_IsHost()) {
+            FUN_00430200(0, 320, 0x15B, 2, 2, 1, 0, 1, 0x1E);
+            Add_Lan_Help_Text(Text_Get("lan.help.start"), 352);
+        } else {
+            Add_Lan_Help_Text(Text_Get("lan.help.wait"), 328);
+        }
+        Add_Lan_Help_Text(Text_Get("lan.help.ship"), 392);
+        FUN_00430200(0, 432, 0x15C, 2, 2, 1, 0, 1, 0xF7);
         DAT_004877c9 = 0xF7;
     }
     g_FrameIndex = 0;
@@ -3099,16 +3187,21 @@ static void Build_Lan_Join_Page(void)
         s_LanSettingsLoaded = true;
     }
     Update_Lan_Menu_Dynamic_Text();
-    FUN_00430200(0, 0x28, 0x158, 1, 0, 0, 0, 1, 0xff);
-    FUN_00430200(0, 0x52, 0x15F, 2, 3, 0, 0, 1, 0xff);
-    FUN_00430200(0, 0x80, 0x159, 2, 2, 0, 0, 1, 0xff);
-    FUN_00430200(0, 0x9c, 0x15E, 1, 2, 1, 0, 1, 0xF5);
-    FUN_00430200(0, 0xc0, 0x161, 2, 2, 0, 0, 1, 0xff);
-    FUN_00430200(0, 0xdc, 0x162, 1, 2, 1, 0, 1, 0xF4);
-    FUN_00430200(0, 0x100, 0x15A, 2, 2, 0, 0, 1, 0xff);
-    FUN_00430200(0, 0x11c, 0x160, 1, 2, 1, 0, 1, 0xFC);
-    FUN_00430200(0, 0x14c, 0x163, 2, 2, 1, 0, 1, 0xFB);
-    FUN_00430200(0, 0x180, 0x0F, 2, 0, 1, 0, 1, 0xF9);
+    s_LanTextLineCount = 0;
+    FUN_00430200(0, 64, 0x158, 1, 0, 0, 0, 1, 0xff);
+    Add_Lan_Help_Text(s_LanStatus, 108, 2, 2);
+    FUN_00430200(0, 160, 0x159, 2, 2, 0, 0, 4, 0xff);
+    FUN_00430200(0, 160, 0x15E, 1,
+                 Menu_Fitting_Font(0x15E, 2, 3, 230), 1, 0, 5, 0xF5);
+    Add_Lan_Help_Text(Text_Get("lan.help.address"), 192);
+    FUN_00430200(0, 240, 0x161, 2, 2, 0, 0, 4, 0xff);
+    FUN_00430200(0, 240, 0x162, 1, 2, 1, 0, 5, 0xF4);
+    FUN_00430200(0, 288, 0x15A, 2, 2, 0, 0, 4, 0xff);
+    FUN_00430200(0, 288, 0x160, 1, 2, 1, 0, 5, 0xFC);
+    Add_Lan_Help_Text(Text_Get("lan.help.team"), 320);
+    FUN_00430200(0, 368, 0x163, 2, 2, 1, 0, 1, 0xFB);
+    Add_Lan_Help_Text(Text_Get("lan.help.ship"), 400);
+    FUN_00430200(0, 432, 0x0F, 2, 0, 1, 0, 1, 0xF9);
     DAT_004877c9 = 0xF9;
     g_FrameIndex = 0;
     DAT_004877b1 = 0;
@@ -3204,8 +3297,10 @@ void FUN_0042a470(void)
 
     case 0xF8: /* Team deathmatch: local or LAN */
         FUN_00430200(0, 0x40, 1, 1, 0, 0, 0, 1, 0xff);
-        FUN_00430200(0, 0x92, 0x155, 2, 2, 1, 0, 1, 0x03);
-        FUN_00430200(0, 0xc2, 0x156, 2, 2, 1, 0, 1, 0xF9);
+        FUN_00430200(0, 0x90, 0x155, 2, 2, 1, 0, 1, 0x03);
+        FUN_00430200(0, 0xb0, 0x165, 1, 3, 0, 0, 1, 0xff);
+        FUN_00430200(0, 0x100, 0x156, 2, 2, 1, 0, 1, 0xF9);
+        FUN_00430200(0, 0x120, 0x166, 1, 3, 0, 0, 1, 0xff);
         FUN_00430200(0, 0x168, 0x0F, 2, 0, 1, 0, 1, 0x00);
         DAT_004877c9 = 0x00;
         g_FrameIndex = 0;

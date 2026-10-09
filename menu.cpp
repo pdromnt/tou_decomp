@@ -1024,6 +1024,33 @@ static const char *ship_files[9] = {
 };
 
 
+const char *Ship_DisplayName(unsigned int ship_type)
+{
+    static char names[9][32] = {};
+    if (ship_type >= 9)
+        return Text_Get("menu.value.random");
+    if (names[ship_type][0] == 0) {
+        char path[64];
+        snprintf(path, sizeof(path), "%s%s", ship_dir, ship_files[ship_type]);
+        FILE *file = fopen(path, "rb");
+        if (file != NULL) {
+            if (fgetc(file) == 0) {
+                for (int i = 0; i < 31; ++i) {
+                    const int character = fgetc(file);
+                    if (character == EOF || character == 0)
+                        break;
+                    names[ship_type][i] = (char)character;
+                }
+            }
+            fclose(file);
+        }
+        if (names[ship_type][0] == 0)
+            snprintf(names[ship_type], sizeof(names[ship_type]), "%s",
+                     ship_files[ship_type]);
+    }
+    return names[ship_type];
+}
+
 /* ===== FUN_0041b010 - Player/Ship Initialization (0041B010) ===== */
 /* Iterates over DAT_00489240 players at stride 0x598, initializes all fields,
  * assigns ship types, weapon loadout, then calls FUN_0041b5d0 (finalize). */

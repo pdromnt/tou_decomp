@@ -1410,7 +1410,7 @@ void Netplay_FormatRoster(char *out, size_t out_size)
                  used == 0 ? "" : " | ",
                  static_cast<unsigned>(entry.slot + 1),
                  static_cast<unsigned>(entry.team + 1),
-                 static_cast<unsigned>(entry.ship + 1),
+                 Ship_DisplayName(entry.ship),
                  Text_Get(entry.ready ? "lan.ready" : "lan.loading"));
     }
 }

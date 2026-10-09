@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* Cached asset-authored ship names, available before match loading. */
+const char *Ship_DisplayName(unsigned int ship_type);
+
 /* ===== Memory (memory.cpp) ===== */
 extern int                   g_MemoryTracker;   /* 004892A0 */
 extern int                  *g_PhysicsParams;   /* 00487880 */

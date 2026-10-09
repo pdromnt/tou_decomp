@@ -37,7 +37,8 @@ bool IsDynamicMenuSlot(int index)
     return index == 0x65 || (index >= 0x71 && index <= 0x8B) ||
            (index >= 0x149 && index <= 0x14C) ||
            index == 0x15E || index == 0x15F || index == 0x160 ||
-           index == 0x162 || index == 0x164;
+           index == 0x162 || index == 0x164 ||
+           (index >= 0x170 && index <= 0x17F);
 }
 
 bool LoadCatalog(const char *code, StringMap &strings)

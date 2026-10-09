@@ -19,6 +19,14 @@ SOURCE = ROOT / "init.cpp"
 OUTPUT = ROOT / "lang"
 
 DIRECT_ENGLISH = {
+    "lan.help.ship": "Choose your ship before hosting or joining: Players > Player 1 > Ship.",
+    "lan.help.host": "Create a match using your selected levels and rules.",
+    "lan.help.join": "Connect to another computer by hostname or IP address.",
+    "lan.help.start": "Start when everyone has joined. You control levels and rules.",
+    "lan.help.wait": "The host starts the match. Your Player 1 ship and controls are used.",
+    "lan.help.address": "Click the address or port to edit; press Enter to finish.",
+    "lan.help.team": "Click your team to switch between Team 1 and Team 2.",
+    "lan.player_count_format": "%d/4 players connected",
     "menu.tooltip.hold": "Hold &",
     "menu.tooltip.drag": "drag",
     "menu.value.infinite": "INFINITE",
@@ -103,7 +111,7 @@ DIRECT_ENGLISH = {
     "lan.landing_prompt": "Host a session or join one.",
     "lan.join_prompt": "Edit the host, port, and team, then connect.",
     "lan.roster_format": "%d/4 players: %s",
-    "lan.roster_entry_format": "%sP%u T%u S%u %s",
+    "lan.roster_entry_format": "%sPlayer %u - Team %u - %s - %s",
     "lan.ready": "READY",
     "lan.loading": "LOADING",
     "lan.reject.session_full": "LAN session is full",

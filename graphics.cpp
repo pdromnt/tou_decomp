@@ -821,6 +821,7 @@ void Render_Frame(void)
  * The scratch framebuffer replaces the original locked display surface. */
 static int Menu_Text_Width(const char *str, int font_idx)
 {
+    int pen = 0;
     int width = 0;
     if (!str)
         return 0;
@@ -828,7 +829,13 @@ static int Menu_Text_Width(const char *str, int font_idx)
     while (*str) {
         unsigned char glyph = '?';
         str = Text_NextGlyph(str, &glyph);
-        width += Font_Char_Table[font_base + glyph].width;
+        const int glyph_width = Font_Char_Table[font_base + glyph].width;
+        if (glyph == ' ') {
+            pen += glyph_width;
+        } else if (glyph_width > 0) {
+            width = pen + glyph_width;
+            pen = width + 1; /* Match Draw_Text_To_Buffer's glyph spacing. */
+        }
     }
     return width;
 }
@@ -957,7 +964,7 @@ static void Menu_Draw_Localized_Button_Label(unsigned short *frame,
     }
 
     const int inner_width = item->width - 14;
-    const int label_x = item->x - 4;
+    const int label_x = item->x + 7;
     /* The baked labels used nearly full-bright pixels. Normal font palette
      * rendering is deliberately dimmer, which made text sink into these dark
      * blue backplates. Use the brighter cyan ramp and a modest baseline lift;
@@ -972,7 +979,7 @@ static void Menu_Draw_Localized_Button_Label(unsigned short *frame,
         int height = Font_Char_Table[font * 256].height;
         Menu_Draw_Centered_Line(frame, label_x,
             item->y + (item->height - height) / 2,
-            item->width, text, font, color, hover);
+            inner_width, text, font, color, hover);
         return;
     }
 
@@ -982,7 +989,7 @@ static void Menu_Draw_Localized_Button_Label(unsigned short *frame,
         int height = Font_Char_Table[font * 256].height;
         Menu_Draw_Centered_Line(frame, label_x,
             item->y + (item->height - height) / 2,
-            item->width, text, font, color, hover);
+            inner_width, text, font, color, hover);
         return;
     }
 
@@ -1011,7 +1018,7 @@ static void Menu_Draw_Localized_Button_Label(unsigned short *frame,
         int height = Font_Char_Table[font * 256].height;
         Menu_Draw_Centered_Line(frame, label_x,
             item->y + (item->height - height) / 2,
-            item->width, text, font, color, hover);
+            inner_width, text, font, color, hover);
         return;
     }
 
@@ -1025,9 +1032,9 @@ static void Menu_Draw_Localized_Button_Label(unsigned short *frame,
     int height = Font_Char_Table[font * 256].height;
     int top = item->y + (item->height - height * 2) / 2;
     Menu_Draw_Centered_Line(frame, label_x, top,
-                            item->width, first, font, color, hover);
+                            inner_width, first, font, color, hover);
     Menu_Draw_Centered_Line(frame, label_x, top + height,
-                            item->width, second, font, color, hover);
+                            inner_width, second, font, color, hover);
 }
 
 static const char *Menu_Key_Name(int scan_code, const char *fallback,
