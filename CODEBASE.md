@@ -31,6 +31,12 @@ Original addresses are guest identity keys rather than native pointers, record
 layouts retain their verified sizes, and wrapping arithmetic, RNG, and float
 conversion live behind compatibility helpers.
 
+Unfocused local windows normally stop updating; LAN peers keep polling and
+advancing. Intro init/run states are an explicit exception so their wall-clock
+splash deadlines and animation do not diverge while unfocused. This exception
+does not change gameplay focus-loss pausing or audio muting, and the input
+adapter still clears keyboard state while unfocused.
+
 ## Rendering Boundary
 
 The recovered renderer composes each frame into a 640x480 RGB565

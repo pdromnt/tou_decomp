@@ -194,8 +194,13 @@ int main(int argc, char **argv)
         /* A LAN peer must keep polling, advancing lobby UI, loading levels, and
          * simulating while another game's window has focus.  Restrict the
          * inactive-window throttle to ordinary local play; using match-active
-         * here froze the host lobby before the connection could become visible. */
-        if (!g_bIsActive && !Netplay_IsEnabled()) {
+         * here froze the host lobby before the connection could become visible.
+         * Intro animation must also keep advancing: its splash deadlines use
+         * wall-clock time, so suspending updates causes a rush on refocus.
+         * This exception does not change gameplay pause/mute or input rules. */
+        const bool intro_running = g_GameState == GAME_STATE_INTRO_INIT ||
+            g_GameState == GAME_STATE_INTRO_RUN;
+        if (!g_bIsActive && !Netplay_IsEnabled() && !intro_running) {
             Platform_Delay(1);
             continue;
         }
