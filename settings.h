@@ -39,6 +39,8 @@ struct DisplaySettings {
     int mode;
     int viewportSize;
     int detail;
+    int scaling;
+    int shaderEffects;
 };
 
 struct VisualSettings {

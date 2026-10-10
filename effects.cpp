@@ -4,7 +4,9 @@
  *            FUN_00422fc0=00422FC0, FUN_0040d100=0040D100,
  *            FUN_004076d0=004076D0, FUN_004257e0=004257E0
  */
+#include <algorithm>
 #include "tou.h"
+#include "shader_effects.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -525,6 +527,8 @@ void FUN_0040d100(Framebuffer *framebuffer)
 
     while (i < g_ParticleCount) {
         const ParticleRecord *part = &g_ParticlePool[i];
+        const int exhaustOwner = ShaderEffects_Active() ? ShaderEffects_ExhaustParticleOwner(i) : -1;
+        int exhaustBrightness = 0;
 
         unsigned char sprite_idx = part->sprite_index;
         unsigned char *desc = (unsigned char *)DAT_00481f20 + (int)sprite_idx * 8;
@@ -614,6 +618,12 @@ void FUN_0040d100(Framebuffer *framebuffer)
                                     unsigned short remap_idx =
                                         ((unsigned short *)DAT_00489230)[bg_pixel];
                                     *dst = blend_table[remap_idx];
+                                    if (exhaustOwner >= 0) {
+                                        const intptr_t offset = dst - framebuffer->pixels;
+                                        exhaustBrightness = std::max(exhaustBrightness,
+                                            ShaderEffects_ExhaustPixel((int)(offset % stride), (int)(offset / stride),
+                                                                      exhaustOwner, bg_pixel, *dst));
+                                    }
                                 }
                             }
                         }
@@ -626,6 +636,10 @@ void FUN_0040d100(Framebuffer *framebuffer)
             }
         }
 
+        if (exhaustOwner >= 0)
+            ShaderEffects_ExhaustPlume(px - DAT_004806dc + DAT_004806ec,
+                py - DAT_004806e0 + DAT_004806e8, exhaustOwner,
+                part->velocity_x, part->velocity_y, exhaustBrightness);
         i++;
     }
 }
@@ -1200,6 +1214,14 @@ void FUN_0040bb60(Framebuffer *framebuffer)
                     }
 
                     /* Shape patterns based on entry[0x24] */
+                    const bool exhaust = ShaderEffects_Active() && entity->type == 0x67 &&
+                        entity->auxiliary_26 == 0xFE && entity->health_or_damage_28 == 0 &&
+                        entity->owner < GAMEPLAY_PLAYER_CAPACITY;
+                    unsigned short before[4] = {};
+                    if (exhaust) {
+                        before[0] = dst[0]; before[1] = dst[1];
+                        before[2] = dst[param_2]; before[3] = dst[param_2 + 1];
+                    }
                     unsigned short shape = (unsigned short)entity->variant_24;
                     switch (shape) {
                     case 0:
@@ -1232,6 +1254,16 @@ void FUN_0040bb60(Framebuffer *framebuffer)
                         *(dst + param_2) = color;
                         *(dst + param_2 + 1) = color;
                         break;
+                    }
+                    if (exhaust) {
+                        const int sx = px - DAT_004806dc + DAT_004806ec;
+                        const int sy = py - DAT_004806e0 + DAT_004806e8;
+                        int brightness = 0;
+                        for (int oy = 0; oy < 2; ++oy)
+                            for (int ox = 0; ox < 2; ++ox)
+                                brightness = std::max(brightness, ShaderEffects_ExhaustPixel(sx + ox, sy + oy, entity->owner,
+                                    before[oy * 2 + ox], dst[oy * param_2 + ox]));
+                        ShaderEffects_ExhaustPlume(sx, sy, entity->owner, entity->velocity_x, entity->velocity_y, brightness);
                     }
                 }
             }

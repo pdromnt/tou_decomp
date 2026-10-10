@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include "gamestate.h"
+#include "gfx.h"
 
 using nlohmann::json;
 
@@ -142,7 +143,11 @@ json SettingsToJson(const UserSettings &settings)
         {"resolutionIndex", settings.display.resolutionIndex},
         {"mode", settings.display.mode == 0 ? "windowed" : "fullscreen"},
         {"viewportSize", settings.display.viewportSize},
-        {"detail", settings.display.detail}
+        {"detail", settings.display.detail},
+        {"scaling", settings.display.scaling == PRESENTATION_CRISP ? "crisp" :
+                    settings.display.scaling == PRESENTATION_SMOOTH ? "smooth" :
+                    settings.display.scaling == PRESENTATION_FSR ? "fsr1" : "pixel-art"},
+        {"shaderEffects", settings.display.shaderEffects}
     };
     root["visuals"] = {
         {"ambientEmitters", settings.visuals.ambientEmitters},
@@ -256,6 +261,15 @@ void OverlayJson(UserSettings &settings, const json &root)
         ReadInt(*section, "resolutionIndex", settings.display.resolutionIndex, 0, 255);
         ReadInt(*section, "viewportSize", settings.display.viewportSize, 0, 2);
         ReadInt(*section, "detail", settings.display.detail, 0, 255);
+        ReadInt(*section, "shaderEffects", settings.display.shaderEffects, 0, 1);
+        const json::const_iterator scaling = section->find("scaling");
+        if (scaling != section->end() && scaling->is_string()) {
+            const std::string value = scaling->get<std::string>();
+            if (value == "crisp") settings.display.scaling = PRESENTATION_CRISP;
+            else if (value == "smooth") settings.display.scaling = PRESENTATION_SMOOTH;
+            else if (value == "pixel-art") settings.display.scaling = PRESENTATION_PIXEL_ART;
+            else if (value == "fsr1") settings.display.scaling = PRESENTATION_FSR;
+        }
         json::const_iterator mode = section->find("mode");
         if (mode != section->end() && mode->is_string()) {
             const std::string value = mode->get<std::string>();
@@ -378,7 +392,8 @@ UserSettings Settings_CaptureCurrent(void)
     };
     settings.display = {
         g_GameConfig.values.resolution_index, g_WindowMode,
-        g_GameConfig.values.display_reserved, g_GameConfig.values.display_detail
+        g_GameConfig.values.display_reserved, g_GameConfig.values.display_detail,
+        g_PresentationScaling, g_BetaShaderEffects
     };
     settings.visuals = {
         g_GameConfig.values.ambient_emitters, g_GameConfig.values.ambient_particles,
@@ -457,6 +472,8 @@ void Settings_Apply(const UserSettings &settings)
     g_GameConfig.values.sound_volume = static_cast<uint8_t>(settings.audio.effectsVolume);
     g_GameConfig.values.resolution_index = static_cast<uint8_t>(settings.display.resolutionIndex);
     g_WindowMode = static_cast<unsigned char>(settings.display.mode);
+    g_PresentationScaling = static_cast<unsigned char>(settings.display.scaling);
+    g_BetaShaderEffects = static_cast<unsigned char>(settings.display.shaderEffects);
     g_GameConfig.values.display_reserved = static_cast<uint8_t>(settings.display.viewportSize);
     g_GameConfig.values.display_detail = static_cast<uint8_t>(settings.display.detail);
 

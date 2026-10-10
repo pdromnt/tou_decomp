@@ -7,6 +7,7 @@
  * The actual menu rendering is driven by FUN_00425fe0 in gameplay state.
  */
 #include "tou.h"
+#include "shader_effects.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2448,6 +2449,7 @@ void FUN_0041bfe0(void)
     g_FireParticleCount = 0;
     DAT_0048926c = 0;
     g_ParticleCount = 0;
+    ShaderEffects_ResetParticles();
     DAT_0048929c = 0;
     DAT_004892a4 = 0;
     DAT_004892a5 = 0;

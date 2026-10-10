@@ -4,6 +4,7 @@
  */
 #include "tou.h"
 #include "platform.h"
+#include "shader_effects.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,16 @@ void Get_Game_Presentation_Rect(PresentationRect *rect)
     if (height > client_h) {
         height = client_h;
         width = (client_h * 4) / 3;
+    }
+
+    if (g_PresentationScaling == PRESENTATION_CRISP) {
+        const int scale = (client_w / 640 < client_h / 480)
+            ? client_w / 640 : client_h / 480;
+        // Fit small windows too; integer enlargement starts at native size.
+        if (scale >= 1) {
+            width = 640 * scale;
+            height = 480 * scale;
+        }
     }
 
     rect->left = (client_w - width) / 2;
@@ -435,21 +446,32 @@ static void Render_Game_World(Framebuffer *framebuffer)
         }
     }
 
+    ShaderEffects_BeginViewport(vp);
     /* Entity rendering subsystems (original order from FUN_00407720) */
     FUN_0040dbd0(framebuffer);       /* Static entities (turrets) */
     FUN_0040dce0(framebuffer);       /* Dynamic entities (troopers) */
     FUN_0040bb60(framebuffer);       /* Main entities (items/ships) */
+    ShaderEffects_Snapshot(framebuffer);
     FUN_0040a870(framebuffer);       /* Projectiles */
     FUN_0040d6c0(framebuffer);       /* Explosions */
+    ShaderEffects_Capture(framebuffer);
     FUN_0040d810(framebuffer);       /* Debris/particles */
     FUN_0040caf0(framebuffer);       /* Player/ship */
     FUN_0040d930(framebuffer);       /* Misc effects (glow/smoke) */
     FUN_0040d360(framebuffer);       /* Edge tiles/detail */
+    ShaderEffects_Snapshot(framebuffer);
     FUN_0040d100(framebuffer);       /* Particle overlay */
+    ShaderEffects_Capture(framebuffer);
 
     /* Fog of War — raycasting visibility + darkening */
     if (DAT_0048372d != '\0' && DAT_00489eac[0] != NULL) {
         FUN_004095e0(framebuffer, 0);
+        if (DAT_0048372d == '\x02') {
+            // Opaque LOS substitutes the entire viewport with terrain/sky.
+            for (int y = 0; g_BetaShaderEffects && y < DAT_004806e4; ++y)
+                for (int x = 0; x < DAT_004806d8; ++x)
+                    ShaderEffects_SetVisibility(DAT_004806ec + x, DAT_004806e8 + y, 1);
+        }
     }
 
     /* Spawn shield overlay — draw contracting cross effect for spawning players */
@@ -464,6 +486,8 @@ static void Render_Game_World(Framebuffer *framebuffer)
         }
     }
 
+    ShaderEffects_BuildExhaustPlumes();
+    ShaderEffects_Snapshot(framebuffer);
     /* ---- HUD elements (per-player, only when alive) ---- */
     /* Draws inside the per-viewport loop, using the current viewport's player. */
     if (DAT_00487808 > 0 && DAT_00487810 != 0) {
@@ -583,6 +607,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
         }
     }
 
+    ShaderEffects_ProtectHud(framebuffer);
     } /* end per-viewport loop */
 
     /* ---- Pause / overlay states (end of FUN_00407720) ---- */
@@ -790,6 +815,7 @@ void Render_Frame(void)
         if (!g_ScratchBuffer) return;
     }
     Framebuffer framebuffer = {g_ScratchBuffer, 640, 480, 640};
+    ShaderEffects_BeginFrame();
 
     /* 1. Draw background into scratch buffer.
      *    Gameplay state (g_GameState==0) with level data: blit level background.
@@ -1136,7 +1162,7 @@ void Render_Game_View_To(Framebuffer *framebuffer)
             /* Enum: string_idx + config_value */
             case 0x01: case 0x04: case 0x0F: case 0x10: case 0x11:
             case 0x12: case 0x17: case 0x1E: case 0x27:
-            case 0x30: case 0x33: {
+            case 0x30: case 0x33: case 0x38: {
                 int val = cfgPtr ? (int)*cfgPtr : 0;
                 /* Inline slider preview for enum items during drag — clamp to valid range */
                 if (g_InputMode == 1 && (unsigned char)i == DAT_004877e6) {
@@ -1403,6 +1429,18 @@ void Render_Game_View_To(Framebuffer *framebuffer)
                 item->x = 540 - item->width;
                 break;
             }
+
+            case 0x37: {
+                const int mode = cfgPtr ? (int)*cfgPtr : (int)PRESENTATION_PIXEL_ART;
+                const int idx = 0x169 + (mode <= PRESENTATION_FSR
+                    ? mode : PRESENTATION_PIXEL_ART);
+                if (g_MenuStrings && g_MenuStrings[idx]) str = g_MenuStrings[idx];
+                // The linked label owns the hitbox. Giving the value its own
+                // width dispatches one click twice through the linked pair.
+                item->x = 540 - Menu_Text_Width(str, item->font_idx);
+                break;
+            }
+
 
             /* Key binding: show key name from scan code */
             case 0x07: {

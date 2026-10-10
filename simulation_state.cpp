@@ -1,4 +1,5 @@
 #include "tou.h"
+#include "shader_effects.h"
 #include "simulation_state.h"
 
 #include <stddef.h>
@@ -435,6 +436,7 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
     g_TrooperCount = trooper_count;
     g_ProjectileCount = projectile_count;
     g_ParticleCount = particle_count;
+    ShaderEffects_ResetParticles(); // Cosmetic tags are not authoritative snapshot data.
     g_FireParticleCount = fire_count;
     g_DebrisItemCount = debris_count;
     DAT_00489264 = misc_count;

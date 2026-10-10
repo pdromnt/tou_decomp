@@ -5,6 +5,7 @@
  *            FUN_0044e510, FUN_00450630
  */
 #include "tou.h"
+#include "shader_effects.h"
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -3202,6 +3203,7 @@ LAB_apply:
     FUN_00451500();
 
     /* Explosion at death location */
+    ShaderEffects_ShipExplosion(ent[0] >> 0x12, ent[1] >> 0x12);
     FUN_004357b0(ent[0] >> 0x12, ent[1] >> 0x12, 9, 0, '\0',
         0, 0, 0, 0, '\0', '\0', (unsigned char)param_2);
 
@@ -5087,6 +5089,7 @@ static void FUN_0044bfa0(PlayerData *player, int player_idx)
                             particle->flags_13 = 0xC5;
                             particle->owner_or_flags_14 = 0xFF;
                             particle->color_index = 0;
+                            ShaderEffects_TagExhaustParticle(g_ParticleCount, player_idx);
                             g_ParticleCount++;
                         }
                     }

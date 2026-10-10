@@ -4,6 +4,7 @@
  * from DAT_004806ec/e8/d8/e4. */
 
 #include "tou.h"
+#include "shader_effects.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -1015,6 +1016,7 @@ apply_rendering:
         for (int y = 0; y < vp_h; y++) {
             for (int x = 0; x < vp_w; x++) {
                 unsigned char vis = vis_buf[vis_idx];
+                ShaderEffects_SetVisibility(DAT_004806ec + x, DAT_004806e8 + y, vis);
                 if (vis == 0x11) {
                     /* Fully dark: show tile or sky color through LUT[40] */
                     unsigned short tile_px = ((unsigned short *)DAT_00481f50)[tilemap_row];
@@ -1114,6 +1116,7 @@ apply_rendering:
             for (int x = 0; x < vp_w; x++) {
                 unsigned char vis = vis_buf[vis_idx];
                 if (vis != 0) {
+                    ShaderEffects_SetVisibility(DAT_004806ec + x, DAT_004806e8 + y, vis);
                     if (vis >= 0x11) {
                         *dst = DAT_00483820;
                     } else {

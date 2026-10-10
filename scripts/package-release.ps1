@@ -53,6 +53,19 @@ $requiredDirectories = @(
     "swap"
 )
 
+# These sources are embedded in the game, so their full notices must travel
+# with archives too (copying asset directories alone drops installed notices).
+$thirdPartyFiles = @(
+    @{ Source = "third_party/fsr/LICENSE.txt"; Name = "TOU-FSR-LICENSE.txt" },
+    @{ Source = "third_party/gaussian_blur/LICENSE.md"; Name = "TOU-BLOOM-LICENSE.txt" },
+    @{ Source = "THIRD_PARTY_NOTICES.md"; Name = "THIRD_PARTY_NOTICES.md" }
+)
+foreach ($notice in $thirdPartyFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot $notice.Source) -PathType Leaf)) {
+        throw "Required third-party notice is missing: $($notice.Source)"
+    }
+}
+
 if (-not (Test-Path -LiteralPath $resolvedExecutable -PathType Leaf)) {
     throw "Required release executable is missing: $resolvedExecutable"
 }
@@ -132,6 +145,11 @@ if ($isMacPackage) {
         throw "macOS executable is not inside an app bundle: $resolvedExecutable"
     }
     $resourcesRoot = Join-Path $bundleRoot "Contents/Resources"
+    foreach ($notice in $thirdPartyFiles) {
+        if (-not (Test-Path -LiteralPath (Join-Path $resourcesRoot $notice.Name) -PathType Leaf)) {
+            throw "Required macOS bundle third-party notice is missing: $($notice.Name)"
+        }
+    }
     foreach ($relativePath in $requiredDirectories) {
         $bundledPath = Join-Path $resourcesRoot $relativePath
         if (-not (Test-Path -LiteralPath $bundledPath -PathType Container)) {
@@ -151,6 +169,10 @@ if ($isMacPackage) {
 }
 Copy-Item -LiteralPath $resolvedLevelEditor `
     -Destination (Join-Path $packageRoot "level-editor") -Recurse
+foreach ($notice in $thirdPartyFiles) {
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot $notice.Source) `
+        -Destination (Join-Path $packageRoot $notice.Name)
+}
 
 if ($isWindowsPackage) {
     Compress-Archive -Path (Join-Path $packageRoot "*") `

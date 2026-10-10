@@ -14,6 +14,7 @@
  * would fragment those across new TUs.
  */
 #include "tou.h"
+#include "shader_effects.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -957,6 +958,7 @@ void FUN_0045d7d0(void)
     g_FrameIndex = 2;              /* Intro starts showing frame 2 */
     g_EntityCount = 0;              /* Entity count */
     g_ParticleCount = 0;              /* Particle count */
+    ShaderEffects_ResetParticles();
     g_FireParticleCount = 0;              /* Misc counter */
     g_FrameTimer = Platform_GetTicks();  /* Frame time reference */
     DAT_004892b8 = Platform_GetTicks();  /* Intro start timestamp for duration checks */
@@ -6190,6 +6192,7 @@ remove_particle:
         /* The original copies only the active 0x00..0x15 fields, rather than
          * blindly copying the opaque tail of the record. */
         g_ParticleCount--;
+        ShaderEffects_RemoveParticle(i, g_ParticleCount);
         const ParticleRecord *last = &g_ParticlePool[g_ParticleCount];
         part->position_x = last->position_x;
         part->position_y = last->position_y;

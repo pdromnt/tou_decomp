@@ -11,6 +11,7 @@
  *   - Exit state is 0x98 (new game)
  */
 #include "tou.h"
+#include "shader_effects.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -255,6 +256,7 @@ void Intro_Sequence(void)
         (g_KeyboardState[0x1C] & 0x80)) {
         /* Clear intro particles/entities so they don't bleed into menu */
         g_ParticleCount = 0;  /* particle count */
+        ShaderEffects_ResetParticles();
         g_EntityCount = 0;  /* entity count */
         GameState_Transition(GAME_STATE_NEW_GAME);
         Pause_Audio_Streams();
@@ -272,6 +274,7 @@ void Intro_Sequence(void)
 
             /* Spawn 0x96 (150) explosion particles */
             g_ParticleCount = 0;
+            ShaderEffects_ResetParticles();
             Spawn_Particles(0x96, 200, 0x50);
 
             /* Reset and spawn intro entities (shrapnel debris) */
@@ -292,6 +295,7 @@ void Intro_Sequence(void)
         else if (g_IntroSplashIndex == 2) {
             /* Splash 2 done: Move to new game state */
             g_ParticleCount = 0;  /* clear particles */
+            ShaderEffects_ResetParticles();
             g_EntityCount = 0;  /* clear entities */
             GameState_Transition(GAME_STATE_NEW_GAME);
         }

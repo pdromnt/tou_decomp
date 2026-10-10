@@ -85,6 +85,8 @@ set(TOU_SOURCES
     platform_sdl.cpp
     render_backend.cpp
     gfx_sdl.cpp
+    gfx_shader.cpp
+    shader_effects.cpp
     intro.cpp
     menu.cpp
     level.cpp
@@ -101,6 +103,26 @@ set(TOU_SOURCES
     localization.cpp
     stb_image.c
 )
+
+function(tou_embed_shader path output)
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${path}" shader)
+    string(LENGTH "${shader}" size)
+    set(chunks "")
+    set(offset 0)
+    while(offset LESS size)
+        # Separate array entries, not concatenated C++ literals: MSVC limits
+        # individual strings even when the shader is only runtime source.
+        string(SUBSTRING "${shader}" ${offset} 16000 chunk)
+        string(APPEND chunks "R\"FSR_SOURCE(${chunk})FSR_SOURCE\",\n")
+        math(EXPR offset "${offset} + 16000")
+    endwhile()
+    set(${output} "${chunks}" PARENT_SCOPE)
+endfunction()
+tou_embed_shader(third_party/fsr/ffx_a.h TOU_FSR_PORTABILITY)
+tou_embed_shader(third_party/fsr/ffx_fsr1.h TOU_FSR_ALGORITHM)
+tou_embed_shader(third_party/gaussian_blur/13.glsl TOU_GAUSSIAN_BLUR)
+configure_file(cmake/fsr_sources.h.in generated/fsr_sources.h @ONLY)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 if(APPLE)
     set_source_files_properties(icon.icns PROPERTIES
@@ -173,8 +195,16 @@ if(APPLE)
     install(DIRECTORY ${TOU_RUNTIME_DIRECTORIES}
         DESTINATION "TOU.app/Contents/Resources"
     )
+    install(FILES third_party/fsr/LICENSE.txt
+        DESTINATION "TOU.app/Contents/Resources" RENAME TOU-FSR-LICENSE.txt)
+    install(FILES third_party/gaussian_blur/LICENSE.md
+        DESTINATION "TOU.app/Contents/Resources" RENAME TOU-BLOOM-LICENSE.txt)
+    install(FILES THIRD_PARTY_NOTICES.md DESTINATION "TOU.app/Contents/Resources")
 else()
     install(DIRECTORY ${TOU_RUNTIME_DIRECTORIES}
         DESTINATION .
     )
+    install(FILES third_party/fsr/LICENSE.txt DESTINATION . RENAME TOU-FSR-LICENSE.txt)
+    install(FILES third_party/gaussian_blur/LICENSE.md DESTINATION . RENAME TOU-BLOOM-LICENSE.txt)
+    install(FILES THIRD_PARTY_NOTICES.md DESTINATION .)
 endif()

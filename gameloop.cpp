@@ -4,6 +4,7 @@
  *            Handle_Menu_State=004611D0, Game_Update_Render=00461710
  */
 #include "tou.h"
+#include "shader_effects.h"
 #include "platform.h"
 #include <stdio.h>
 #include <string.h>
@@ -700,6 +701,7 @@ void Free_Game_Resources(void)
      * to the next level or persist in the menu (e.g. fluid bubbles). */
     g_EntityCount = 0;   /* emitter/complex particle count */
     g_ParticleCount = 0;   /* fire particle count */
+    ShaderEffects_ResetParticles();
     g_FluidSourceCount = 0;   /* fluid source count */
     g_DebrisItemCount = 0;   /* bullet count */
     DAT_0048926c = 0;   /* item/pickup count */

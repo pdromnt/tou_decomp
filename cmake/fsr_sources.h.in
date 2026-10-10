@@ -1,0 +1,10 @@
+// Embedded upstream sources: no shader files or runtime compiler DLLs to ship.
+static const char *const kFsrPortability[] = {
+@TOU_FSR_PORTABILITY@
+};
+static const char *const kFsrAlgorithm[] = {
+@TOU_FSR_ALGORITHM@
+};
+static const char *const kGaussianBlur[] = {
+@TOU_GAUSSIAN_BLUR@
+};

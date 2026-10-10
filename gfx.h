@@ -5,6 +5,15 @@
 #include "types.h"
 #include "render_backend.h"
 
+enum PresentationScaling {
+    PRESENTATION_CRISP = 0,
+    PRESENTATION_SMOOTH = 1,
+    PRESENTATION_PIXEL_ART = 2,
+    PRESENTATION_FSR = 3
+};
+extern unsigned char g_PresentationScaling;
+extern unsigned char g_BetaShaderEffects;
+
 /* ===== Frame / Render (memory.cpp) ===== */
 extern unsigned short       *Software_Buffer;   /* 004877C0 */
 extern unsigned char         g_FrameIndex;      /* 004877C8 */

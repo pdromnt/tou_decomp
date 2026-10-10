@@ -14,6 +14,28 @@
 
 static SDL_Window *s_PlatformWindow = NULL;
 
+static SDL_Window *Create_Shader_Window(const char *title, int width, int height,
+                                        int profile, int major, int minor)
+{
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, profile);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_Window *candidate = SDL_CreateWindow(title, width, height,
+                                              SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    if (!candidate) return NULL;
+    // Window creation alone does not prove that the requested GL profile works.
+    // Probe now so Linux can retry GLES with a correctly created EGL window.
+    SDL_GLContext probe = SDL_GL_CreateContext(candidate);
+    if (!probe) {
+        LOG("[PLATFORM] Shader profile %d.%d unavailable: %s\n", major, minor, SDL_GetError());
+        SDL_DestroyWindow(candidate);
+        return NULL;
+    }
+    SDL_GL_DestroyContext(probe);
+    return candidate;
+}
+
 int Platform_SetRuntimeDirectory(void)
 {
     const char *base_path = SDL_GetBasePath();
@@ -41,7 +63,23 @@ int Platform_CreateWindow(const char *title, int width, int height)
         return 0;
     }
 
-    s_PlatformWindow = SDL_CreateWindow(title, width, height, SDL_WINDOW_HIDDEN);
+    // Experimental presentation only; the normal SDL window remains the default.
+    const char *shader = SDL_getenv("TOU_SHADER_PRESENTATION");
+    const bool request_shader = shader != NULL && strcmp(shader, "1") == 0;
+    if (request_shader) {
+        s_PlatformWindow = Create_Shader_Window(title, width, height,
+                                                SDL_GL_CONTEXT_PROFILE_CORE, 4, 1);
+#if !defined(_WIN32) && !defined(__APPLE__)
+        if (s_PlatformWindow == NULL) {
+            s_PlatformWindow = Create_Shader_Window(title, width, height,
+                                                    SDL_GL_CONTEXT_PROFILE_ES, 3, 1);
+        }
+#endif
+        if (s_PlatformWindow == NULL)
+            LOG("[PLATFORM] Shader window unavailable; using normal SDL presentation: %s\n", SDL_GetError());
+    }
+    if (s_PlatformWindow == NULL)
+        s_PlatformWindow = SDL_CreateWindow(title, width, height, SDL_WINDOW_HIDDEN);
     if (s_PlatformWindow == NULL) {
         LOG("[PLATFORM] SDL window creation failed: %s\n", SDL_GetError());
         SDL_QuitSubSystem(SDL_INIT_VIDEO);

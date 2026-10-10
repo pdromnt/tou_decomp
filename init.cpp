@@ -4,6 +4,7 @@
  *            Init_Game_Config=004207C0
  */
 #include "tou.h"
+#include "gfx_shader.h"
 #include "settings.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,6 +73,8 @@ int           DAT_004877cc   = 0;
 unsigned char DAT_004877ec   = 0;
 int           DAT_00487824   = 0;
 unsigned char g_WindowMode = 0;
+unsigned char g_PresentationScaling = PRESENTATION_PIXEL_ART;
+unsigned char g_BetaShaderEffects = 0;
 int           DAT_00487784   = 0;
 int           DAT_00489e9c   = 0;
 unsigned char g_KeyboardState[256] = {0}; /* 00481D8C - saved scan-code state */
@@ -1296,7 +1299,7 @@ void FUN_0042d8b0(void)
 
     /* Campaign */
     g_MenuStrings[0x128] = (char *)"Campaign game";
-    g_MenuStrings[0x129] = (char *)"On";
+    g_MenuStrings[0x129] = (char *)"Off"; /* fog_mode=0 disables LOS */
     g_MenuStrings[0x12A] = (char *)"Transparent";
     g_MenuStrings[0x12B] = (char *)"Normal";
     g_MenuStrings[0x12C] = (char *)"Opaque";
@@ -1361,6 +1364,13 @@ void FUN_0042d8b0(void)
     g_MenuStrings[0x164] = s_LanRoster;
     g_MenuStrings[0x165] = (char *)"Play on this computer with friends or CPU pilots.";
     g_MenuStrings[0x166] = (char *)"Play with 2-4 people on separate computers.";
+    g_MenuStrings[0x167] = (char *)"Display and Rendering Settings";
+    g_MenuStrings[0x168] = (char *)"Scaling";
+    g_MenuStrings[0x169] = (char *)"Crisp";
+    g_MenuStrings[0x16A] = (char *)"Smooth";
+    g_MenuStrings[0x16B] = (char *)"Pixel art";
+    g_MenuStrings[0x16C] = (char *)"FSR 1 (beta)";
+    g_MenuStrings[0x16D] = (char *)"Shader effects (beta)";
 
     Localization_BindLegacyMenuStrings(g_MenuStrings, MENU_STRING_CAPACITY);
 }
@@ -3371,16 +3381,7 @@ void FUN_0042a470(void)
 
     case 0x04: /* Video settings */
         FUN_00430200(0, 0x28, 10, 1, 0, 0, 0, 1, 0xff);           /* "Video" heading */
-        FUN_00430200(0, 0x50, 100, 0, 2, 2, 0, 4, 0xff);          /* "Resolution" label */
-        iVar7 = FUN_00430200(0, 0x50, 0, 0, 2, 1, 0xd, 5, 0xff);  /* resolution value */
-        iVar7 = iVar7 + 0x50;
-        FUN_0042fc90(CFG_ADDR(0x483725));
-        FUN_0042fcf0();
-        FUN_00430200(0, iVar7, 0x14D, 2, 2, 2, 0, 4, 0xff);        /* "Mode" label */
-        iVar3 = FUN_00430200(0, iVar7, 0x14E, 2, 2, 1, 0x35, 5, 0xff);
-        FUN_0042fc90((intptr_t)&g_WindowMode);
-        FUN_0042fcf0();
-        iVar7 = iVar7 + iVar3;
+        iVar7 = 0x50 + FUN_00430200(0, 0x50, 0x167, 0, 2, 1, 0, 1, 0xE0);
         FUN_00430200(0, iVar7, 0x40, 2, 2, 2, 0, 4, 0xff);        /* "Detail" label */
         iVar3 = FUN_00430200(0, iVar7, 0x41, 2, 2, 1, 4, 5, 0xff); /* detail value */
         FUN_0042fc90(CFG_ADDR(0x483726));
@@ -3445,6 +3446,39 @@ void FUN_0042a470(void)
         g_FrameIndex = 1;
         DAT_004877b1 = 0;
         return;
+
+    case 0xE0: { /* Presentation settings; separate from gameplay detail. */
+        s_LanTextLineCount = 0;
+        FUN_00430200(0, 48, 0x167, 1, 2, 0, 0, 1, 0xff);
+        FUN_00430200(0, 112, 100, 0, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 112, 0, 0, 2, 1, 0xd, 5, 0xff);
+        FUN_0042fc90(CFG_ADDR(0x483725));
+        FUN_0042fcf0();
+        FUN_00430200(0, 168, 0x14D, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 168, 0x14E, 2, 2, 1, 0x35, 5, 0xff);
+        FUN_0042fc90((intptr_t)&g_WindowMode);
+        FUN_0042fcf0();
+        FUN_00430200(0, 224, 0x168, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 224, 0x169, 2, 2, 1, 0x37, 5, 0xff);
+        FUN_0042fc90((intptr_t)&g_PresentationScaling);
+        FUN_0042fcf0();
+        Add_Lan_Help_Text(Text_Get(g_PresentationScaling == PRESENTATION_CRISP
+            ? "display.help.crisp" : g_PresentationScaling == PRESENTATION_SMOOTH
+            ? "display.help.smooth" : g_PresentationScaling == PRESENTATION_FSR
+            ? (ShaderPresentation_Available() ? "display.help.fsr" : "display.help.fsr_unavailable")
+            : "display.help.pixel_art"), 248, 3);
+        FUN_00430200(0, 312, 0x16D, 2, 2, 2, 0, 4, 0xff);
+        FUN_00430200(0, 312, 0x22, 2, 2, 1, 0x38, 5, 0xff);
+        FUN_0042fc90((intptr_t)&g_BetaShaderEffects);
+        FUN_0042fcf0();
+        Add_Lan_Help_Text(Text_Get(ShaderPresentation_Available()
+            ? "display.help.effects" : "display.help.effects_unavailable"), 352, 3);
+        FUN_00430200(0, 416, 0xf, 2, 0, 1, 0, 1, 4);
+        DAT_004877c9 = 4;
+        g_FrameIndex = 1;
+        DAT_004877b1 = 0;
+        return;
+    }
 
     case 0x05: /* Event */
         FUN_00430200(0, 0x28, 0xb, 1, 0, 0, 0, 1, 0xff);           /* "Event" heading */
@@ -4597,6 +4631,22 @@ void FUN_00427df0(int param_1, char param_2)
         Apply_Display_Settings();
         break;
     }
+
+    case 0x37: { /* Live presentation scaling */
+        int value = (int)*data + (int)cVar9;
+        if (value < 0) value = PRESENTATION_FSR;
+        if (value > PRESENTATION_FSR) value = PRESENTATION_CRISP;
+        *data = (unsigned char)value;
+        DAT_004877b1 = 1;
+        break;
+    }
+
+    case 0x38: { /* Persist beta effects before match startup reloads JSON. */
+        *data = (*data == 0) ? 1 : 0;
+        Settings_SaveJson();
+        break;
+    }
+
 
     case 0x0F: { /* Cycle 0-4 */
         unsigned char val = *data + cVar9;
@@ -6520,6 +6570,8 @@ void Early_Init_Vars(void)
 void Set_Config_Defaults(void)
 {
     g_WindowMode = 0;
+    g_PresentationScaling = PRESENTATION_PIXEL_ART;
+    g_BetaShaderEffects = 0;
 
     /* === Basic config (offsets 0-3) === */
     g_GameConfig.values.active_level_count = 1;
