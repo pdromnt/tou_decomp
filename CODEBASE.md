@@ -66,6 +66,11 @@ a separate flame texture preserves the narrow plume shape. These features have
 local Windows visual acceptance, not cross-platform/performance acceptance.
 See `docs/SHADER_PRESENTATION.md` for the complete seam and manual checks.
 
+Paused gameplay and the ESC menu retain world effects with a frozen cosmetic
+clock. Overlay diffs and an explicit ESC-panel rectangle protect the foreground;
+they do not change simulation pause/focus behavior. Other non-play substates
+disable effects, and reset/snapshot import clears transient presentation state.
+
 ## Source Map
 
 | Module | Responsibility |

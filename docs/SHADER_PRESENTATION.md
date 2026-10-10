@@ -110,11 +110,13 @@ RNG call, particle lifetime, network checksum, or saved format is changed.
 The mask is cleared each frame. It carries viewport IDs to prevent cross-view
 sampling in local split screen. LOS-hidden and partially obscured pixels block
 both glow sources and destinations; opaque LOS disables glow entirely.
-HUD changes and their immediate outlines are excluded. Added glow is disabled
-in menus and all non-active gameplay substates, including pause and round panels.
+HUD changes and their immediate outlines are excluded. Effects remain visible
+in the paused world and ESC menu, with a frozen cosmetic clock for exhaust curl
+and ripple ages. Pause text and the entire ESC panel are protected separately.
+Effects are disabled in main menus, round panels, and other non-play substates.
 
 Ship deaths also emit a brief radial distortion wave under the same beta toggle.
-The presentation-only event queue stores world positions and wall-clock ages;
+The presentation-only event queue stores world positions and cosmetic-clock ages;
 each wave lasts 650 ms, expanding from 8 to 96 native pixels with a fading
 strength capped at 6 pixels of displacement. A Gaussian crest and opposing
 trough make the shock front more pronounced. The final plain/RCAS shader
@@ -123,8 +125,9 @@ modified. This is refraction of the flattened image, not a gameplay shockwave.
 At most 64 recent events and 16 on-screen events per viewport are presented.
 Off-screen or LOS-hidden centres do not contribute. Destination, sample path,
 and bilinear source footprint must share a visible viewport ID, protecting LOS,
-HUD pixels/outlines, and split-screen borders. Pause, inactive states, level
-reset, and authoritative snapshot import discard cosmetic waves.
+HUD pixels/outlines, and split-screen borders. Pause freezes cosmetic time;
+other inactive states, level reset, and authoritative snapshot import discard
+cosmetic waves. Unpausing does not add the paused wall-clock interval to wave age.
 
 Acceptance still requires comparing on/off in motion, heavy explosion scenes,
 split screen, each LOS style, HUD/weapon selectors, pause/end-round screens,
@@ -141,6 +144,10 @@ Trigger ship deaths with effects on/off and compare the short expanding ripple.
 Ordinary projectile blasts should not trigger it. Test deaths near HUD and LOS
 edges, simultaneous deaths in split screen, pausing during a ripple, and level
 changes. Assess extra fragment cost on lower-power GPUs before promotion.
+During P-pause and the ESC menu, check that bloom/flames stay visible, ripple
+and curl timing freeze, overlays stay clear, and effects resume without jumping
+after waiting several seconds. Gameplay focus and multiplayer pause rules are
+unchanged; this is presentation-only behavior.
 
 `gfx_shader.cpp` owns the context, shaders, input texture, and intermediate
 targets. FSR and bloom demonstrate multipass pipelines; additional passes could

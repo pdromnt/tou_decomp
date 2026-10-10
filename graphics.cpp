@@ -610,11 +610,11 @@ static void Render_Game_World(Framebuffer *framebuffer)
     ShaderEffects_ProtectHud(framebuffer);
     } /* end per-viewport loop */
 
+    ShaderEffects_SnapshotOverlay(framebuffer);
     /* ---- Pause / overlay states (end of FUN_00407720) ---- */
     if (g_SubState != GAMEPLAY_ACTIVE) {
         if (g_SubState == GAMEPLAY_PAUSED) {
-            /* State 1 (Pause key): text overlay with key name + version string.
-             * Original: "Game Paused. Press \"[KEY]\" to continue." + "TOU v1.0" */
+            /* State 1 (Pause key): text overlay with key name and app name. */
             char pause_msg[128];
             char key_buf[64];
             const char *key_name = "???";
@@ -626,7 +626,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
             Draw_Text_To_Buffer(pause_msg, 3, 2,
                 buffer + (DAT_0048923c - 0x1e) * stride + 8,
                 stride, 0, DAT_00489238 - 0x10, 0);
-            Draw_Text_To_Buffer("TOU v1.0", 3, 0,
+            Draw_Text_To_Buffer("Tunnels of Underworld", 3, 0,
                 buffer + (DAT_0048923c - 0x0f) * stride + 8,
                 stride, 0, DAT_00489238 - 0x10, 0);
         }
@@ -641,6 +641,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
                 if (spr_w > 0 && spr_h > 0) {
                     int cx = (DAT_00489238 - spr_w) / 2;
                     int cy = (DAT_0048923c - spr_h) / 2;
+                    ShaderEffects_ProtectOverlayRect(cx, cy, spr_w, spr_h);
                     unsigned short *dst = buffer + cy * stride + cx;
                     int src_idx = frame_off;
                     for (int y = 0; y < spr_h; y++) {
@@ -800,6 +801,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
             }
         }
     }
+    ShaderEffects_ProtectOverlay(framebuffer);
 }
 
 /* ===== Render_Frame (0045D800) ===== */

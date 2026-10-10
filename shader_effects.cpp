@@ -17,6 +17,8 @@ struct ExhaustPlume { int x, y, owner, vx, vy, brightness; };
 ExhaustPlume plumes[ENTITY_ACTIVE_CAPACITY + PARTICLE_CAPACITY];
 int plumeCount = 0;
 uint16_t snapshot[640 * 480];
+uint16_t overlaySnapshot[640 * 480];
+bool overlaySnapshotValid = false;
 bool exhaustPixels[640 * 480];
 // Presentation-only ownership: never part of packed gameplay records/snapshots.
 unsigned char exhaustOwners[PARTICLE_CAPACITY] = {};
@@ -31,21 +33,51 @@ Shockwave waves[64] = {};
 unsigned int nextWave = 0;
 float shockwaves[4 * 16 * 4] = {};
 bool hasShockwaves = false;
+uint32_t effectsTime = 0, lastWallTime = 0;
+bool clockInitialized = false, clockWasPaused = false;
+
+bool EffectsPaused(void)
+{
+    return g_GameState == GAME_STATE_GAMEPLAY &&
+        (g_SubState == GAMEPLAY_PAUSED || g_SubState == GAMEPLAY_EXIT_MENU);
+}
+
+uint32_t EffectsNow(void)
+{
+    const uint32_t wall = Platform_GetTicks();
+    const bool paused = EffectsPaused();
+    if (!clockInitialized) {
+        effectsTime = wall;
+        clockInitialized = true;
+    } else if (!paused && !clockWasPaused) {
+        effectsTime += wall - lastWallTime;
+    }
+    lastWallTime = wall;
+    clockWasPaused = paused;
+    return effectsTime;
+}
+
+void BlockScreen(int x, int y)
+{
+    if (x < 0 || x >= 640 || y < 0 || y >= 480) return;
+    memset(glow + (y * 640 + x) * 4, 0, 4);
+    memset(flames + (y * 640 + x) * 4, 0, 4);
+}
 
 void Block(int x, int y)
 {
     if (x < left || x >= right || y < top || y >= bottom) return;
-    unsigned char *pixel = glow + (y * 640 + x) * 4;
-    pixel[0] = pixel[1] = pixel[2] = pixel[3] = 0;
-    memset(flames + (y * 640 + x) * 4, 0, 4);
+    BlockScreen(x, y);
 }
 }
 
 void ShaderEffects_BeginFrame(void)
 {
     active = g_BetaShaderEffects != 0 && ShaderPresentation_Available() &&
-        g_GameState == GAME_STATE_GAMEPLAY && g_SubState == GAMEPLAY_ACTIVE;
+        g_GameState == GAME_STATE_GAMEPLAY && (g_SubState == GAMEPLAY_ACTIVE || EffectsPaused());
+    EffectsNow();
     snapshotValid = false;
+    overlaySnapshotValid = false;
     hasEmission = false;
     hasFlames = false;
     hasShockwaves = false;
@@ -77,7 +109,7 @@ void ShaderEffects_BeginViewport(int index)
     for (int y = top; y < bottom; ++y)
         for (int x = left; x < right; ++x)
             glow[(y * 640 + x) * 4 + 3] = (unsigned char)(index + 1);
-    const uint32_t now = Platform_GetTicks();
+    const uint32_t now = effectsTime;
     int count = 0;
     // Newest first, at most 16 visible waves per viewport; no gameplay limit.
     for (unsigned int n = 0; n < 64 && count < 16; ++n) {
@@ -161,6 +193,33 @@ void ShaderEffects_ProtectHud(const Framebuffer *frame)
     snapshotValid = false;
 }
 
+void ShaderEffects_SnapshotOverlay(const Framebuffer *frame)
+{
+    overlaySnapshotValid = false;
+    if (!active || !EffectsPaused() || !frame || frame->width != 640 || frame->height != 480 || frame->stride < 640) return;
+    for (int y = 0; y < 480; ++y)
+        memcpy(overlaySnapshot + y * 640, frame->pixels + y * frame->stride, 640 * sizeof(uint16_t));
+    overlaySnapshotValid = true;
+}
+
+void ShaderEffects_ProtectOverlay(const Framebuffer *frame)
+{
+    if (!active || !overlaySnapshotValid) return;
+    for (int y = 0; y < 480; ++y)
+        for (int x = 0; x < 640; ++x)
+            if (overlaySnapshot[y * 640 + x] != frame->pixels[y * frame->stride + x])
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) BlockScreen(x + dx, y + dy);
+    overlaySnapshotValid = false;
+}
+
+void ShaderEffects_ProtectOverlayRect(int x, int y, int width, int height)
+{
+    if (!active || !EffectsPaused() || width <= 0 || height <= 0) return;
+    for (int py = std::max(0, y - 1); py < std::min(480, y + height + 1); ++py)
+        for (int px = std::max(0, x - 1); px < std::min(640, x + width + 1); ++px) BlockScreen(px, py);
+}
+
 const unsigned char *ShaderEffects_GlowPixels(void) { return active && (hasEmission || hasShockwaves) ? glow : nullptr; }
 const float *ShaderEffects_ViewportBounds(void) { return viewports; }
 
@@ -211,7 +270,7 @@ static void DrawExhaustPlume(int x, int y, int owner, int velocityX, int velocit
     dx /= length; dy /= length;
     const float strength = (float)brightness / 255.0f;
     const float plumeLength = 8.0f + 5.0f * strength;
-    const float phase = (float)(Platform_GetTicks() % 10000) * 0.018f + x * 0.13f + y * 0.07f;
+    const float phase = (float)(effectsTime % 10000) * 0.018f + x * 0.13f + y * 0.07f;
     const unsigned short color = DAT_00483838[player.team];
     const float rgb[3] = {(float)((color >> 10) & 31), (float)((color >> 5) & 31), (float)(color & 31)};
     const float peak = std::max(1.0f, std::max(rgb[0], std::max(rgb[1], rgb[2])));
@@ -280,13 +339,15 @@ void ShaderEffects_ResetParticles(void)
     memset(exhaustOwners, 0, sizeof(exhaustOwners));
     memset(waves, 0, sizeof(waves));
     nextWave = 0;
+    clockInitialized = false;
+    clockWasPaused = false;
 }
 
 void ShaderEffects_ShipExplosion(int worldX, int worldY)
 {
     if (!g_BetaShaderEffects || !ShaderPresentation_Available() ||
         g_GameState != GAME_STATE_GAMEPLAY || g_SubState != GAMEPLAY_ACTIVE) return;
-    waves[nextWave] = {worldX, worldY, Platform_GetTicks(), true};
+    waves[nextWave] = {worldX, worldY, EffectsNow(), true};
     nextWave = (nextWave + 1) % 64;
 }
 const float *ShaderEffects_Shockwaves(void) { return shockwaves; }
