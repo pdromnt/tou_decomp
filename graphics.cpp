@@ -724,20 +724,21 @@ static void Render_Game_World(Framebuffer *framebuffer)
                     /* Team names and win counts. Translations such as
                      * Portuguese "Equipe" and Finnish "Joukkue" are wider
                      * than the baked English columns, so center each label and
-                     * use the narrow font only when its column truly needs it. */
+                     * choose one shared font that fits all three columns. */
                     const int team_centers[3] = { 0x2f, 0x7f, 0xd4 };
                     const char *team_labels[3] = {
                         Text_Get("hud.team_1"), Text_Get("hud.team_2"),
                         Text_Get("hud.team_3")
                     };
-                    for (int team = 0; team < 3; ++team) {
-                        int font = 1;
-                        int width = Menu_Text_Width(team_labels[team], font);
-                        if (width > 72) {
-                            font = 3;
-                            width = Menu_Text_Width(team_labels[team], font);
+                    int team_font = 1;
+                    for (int team = 0; team < 3; ++team)
+                        if (Menu_Text_Width(team_labels[team], team_font) > 72) {
+                            team_font = 3;
+                            break;
                         }
-                        Draw_Text_To_Buffer(team_labels[team], font, 6 + team,
+                    for (int team = 0; team < 3; ++team) {
+                        const int width = Menu_Text_Width(team_labels[team], team_font);
+                        Draw_Text_To_Buffer(team_labels[team], team_font, 6 + team,
                             buffer + (panel_y + 0x55) * stride + panel_x +
                                 team_centers[team] - width / 2,
                             stride, 32, 0, 0);

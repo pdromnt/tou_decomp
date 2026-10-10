@@ -5866,14 +5866,16 @@ void FUN_0041a8c0(void)
     DAT_00487640[0] = 0;
     DAT_004892b8 = Platform_GetTicks();
 
-    /* 2. Sky/fade color switch */
+    /* 2. Sky/fade color switch. The original constants are X1R5G5B5;
+     * both the software framebuffer and fade LUT generator now use RGB565. */
+    const unsigned short previous_fade_color = DAT_00483820;
     switch (DAT_00483731) {
     case 0:  DAT_00483820 = 0;      break;
-    case 1:  DAT_00483820 = 0x2108; break;
-    case 2:  DAT_00483820 = 0x014A; break;
-    case 3:  DAT_00483820 = 0x7FFF; break;
+    case 1:  DAT_00483820 = 0x4208; break; /* RGB555 0x2108: dark grey */
+    case 2:  DAT_00483820 = 0x028A; break; /* RGB555 0x014A: dark cyan */
+    case 3:  DAT_00483820 = 0xFFFF; break; /* RGB555 0x7FFF: white */
     }
-    if (DAT_00483732 != DAT_00483731) {
+    if (DAT_00483732 != DAT_00483731 || previous_fade_color != DAT_00483820) {
         DAT_00483732 = DAT_00483731;
         FUN_0045adc0();
     }
@@ -6083,7 +6085,7 @@ static void AddTeamAward(const char *name, int winner_idx)
 
 void FUN_0041d740(void)
 {
-    unsigned char saved_cfg_820 = (unsigned char)DAT_00483820;
+    unsigned short saved_cfg_820 = DAT_00483820;
     unsigned char saved_cfg_725 = g_GameConfig.values.resolution_index;
     unsigned char saved_cfg_732 = DAT_00483732;
     unsigned char saved_cfg_72d = DAT_0048372d;
