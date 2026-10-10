@@ -49,7 +49,7 @@ Windows keyboard; MacBook users should remap them under **Options → Controls**
 Right Option and Right Command are practical primary-action choices.
 
 The reconstructed game identifies itself as
-`Tunnels of Underworld - RE/Decompiled - v0.7` so it cannot be confused with
+`Tunnels of Underworld - RE/Decompiled - v{version]` so it cannot be confused with
 the original executable.
 
 ### LAN deathmatch
