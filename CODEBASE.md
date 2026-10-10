@@ -167,6 +167,12 @@ divergent client. Handshake compatibility covers simulation build identity,
 normal/GG level content, ships, and gameplay data. It is still delayed TCP
 lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
+The simulation compatibility ID in `netplay.cpp` uses an independent `sim`
+revision plus protocol/snapshot identities, not the app's release version.
+Advance the simulation revision when equal inputs can produce different
+authoritative state; do not bump it solely for cosmetic changes. Changing the
+ID changes the handshake fingerprint and rejects peers carrying the previous ID.
+
 ## Runtime Data
 
 The executable expects these paths relative to its working directory:

@@ -32,9 +32,11 @@ namespace {
 
 const uint32_t kProtocolMagic = 0x4e554f54u; /* TOUN, little endian */
 const uint16_t kProtocolVersion = 4;
-/* Bump this whenever a gameplay or snapshot change can make equal commands
- * produce different state, even if the packet shapes remain compatible. */
-const char kSimulationBuildId[] = "tou-0.7-net4-snapshot3";
+/* The sim revision is independent of the app/release version. Bump it whenever
+ * a gameplay or snapshot change can make equal commands produce different
+ * state, even if the packet shapes remain compatible. Cosmetic releases do
+ * not by themselves require a compatibility revision. */
+const char kSimulationBuildId[] = "tou-sim1-net4-snapshot3";
 const uint16_t kDefaultPort = 27015;
 const uint32_t kMaximumPayload = 1024u * 1024u;
 const uint32_t kMaximumSnapshotPayload = 64u * 1024u * 1024u;

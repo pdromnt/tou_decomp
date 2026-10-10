@@ -72,6 +72,9 @@ those session controls.
 - Content fingerprinting covers the ordered normal-level bytes, GG theme files,
   ships, and gameplay data. Music, sound effects, help, and translations are
   intentionally not simulation compatibility inputs.
+- The handshake's simulation compatibility revision is independent of the app
+  version. Changing that identity rejects older identities; use the same build
+  on every peer, including after the release-tagged ID was replaced.
 - Snapshot correction recovers detected state drift; it is not prediction,
   rollback, or reconnection and may cause a visible hitch.
 - Tick-zero snapshots are capped at 64 MiB. Very large authored/GG worlds can
