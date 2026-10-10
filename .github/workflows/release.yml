@@ -39,58 +39,6 @@ jobs:
             echo "tag_exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-  windows-x86:
-    name: Windows x86
-    needs: prepare
-    runs-on: windows-latest
-
-    steps:
-      - name: Check out release source
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.source_ref }}
-
-      - name: Install 32-bit MinGW and CMake
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW32
-          update: true
-          install: >-
-            mingw-w64-i686-cmake
-            mingw-w64-i686-gcc
-            mingw-w64-i686-ninja
-
-      - name: Build and stage game
-        shell: msys2 {0}
-        run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --parallel 2
-          cmake --install build --prefix stage
-
-      - name: Verify 32-bit executable
-        shell: msys2 {0}
-        run: |
-          objdump -f stage/TOU.exe | grep -q "file format pei-i386"
-          objdump -f stage/level-editor/tou-level-editor.exe | grep -q "file format pei-i386"
-
-      - name: Package runtime
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: >-
-          ./scripts/package-release.ps1
-          -Version $env:RELEASE_TAG
-          -Platform windows-x86
-          -ExecutablePath stage/TOU.exe
-          -LevelEditorDirectory stage/level-editor
-
-      - name: Upload release archive
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-windows-x86
-          path: dist/*
-          if-no-files-found: error
-
   native:
     name: ${{ matrix.name }}
     needs: prepare
@@ -98,6 +46,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Windows x86
+            runner: windows-latest
+            platform: windows-x86
+            cmake_arch: Win32
+            executable: stage/TOU.exe
+            expected_machine: "0x014C"
           - name: Windows x64
             runner: windows-latest
             platform: windows-x64
@@ -239,7 +193,7 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    needs: [prepare, windows-x86, native]
+    needs: [prepare, native]
     runs-on: ubuntu-24.04
 
     steps:

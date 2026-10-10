@@ -343,8 +343,8 @@ SDL's legacy `timeBeginPeriod` hook and unconditional WinMM link are removed.
 SDL's modern high-resolution waitable-timer path remains active. MSVC builds
 also link the C/C++ runtime statically, keeping release archives self-contained.
 
-`.github/workflows/build.yml` builds Windows x86 plus native Windows, Linux,
-and macOS x64/ARM64 targets once per pull request and on direct pushes to
+`.github/workflows/build.yml` builds Windows x86/x64/ARM64 with MSVC, plus
+Linux and macOS x64/ARM64 targets once per pull request and on direct pushes to
 `main`. It stages the complete runtime and checks each produced architecture.
 It is build-only; publishing remains exclusive to the manually dispatched
 release workflow, which creates one archive per platform and architecture.

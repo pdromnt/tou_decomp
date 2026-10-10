@@ -117,9 +117,9 @@ cmake --build build --parallel 8
 ```
 
 The output is `TOU.exe` on Windows, `TOU` on Linux, or `TOU.app` on macOS.
-Windows packages do not require SDL DLLs or the Visual C++ redistributable. The
-32-bit MinGW build remains the closest host to the original executable; native
-x64 and ARM64 builds are also supported.
+Windows packages do not require SDL DLLs or the Visual C++ redistributable.
+CI uses MSVC for Windows x86 (`-A Win32`), x64, and ARM64 builds. MinGW-w64
+remains an alternative for local builds.
 
 The `Build` GitHub Actions workflow runs once for each pull request and for
 direct pushes to `main`. It builds Windows x86, Windows/Linux x64 and ARM64,
@@ -168,6 +168,7 @@ Useful diagnostic workflows are documented in
 
 ## Tools Used
 
+- MSVC (Windows CI builds)
 - MinGW-w64
 - Ghidra and GhidrAssistMCP
 - Runtime comparison on hardware capable of running the original game

@@ -24,51 +24,17 @@ jobs:
       - name: Validate UTF-8 catalogs and English extraction
         run: python3 tools/validate_localization.py
 
-  windows-x86:
-    name: Windows x86
-    runs-on: windows-latest
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-
-      - name: Install 32-bit MinGW and CMake
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW32
-          update: true
-          install: >-
-            mingw-w64-i686-binutils
-            mingw-w64-i686-cmake
-            mingw-w64-i686-gcc
-            mingw-w64-i686-ninja
-
-      - name: Build and stage game
-        shell: msys2 {0}
-        run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --parallel 2
-          cmake --install build --prefix stage
-
-      - name: Verify 32-bit executable
-        shell: msys2 {0}
-        run: |
-          objdump -f stage/TOU.exe | grep -q "file format pei-i386"
-          objdump -f stage/level-editor/tou-level-editor.exe | grep -q "file format pei-i386"
-
-      - name: Upload staged build
-        uses: actions/upload-artifact@v7
-        with:
-          name: tou-windows-x86
-          path: stage
-          if-no-files-found: error
-
   native:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          - name: Windows x86
+            runner: windows-latest
+            platform: windows-x86
+            cmake_arch: Win32
+            expected_machine: "0x014C"
           - name: Windows x64
             runner: windows-latest
             platform: windows-x64
