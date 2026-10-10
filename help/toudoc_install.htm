@@ -31,12 +31,23 @@
             <p>The game uses SDL3 and SDL_mixer, which are included in release
               builds. Windows releases do not require separate SDL DLLs or the
               Visual C++ redistributable.</p>
+            <p>Display scaling and beta shader effects are selected under
+              <a href="toudoc_menus.htm#details">Options / Details &amp; Visuals /
+              Display and Rendering Settings</a>. No launch flags are needed.
+              Compatible shader presentation is detected automatically; systems
+              without it use SDL presentation, with Pixel art instead of FSR
+              and no added shader effects.</p>
             <h2><a name="optimize">2.2 TOU doesn't run well on my machine. What 
               to do?</a></h2>
             <p>Try these options before reporting a performance problem:</p>
             <ol>
               <li>Under <i><a href="toudoc_menus.htm#details">Options / Details
                 &amp; Visuals</a></i>, lower the resolution or use Windowed mode.</li>
+              <li>In Display and Rendering Settings, turn off Shader effects
+                (beta) and choose Pixel art, Smooth, or Crisp instead of FSR.</li>
+              <li>On Raspberry Pi / Compute Module systems, try an X11 desktop
+                session. CM4 testing on Debian found severe performance and
+                match audio problems under Wayland, not the audio sample settings.</li>
               <li>Reduce or disable running water, waves, parallax, particles,
                 shadows, or line of sight.</li>
               <li>Reduce the number of computer pilots. Large 64-player matches

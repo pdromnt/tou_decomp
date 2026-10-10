@@ -37,8 +37,12 @@ static int SDLBackend_Initialize(void)
     if ((SDL_GetWindowFlags(s_Window) & SDL_WINDOW_OPENGL) != 0 &&
         ShaderPresentation_Initialize(s_Window))
         return 1;
-    if ((SDL_GetWindowFlags(s_Window) & SDL_WINDOW_OPENGL) != 0)
+    if ((SDL_GetWindowFlags(s_Window) & SDL_WINDOW_OPENGL) != 0) {
         LOG("[GFX] Shader initialization failed; using normal SDL renderer\n");
+        // Do not ask SDL's fallback renderer to reuse a failed GL-only window.
+        if (!Platform_RecreatePlainWindow()) return 0;
+        s_Window = (SDL_Window *)Platform_GetSdlWindow();
+    }
 
     s_Renderer = SDL_CreateRenderer(s_Window, NULL);
     if (s_Renderer == NULL) {

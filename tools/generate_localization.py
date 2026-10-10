@@ -19,10 +19,10 @@ SOURCE = ROOT / "init.cpp"
 OUTPUT = ROOT / "lang"
 
 DIRECT_ENGLISH = {
-    "display.help.effects": "Optional explosion and particle glow during play. Menus, overlays and hidden areas stay unchanged.",
-    "display.help.effects_unavailable": "Effects need TOU_SHADER_PRESENTATION=1 when launching. Unsupported renderers leave the image unchanged.",
+    "display.help.effects": "Optional bloom, team-colored exhaust flames and ship shockwaves. Overlays and hidden areas stay unchanged.",
+    "display.help.effects_unavailable": "Shader effects are unavailable on this renderer. The image stays unchanged.",
     "display.help.fsr": "Experimental edge-aware upscaling and sharpening. Compare in menus and matches.",
-    "display.help.fsr_unavailable": "FSR needs the shader backend: launch with TOU_SHADER_PRESENTATION=1. Using Pixel art instead.",
+    "display.help.fsr_unavailable": "FSR is unavailable on this renderer. Using Pixel art instead.",
     "display.help.crisp": "Even, sharp pixels at whole-number scales. Extra borders may appear.",
     "display.help.smooth": "Fills the available 4:3 area with softer, filtered pixels.",
     "display.help.pixel_art": "Sharp pixels with softened transitions at uneven scales.",

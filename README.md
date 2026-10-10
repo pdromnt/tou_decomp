@@ -26,7 +26,7 @@ The modern runtime now provides:
 - native Windows, Linux, and macOS builds for x86, x64, and ARM64 as applicable;
 - SDL3 windowing, input, software-framebuffer presentation, and SDL_mixer audio;
 - windowed/fullscreen display modes and immediate audio controls;
-- selectable display scaling and opt-in FSR 1 / beta visual effects;
+- menu-selectable display scaling, FSR 1, and optional beta visual effects;
 - English, Spanish, Brazilian Portuguese, and Finnish user interfaces;
 - human-readable `settings.json` configuration;
 - a visual normal/GG level editor and native level compiler; and
@@ -75,15 +75,16 @@ beta. See [docs/LAN_BETA.md](docs/LAN_BETA.md) for the full flow and diagnostics
 Smooth (linear filtering), and Pixel art (default). The setting
 is saved in `settings.json` and does not change gameplay resolution.
 
-The optional **FSR 1 (beta)** shader prototype requires launching with
-`TOU_SHADER_PRESENTATION=1`. It uses AMD's EASU upscaler followed by moderate
+Select **FSR 1 (beta)** directly in that menu; no launch flags are needed.
+The game automatically tries the compatible shader backend on startup.
+FSR uses AMD's EASU upscaler followed by moderate
 RCAS sharpening fixed at 70%, with denoising enabled. Without a working shader
 backend it uses Pixel art instead.
-This is experimental, not the default renderer; see
-[docs/SHADER_PRESENTATION.md](docs/SHADER_PRESENTATION.md) for launch commands,
+The effects and FSR filter remain experimental and optional; see
+[docs/SHADER_PRESENTATION.md](docs/SHADER_PRESENTATION.md) for troubleshooting,
 platform requirements, limitations, and manual checks.
 
-With that backend active, **Shader effects (beta)** enables explosion bloom,
+In the same menu, **Shader effects (beta)** enables explosion bloom,
 team-colored exhaust flames, and a brief distortion ripple when a ship dies.
 Effects are off by default, leave gameplay unchanged, and protect LOS, HUD,
 and split-screen boundaries. Windows visuals have received hands-on acceptance;

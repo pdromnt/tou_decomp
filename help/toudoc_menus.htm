@@ -179,17 +179,17 @@
                             Scaling changes presentation only, not gameplay or
                             viewport size. The choice is saved in settings.json.</li>
                           <li><b><i>FSR 1 (beta)</i></b>: An experimental
-                            edge-aware upscale and sharpening filter. Start the
-                            game with <code>TOU_SHADER_PRESENTATION=1</code> to
-                            enable the shader backend. Otherwise this choice
-                            uses Pixel art. The ordinary SDL renderer remains
-                            the default; compare text and gameplay before
+                            edge-aware upscale and sharpening filter. Select it
+                            here without launch flags. The shader backend is
+                            detected automatically; unsupported systems use
+                            Pixel art instead. Compare text and gameplay before
                             deciding which filter you prefer.</li>
                           <li><b><i>Shader effects (beta)</i></b>: Adds restrained
                             explosion bloom, team-colored exhaust flames, and
                             an expanding distortion ripple when a ship dies.
                             These are visual effects, not extra damage or physics.
-                            Off by default. Requires the opt-in shader backend;
+                            Off by default. Select it here without launch flags;
+                            unsupported renderers leave the image unchanged. It
                             keeps world effects visible but frozen during pause
                             and the ESC menu, without affecting their text or
                             panel. Main menus, round panels, and hidden LOS areas

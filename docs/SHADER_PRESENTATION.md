@@ -1,41 +1,27 @@
-# Experimental Shader Presentation
+# Rendering and Beta Shader Effects
 
 The software renderer still produces the authoritative 640 x 480 RGB565 frame.
-This prototype adds optional GPU presentation after that frame is complete.
+The game automatically selects compatible GPU presentation after that frame
+is complete, with SDL fallback and optional menu-selected filters/effects.
 Physics, collisions, RNG, particle spawning, terrain mutation, and netplay
 remain untouched. No shader changes gameplay visibility or lighting rules.
 
-## Run It
+## Use It
 
-Windows PowerShell, from the directory containing `TOU.exe`:
+Launch normally. Choose **Options > Details & Visuals > Display and Rendering
+Settings > Scaling > FSR 1 (beta)**, or turn on **Shader effects (beta)** in the
+same screen. No launch flags are required. A compatible shader backend is
+detected automatically; filters and effects can be changed without restarting.
+Pixel art remains the default filter, and beta effects remain off by default.
 
-```powershell
-$env:TOU_SHADER_PRESENTATION = '1'
-./TOU.exe --logging
-Remove-Item Env:TOU_SHADER_PRESENTATION
-```
-
-Linux:
-
-```sh
-TOU_SHADER_PRESENTATION=1 ./TOU --logging
-```
-
-macOS app bundle:
-
-```sh
-TOU_SHADER_PRESENTATION=1 ./TOU.app/Contents/MacOS/TOU --logging
-```
-
-Choose **Options > Details & Visuals > Display and Rendering Settings > Scaling > FSR 1 (beta)**.
-Setting the environment variable enables the shader backend, not the FSR
-filter itself. All four filters can be compared without restarting once
-the shader backend is active. To restore ordinary SDL presentation, close
-the game and launch normally without the variable.
+Select Crisp, Smooth, or Pixel art instead of FSR and turn off Shader effects
+in that menu to disable the optional features. Backend selection is automatic;
+there is no rendering environment-variable override. `--logging` is optional
+and enables diagnostics, not rendering features.
 
 `settings.json` stores `display.scaling` as `crisp`, `smooth`, `pixel-art`,
 or `fsr1`. Missing or invalid values preserve the previous default, Pixel art.
-Factory reset restores Pixel art. A saved FSR choice on a normal SDL launch
+Factory reset restores Pixel art. A saved FSR choice on an SDL fallback launch
 falls back to Pixel art, with an explanation in the Display screen.
 
 ## What It Does
@@ -62,7 +48,9 @@ is added. The FSR source is pinned and embedded at build time, with AMD's
 MIT notice shipped as `TOU-FSR-LICENSE.txt`.
 
 If context creation or shader compilation fails, initialization falls back
-to the ordinary SDL renderer. An unavailable FSR intermediate target uses
+to the ordinary SDL renderer. After shader initialization failure, a plain
+window is recreated with the prior title, size, position, and fullscreen mode
+before initializing SDL's renderer. An unavailable FSR intermediate target uses
 filtered presentation. Diagnostics are written to `debug.txt` with `--logging`.
 Shader availability is not a performance guarantee on low-power devices.
 For Raspberry Pi / Compute Module testing, start with an X11 desktop session:
@@ -70,13 +58,11 @@ the CM4 Debian report identified Wayland as the source of severe performance
 problems and match audio stuttering, rather than audio sample settings. Keep
 that desktop-session issue separate from shader-backend performance measurements.
 
-## Future VFX Boundary
-
-### Shader Effects (Beta)
+## Shader Effects (Beta)
 
 The Display and Rendering Settings screen now has an off-by-default
 **Shader effects (beta)** switch, saved as `display.shaderEffects` (0/1).
-It requires the same opt-in shader backend as FSR, but works independently
+It uses the automatically detected shader backend, but works independently
 of scaling mode. Unsupported renderers ignore it. Factory reset disables it.
 
 During active gameplay, the renderer captures newly added bright colour from
@@ -131,7 +117,7 @@ cosmetic waves. Unpausing does not add the paused wall-clock interval to wave ag
 
 Acceptance still requires comparing on/off in motion, heavy explosion scenes,
 split screen, each LOS style, HUD/weapon selectors, pause/end-round screens,
-level changes, and normal launches without the shader backend. On the CM4,
+level changes, and fallback launches without the shader backend. On the CM4,
 check frame pacing and audio as well as visual correctness. Bright particles
 are selected by their actual added colour, so emission threshold/intensity may
 need further art-direction tuning.
@@ -149,15 +135,18 @@ and curl timing freeze, overlays stay clear, and effects resume without jumping
 after waiting several seconds. Gameplay focus and multiplayer pause rules are
 unchanged; this is presentation-only behavior.
 
+## Future VFX Boundary
+
 `gfx_shader.cpp` owns the context, shaders, input texture, and intermediate
 targets. FSR and bloom demonstrate multipass pipelines; additional passes could
 apply CRT styling, colour grading, or screen-space distortion. Keep effects
 optional and provide a no-effects path for pixel clarity and low-power GPUs.
 
 The main colour input is a flattened image, not a modern scene with depth,
-motion vectors, material IDs, or separate UI/world layers. Object-aware glow,
-localized heat distortion would require more targeted render outputs or masks.
-The beta now supplies a selective glow/visibility mask, not general scene layers.
+motion vectors, material IDs, or separate UI/world layers. Current effects use
+selective emission/visibility masks and ship-death events. More general
+object-aware lighting or localized heat distortion would need additional
+targeted render outputs or metadata, not just the existing final colour frame.
 Depth-aware effects and temporal FSR do not become
 available merely by adding this presentation backend. A shader editing UI,
 hot reload, and a general effect graph are not part of this prototype.
@@ -175,8 +164,11 @@ hot reload, and a general effect graph are not part of this prototype.
    after changing scaling; Crisp may add extra borders.
 5. Alt-tab out and back during menus and a match. Verify focus, audio,
    pausing rules, and the returned frame.
-6. Restart and confirm the saved filter. Launch without the shader variable
-   after saving FSR and verify the documented Pixel art fallback.
+6. Restart normally and confirm the saved filter/effects without any flags.
+   Switch to Pixel art and disable effects in the menu, then restart and confirm
+   both stay disabled. On an unsupported system, verify automatic Pixel art
+   fallback and the unavailable-effects explanation without changing the saved
+   choices intended for a compatible shader backend.
 7. Check translated Display text in English, Spanish, Brazilian Portuguese,
    and Finnish. Help text should wrap and center without clipping.
 8. Try macOS Intel/Apple Silicon and Linux x64/ARM64, especially the CM4.

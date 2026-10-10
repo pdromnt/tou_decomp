@@ -63,21 +63,17 @@ int Platform_CreateWindow(const char *title, int width, int height)
         return 0;
     }
 
-    // Experimental presentation only; the normal SDL window remains the default.
-    const char *shader = SDL_getenv("TOU_SHADER_PRESENTATION");
-    const bool request_shader = shader != NULL && strcmp(shader, "1") == 0;
-    if (request_shader) {
-        s_PlatformWindow = Create_Shader_Window(title, width, height,
-                                                SDL_GL_CONTEXT_PROFILE_CORE, 4, 1);
+    // Make menu-selected filters/effects available without launch flags.
+    s_PlatformWindow = Create_Shader_Window(title, width, height,
+                                            SDL_GL_CONTEXT_PROFILE_CORE, 4, 1);
 #if !defined(_WIN32) && !defined(__APPLE__)
-        if (s_PlatformWindow == NULL) {
-            s_PlatformWindow = Create_Shader_Window(title, width, height,
-                                                    SDL_GL_CONTEXT_PROFILE_ES, 3, 1);
-        }
-#endif
-        if (s_PlatformWindow == NULL)
-            LOG("[PLATFORM] Shader window unavailable; using normal SDL presentation: %s\n", SDL_GetError());
+    if (s_PlatformWindow == NULL) {
+        s_PlatformWindow = Create_Shader_Window(title, width, height,
+                                                SDL_GL_CONTEXT_PROFILE_ES, 3, 1);
     }
+#endif
+    if (s_PlatformWindow == NULL)
+        LOG("[PLATFORM] Shader window unavailable; using normal SDL presentation: %s\n", SDL_GetError());
     if (s_PlatformWindow == NULL)
         s_PlatformWindow = SDL_CreateWindow(title, width, height, SDL_WINDOW_HIDDEN);
     if (s_PlatformWindow == NULL) {
@@ -91,6 +87,27 @@ int Platform_CreateWindow(const char *title, int width, int height)
     SDL_HideCursor();
 
     LOG("[PLATFORM] SDL window created\n");
+    return 1;
+}
+
+int Platform_RecreatePlainWindow(void)
+{
+    if (!s_PlatformWindow) return 0;
+    int width, height, x, y;
+    SDL_GetWindowSize(s_PlatformWindow, &width, &height);
+    SDL_GetWindowPosition(s_PlatformWindow, &x, &y);
+    const SDL_WindowFlags flags = SDL_GetWindowFlags(s_PlatformWindow);
+    const std::string title(SDL_GetWindowTitle(s_PlatformWindow));
+    SDL_Window *replacement = SDL_CreateWindow(title.c_str(), width, height,
+        SDL_WINDOW_HIDDEN | (flags & SDL_WINDOW_FULLSCREEN));
+    if (!replacement) {
+        LOG("[PLATFORM] Plain SDL fallback window failed: %s\n", SDL_GetError());
+        return 0;
+    }
+    SDL_SetWindowPosition(replacement, x, y);
+    SDL_DestroyWindow(s_PlatformWindow);
+    s_PlatformWindow = replacement;
+    LOG("[PLATFORM] Recreated plain SDL window after shader initialization failure\n");
     return 1;
 }
 

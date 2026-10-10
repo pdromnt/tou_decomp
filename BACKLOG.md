@@ -10,7 +10,7 @@ New defects should be added only after a concrete reproduction.
 ## Active Work: Presentation Shaders
 
 - Confirm macOS OpenGL and Linux/GLES compatibility and Raspberry Pi CM4
-  performance before promoting the opt-in backend; unsupported devices retain
+  performance with automatic shader-backend startup; unsupported devices retain
   normal SDL presentation and Pixel art remains the default scaling mode.
 - Finish targeted VFX edge/performance checks: LOS/HUD boundaries, split screen,
   simultaneous deaths, pause/level cleanup, and high-player-count exhaust scenes.

@@ -22,7 +22,7 @@ main.cpp
   -> menu or match state
   -> input, simulation, entity callbacks, effects
   -> software rendering into a backend-neutral RGB565 framebuffer
-  -> SDL presentation, or opt-in OpenGL/GLES scaling and beta VFX
+  -> OpenGL/GLES presentation with optional scaling/VFX, or SDL fallback
   -> audio through the SDL_mixer backend
 ```
 
@@ -45,15 +45,19 @@ that typed buffer and a single active `Viewport` record. Lifted renderer bodies
 may still create local integer views where preserving original 32-bit pointer
 arithmetic matters; those views no longer leak through subsystem call sites.
 
-`RenderBackend` owns platform presentation. `gfx_sdl.cpp` uploads the unchanged
-framebuffer to a streaming SDL texture. Simulation and software rendering code
-do not access SDL renderer objects directly.
+`RenderBackend` owns platform presentation. `gfx_sdl.cpp` selects the compatible
+shader backend or uploads the unchanged framebuffer to a streaming SDL texture
+as a fallback. Simulation and software rendering code do not access SDL renderer
+objects directly.
 
-`TOU_SHADER_PRESENTATION=1` opts into `gfx_shader.cpp`: OpenGL 4.1 (with a Linux
+Normal launches try `gfx_shader.cpp`: OpenGL 4.1 (with a Linux
 GLES 3.1 context fallback), embedded AMD FSR 1 EASU/RCAS, and selectable scaling.
-Normal launches keep SDL presentation. Pixel art remains the default; FSR uses
+Unsupported contexts/shaders fall back to SDL presentation; failed shader
+initialization recreates a plain window before initializing SDL's renderer.
+Pixel art remains the default; FSR uses
 the accepted 70% sharpening preset with denoising, and falls back to Pixel art
 when the shader backend is unavailable.
+Filters and beta effects are selected in the Display menu, without launch flags.
 
 `shader_effects.cpp` supplies optional presentation-only emission/visibility
 metadata for explosion bloom, team-coloured tapered exhaust, and ship-death
@@ -94,8 +98,8 @@ disable effects, and reset/snapshot import clears transient presentation state.
 | `effects.cpp` | Explosions, particles, lighting, terrain effects |
 | `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
 | `render_backend.cpp` | Presentation-backend interface and SDL dispatch |
-| `gfx_sdl.cpp` | SDL streaming texture and framebuffer presentation |
-| `gfx_shader.cpp` | Opt-in OpenGL/GLES scaling, FSR 1, Gaussian bloom, flame compositing, and refraction |
+| `gfx_sdl.cpp` | Shader-backend selection and SDL streaming-texture fallback |
+| `gfx_shader.cpp` | Automatic OpenGL/GLES presentation, optional FSR 1, bloom, flame compositing, refraction |
 | `shader_effects.cpp` | Presentation-only emission/flame masks, exhaust tags, shockwave events, LOS/HUD gating |
 | `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
 | `assets.cpp` | Font and image asset loading |
@@ -131,7 +135,7 @@ disable effects, and reset/snapshot import clears transient presentation state.
 | `docs/LAN_BETA.md` | Direct-IP beta launch, scope, limitations, and bug-report data |
 | `docs/REPLAY_DIAGNOSTICS.md` | Replay recording/playback and snapshot boundary |
 | `docs/SIMULATION_STATE.md` | Complete authoritative snapshot inventory and exclusions |
-| `docs/SHADER_PRESENTATION.md` | Optional GPU presentation/VFX, launch commands, limitations, manual acceptance |
+| `docs/SHADER_PRESENTATION.md` | Automatic GPU presentation, menu-selected filters/VFX, fallback, manual acceptance |
 | `THIRD_PARTY_NOTICES.md` | New presentation dependencies, revisions, and packaged license notices |
 
 ## Simulation Boundaries
