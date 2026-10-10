@@ -22,7 +22,7 @@ main.cpp
   -> menu or match state
   -> input, simulation, entity callbacks, effects
   -> software rendering into a backend-neutral RGB565 framebuffer
-  -> SDL presentation
+  -> SDL presentation, or opt-in OpenGL/GLES scaling and beta VFX
   -> audio through the SDL_mixer backend
 ```
 
@@ -42,6 +42,23 @@ arithmetic matters; those views no longer leak through subsystem call sites.
 `RenderBackend` owns platform presentation. `gfx_sdl.cpp` uploads the unchanged
 framebuffer to a streaming SDL texture. Simulation and software rendering code
 do not access SDL renderer objects directly.
+
+`TOU_SHADER_PRESENTATION=1` opts into `gfx_shader.cpp`: OpenGL 4.1 (with a Linux
+GLES 3.1 context fallback), embedded AMD FSR 1 EASU/RCAS, and selectable scaling.
+Normal launches keep SDL presentation. Pixel art remains the default; FSR uses
+the accepted 70% sharpening preset with denoising, and falls back to Pixel art
+when the shader backend is unavailable.
+
+`shader_effects.cpp` supplies optional presentation-only emission/visibility
+metadata for explosion bloom, team-coloured tapered exhaust, and ship-death
+refraction. It never writes the RGB565 frame or changes RNG, damage, visibility,
+particle lifetimes, or gameplay ownership. Simple exhaust owner tags follow pool
+compaction separately from packed records; reset/snapshot import clears those
+tags and cosmetic waves. The final shader gates effects against viewport, LOS,
+and HUD exclusions. Native-sized bloom targets run four contiguous blur pairs;
+a separate flame texture preserves the narrow plume shape. These features have
+local Windows visual acceptance, not cross-platform/performance acceptance.
+See `docs/SHADER_PRESENTATION.md` for the complete seam and manual checks.
 
 ## Source Map
 
@@ -67,6 +84,8 @@ do not access SDL renderer objects directly.
 | `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
 | `render_backend.cpp` | Presentation-backend interface and SDL dispatch |
 | `gfx_sdl.cpp` | SDL streaming texture and framebuffer presentation |
+| `gfx_shader.cpp` | Opt-in OpenGL/GLES scaling, FSR 1, Gaussian bloom, flame compositing, and refraction |
+| `shader_effects.cpp` | Presentation-only emission/flame masks, exhaust tags, shockwave events, LOS/HUD gating |
 | `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
 | `assets.cpp` | Font and image asset loading |
 | `level.cpp` | `.lev` loading and swap/height-map data |
@@ -101,6 +120,8 @@ do not access SDL renderer objects directly.
 | `docs/LAN_BETA.md` | Direct-IP beta launch, scope, limitations, and bug-report data |
 | `docs/REPLAY_DIAGNOSTICS.md` | Replay recording/playback and snapshot boundary |
 | `docs/SIMULATION_STATE.md` | Complete authoritative snapshot inventory and exclusions |
+| `docs/SHADER_PRESENTATION.md` | Optional GPU presentation/VFX, launch commands, limitations, manual acceptance |
+| `THIRD_PARTY_NOTICES.md` | New presentation dependencies, revisions, and packaged license notices |
 
 ## Simulation Boundaries
 
@@ -311,6 +332,12 @@ Windows release packages are ZIP files. Linux and macOS packages are `.tar.gz`
 archives so executable permissions survive extraction. macOS is packaged as a
 native `TOU.app` bundle with its icon and all runtime assets under
 `Contents/Resources`.
+
+The FSR and Gaussian-blur sources are vendored at pinned revisions and embedded
+by CMake; no runtime shader/source files are required. CMake installation and
+`scripts/package-release.ps1` both include `THIRD_PARTY_NOTICES.md`,
+`TOU-FSR-LICENSE.txt`, and `TOU-BLOOM-LICENSE.txt`. On macOS, the app resource
+directory also carries those notices. Do not strip them from release archives.
 
 There is intentionally no permanent standalone test executable. When a binary
 discrepancy needs instrumentation, add the smallest targeted harness, compare it

@@ -5,8 +5,18 @@ direct-IP LAN foundations are complete. Their implementation and forensic
 notes live in `CODEBASE.md` and `docs/`; they are intentionally not duplicated
 here as a wall of checked boxes.
 
-There is no active bug or technical-debt backlog. New defects should be added
-only after a concrete reproduction.
+New defects should be added only after a concrete reproduction.
+
+## Active Work: Presentation Shaders
+
+- Confirm macOS OpenGL and Linux/GLES compatibility and Raspberry Pi CM4
+  performance before promoting the opt-in backend; unsupported devices retain
+  normal SDL presentation and Pixel art remains the default scaling mode.
+- Finish targeted VFX edge/performance checks: LOS/HUD boundaries, split screen,
+  simultaneous deaths, pause/level cleanup, and high-player-count exhaust scenes.
+  Measure the repeated bloom passes, CPU flame mask, and distortion on low-power
+  GPUs before deciding whether quality controls are needed. The manual checklist
+  lives in `docs/SHADER_PRESENTATION.md`.
 
 ## Future Features
 
@@ -19,8 +29,8 @@ only after a concrete reproduction.
 - Improve LAN play only when demanded by testing: discovery, reconnect,
   mid-match join, prediction/rollback, internet relay/NAT traversal, AI,
   dedicated servers, spectators, or multiple local players per client.
-- Consider optional GPU presentation/post-processing behind the authoritative
-  RGB565 software framebuffer.
+- Extend optional post-processing only when desired, keeping gameplay and the
+  authoritative software framebuffer independent of presentation effects.
 - Target Browser/WebAssembly last, after native desktop work remains stable.
 
 ## Rules for New Work

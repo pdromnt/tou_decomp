@@ -26,6 +26,7 @@ The modern runtime now provides:
 - native Windows, Linux, and macOS builds for x86, x64, and ARM64 as applicable;
 - SDL3 windowing, input, software-framebuffer presentation, and SDL_mixer audio;
 - windowed/fullscreen display modes and immediate audio controls;
+- selectable display scaling and opt-in FSR 1 / beta visual effects;
 - English, Spanish, Brazilian Portuguese, and Finnish user interfaces;
 - human-readable `settings.json` configuration;
 - a visual normal/GG level editor and native level compiler; and
@@ -49,8 +50,16 @@ Windows keyboard; MacBook users should remap them under **Options → Controls**
 Right Option and Right Command are practical primary-action choices.
 
 The reconstructed game identifies itself as
-`Tunnels of Underworld - RE/Decompiled - v{version]` so it cannot be confused with
+`Tunnels of Underworld - RE/Decompiled - v{version}` so it cannot be confused with
 the original executable.
+
+### Raspberry Pi / Compute Module performance
+
+On Raspberry Pi and Compute Module-based systems, prefer an **X11 desktop
+session**. Testing on a CM4 with Debian found severe performance problems and
+match audio stuttering under Wayland; the game ran better under X11. Changing
+audio sample settings did not resolve the observed issue. If you hit similar
+problems, try X11 before tuning the game's audio settings.
 
 ### LAN deathmatch
 
@@ -59,6 +68,26 @@ to three players connect by hostname/IP and TCP port (default `27015`). Every
 computer must use the same game build, gameplay assets, ships, levels, and GG
 themes. There is no AI, discovery, reconnect, relay, or public lobby in this
 beta. See [docs/LAN_BETA.md](docs/LAN_BETA.md) for the full flow and diagnostics.
+
+### Display scaling and beta effects
+
+**Options → Details & Visuals → Display and Rendering Settings** offers Crisp (integer scaling),
+Smooth (linear filtering), and Pixel art (default). The setting
+is saved in `settings.json` and does not change gameplay resolution.
+
+The optional **FSR 1 (beta)** shader prototype requires launching with
+`TOU_SHADER_PRESENTATION=1`. It uses AMD's EASU upscaler followed by moderate
+RCAS sharpening fixed at 70%, with denoising enabled. Without a working shader
+backend it uses Pixel art instead.
+This is experimental, not the default renderer; see
+[docs/SHADER_PRESENTATION.md](docs/SHADER_PRESENTATION.md) for launch commands,
+platform requirements, limitations, and manual checks.
+
+With that backend active, **Shader effects (beta)** enables explosion bloom,
+team-colored exhaust flames, and a brief distortion ripple when a ship dies.
+Effects are off by default, leave gameplay unchanged, and protect LOS, HUD,
+and split-screen boundaries. Windows visuals have received hands-on acceptance;
+other shader-backend platforms and low-power performance still need validation.
 
 ## Level Editor
 
@@ -122,8 +151,7 @@ permissions survive extraction.
 - A simplified, expansion-friendly campaign using newly authored maps.
 - LAN discovery, reconnect, latency hiding, AI, and internet-friendly transport.
 - Additional community-maintained translations.
-- Optional GPU presentation/post-processing behind the authoritative software
-  framebuffer.
+- Further optional shader effects behind the authoritative software framebuffer.
 - Browser/WebAssembly after native desktop development remains stable.
 
 ## Contributing
@@ -145,5 +173,12 @@ Useful diagnostic workflows are documented in
 
 ## License
 
-No license is currently offered. This is not a clean-room decompilation, and the
-repository includes original game data for preservation purposes.
+No project-wide license is currently offered for the reconstruction or original
+game assets. This is not a clean-room decompilation, and the repository includes
+original game data for preservation purposes.
+
+Third-party code retains its own licenses. The new presentation backend embeds
+AMD's FidelityFX FSR 1 and Jam3's Gaussian blur kernel under their MIT terms;
+see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for sources, pinned revisions,
+and full-license links. Release archives include both notices as
+`TOU-FSR-LICENSE.txt` and `TOU-BLOOM-LICENSE.txt`.

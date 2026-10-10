@@ -162,12 +162,36 @@
                       <td height="230"> 
                         <h2><a name="details">4.5.2 Details &amp; Visuals</a></h2>
                         <ul>
-                          <li><b><i>Resolution</i></b>: Changes the output window
+                          <li><b><i>Display and Rendering Settings</i></b>: Opens the resolution, mode,
+                            and scaling settings. Changes apply immediately.</li>
+                          <li><b><i>Display &gt; Resolution</i></b>: Changes the output window
                             or fullscreen resolution. The original 640 x 480
                             software framebuffer is scaled while keeping its
                             aspect ratio.</li>
-                          <li><b><i>Mode</i></b>: Switches immediately between
+                          <li><b><i>Display &gt; Mode</i></b>: Switches immediately between
                             Windowed and Fullscreen presentation.</li>
+                          <li><b><i>Display &gt; Scaling</i></b>: <b>Crisp</b>
+                            uses nearest-neighbor filtering and whole-number
+                            enlargement, with extra black borders when needed.
+                            <b>Smooth</b> uses linear filtering to fill the 4:3
+                            area. <b>Pixel art</b> keeps the previous SDL filter:
+                            sharp pixels with softer transitions at uneven scales.
+                            Scaling changes presentation only, not gameplay or
+                            viewport size. The choice is saved in settings.json.</li>
+                          <li><b><i>FSR 1 (beta)</i></b>: An experimental
+                            edge-aware upscale and sharpening filter. Start the
+                            game with <code>TOU_SHADER_PRESENTATION=1</code> to
+                            enable the shader backend. Otherwise this choice
+                            uses Pixel art. The ordinary SDL renderer remains
+                            the default; compare text and gameplay before
+                            deciding which filter you prefer.</li>
+                          <li><b><i>Shader effects (beta)</i></b>: Adds restrained
+                            explosion bloom, team-colored exhaust flames, and
+                            an expanding distortion ripple when a ship dies.
+                            These are visual effects, not extra damage or physics.
+                            Off by default. Requires the opt-in shader backend;
+                            does not affect menus, pause/round panels, or hidden
+                            LOS areas. The option is saved immediately.</li>
                           <li><i><b>Viewport size</b></i>: &quot;Full&quot;
                             means that the player viewports always try to cover
                             the whole screen. &quot;Square&quot; means that player 
