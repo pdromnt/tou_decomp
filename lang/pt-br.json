@@ -59,7 +59,7 @@
     "gamepad.end": "Encerrar partida (painel / ESC)",
     "gamepad.help_fixed": "Direcional, gatilho esquerdo e atalhos de menu são fixos.",
     "menu.365.shader_effects_beta": "Efeitos shader (beta)",
-    "display.help.effects": "Brilho, chamas na cor da equipe e ondas ao explodir naves. Painéis e áreas ocultas ficam iguais.",
+    "display.help.effects": "Brilho, chamas, luzes de armas e ondas de explosão opcionais. Painéis e áreas ocultas ficam iguais.",
     "display.help.effects_unavailable": "Efeitos indisponíveis neste renderizador. A imagem fica igual.",
     "menu.364.fsr_1_beta": "FSR 1 (beta)",
     "display.help.fsr": "Escala e nitidez experimentais com detecção de bordas. Compare em menus e partidas.",

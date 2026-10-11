@@ -1892,6 +1892,7 @@ void FUN_00434310(void)
             if (beam_life < 1) beam_life = 50;
             int beam_x = entity->position_x;
             int beam_y = entity->position_y;
+            int lightEndX = beam_x >> 18, lightEndY = beam_y >> 18;
 
             for (int step = 0; step < beam_life; step++) {
                 beam_x += beam_vx;
@@ -1907,6 +1908,7 @@ void FUN_00434310(void)
                 /* Wall collision check */
                 int btx = beam_x >> 0x12;
                 int bty = beam_y >> 0x12;
+                lightEndX = btx; lightEndY = bty;
                 if (btx > 0 && bty > 0 && btx < (int)DAT_004879f0 && bty < (int)DAT_004879f4) {
                     int btile_off = (bty << shift) + btx;
                     unsigned char btile = *(unsigned char *)((intptr_t)DAT_0048782c + btile_off);
@@ -1982,6 +1984,7 @@ void FUN_00434310(void)
                     }
                 }
             }
+            ShaderEffects_Laser(entity->position_x >> 18, entity->position_y >> 18, lightEndX, lightEndY);
             should_remove = 1;  /* beam traced — remove the invisible entity */
         }
 
@@ -3577,6 +3580,7 @@ void FUN_00434310(void)
                                     *(unsigned char *)((intptr_t)DAT_0048782c + ptoff) = fill_tile;
                                     if (DAT_00481f50 != NULL) {
                                         *(unsigned short *)((intptr_t)DAT_00481f50 + ptoff * 2) = ow_rgb;
+                                        ShaderEffects_OrganicPixel(px, py);
                                     }
                                 }
                             }
@@ -5127,6 +5131,7 @@ void FUN_00434310(void)
                         case 0x23: {
                             int gx = entity->position_x;
                             int gy = entity->position_y;
+                            ShaderEffects_ShipExplosion(gx >> 18, gy >> 18);
                             int gvx = entity->velocity_x;
                             int gvy = entity->velocity_y;
                             int *sc = (int *)DAT_00487ab0;

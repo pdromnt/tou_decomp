@@ -33,7 +33,8 @@ kernel in horizontal/vertical passes for bloom. No glslify runtime is shipped.
 ## Project-Specific Effect Code
 
 The emission capture, team-coloured tapered exhaust layer, visibility/HUD guards,
-and radial ship-death distortion were written for this project, not copied from
+weapon-specific boost/waste/laser lights, cosmetic Digger sparks,
+and radial ship/Gamma Boom distortion were written for this project, not copied from
 another shader repository. They are not covered by the upstream MIT notices
 merely because they interact with those components.
 

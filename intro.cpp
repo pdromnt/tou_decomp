@@ -188,6 +188,7 @@ static void Update_Entities(void)
         /* TTL: remove expired entities (swap with last) */
         if (entity->health_or_damage_28 < (int)currentTime) {
             g_EntityCount--;
+            ShaderEffects_RemoveEntity(i, g_EntityCount);
             if (i < g_EntityCount) {
                 *entity = g_EntityPool[g_EntityCount];
                 continue;  /* re-process swapped entity */

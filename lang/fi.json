@@ -59,7 +59,7 @@
     "gamepad.end": "Lopeta ottelu (paneeli / ESC)",
     "gamepad.help_fixed": "Ristiohjain, vasen liipaisin ja valikon pikatoiminnot ovat kiinteät.",
     "menu.365.shader_effects_beta": "Shader-tehosteet (beta)",
-    "display.help.effects": "Valinnainen hehku, joukkueväriset liekit ja alusten räjähdysaallot. Paneelit ja piilotetut alueet eivät muutu.",
+    "display.help.effects": "Valinnainen hehku, liekit, aseiden valot ja räjähdysaallot. Paneelit ja piilotetut alueet eivät muutu.",
     "display.help.effects_unavailable": "Shader-tehosteet eivät ole käytettävissä tällä piirtotavalla. Kuva ei muutu.",
     "menu.364.fsr_1_beta": "FSR 1 (beta)",
     "display.help.fsr": "Kokeellinen reunat huomioiva skaalaus ja terävöitys. Vertaa valikoissa ja otteluissa.",

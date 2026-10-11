@@ -2,6 +2,7 @@
 
 #include "original_semantics.h"
 #include "tou.h"
+#include "shader_effects.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -756,6 +757,7 @@ explode:
         const int32_t y = tou_binary::load_i32(entity, 0x08);
         const uint8_t owner = tou_binary::load_u8(entity, 0x22);
         const uint8_t old_tile = previous_effect_tile(entity);
+        ShaderEffects_ShipExplosion(tx, ty);
         FUN_004357b0(tx, ty, 9, old_tile, tile_at(tx, ty) == 0x0c,
                     x, y, tou_binary::load_i32(entity, 0x04), tou_binary::load_i32(entity, 0x0c), 0, 0, owner);
         if (coarse_effect_allowed(entity)) spawn_flash(x, y, 0x0b, 0, 0xff, 1);
@@ -2010,6 +2012,7 @@ void spawn_machinegun_trace(uint8_t *projectile, int heading)
         uint8_t *trail = spawn_type67(x, y, vx, vy);
         if (trail == NULL) break;
         tou_binary::store_u8(trail, 0x5c, 1);
+        ShaderEffects_TagMachinegunParticle(g_EntityCount - 1);
         const uint8_t palette_index = static_cast<uint8_t>(game_rand() % 12 + 0x14);
         tou_binary::store_u8(trail, 0x65, palette_index);
         tou_binary::store_u8(trail, 0x64, 0x12);
@@ -2234,6 +2237,7 @@ void smooth_organic_patch(int center_offset)
                                     (below & 0x1f) + (center & 0x1f) * 4u) >> 3;
             pixels[offset] = rgb555_to_rgb565(
                 static_cast<uint16_t>((r << 10) | (g << 5) | b));
+            ShaderEffects_OrganicPixel(offset % DAT_00487a00, offset / DAT_00487a00, true);
         }
     }
 }
@@ -2389,6 +2393,7 @@ void callback_organic_waste_004427e0(int entity_index)
                         static_cast<uint16_t>(color_with_bias - 30000u);
                     static_cast<uint16_t *>(DAT_00481f50)[offset] =
                         rgb555_to_rgb565(original_color);
+                    ShaderEffects_OrganicPixel(px, py);
                 }
             }
         }
@@ -2606,5 +2611,6 @@ void EntityCallbacks_RemoveAt(int entity_index)
     }
 
     --g_EntityCount;
+    ShaderEffects_RemoveEntity(entity_index, g_EntityCount);
     copy_entity_fields(removed, entity_at(g_EntityCount));
 }

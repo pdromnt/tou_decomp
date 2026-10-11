@@ -2304,6 +2304,7 @@ static void FUN_0044e5a0_impl(int *ent)
 static void FUN_0044ed90_impl(int *ent, int idx, unsigned int tile_type)
 {
     int *piVar1 = ent;
+    ShaderEffects_DiggerShipContact(idx);
 
     /* Play explosion sound */
     FUN_0040fd70(idx, 0xc, ent[0], ent[1]);
@@ -3795,6 +3796,7 @@ LAB_00401856:
      * then spawns a detail-scaled trail when the player is in water. */
     case 4:
     {
+        ShaderEffects_TurboBoost(idx);
         player->velocity_x += sincos[uVar7] >> 3;
         player->velocity_y += sincos[0x200 + uVar7] >> 3;
 
@@ -3831,6 +3833,7 @@ LAB_00401856:
                 g_EntityCount++;
                 g_EntityPool[g_EntityCount - 1].counter_3c = 0;
                 g_EntityPool[g_EntityCount - 1].timer_5c = 3;
+                ShaderEffects_TagBoostParticle(g_EntityCount - 1);
                 uVar8 = rand(); uVar8 &= 0x80000007;
                 if ((int)uVar8 < 0) uVar8 = ((uVar8 - 1) | 0xfffffff8) + 1;
                 g_EntityPool[g_EntityCount - 1].scratch_65 = (char)uVar8 + '\x14';

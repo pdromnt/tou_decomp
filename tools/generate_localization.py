@@ -74,7 +74,7 @@ DIRECT_ENGLISH = {
     "gamepad.disconnected": "Not connected",
     "gamepad.unbound": "Unbound",
     "gamepad.help": "Click or D-pad left/right to change. A confirms, B returns. Release controls after changes. LAN uses Player 1.",
-    "display.help.effects": "Optional bloom, team-colored exhaust flames and ship shockwaves. Overlays and hidden areas stay unchanged.",
+    "display.help.effects": "Optional bloom, exhaust flames, weapon lights and explosion ripples. Overlays and hidden areas stay unchanged.",
     "display.help.effects_unavailable": "Shader effects are unavailable on this renderer. The image stays unchanged.",
     "display.help.fsr": "Experimental edge-aware upscaling and sharpening. Compare in menus and matches.",
     "display.help.fsr_unavailable": "FSR is unavailable on this renderer. Using Pixel art instead.",

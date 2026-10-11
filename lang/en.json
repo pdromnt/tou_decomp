@@ -15,7 +15,7 @@
     "awards.survivor": "Survivor",
     "awards.the_best": "The best",
     "display.help.crisp": "Even, sharp pixels at whole-number scales. Extra borders may appear.",
-    "display.help.effects": "Optional bloom, team-colored exhaust flames and ship shockwaves. Overlays and hidden areas stay unchanged.",
+    "display.help.effects": "Optional bloom, exhaust flames, weapon lights and explosion ripples. Overlays and hidden areas stay unchanged.",
     "display.help.effects_unavailable": "Shader effects are unavailable on this renderer. The image stays unchanged.",
     "display.help.fsr": "Experimental edge-aware upscaling and sharpening. Compare in menus and matches.",
     "display.help.fsr_unavailable": "FSR is unavailable on this renderer. Using Pixel art instead.",

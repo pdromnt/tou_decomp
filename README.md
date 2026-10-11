@@ -112,9 +112,13 @@ platform requirements, limitations, and manual checks.
 
 In the same menu, **Shader effects (beta)** enables explosion bloom,
 team-colored exhaust flames, and a brief distortion ripple when a ship dies.
+Weapon-specific lights add yellow Turbo plumes, green MK1 waste pulses,
+laser glow, vivid machine-gun tracers, Digger cutting sparks, and Gamma Boom's
+final explosion ripple.
 Effects are off by default, leave gameplay unchanged, and protect LOS, HUD,
-and split-screen boundaries. Windows visuals have received hands-on acceptance;
-other shader-backend platforms and low-power performance still need validation.
+and split-screen boundaries. Windows visuals, including the weapon-specific
+effects, have received hands-on acceptance; other platforms, edge cases and
+low-power performance still need validation.
 
 ## Level Editor
 

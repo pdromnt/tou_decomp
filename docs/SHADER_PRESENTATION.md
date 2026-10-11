@@ -101,7 +101,8 @@ in the paused world and ESC menu, with a frozen cosmetic clock for exhaust curl
 and ripple ages. Pause text and the entire ESC panel are protected separately.
 Effects are disabled in main menus, round panels, and other non-play substates.
 
-Ship deaths also emit a brief radial distortion wave under the same beta toggle.
+Ship deaths and Gamma Boom's final detonation also emit a brief radial distortion
+wave under the same beta toggle. Gamma's warning ticks do not trigger a wave.
 The presentation-only event queue stores world positions and cosmetic-clock ages;
 each wave lasts 650 ms, expanding from 8 to 96 native pixels with a fading
 strength capped at 6 pixels of displacement. A Gaussian crest and opposing
@@ -127,13 +128,55 @@ own emission colours. Check enlarged explosion halos for square patterns.
 Check the tapered exhaust flames while thrusting, turning, and coasting,
 including darker terrain and LOS edges; the original particle sprites stay intact.
 Trigger ship deaths with effects on/off and compare the short expanding ripple.
-Ordinary projectile blasts should not trigger it. Test deaths near HUD and LOS
+Ordinary projectile blasts other than Gamma Boom should not trigger it. Test deaths near HUD and LOS
 edges, simultaneous deaths in split screen, pausing during a ripple, and level
 changes. Assess extra fragment cost on lower-power GPUs before promotion.
 During P-pause and the ESC menu, check that bloom/flames stay visible, ripple
 and curl timing freeze, overlays stay clear, and effects resume without jumping
 after waiting several seconds. Gameplay focus and multiplayer pause rules are
 unchanged; this is presentation-only behavior.
+
+### Weapon-specific lights
+
+The same **Shader effects (beta)** switch also enables:
+
+- **Turbo Boost:** a longer, vivid yellow plume behind the ship while the boost
+  is fired. It follows the ship's current heading, independently of team colour.
+  Its existing trail particles also get short vivid yellow streaks, white-hot
+  heads and soft glow, following their actual motion and palette fade.
+- **Organic Waste MK1:** a slow green pulse in its painted terrain. Only tagged,
+  green-dominant pixels emit; the brown texture and other green terrain stay intact.
+- **Laser:** a narrow violet light along the actual traced beam, stopping at the
+  collision endpoint and fading over 120 ms alongside the original purple trail.
+- **Gamma Boom:** the ship-death refraction wave at the final explosion.
+- **Digger:** short amber/white spark streaks sprayed backward from solid terrain
+  at the ship's cutting face. Air and fluids do not trigger sparks.
+- **Machine gun:** warm yellow/white bullet-like streaks on its existing trace
+  particles, aligned with their movement and fading with their palette brightness.
+  These are short moving tracers, not another continuous laser beam.
+
+These use the existing bloom/flame textures, not new shader passes.
+Machine-gun and boost particle tags follow entity-pool compaction and reset/snapshot import;
+they never alter the original particles or consume extra gameplay pool slots.
+Beam and
+spark queues each hold at most 64 cosmetic events; sparks use a separate hash,
+never gameplay RNG or particle slots. Digger emission is capped at one burst per
+ship every 40 ms. Laser/spark/boost timing freezes during pause and is discarded
+on level reset or snapshot import. All added light is gated by LOS, viewport and
+HUD masks; sparks require a visible contact origin.
+
+Waste tags record the expected terrain tile and colour, survive toggling effects
+off/on, and are invalidated when that pixel is removed or repainted. The optional
+tag allocation is capped at 64 MiB; allocation failure disables only the waste
+pulse. Level reset and authoritative snapshot import discard these cosmetic tags;
+existing snapshot-restored waste stays unlit until fresh growth is tagged. No
+terrain colour, growth rule, damage, collision or saved/network format is changed.
+
+Compare each weapon with effects on/off, including waste growth/destruction,
+boost while turning, laser wall hits, machine-gun fire/fading traces, sustained digging, Gamma warning/final
+explosion, pause, split screen and LOS edges. The new weapon effects, including
+machine-gun tracers and boost sparks, passed local Windows visual acceptance.
+Exhaustive edge-case and low-power performance checks remain pending.
 
 ## Future VFX Boundary
 

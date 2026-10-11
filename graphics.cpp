@@ -487,6 +487,7 @@ static void Render_Game_World(Framebuffer *framebuffer)
     }
 
     ShaderEffects_BuildExhaustPlumes();
+    ShaderEffects_BuildWeaponLights();
     ShaderEffects_Snapshot(framebuffer);
     /* ---- HUD elements (per-player, only when alive) ---- */
     /* Draws inside the per-viewport loop, using the current viewport's player. */

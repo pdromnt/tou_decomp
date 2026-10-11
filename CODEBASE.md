@@ -61,13 +61,17 @@ Filters and beta effects are selected in the Display menu, without launch flags.
 
 `shader_effects.cpp` supplies optional presentation-only emission/visibility
 metadata for explosion bloom, team-coloured tapered exhaust, and ship-death
-refraction. It never writes the RGB565 frame or changes RNG, damage, visibility,
+refraction. Weapon-specific metadata adds yellow Turbo plumes, MK1 waste pulses,
+traced laser light, Digger cutting sparks and Gamma Boom refraction. It never
+writes the RGB565 frame or changes RNG, damage, visibility,
 particle lifetimes, or gameplay ownership. Simple exhaust owner tags follow pool
 compaction separately from packed records; reset/snapshot import clears those
-tags and cosmetic waves. The final shader gates effects against viewport, LOS,
+tags and cosmetic waves. Waste terrain tags and bounded laser/spark queues also
+reset at that boundary. The final shader gates effects against viewport, LOS,
 and HUD exclusions. Native-sized bloom targets run four contiguous blur pairs;
-a separate flame texture preserves the narrow plume shape. These features have
-local Windows visual acceptance, not cross-platform/performance acceptance.
+a separate flame texture preserves the narrow plume shape. These effects,
+including the weapon-specific lights, have local Windows visual acceptance,
+not exhaustive edge-case or cross-platform/performance acceptance.
 See `docs/SHADER_PRESENTATION.md` for the complete seam and manual checks.
 
 Paused gameplay and the ESC menu retain world effects with a frozen cosmetic
