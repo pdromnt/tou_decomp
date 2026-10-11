@@ -1,7 +1,7 @@
-# Presentation Backend Third-Party Notices
+# Third-Party Notices
 
 These notices cover the third-party source newly embedded by the optional
-presentation backend. They do not license TOU's original game assets or grant
+presentation and gamepad backends. They do not license TOU's original game assets or grant
 a project-wide license to the reconstruction. Existing dependencies such as
 SDL3, SDL_mixer, nlohmann/json, and stb_image retain their upstream terms.
 
@@ -37,7 +37,15 @@ and radial ship-death distortion were written for this project, not copied from
 another shader repository. They are not covered by the upstream MIT notices
 merely because they interact with those components.
 
-Both full upstream notices accompany installed builds and release archives.
+## SDL Xbox BLE endpoint compatibility patch
+
+The pinned SDL source receives a marked build-time patch to its Windows Xbox
+HID endpoint filter. Xbox Series BLE (`045e:0b13`) devices whose bus is explicitly
+Bluetooth are allowed through the existing HIDAPI Xbox parser. Wired XGIP proxy
+endpoints remain filtered. No external controller database is embedded; SDL's
+existing upstream license applies to its driver code.
+
+Full upstream notices accompany installed builds and release archives.
 On macOS they are also inside `TOU.app/Contents/Resources`. In release packages,
 use the packaged notice filenames above; repository-relative links in this index
 refer to the source checkout, not bundled source files.

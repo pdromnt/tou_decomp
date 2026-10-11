@@ -5,6 +5,7 @@
 #include <string>
 
 #include "config.h"
+#include "gamepad.h"
 
 enum SettingsLoadResult {
     SETTINGS_LOAD_MISSING,
@@ -120,6 +121,7 @@ struct UserSettings {
     AdvancedSettings advanced;
     std::array<int, 50> enabledWeapons;
     ControlSettings controls;
+    GamepadSettings gamepad;
     NetworkSettings network;
 };
 

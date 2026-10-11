@@ -121,6 +121,7 @@ static SDL_Scancode LegacyScanCodeToSdl(unsigned int code)
 void Input_UpdateKeyboardState(void)
 {
     memset(g_KeyboardState, 0, sizeof(g_KeyboardState));
+    Gamepad_Update();
     if (!g_bIsActive)
         return;
 

@@ -23,7 +23,9 @@ New defects should be added only after a concrete reproduction.
 - Restore a simplified, expansion-friendly campaign using newly authored
   content. The original `sp1` through `sp14` levels are missing; see
   `docs/CAMPAIGN_FORENSICS.md`.
-- Add gamepad support.
+- Extend gamepad acceptance beyond the tested Xbox Bluetooth menu/gameplay flow:
+  other controller families, Linux/macOS, multiple local pads, LAN Player 1
+  controls, reconnect, and focus transitions. See `docs/GAMEPADS.md`.
 - Add community translation tooling and additional languages when translators
   are available.
 - Improve LAN play only when demanded by testing: discovery, reconnect,

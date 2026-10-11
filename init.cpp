@@ -3,6 +3,7 @@
  * Addresses: System_Init_Check=0041D480, Early_Init_Vars=0041EAD0,
  *            Init_Game_Config=004207C0
  */
+#include <algorithm>
 #include "tou.h"
 #include "gfx_shader.h"
 #include "settings.h"
@@ -10,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_gamepad.h>
 #include <ctype.h>
 #include <math.h>
 
@@ -135,6 +137,10 @@ static bool s_LanAttemptedConnection = false;
 static bool s_LanSettingsLoaded = false;
 static void Build_Lan_Menu_Page(void);
 static void Build_Lan_Join_Page(void);
+static int s_GamepadPlayer = 0;
+static char s_GamepadRows[24][256];
+static int s_GamepadRowCount = 0;
+static char s_GamepadStatus[256];
 
 static void Update_Lan_Menu_Dynamic_Text(void)
 {
@@ -2461,6 +2467,9 @@ void FUN_00425fe0(void)
         }
     }
 
+    // Snap controller navigation to real clickable rows after mouse synchronization.
+    Gamepad_MenuInput();
+
     /* ---- Input processing ---- */
     /* Capture only a new key press after the row was clicked.  Snapshotting
      * the state when capture begins prevents an already-held key from being
@@ -3186,6 +3195,103 @@ static int Menu_Fitting_Font(int string_idx, int preferred_font,
     return width <= max_width ? preferred_font : fallback_font;
 }
 
+static int Gamepad_Text_Width(const char *text, int font)
+{
+    int pen = 0, width = 0;
+    while (*text) {
+        unsigned char glyph;
+        text = Text_NextGlyph(text, &glyph);
+        const int glyph_width = Font_Char_Table[font * 256 + glyph].width;
+        if (glyph == ' ') pen += glyph_width;
+        else if (glyph_width > 0) {
+            width = pen + glyph_width;
+            pen = width + 1;
+        }
+    }
+    return width;
+}
+
+static void Add_Gamepad_Text(const char *text, int y, int color = 2,
+                             int setting = -1, int nav = 0xff, int preferred_font = 2)
+{
+    if (s_GamepadRowCount >= 24) return;
+    const int row = s_GamepadRowCount++;
+    snprintf(s_GamepadRows[row], sizeof(s_GamepadRows[row]), "%s", text);
+    const char *display = s_GamepadRows[row];
+    g_MenuStrings[0x181 + row] = s_GamepadRows[row];
+    int font = preferred_font;
+    if (font == 0 && Gamepad_Text_Width(display, font) > 560) font = 2;
+    if (Gamepad_Text_Width(display, font) > 560) font = 3;
+    const int index = DAT_004877a8;
+    FUN_00430200(0, y, 0x181 + row, color, font,
+                 setting >= 0 || nav != 0xff ? 1 : 0, 0, 1,
+                 static_cast<unsigned char>(nav));
+    MenuItem *item = &static_cast<MenuItem *>(g_GameViewData)[index];
+    // Match the renderer's glyph spacing, not the legacy width approximation.
+    item->width = Gamepad_Text_Width(display, font);
+    item->x = (640 - item->width) / 2;
+    if (setting >= 0) { item->flag1 = 0xE1; item->extra_data = setting; }
+}
+
+static void Build_Gamepad_Page(bool shortcuts = false)
+{
+    s_LanTextLineCount = 0;
+    s_GamepadRowCount = 0;
+    const auto &settings = Gamepad_GetSettings();
+    const int device = settings.devices[s_GamepadPlayer];
+    Add_Gamepad_Text(Text_Get(shortcuts ? "gamepad.shortcuts" : "gamepad.title"), 32, 1, -1, 0xff, 0);
+    snprintf(s_GamepadStatus, sizeof(s_GamepadStatus), "%s", Gamepad_DeviceName(device));
+    Add_Lan_Help_Text(s_GamepadStatus, 70, 1);
+
+    if (!shortcuts) {
+        const char *keys[11] = {"gamepad.player", "gamepad.device", "gamepad.deadzone",
+            "gamepad.sensitivity", "gamepad.left", "gamepad.right", "gamepad.thrust",
+            "gamepad.primary", "gamepad.secondary", "gamepad.detonate", "gamepad.brake"};
+        const int order[11] = {0, 1, 2, 3, 4, 5, 6, 10, 7, 8, 9};
+        for (int position = 0; position < 11; ++position) {
+            const int row = order[position];
+            char value[128], text[256];
+            if (row == 0) snprintf(value, sizeof(value), "%d", s_GamepadPlayer + 1);
+            else if (row == 1) {
+                if (device) snprintf(value, sizeof(value), "%d", device);
+                else snprintf(value, sizeof(value), "%s", Text_Get("gamepad.disabled"));
+            } else if (row == 2) snprintf(value, sizeof(value), "%d%%", settings.deadzone);
+            else if (row == 3) snprintf(value, sizeof(value), "%d%%", settings.sensitivity);
+            else if (row == 10) snprintf(value, sizeof(value), "%s", Text_Get("gamepad.input.left_trigger"));
+            else snprintf(value, sizeof(value), "%s", Gamepad_BindingName(settings.bindings[s_GamepadPlayer][row - 4], device));
+            snprintf(text, sizeof(text), "%s: %s", Text_Get(keys[row]), value);
+            Add_Gamepad_Text(text, 96 + position * 23, 2, row == 10 ? -1 : row);
+        }
+        Add_Gamepad_Text(Text_Get("gamepad.defaults"), 362, 0, 11);
+        Add_Gamepad_Text(Text_Get("gamepad.shortcuts"), 395, 2, -1, 0xE2);
+        Add_Lan_Help_Text(Text_Get("gamepad.help_bindings"), 421, 1);
+    } else {
+        const char *direction[4] = {"gamepad.input.dpad_up", "gamepad.input.dpad_down",
+                                   "gamepad.input.dpad_left", "gamepad.input.dpad_right"};
+        const char *action[4] = {"gamepad.thrust", "gamepad.brake", "gamepad.left", "gamepad.right"};
+        for (int row = 0; row < 4; ++row) {
+            char text[256];
+            snprintf(text, sizeof(text), "%s: %s", Text_Get(direction[row]), Text_Get(action[row]));
+            Add_Gamepad_Text(text, 104 + row * 27);
+        }
+        char text[256];
+        Add_Gamepad_Text(Text_Get("gamepad.menu_controls"), 270, 0);
+        const SDL_GamepadButton buttons[4] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST,
+                                              SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_BACK};
+        const char *meaning[4] = {"gamepad.confirm", "gamepad.return", "gamepad.pause", "gamepad.end"};
+        for (int row = 0; row < 4; ++row) {
+            snprintf(text, sizeof(text), "%s: %s", Gamepad_BindingName(1 + buttons[row], device), Text_Get(meaning[row]));
+            Add_Gamepad_Text(text, 300 + row * 27, 1);
+        }
+        Add_Lan_Help_Text(Text_Get("gamepad.help_fixed"), 419, 1);
+    }
+    const int back = shortcuts ? 0xE1 : 0x0C;
+    Add_Gamepad_Text(g_MenuStrings[0xf], 450, 2, -1, back, 0);
+    DAT_004877c9 = static_cast<unsigned char>(back);
+    g_FrameIndex = 1;
+    DAT_004877b1 = 0;
+}
+
 static void Build_Lan_Join_Page(void)
 {
     if (!s_LanSettingsLoaded) {
@@ -3445,6 +3551,14 @@ void FUN_0042a470(void)
         DAT_004877c9 = 1;
         g_FrameIndex = 1;
         DAT_004877b1 = 0;
+        return;
+
+    case 0xE1:
+        Build_Gamepad_Page();
+        return;
+
+    case 0xE2:
+        Build_Gamepad_Page(true);
         return;
 
     case 0xE0: { /* Presentation settings; separate from gameplay detail. */
@@ -3791,6 +3905,8 @@ void FUN_0042a470(void)
     case 0x0C: /* Name entry */
         FUN_00430200(0, 0x28, 0x3f, 1, 0, 0, 0, 1, 0xff);          /* "Name" heading */
         FUN_00430200(0, 0x50, 0x4e, 2, 0, 1, 0, 1, 0xf);           /* "Enter name" → page 0xF */
+        g_MenuStrings[0x180] = const_cast<char *>(Text_Get("gamepad.title"));
+        FUN_00430200(0, 118, 0x180, 0, 2, 1, 0, 1, 0xE1);
         FUN_0042fdf0(0xa0);
         FUN_00430200(0, 0xb4, 0xc3, 2, 2, 2, 0, 4, 0xff);
         FUN_00430200(0, 0xb4, 0, 2, 2, 1, 7, 5, 0xff);
@@ -4417,6 +4533,27 @@ void FUN_00427df0(int param_1, char param_2)
 
     /* Click direction: +1 for primary (left), -1 for secondary (right) */
     char cVar9 = (char)((-(param_2 != 1) & 0xFE) + 1);
+
+    if (item->flag1 == 0xE1) {
+        const int row = static_cast<int>(item->extra_data);
+        auto settings = Gamepad_GetSettings();
+        const int direction = param_2 == 1 ? 1 : -1;
+        if (row == 0) s_GamepadPlayer = (s_GamepadPlayer + direction + 4) % 4;
+        else if (row == 1)
+            settings.devices[s_GamepadPlayer] = (settings.devices[s_GamepadPlayer] + direction + 5) % 5;
+        else if (row == 2) settings.deadzone = std::max(5, std::min(settings.deadzone + direction * 5, 80));
+        else if (row == 3) settings.sensitivity = std::max(50, std::min(settings.sensitivity + direction * 10, 200));
+        else if (row >= 4 && row <= 10) {
+            int &binding = settings.bindings[s_GamepadPlayer][row - 4];
+            binding = Gamepad_CycleBinding(binding, direction);
+        } else if (row == 11) settings = Gamepad_DefaultSettings();
+        if (row != 0) {
+            Gamepad_ApplySettings(settings);
+            Settings_SaveJson();
+        }
+        DAT_004877b1 = 1;
+        return;
+    }
 
     /* Navigation: if nav_target != 0xFF, switch to that page */
     if (item->nav_target != 0xFF) {

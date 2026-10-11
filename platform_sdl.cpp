@@ -170,7 +170,13 @@ int Platform_PollEvent(PlatformEvent *event)
         event->type = PLATFORM_EVENT_FOCUS_GAINED;
         break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
+        Gamepad_FocusLost();
         event->type = PLATFORM_EVENT_FOCUS_LOST;
+        break;
+    case SDL_EVENT_GAMEPAD_ADDED:
+    case SDL_EVENT_GAMEPAD_REMOVED:
+    case SDL_EVENT_GAMEPAD_REMAPPED:
+        Gamepad_DevicesChanged();
         break;
     case SDL_EVENT_MOUSE_MOTION:
         event->type = PLATFORM_EVENT_MOUSE_MOTION;

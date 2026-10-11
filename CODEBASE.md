@@ -82,6 +82,7 @@ disable effects, and reset/snapshot import clears transient presentation state.
 | `main.cpp` | Portable SDL entry point and application lifecycle |
 | `platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
 | `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
+| `gamepad.cpp` | SDL3 gamepad discovery, connection slots, focus/neutral guards, menu navigation, and simulation action translation |
 | `input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
 | `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
@@ -294,6 +295,14 @@ normal `UserSettings` model contains only user-facing choices, validates values,
 and maps them into recovered runtime state at the load/save boundary. Writes use
 a same-directory temporary file followed by replacement.
 
+The optional `gamepad` section stores four connection-slot assignments, global
+deadzone/sensitivity, and four binding arrays. Missing fields retain defaults;
+factory reset restores those defaults too. The saved button namespace reserves
+32 button IDs before axis directions, so new SDL button types do not shift
+existing axis bindings. Controller choices remain local and are not included in
+simulation snapshots or LAN settings. See `docs/GAMEPADS.md` for controls and
+hardware acceptance boundaries.
+
 `GameConfig` in `config.h` remains a 6405-byte compatibility record because
 recovered menu and gameplay code still address that layout directly. It is no
 longer the persistence format. If JSON is absent, a compatible legacy
@@ -338,10 +347,16 @@ and builds for the host architecture. Windows builds embed `icon.ico` through
 game source is compiled with warnings treated as errors. Generated build trees,
 objects, executables, logs, and `dist/` packages are ignored by Git.
 
-The pinned SDL source receives one documented build-time patch on Windows:
+The pinned SDL source receives documented build-time patches on Windows:
 SDL's legacy `timeBeginPeriod` hook and unconditional WinMM link are removed.
 SDL's modern high-resolution waitable-timer path remains active. MSVC builds
 also link the C/C++ runtime statically, keeping release archives self-contained.
+
+For Xbox Series BLE (`045e:0b13`), SDL's Windows HID endpoint filter permits the
+real Bluetooth endpoint through its existing Xbox HIDAPI parser. The bus must
+explicitly be Bluetooth; wired XGIP proxy endpoints remain filtered. No external
+mapping is embedded. Other device types retain normal SDL classification;
+mixed XInput/BLE devices and reconnect still require hardware acceptance.
 
 `.github/workflows/build.yml` builds Windows x86/x64/ARM64 with MSVC, plus
 Linux and macOS x64/ARM64 targets once per pull request and on direct pushes to

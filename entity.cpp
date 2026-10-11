@@ -4870,8 +4870,8 @@ static void FUN_0044b990(void)
         if (player->ai_level != 0)
             continue;
 
-        const uint8_t local_actions = Input_EncodeGameActions(
-            keyState, player->key_scan_codes);
+        const uint8_t local_actions = static_cast<uint8_t>(Input_EncodeGameActions(
+            keyState, player->key_scan_codes) | Gamepad_PlayerActions(i));
         player->buttons = Replay_PlayerActions(
             i, Netplay_PlayerActions(i, local_actions));
     }

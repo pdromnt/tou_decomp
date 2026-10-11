@@ -16,6 +16,7 @@
 #include "entity.h"
 #include "gfx.h"
 #include "input.h"
+#include "gamepad.h"
 #include "sound.h"
 #include "level.h"
 #include "gamestate.h"

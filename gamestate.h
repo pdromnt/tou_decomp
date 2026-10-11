@@ -12,7 +12,7 @@
 /* COMPAT */   #define STR_ERR_RENDER_MODE    "Video renderer configuration failed.\n\nRun with --logging for details."
 /* 0047F1B0 */ #define STR_ERR_INIT_FILENOTFOUND "Tou init failed!\nPossible reason: File not found.\n\nDo not delete any TOU files.\n\nAlso, be sure to run TOU\nfrom the TOU directory.\n\nRead readme.txt for more information."
 /* 0047F14C */ #define STR_ERR_INIT_NOLEVELS  "Tou init failed!\nYou don't have any levels or GG themes!\n\nYou can't run the game without levels.\n\nRead readme.txt for more information."
-/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.8"
+/* 0047F018 */ #define STR_TITLE              "Tunnels of Underworld - RE/Decompiled - v0.9"
 
 /* ===== Window / App Globals (main.cpp) ===== */
 extern int                   g_bIsActive;       /* 00489EC4 */
@@ -70,7 +70,7 @@ extern unsigned int          DAT_004892bc;      /* elapsed round time (ms) */
 extern float                 DAT_004877d4;      /* scroll position (0.0 - 1.0) */
 
 /* ===== Menu / Session (init.cpp / FUN_0042d8b0) ===== */
-enum { MENU_STRING_CAPACITY = 384 };
+enum { MENU_STRING_CAPACITY = 416 };
 extern char                **g_MenuStrings;     /* 00481D3C - extended legacy menu text table */
 extern void                 *g_GameViewData;    /* 00481D40 - game view item array */
 extern char                **g_KeyNameTable;    /* 00481D88 - 256-entry scan code name table */

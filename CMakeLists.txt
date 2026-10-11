@@ -34,6 +34,9 @@ FetchContent_Declare(
         ${CMAKE_COMMAND}
         -DSDL_SOURCE_DIR=<SOURCE_DIR>
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch-sdl-no-winmm.cmake
+    COMMAND ${CMAKE_COMMAND}
+        -DSDL_SOURCE_DIR=<SOURCE_DIR>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch-sdl-xbox-ble.cmake
 )
 FetchContent_MakeAvailable(SDL3)
 
@@ -78,6 +81,7 @@ set(TOU_SOURCES
     init.cpp
     input_sdl.cpp
     input_actions.cpp
+    gamepad.cpp
     simulation_state.cpp
     netplay.cpp
     replay.cpp
@@ -179,8 +183,8 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_NAME "Tunnels of Underworld"
         MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou"
         MACOSX_BUNDLE_ICON_FILE "icon.icns"
-        MACOSX_BUNDLE_BUNDLE_VERSION "0.8"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.8"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.9"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.9"
     )
 endif()
 

@@ -1154,7 +1154,9 @@ uint8_t SampleLocalActions(void)
 {
     if (g_local_slot >= DAT_00489240 || DAT_00487810 == NULL)
         return 0;
-    return Input_EncodeGameActions(g_KeyboardState, Player_Get(g_local_slot)->key_scan_codes);
+    // LAN always uses this machine's Player 1 controller configuration.
+    return static_cast<uint8_t>(Input_EncodeGameActions(
+        g_KeyboardState, Player_Get(g_local_slot)->key_scan_codes) | Gamepad_PlayerActions(0));
 }
 
 } // namespace

@@ -25,6 +25,7 @@ The modern runtime now provides:
 
 - native Windows, Linux, and macOS builds for x86, x64, and ARM64 as applicable;
 - SDL3 windowing, input, software-framebuffer presentation, and SDL_mixer audio;
+- gamepad gameplay and menu controls, with configurable bindings and controller labels;
 - windowed/fullscreen display modes and immediate audio controls;
 - menu-selectable display scaling, FSR 1, and optional beta visual effects;
 - English, Spanish, Brazilian Portuguese, and Finnish user interfaces;
@@ -68,6 +69,31 @@ to three players connect by hostname/IP and TCP port (default `27015`). Every
 computer must use the same game build, gameplay assets, ships, levels, and GG
 themes. There is no AI, discovery, reconnect, relay, or public lobby in this
 beta. See [docs/LAN_BETA.md](docs/LAN_BETA.md) for the full flow and diagnostics.
+
+### Gamepads
+
+SDL3 gamepad support uses its platform drivers (including HIDAPI where
+available), not a Windows-only XInput integration. Open **Options → Controls →
+Gamepads** to assign up to four controllers and change bindings, deadzone, and
+sensitivity. Keyboard controls remain available alongside controllers.
+Brake/reverse is listed below thrust. **D-pad and shortcuts** lists each
+direction separately alongside the fixed menu actions; these are not button combos.
+
+Xbox defaults: left stick turns, RT thrusts, A fires the primary weapon, X fires
+the secondary, Y detonates, and LT or D-pad Down brakes/reverses. B is unassigned
+in gameplay by default and available for rebinding. The D-pad also supplies the
+original directional controls for weapon selection in bases. Start opens/closes
+the ESC menu; on that panel A skips the level and Back/View ends the match.
+In menus the left stick moves the cursor freely; hold A and move the stick
+left/right to drag sliders. The D-pad also selects rows and changes values.
+A activates and B returns. Face-button names adapt to detected Xbox,
+PlayStation, and Nintendo labels; unknown layouts use physical button positions.
+
+Bindings and device slots are saved in `settings.json`. LAN uses this machine's
+Player 1 controller settings. Release the controls after reconnecting, changing
+bindings, or switching between menus and gameplay. Xbox Bluetooth menus and
+gameplay have passed hands-on testing. Other controller families
+and platforms still need hands-on testing; see [docs/GAMEPADS.md](docs/GAMEPADS.md).
 
 ### Display scaling and beta effects
 
@@ -121,6 +147,15 @@ Windows packages do not require SDL DLLs or the Visual C++ redistributable.
 CI uses MSVC for Windows x86 (`-A Win32`), x64, and ARM64 builds. MinGW-w64
 remains an alternative for local builds.
 
+For Windows gamepad development, prefer MSVC with a current Windows SDK so SDL
+can include Windows Gaming Input and GameInput backends. Older MinGW toolchains
+may omit these and fail to detect some Xbox Bluetooth controllers. For example:
+
+```powershell
+cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64
+cmake --build build-msvc --config Release --parallel 8
+```
+
 The `Build` GitHub Actions workflow runs once for each pull request and for
 direct pushes to `main`. It builds Windows x86, Windows/Linux x64 and ARM64,
 and macOS Intel and Apple Silicon, validates localization, checks executable
@@ -148,7 +183,6 @@ permissions survive extraction.
 
 ## Future Possibilities
 
-- Gamepad support.
 - A simplified, expansion-friendly campaign using newly authored maps.
 - LAN discovery, reconnect, latency hiding, AI, and internet-friendly transport.
 - Additional community-maintained translations.

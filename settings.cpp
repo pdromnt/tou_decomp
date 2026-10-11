@@ -206,6 +206,15 @@ json SettingsToJson(const UserSettings &settings)
         {"menu", WriteIntArray(settings.controls.menu)},
         {"players", controlPlayers}
     };
+    json padBindings = json::array();
+    for (const auto &bindings : settings.gamepad.bindings)
+        padBindings.push_back(WriteIntArray(bindings));
+    root["gamepad"] = {
+        {"devices", WriteIntArray(settings.gamepad.devices)},
+        {"deadzone", settings.gamepad.deadzone},
+        {"sensitivity", settings.gamepad.sensitivity},
+        {"bindings", padBindings}
+    };
     root["network"] = {
         {"recentHost", settings.network.recentHost},
         {"recentPort", settings.network.recentPort},
@@ -350,6 +359,27 @@ void OverlayJson(UserSettings &settings, const json &root)
         }
     }
 
+    section = root.find("gamepad");
+    if (section != root.end() && section->is_object()) {
+        ReadIntArray(*section, "devices", settings.gamepad.devices, 0, 4);
+        ReadInt(*section, "deadzone", settings.gamepad.deadzone, 5, 80);
+        ReadInt(*section, "sensitivity", settings.gamepad.sensitivity, 50, 200);
+        auto bindings = section->find("bindings");
+        if (bindings != section->end() && bindings->is_array()) {
+            const size_t count = std::min(bindings->size(), settings.gamepad.bindings.size());
+            for (size_t i = 0; i < count; ++i) {
+                json wrapper = {{"values", (*bindings)[i]}};
+                ReadIntArray(wrapper, "values", settings.gamepad.bindings[i],
+                             0, Gamepad_BindingCount() - 1);
+                // Upgrade the initial prototype defaults only. Preserve custom
+                // layouts, including an intentionally rebound B button.
+                auto oldDefaults = Gamepad_DefaultSettings().bindings[i];
+                oldDefaults[6] = 1 + SDL_GAMEPAD_BUTTON_EAST;
+                if (settings.gamepad.bindings[i] == oldDefaults)
+                    settings.gamepad.bindings[i][6] = 0;
+            }
+        }
+    }
     section = root.find("network");
     if (section != root.end() && section->is_object()) {
         ReadString(*section, "recentHost", settings.network.recentHost, 63);
@@ -437,6 +467,7 @@ UserSettings Settings_CaptureCurrent(void)
         for (size_t j = 0; j < settings.controls.players[i].size(); ++j)
             settings.controls.players[i][j] = g_GameConfig.values.player_keys[i][j];
     settings.network = {g_RecentLanHost, g_RecentLanPort, g_RecentLanTeam};
+    settings.gamepad = Gamepad_GetSettings();
     return settings;
 }
 
@@ -533,6 +564,7 @@ void Settings_Apply(const UserSettings &settings)
     g_RecentLanHost = settings.network.recentHost;
     g_RecentLanPort = settings.network.recentPort;
     g_RecentLanTeam = settings.network.recentTeam;
+    Gamepad_ApplySettings(settings.gamepad);
 }
 
 SettingsLoadResult Settings_LoadJson(void)
@@ -643,6 +675,7 @@ bool Settings_RememberLanEndpoint(const char *host, int port, int team)
 
 void Settings_ResetAuxiliaryDefaults(void)
 {
+    Gamepad_ApplySettings(Gamepad_DefaultSettings());
     g_Language = "en";
     g_RecentLanHost = "127.0.0.1";
     g_RecentLanPort = 27015;
