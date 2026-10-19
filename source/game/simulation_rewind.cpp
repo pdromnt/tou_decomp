@@ -248,7 +248,11 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
         batch_left = forward_batch_left;
         if (presentation) {
             const uint32_t tick = SimulationState_Tick();
+            if (terminal && Gameplay_TransitionsAllowed()) return 6;
             if (!PresentationEvents_CommitThrough(tick)) return 6;
+            if (terminal && !Gameplay_TransitionsAllowed()) return 6;
+            if (terminal)
+                LOG("[REWIND] terminal_confirmation_guard=passed (outer scoring/unload not executed)\n");
             const uint64_t once = PresentationEvents_CommittedCount();
             if (!PresentationEvents_CommitThrough(tick) || PresentationEvents_CommittedCount() != once)
                 return 6;

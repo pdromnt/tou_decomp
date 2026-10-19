@@ -8,7 +8,7 @@
 namespace {
 
 const uint8_t kSnapshotMagic[8] = {'T', 'O', 'U', 'S', 'N', 'A', 'P', 0};
-const uint32_t kSnapshotVersion = 4;
+const uint32_t kSnapshotVersion = 5;
 const int kWaypointRecordLimit = 1400000 / 0x1c;
 const int kSpawnPointLimit = 0xc00 / 0x0c;
 const int kDecorationLimit = 0x800 / 0x10;
@@ -162,7 +162,7 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
         (DAT_00487820 == NULL && DAT_004892c8 != 0) ||
         DAT_00487814 == NULL || DAT_00489ea4 == NULL || DAT_00489ea8 == NULL ||
         DAT_00489e84 == NULL || DAT_004876a0 == NULL || DAT_00487aa0 == NULL ||
-        DAT_00489e98 == NULL ||
+        DAT_00489e98 == NULL || DAT_00487aa4 == NULL ||
         !ValidCount(DAT_00489240, GAMEPLAY_PLAYER_CAPACITY) ||
         !ValidCount(g_EntityCount, ENTITY_ACTIVE_CAPACITY) ||
         !ValidCount(g_TrooperCount, TROOPER_CAPACITY) ||
@@ -285,6 +285,9 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
     writer.raw(DAT_00489ea8, shadow_bytes);
     writer.raw(&DAT_00487784, sizeof(DAT_00487784)); // Fluid spread phase.
     writer.raw(&DAT_00489e9c, sizeof(DAT_00489e9c)); // Periodic edge relocation.
+    // Live team scoring survives ticks; the adjacent spatial bins are rebuilt.
+    for (int team = 0; team < 4; ++team)
+        writer.raw(static_cast<uint8_t *>(DAT_00487aa4) + team * 0x4000, 8);
     return true;
 }
 
@@ -294,7 +297,7 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve
         DAT_0048781c == NULL || DAT_00487814 == NULL ||
         DAT_00489ea4 == NULL || DAT_00489ea8 == NULL ||
         DAT_00489e84 == NULL || DAT_004876a0 == NULL || DAT_00487aa0 == NULL ||
-        DAT_00489e98 == NULL)
+        DAT_00489e98 == NULL || DAT_00487aa4 == NULL)
         return false;
 
     Reader reader(snapshot, size);
@@ -397,7 +400,7 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve
         kEntityTrackingBytes + cells * (sizeof(uint16_t) + 1u) +
         static_cast<size_t>(DAT_004879fc + 1) * (DAT_004879f8 + 1) +
         2u * static_cast<size_t>(DAT_00487a08 + 1) * (DAT_00487a04 + 1) +
-        sizeof(DAT_00487784) + sizeof(DAT_00489e9c);
+        sizeof(DAT_00487784) + sizeof(DAT_00489e9c) + 32u;
     if (reader.remaining() != expected_body)
         return false;
 
@@ -464,9 +467,13 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve
         !reader.raw(DAT_00487814, static_cast<size_t>(DAT_004879fc + 1) * (DAT_004879f8 + 1)) ||
         !reader.raw(DAT_00489ea4, shadow_bytes) || !reader.raw(DAT_00489ea8, shadow_bytes) ||
         !reader.raw(&DAT_00487784, sizeof(DAT_00487784)) ||
-        !reader.raw(&DAT_00489e9c, sizeof(DAT_00489e9c)) || reader.remaining() != 0) {
+        !reader.raw(&DAT_00489e9c, sizeof(DAT_00489e9c))) {
         return false;
     }
+    for (int team = 0; team < 4; ++team)
+        if (!reader.raw(static_cast<uint8_t *>(DAT_00487aa4) + team * 0x4000, 8))
+            return false;
+    if (reader.remaining() != 0) return false;
 
     g_EntityCount = entity_count;
     g_TrooperCount = trooper_count;

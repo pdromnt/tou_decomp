@@ -23,6 +23,8 @@ bool Netplay_PrepareSimulationTick(uint32_t tick);
 uint8_t Netplay_PlayerActions(int player, uint8_t local_fallback);
 void Netplay_AfterSimulationTick(uint32_t tick, uint64_t checksum);
 bool Netplay_LocalSessionControlsAllowed(void);
+// True only through the current level's confirmed input frontier during LAN.
+bool Netplay_CanFinalizeSimulationTick(uint32_t tick);
 const char *Netplay_Status(void);
 int Netplay_ConnectedPlayerCount(void);
 void Netplay_FormatRoster(char *out, size_t out_size);

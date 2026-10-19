@@ -85,7 +85,11 @@ must match its event digest, player sound timers/identities/virtual channels and
 exhaust/weapon-particle tags, as well as the canonical world. Each window is
 confirmed twice to verify idempotency; event counts must not increase twice.
 `--rewind-presentation 0` retains the old sound-disabled simulation-only check.
-Exit code 6 indicates event/local-presentation divergence or timeline overflow.
+With a terminal countdown, the diagnostic also checks that the score/level
+transition guard stays closed before confirmation and opens after event commit.
+It does not execute the outer score update or level unload/load itself.
+Exit code 6 indicates event/local-presentation divergence, timeline overflow,
+or a failed terminal confirmation guard.
 
 No GPU rendering or actual audible output is exercised here. Real sound/glow
 acceptance, network prediction and cross-platform determinism remain separate

@@ -46,8 +46,8 @@ No GPU resources, framebuffer or physical mixer handles are rewound.
 
 Experimental LAN resets transient gameplay flags once per successfully prepared
 simulation tick, not per wall-clock catch-up batch. It therefore uses simulation
-identity `tou-sim2-net5-snapshot4`. Local play preserves legacy batching. The
-wire protocol remains 5: simulation fingerprint validation rejects earlier
+identity `tou-sim2-net6-snapshot5`. Local play preserves legacy batching. The
+wire protocol is now 6: simulation fingerprint validation rejects earlier
 branch builds. The rewind diagnostic can compare canonical ticks grouped 9 at
 a time forward against groups of 1 or 2 on replay.
 
@@ -74,10 +74,10 @@ Still required before live prediction:
   multi-viewport rendering; dry-run equality cannot establish their quality.
 - Exercise real boost/laser/spark/organic event producers and HUD/LOS/pause
   edges; current full-game evidence primarily covers sounds and explosions.
-- Gate score finalization, level unload, skip/end and external writes on the
-  confirmed frontier when integrating a speculative gameplay loop. Current
-  live play is not speculative; the diagnostic stops at the terminal state.
-- Define the client/host confirmed frontier, late-input policy, correction and
-  checkpoint ownership, then profile the full path on low-power hardware.
+- Exercise the new confirmed-only score/level transition guard through full
+  match/level changes. The terminal diagnostic verifies that the guard is
+  closed before event commit and open afterwards, but does not unload a level.
+- Integrate the bounded input ledger with world/presentation checkpoint
+  ownership and live reconciliation, then profile on low-power hardware.
 
 No user-facing rollback toggle, network prediction or ENet migration is enabled.

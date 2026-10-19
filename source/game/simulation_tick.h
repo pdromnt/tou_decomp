@@ -11,6 +11,8 @@
 // not enabled in live multiplayer yet.
 bool Gameplay_AdvanceSimulation(const uint8_t *actions, size_t count);
 uint8_t Gameplay_PlayerActions(int player, const unsigned char *bindings);
+// Irreversible score/level changes require confirmed simulation and effects.
+bool Gameplay_TransitionsAllowed(void);
 
 // Developer-only local rewind experiment; never active in ordinary play.
 int SimulationRewind_Run(int argc, char **argv, const char *level);

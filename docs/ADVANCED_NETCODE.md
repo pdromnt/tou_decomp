@@ -150,7 +150,7 @@ internet or cross-architecture acceptance.
 
 ## Current implementation slice and evidence
 
-Stage 1 now uses protocol 5 with timestamp-echo RTT probes, smoothed RTT
+Stage 1 introduced protocol 5 with timestamp-echo RTT probes, smoothed RTT
 variation, local receive-age/queue/polling diagnostics and missing-input wait
 statistics. The host selects a session-only 1-12 tick lead in the lobby, default
 3; it is announced to clients and frozen in the start payload. Translations
@@ -230,7 +230,7 @@ ordinary play still emits sound/VFX immediately.
 Experimental LAN resets transient flags per successfully prepared simulation
 tick, independent of catch-up grouping. Local play keeps legacy batch behavior.
 This intentional network change advances the identity to
-`tou-sim2-net5-snapshot4`; packet shapes remain protocol 5. Earlier branch
+`tou-sim2-net5-snapshot4` (superseded below); packet shapes remained protocol 5. Earlier branch
 builds are rejected by fingerprint.
 
 Sound-enabled checks matched state/RNG, event digests, sound timers/virtual
@@ -243,12 +243,66 @@ rejection, queue limits and physical-track generation changes with stub sinks.
 No CI test suite was added. A two-instance live TCP smoke advanced past tick
 600 without checksum correction under the new reset policy.
 
-Still required: real audible/GPU delivery, weapon-specific producer coverage,
-lobby/remote/other-platform acceptance, low-power budgets, and gating outer
-score/skip/end/unload transitions on a confirmed frontier when integrating the
-speculative loop. The diagnostic stops before those outer transitions. Next
-define the session/input frontier and bounded late-input/reconciliation policy;
-do not enable network prediction before presentation/barrier gates pass. Keep
-changes reviewable and main stable; this is not an ENet migration.
+### Input frontiers and transition barriers (Stage 4 foundation)
+
+`InputTimeline` is a bounded 512-frame, four-player ledger with explicit
+simulated, confirmed and caller-owned oldest-restorable state ticks. Live LAN
+uses it with prediction set to zero. The pure model also supports holding the
+last input up to a maximum 12-tick outstanding window, marking the earliest
+changed predicted tick dirty, and replaying after the caller restores the world
+and local presentation at dirty tick minus one. Prediction is not enabled on
+the network. Matching late inputs may advance confirmation without replay;
+changed used inputs cannot confirm until replay finishes. Duplicate inputs are
+idempotent; conflicting duplicates and invalid/out-of-window inputs fail closed.
+Old generations and expired input history do not mutate the current timeline.
+Tick wrap is not supported as a continuing session.
+
+Protocol 6 prefixes input, bundle and checksum packets with level generation.
+Pause/resume/skip/end controls carry generation plus effective tick. A client
+waits for that confirmed boundary; an already-passed control fails closed rather
+than changing the past without rollback. Queues are bounded to 16 controls.
+Pause/resume never overwrites simulation score counters. Natural completion is
+derived independently from the same simulation ticks, not broadcast as a state
+override that could bypass client scoring. Initial synchronization runs in the
+preview too, avoiding a confirmed-only preview-control deadlock. No control is
+broadcast after leaving gameplay for level teardown.
+
+Outer score/level-slot updates and round-complete level teardown now require
+both confirmed input and, when enabled, confirmed presentation. Snapshot 5 adds
+the two live counters per team read by round finalization (32 bytes total);
+rebuilt spatial bins remain excluded. Current identity is
+`tou-sim2-net6-snapshot5`. Earlier branch peers and snapshots are incompatible.
+
+Local Windows x64 evidence for this slice:
+
+- MSVC Release, all localization overlays and whitespace checks pass.
+- An ignored one-off probe linked the real input ledger and checked strict
+  lockstep, 1999 ticks with ring wrap, the 12-tick limit, changed and matching
+  late input, replay, duplicates/conflicts, retention and generation reset.
+- Two staged live instances advanced past tick 600 with equal simulated and
+  confirmed frontiers and no checksum correction.
+- A real TCP relay injected a future pause at tick 104 and resumed that same
+  tick after a short hold. The client log confirmed exact-tick application,
+  ignored a wrong-generation control, and advanced to tick 594 without a
+  correction. Wrong-generation input/checksum packets were also ignored and
+  identical input duplicates accepted; a separate run disconnected a client
+  sending a conflicting duplicate. This was idle-input synthetic control testing, not host keyboard
+  or real internet acceptance.
+- The forced 40-tick terminal rewind with 12-tick history and 9-versus-1 tick
+  grouping passed snapshot/RNG/event comparison. The transition guard was
+  closed before event confirmation and open afterwards. It did not execute
+  the outer scoring update or unload/load itself.
+- A 600-tick, 64-player Woods rewind passed with 12-tick history and 9-versus-1
+  grouping under snapshot 5, observing fire, 5000 fluid sources, 42 deaths and
+  15389 changed tiles. History vector capacity peaked at about 67.3 MiB;
+  replay simulation averaged 13.30 ms/window (16.26 ms maximum), excluding
+  restore/capture/comparison. These remain desktop, time-seeded observations,
+  not low-power budgets or real output acceptance.
+
+Still required: real audible/GPU delivery, weapon-specific producers, full
+host-controlled pause/skip/end and multi-level/lobby acceptance, remote and
+cross-platform checks, low-power budgets, and integrating the ledger with
+checkpoint ownership/live reconciliation. No live prediction, rollback toggle
+or ENet migration is enabled. Keep main stable.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

@@ -7,6 +7,9 @@
 #include "shader_effects.h"
 #include "platform.h"
 #include "presentation_events.h"
+#include "simulation_tick.h"
+#include "simulation_state.h"
+#include "netplay.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -452,6 +455,12 @@ static void Gameplay_Tick(void)
  *   4 = menu/level preview (waiting for Enter)
  *   100 = round end
  *   101 = game over */
+bool Gameplay_TransitionsAllowed(void)
+{
+    const uint32_t tick = SimulationState_Tick();
+    return Netplay_CanFinalizeSimulationTick(tick) && PresentationEvents_CanFinalize(tick);
+}
+
 void Game_Update_Render(void)
 {
     /* NOTE: Cursor sync is handled by the SDL main loop
@@ -584,7 +593,7 @@ void Game_Update_Render(void)
     /* Original at 0x00461a10 / 0x00461a2d in Game_Update_Render.
      * Substate 3 is checked FIRST so it processes from the previous frame
      * (after the stats overlay had a chance to render). */
-    if (g_SubState == GAMEPLAY_ROUND_COMPLETE) {
+    if (g_SubState == GAMEPLAY_ROUND_COMPLETE && Gameplay_TransitionsAllowed()) {
         g_SubState = GAMEPLAY_ACTIVE;
         if ((unsigned char)DAT_0048693c >= g_GameConfig.values.active_level_count) {
             /* All rounds completed → game over / scoreboard path */
@@ -599,8 +608,8 @@ void Game_Update_Render(void)
     /* Level advance and natural match completion both enter round-complete,
      * increment the level slot, and fall through
      * to rendering so the stats overlay displays for one frame. */
-    if (g_SubState == GAMEPLAY_LEVEL_ADVANCE ||
-        g_SubState == GAMEPLAY_MATCH_COMPLETE) {
+    if ((g_SubState == GAMEPLAY_LEVEL_ADVANCE ||
+        g_SubState == GAMEPLAY_MATCH_COMPLETE) && Gameplay_TransitionsAllowed()) {
         if (g_SubState == GAMEPLAY_LEVEL_ADVANCE) {
             /* Level skip: clear victory flag */
             DAT_004892a4 = 0;

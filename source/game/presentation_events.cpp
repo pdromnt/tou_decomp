@@ -67,6 +67,11 @@ bool PresentationCheckpoint::operator==(const PresentationCheckpoint &other) con
         next_voice == other.next_voice && particle_tags == other.particle_tags;
 }
 
+bool PresentationEvents_CanFinalize(uint32_t tick)
+{
+    return !enabled || (healthy && tick <= confirmed);
+}
+
 void PresentationEvents_Start(bool should_deliver)
 {
     PresentationEvents_Stop();

@@ -1,7 +1,7 @@
 # Authoritative Simulation State
 
 `source/game/simulation_state.cpp` defines the portable boundary used by replay diagnostics
-and LAN state correction. Experimental snapshot version 4 is a little-endian, fixed-width
+and LAN state correction. Experimental snapshot version 5 is a little-endian, fixed-width
 format. All supported targets are little-endian and the serialized runtime
 records have compile-time size and offset assertions in `source/game/types.h`.
 
@@ -18,7 +18,8 @@ records have compile-time size and offset assertions in `source/game/types.h`.
 - entity category tracking links and their twelve cursors;
 - sub-frame, victory, activation, bombing, visibility, turret, AI waypoint, and
   spawn/emitter scheduler counters;
-- team wins plus per-team and per-player match/award statistics;
+- team wins plus per-team and per-player match/award statistics, including the
+  two live score counters per team consumed by round finalization;
 - collision presence and visibility/pathfinding grids, including padded cells;
 - fluid-spread phase and the periodic edge-relocation timer.
 
@@ -53,6 +54,6 @@ compares each tick after restore/resimulation, including RNG state/call count.
 Real audio/GPU delivery and cross-architecture acceptance remain separate gates.
 The current experiment enables sound logic with a dry-run event sink and local
 presentation checkpoints, but performs no rendering or audible playback. See
-[presentation timeline](PRESENTATION_TIMELINE.md). Snapshot version 4 rejects
-version 3 data, and the LAN simulation
+[presentation timeline](PRESENTATION_TIMELINE.md). Snapshot version 5 rejects
+earlier data, and the LAN simulation
 build fingerprint was advanced accordingly on `advanced-netcode` only.

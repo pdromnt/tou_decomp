@@ -7,13 +7,17 @@ level catalog.
 
 The v0.11 source comparison with Uprising's ENet implementation is documented
 in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). The `advanced-netcode`
-branch now has experimental protocol 5 diagnostics and negotiated input delay;
+branch now has experimental protocol 6 diagnostics and negotiated input delay;
 it cannot connect to stable v0.11 protocol 4 peers. TCP lockstep remains in use.
 The local-rewind prototype also advances snapshot format/build identity to
-`tou-sim2-net5-snapshot4`, rejecting older experimental branch builds. The
+`tou-sim2-net6-snapshot5`, rejecting older experimental branch builds. The
 live network game still has no prediction or rollback.
 Simulation revision 2 resets transient flags per simulation tick in LAN,
 independent of local catch-up grouping. Local matches retain legacy batching.
+Inputs, checksums and pause/skip controls carry the level generation. Controls
+wait for their effective confirmed tick rather than interrupting catch-up.
+The input ledger tracks simulated/confirmed frontiers; live prediction remains
+zero. Initial synchronization also runs while the level preview is visible.
 
 ## Start a session
 
