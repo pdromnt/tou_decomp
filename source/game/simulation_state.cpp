@@ -158,7 +158,8 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
 {
     if (snapshot == NULL || DAT_00481f50 == NULL || DAT_0048782c == NULL ||
         DAT_00487810 == NULL || DAT_0048781c == NULL || DAT_00487a00 <= 0 ||
-        DAT_004879f4 == 0 || DAT_00481f48 == NULL || DAT_00487820 == NULL ||
+        DAT_004879f4 == 0 || DAT_00481f48 == NULL ||
+        (DAT_00487820 == NULL && DAT_004892c8 != 0) ||
         DAT_00489e84 == NULL || DAT_004876a0 == NULL || DAT_00487aa0 == NULL ||
         DAT_00489e98 == NULL ||
         !ValidCount(DAT_00489240, GAMEPLAY_PLAYER_CAPACITY) ||
@@ -177,6 +178,18 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
         !ValidCount(DAT_004892d4, kSpawnPointLimit) ||
         !ValidCount(DAT_004892d8, kDecorationLimit) ||
         !ValidCount(DAT_00489274, kStaticEntityLimit)) {
+        LOG("[SNAP] capture rejected: dimensions=%u,%u,%d buffers=%d%d%d%d%d%d%d%d%d%d%d\n",
+            DAT_004879f0, DAT_004879f4, DAT_00487a00,
+            DAT_00481f50 != NULL, DAT_0048782c != NULL, DAT_00487810 != NULL,
+            DAT_0048781c != NULL, DAT_00481f48 != NULL, DAT_00487820 != NULL,
+            DAT_00489e84 != NULL, DAT_004876a0 != NULL, DAT_00487aa0 != NULL,
+            DAT_00489e98 != NULL, snapshot != NULL);
+        LOG("[SNAP] counts: players=%d entities=%d troopers=%d projectiles=%d particles=%d fire=%d debris=%d misc=%d explosions=%d fluid=%d walls=%d turrets=%d/%d waypoints=%d edges=%d spawn=%d decorations=%d static=%d\n",
+            DAT_00489240, g_EntityCount, g_TrooperCount, g_ProjectileCount,
+            g_ParticleCount, g_FireParticleCount, g_DebrisItemCount, DAT_00489264,
+            DAT_0048926c, g_FluidSourceCount, DAT_00489270, DAT_0048927c,
+            DAT_00489280, DAT_004892c8, g_MapEdgeCount, DAT_004892d4,
+            DAT_004892d8, DAT_00489274);
         return false;
     }
 
@@ -266,7 +279,7 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
 bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
 {
     if (snapshot == NULL || DAT_00481f50 == NULL || DAT_0048782c == NULL ||
-        DAT_0048781c == NULL || DAT_00481f48 == NULL || DAT_00487820 == NULL ||
+        DAT_0048781c == NULL || DAT_00481f48 == NULL ||
         DAT_00489e84 == NULL || DAT_004876a0 == NULL || DAT_00487aa0 == NULL ||
         DAT_00489e98 == NULL)
         return false;
@@ -321,6 +334,7 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
         !ValidCount(fluid_count, FLUID_SOURCE_CAPACITY) || !ValidCount(wall_count, 16) ||
         DAT_00489280 < 0 || !ValidCount(turret_count, DAT_00489280) ||
         !ValidCount(waypoint_count, kWaypointRecordLimit) ||
+        (waypoint_count != 0 && DAT_00487820 == NULL) ||
         !ValidCount(map_edge_count, MAP_EDGE_CAPACITY) ||
         !ValidCount(spawn_count, kSpawnPointLimit) ||
         !ValidCount(decoration_count, kDecorationLimit) ||
