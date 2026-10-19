@@ -10,7 +10,8 @@ public:
     NetcodeExchange(const NetcodeExchange &) = delete;
     NetcodeExchange &operator=(const NetcodeExchange &) = delete;
     enum Role { Host, Client };
-    enum Phase { Running, NeedsSync, AwaitReady, Prepared, AwaitApplied, AwaitResume, Closing, Closed, Failed };
+    enum Phase { Running, NeedsSync, AwaitReady, Prepared, AwaitApplied, AwaitResume, Closing, Closed, Failed,
+                 HostReady, HostApplied };
     enum Type { Receipt = 1, ReceiptAck, Revision, RevisionAck, Progress,
                 SyncOffer, SyncReady, SyncCommit, SyncApplied, SyncResume, End, EndAck };
     struct Message { Type type = Receipt; std::vector<uint8_t> bytes; };
@@ -30,6 +31,8 @@ public:
     size_t queued_bytes() const { return queued_bytes_; }
     static bool valid_size(Type type, size_t size);
 private:
+    friend class NetcodeHostExchange;
+    bool offer(const ConfirmedState &state, uint32_t now);
     struct ReceiptSlot { uint32_t tick = 0; uint8_t actions = 0; bool valid = false, acked = false; };
     struct RevisionSlot { AuthoritativeInput input; uint64_t hash = 0; bool acked = false; };
     bool queue(Type type, std::vector<uint8_t> bytes);
@@ -47,7 +50,25 @@ private:
     ConfirmedState pending_;
     std::deque<Message> outgoing_;
     size_t queued_bytes_ = 0;
+    bool coordinated_ = false;
 };
-// Two-process, loopback-only developer harness. Never used by live LAN.
-int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port);
+// One shared host world, up to three peers. Failure of any member aborts all.
+class NetcodeHostExchange {
+public:
+    bool start(uint32_t generation, uint32_t epoch, uint8_t players);
+    bool begin_sync(const SimulationReconciliation &world, uint32_t epoch, uint32_t now);
+    bool poll(SimulationReconciliation *world, uint32_t now);
+    void disconnect();
+    bool running() const;
+    bool needs_sync() const;
+    uint32_t peer_confirmed() const;
+    NetcodeExchange *peer(uint8_t slot);
+private:
+    NetcodeExchange peers_[3];
+    ConfirmedState pending_;
+    uint8_t count_ = 0;
+    bool active_ = false, syncing_ = false, installed_ = false;
+};
+// Loopback-only developer harness. Never used by live LAN.
+int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int players, int slot);
 #endif

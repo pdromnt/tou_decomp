@@ -100,8 +100,8 @@ forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
 | `source/game/input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
 | `source/game/input_timeline.cpp` | Bounded input ledger, simulated/confirmed frontiers and late-input replay bookkeeping (experimental branch) |
 | `source/game/input_authority.cpp` | Experimental provisional/sealed revision publisher and confirmed-resync record codecs; see `docs/INPUT_AUTHORITY.md` |
-| `source/game/netcode_exchange.cpp` | Bounded experimental per-peer acknowledgements, hash progress and confirmed-resync barrier; see `docs/NETCODE_EXCHANGE.md` |
-| `source/game/exchange_diagnostic.cpp` | Isolated two-process loopback TCP driver with scripted inputs and no live LAN integration |
+| `source/game/netcode_exchange.cpp` | Bounded experimental per-peer acknowledgements, hash progress and all-peer confirmed-resync coordinator; see `docs/NETCODE_EXCHANGE.md` |
+| `source/game/exchange_diagnostic.cpp` | Isolated two-to-four-process loopback TCP driver with scripted inputs and no live LAN integration |
 | `source/game/simulation_reconciliation.cpp` | Experimental checkpoint/journal owner, sliced late-input resimulation and bounded frame pump; see `docs/INPUT_RECONCILIATION.md` |
 | `source/game/gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `source/game/simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |

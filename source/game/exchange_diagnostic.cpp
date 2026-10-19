@@ -1,4 +1,4 @@
-// Loopback-only two-process experiment; never the live LAN socket path.
+// Loopback-only multi-process experiment; never the live LAN socket path.
 #include "tou.h"
 #include "netcode_exchange.h"
 #include <algorithm>
@@ -149,7 +149,8 @@ Socket Connect(bool host, uint16_t port) {
 }
 }
 
-int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port) {
+int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int players, int slot) {
+    if (players < 2 || players > 4 || slot < 1 || slot >= players || unsigned(port) + players - 2 > 65535) return 8;
 #ifdef _WIN32
     struct SocketScope {
         bool ready;
@@ -158,37 +159,49 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port) {
     } sockets;
     if (!sockets.ready) return 8;
 #endif
-    Wire wire; wire.socket = Connect(host, port);
-    if (wire.socket == kInvalid || !Nonblocking(wire.socket)) return 8;
-    const int enabled = 1;
-    setsockopt(wire.socket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&enabled), sizeof(enabled));
+    Wire wires[3];
+    const int peers = host ? players - 1 : 1;
+    for (int i = 0; i < peers; ++i) {
+        Wire &wire = wires[i];
+        wire.socket = Connect(host, static_cast<uint16_t>(port + (host ? i : slot - 1)));
+        if (wire.socket == kInvalid || !Nonblocking(wire.socket)) return 8;
+        const int enabled = 1;
+        setsockopt(wire.socket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&enabled), sizeof(enabled));
 #ifdef SO_NOSIGPIPE
-    setsockopt(wire.socket, SOL_SOCKET, SO_NOSIGPIPE, reinterpret_cast<const char *>(&enabled), sizeof(enabled));
+        setsockopt(wire.socket, SOL_SOCKET, SO_NOSIGPIPE, reinterpret_cast<const char *>(&enabled), sizeof(enabled));
 #endif
+    }
     SimulationReconciliation world;
-    if (!world.start(1, 2, static_cast<uint32_t>(window), 128u * 1024u * 1024u, false,
+    if (!world.start(1, static_cast<uint8_t>(players), static_cast<uint32_t>(window), 128u * 1024u * 1024u, false,
         host ? SimulationReconciliation::DirectInputs : SimulationReconciliation::HostRevisions)) return 8;
     NetcodeExchange exchange;
-    if (!exchange.start(host ? NetcodeExchange::Host : NetcodeExchange::Client, 1, 1, 2, 1)) return 8;
+    NetcodeHostExchange group;
+    if (host ? !group.start(1, 1, static_cast<uint8_t>(players)) :
+        !exchange.start(NetcodeExchange::Client, 1, 1, static_cast<uint8_t>(players), static_cast<uint8_t>(slot))) return 8;
     InputAuthorityPublisher publisher;
-    if (host && !publisher.reset(1, 1, 2)) return 8;
+    if (host && !publisher.reset(1, 1, static_cast<uint8_t>(players))) return 8;
     const uint32_t start = Platform_GetTicks(); uint32_t last = start, sampled = 0, epoch = 1, resyncs = 0, frames = 0;
     bool periodic_sync = false;
     struct Delayed { uint32_t tick, due; uint8_t action; };
     std::vector<Delayed> delayed;
-    LOG("[EXCHANGE] begin role=%s ticks=%d window=%d port=%u loopback-only=1 dry-run-events=1\n",
-        host ? "host" : "client", ticks, window, unsigned(port));
-    if (host && !exchange.begin_sync(world, 2, start)) return 8; // Authoritative tick-zero bootstrap.
+    LOG("[EXCHANGE] begin role=%s players=%d slot=%d ticks=%d window=%d port=%u loopback-only=1 dry-run-events=1\n",
+        host ? "host" : "client", players, host ? 0 : slot, ticks, window, unsigned(port));
+    if (host && !group.begin_sync(world, 2, start)) return 8; // Authoritative tick-zero bootstrap.
     while (Platform_GetTicks() - start < 30000) {
         const uint32_t now = Platform_GetTicks(), elapsed = now - last; last = now;
-        if (!wire.receive(&exchange, &world, now) || !exchange.poll(now)) {
-            LOG("[EXCHANGE] transport/barrier failed phase=%u tick=%u\n", unsigned(exchange.phase()), world.simulated_tick()); return 8;
+        for (int i = 0; i < peers; ++i) {
+            NetcodeExchange *peer = host ? group.peer(static_cast<uint8_t>(i + 1)) : &exchange;
+            if (!peer || !wires[i].receive(peer, &world, now) || !peer->poll(now)) {
+                group.disconnect();
+                LOG("[EXCHANGE] transport/barrier failed peer=%d tick=%u\n", i + 1, world.simulated_tick()); return 8;
+            }
         }
+        if (host && !group.poll(&world, now)) return 8;
         if (world.epoch() != epoch) {
             epoch = world.epoch(); sampled = world.simulated_tick(); delayed.clear(); ++resyncs;
-            if (host && !publisher.reset(1, epoch, 2, world.simulated_tick())) return 8;
+            if (host && !publisher.reset(1, epoch, static_cast<uint8_t>(players), world.simulated_tick())) return 8;
         }
-        if (exchange.phase() == NetcodeExchange::Running && epoch > 1) {
+        if ((host ? group.running() : exchange.phase() == NetcodeExchange::Running) && epoch > 1) {
             const uint32_t target = static_cast<uint32_t>(ticks);
             if (!world.replaying() && sampled < target && sampled < world.simulated_tick() + 1) {
                 ++sampled;
@@ -196,7 +209,7 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port) {
                     if (world.submit(1, sampled, 0, Action(sampled, 0), epoch) != InputTimeline::Accepted) return 8;
                 } else {
                     if (delayed.size() >= 64) return 8;
-                    delayed.push_back(Delayed{sampled, now + (sampled % 7u) * 8u, Action(sampled, 1)});
+                    delayed.push_back(Delayed{sampled, now + ((sampled + slot) % 7u) * 8u, Action(sampled, slot)});
                 }
             }
             for (size_t n = delayed.size(); n > 0; --n)
@@ -208,41 +221,53 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port) {
             if (work.result == SimulationReconciliation::Failed || work.forward_ticks + work.replay_ticks > 3) return 8;
             if (!world.replaying() && !world.dirty_from()) {
                 if (host) {
-                    for (uint32_t tick = exchange.peer_confirmed() + 1; tick <= world.simulated_tick(); ++tick) {
+                    for (uint32_t tick = group.peer_confirmed() + 1; tick <= world.simulated_tick(); ++tick) {
                         uint8_t actions[4] = {}; bool sealed = false; AuthoritativeInput input;
                         if (!world.canonical_input(tick, actions, &sealed)) return 8;
                         const InputAuthorityPublisher::Result result = publisher.publish(tick, actions, sealed, &input);
-                        if ((result != InputAuthorityPublisher::Changed && result != InputAuthorityPublisher::Unchanged) ||
-                            !exchange.revision(input, world)) return 8;
+                        if (result != InputAuthorityPublisher::Changed && result != InputAuthorityPublisher::Unchanged) return 8;
+                        for (int i = 1; i < players; ++i) {
+                            NetcodeExchange *peer = group.peer(static_cast<uint8_t>(i));
+                            if (tick > peer->peer_confirmed() && !peer->revision(input, world)) return 8;
+                        }
                     }
                 }
                 if (!world.confirm()) return 8;
                 if (!host && !exchange.progress(world)) return 8;
                 if (host && !periodic_sync && world.confirmed_tick() >= target / 2) {
-                    if (!exchange.begin_sync(world, epoch + 1, now)) return 8;
+                    if (!group.begin_sync(world, epoch + 1, now)) return 8;
                     periodic_sync = true;
-                } else if (host && world.confirmed_tick() == target && exchange.peer_confirmed() == target) {
-                    if (!exchange.finish(target, now)) return 8;
+                } else if (host && world.confirmed_tick() == target && group.peer_confirmed() == target) {
+                    for (int i = 1; i < players; ++i)
+                        if (!group.peer(static_cast<uint8_t>(i))->finish(target, now)) return 8;
                 }
             }
-        } else if (exchange.phase() == NetcodeExchange::NeedsSync) {
+        } else if (host && group.needs_sync()) {
             if (world.replaying() || world.dirty_from()) {
                 if (world.pump(0, 3, world.simulated_tick()).result == SimulationReconciliation::Failed) return 8;
-            } else if (world.confirm() && exchange.begin_sync(world, epoch + 1, now))
+            } else if (world.confirm() && group.begin_sync(world, epoch + 1, now))
                 LOG("[EXCHANGE] checksum recovery offered\n");
             else return 8;
         }
-        if (!wire.flush(&exchange)) return 8;
+        bool closed = true;
+        uint64_t sent = 0, received = 0;
+        for (int i = 0; i < peers; ++i) {
+            NetcodeExchange *peer = host ? group.peer(static_cast<uint8_t>(i + 1)) : &exchange;
+            if (!peer || !wires[i].flush(peer)) return 8;
+            if (peer->phase() != NetcodeExchange::Closed || !wires[i].outgoing.empty() || peer->queued_bytes()) closed = false;
+            sent += wires[i].sent_bytes; received += wires[i].received_bytes;
+        }
         ++frames;
-        if (exchange.phase() == NetcodeExchange::Closed && wire.outgoing.empty() && !exchange.queued_bytes()) {
+        if (closed) {
             LOG("[EXCHANGE] PASS role=%s tick=%u peer_confirmed=%u epoch=%u resyncs=%u frames=%u corrections=%u replayed=%llu sent=%llu received=%llu\n",
-                host ? "host" : "client", world.simulated_tick(), exchange.peer_confirmed(), epoch, resyncs, frames,
+                host ? "host" : "client", world.simulated_tick(), host ? group.peer_confirmed() : exchange.peer_confirmed(), epoch, resyncs, frames,
                 world.corrections(), static_cast<unsigned long long>(world.replayed_ticks()),
-                static_cast<unsigned long long>(wire.sent_bytes), static_cast<unsigned long long>(wire.received_bytes));
+                static_cast<unsigned long long>(sent), static_cast<unsigned long long>(received));
             return 0;
         }
         Platform_Delay(1);
     }
-    LOG("[EXCHANGE] timeout phase=%u tick=%u peer=%u\n", unsigned(exchange.phase()), world.simulated_tick(), exchange.peer_confirmed());
+    LOG("[EXCHANGE] timeout role=%s tick=%u peer=%u\n", host ? "host" : "client",
+        world.simulated_tick(), host ? group.peer_confirmed() : exchange.peer_confirmed());
     return 8;
 }

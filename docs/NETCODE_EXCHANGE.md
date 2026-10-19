@@ -2,8 +2,9 @@
 
 `source/game/netcode_exchange.cpp` joins receipts, canonical revisions,
 acknowledgements and confirmed resync into one per-peer state machine. It owns
-neither the world nor a socket. `source/game/exchange_diagnostic.cpp` supplies
-a separate loopback-only reliable TCP driver for two real game processes.
+neither the world nor a socket. `NetcodeHostExchange` coordinates one host world
+across up to three clients. `source/game/exchange_diagnostic.cpp` supplies
+a separate loopback-only reliable TCP driver for two to four real game processes.
 Neither module is used by normal LAN menus or matches. Live LAN is still
 protocol 6 delayed lockstep; no user-facing prediction mode is enabled.
 
@@ -45,6 +46,18 @@ The initial harness connection uses the same barrier for an authoritative
 tick-zero bootstrap. A periodic barrier proves continuation after replacement;
 a mismatching Progress hash enters `NeedsSync` and uses the same recovery path.
 
+For multiple clients, the session coordinator exports one common anchor and
+offers it to every peer. A Ready reply enters `HostReady`; it cannot apply the
+host world on its own. Only when **all** peers are ready does the coordinator
+install that anchor once and queue Commit for every connection. Applied replies
+enter `HostApplied`; only when **all** peers applied does it queue every Resume
+and reopen the host's input/simulation gate. Direct per-peer `begin_sync` is
+disabled for coordinator-owned exchanges. A mismatch on any peer freezes host
+advancement and resynchronizes the entire group, not just the reporting client.
+The host's group progress is the minimum validated peer frontier. Duplicate
+replies cannot stand in for a missing participant. A timeout or failed peer
+aborts all coordinator members; there is no mid-barrier peer removal/quorum.
+
 Normal simulation/input publication must stop in all waiting phases. Old
 receipt/revision traffic drains without mutating the world across a barrier.
 Client input remains blocked after installation until Resume arrives. The host
@@ -75,8 +88,9 @@ ordered delivery, not unreliable UDP with arbitrary lost control messages.
 - Buffers, decoded snapshots, transfer copies and owner history have separate
   limits; they are **not** a low total-process-memory promise. No low-power
   acceptance or zero-copy transfer claim is made.
-- The current driver supports two players/one client only. Per-peer state
-  machines are a building block, not proof of multi-client barrier coordination.
+- The driver supports two to four players, with one distinct slot per client.
+  The host opens one loopback port per client (base port plus slot minus one).
+  Slots are explicit diagnostic arguments, not a negotiated lobby or discovery.
 - It seeds generated-level construction deterministically and uses scripted
   actions, initialized sound logic with a dry-run sink, and no renderer. It
   neither saves settings nor uses physical input, lobby UI or match transitions.
@@ -84,7 +98,7 @@ ordered delivery, not unreliable UDP with arbitrary lost control messages.
 - It binds/connects only `127.0.0.1`. Matching binaries/assets/configuration are
   a fixture prerequisite, not negotiated/authenticated by this diagnostic lane.
 
-## Running the two-process diagnostic
+## Running the process diagnostic
 
 From two isolated asset staging directories, run:
 
@@ -93,8 +107,12 @@ TOU --verify-rewind woods --rewind-late-input 4 --rewind-canonical 1 --rewind-wi
 TOU --verify-rewind woods --rewind-late-input 4 --rewind-canonical 1 --rewind-window 12 --rewind-ticks 240 --exchange-role 1 --exchange-port 27961 --logging
 ```
 
-Role 0 is host, role 1 client. Use exactly two players, canonical ticks, sound
+Role 0 is host, role 1 client. Use two to four players, canonical ticks, sound
 logic enabled and no forced round-ending option. The port is session-local.
+For four processes add `--rewind-players 4` everywhere and launch three clients
+with `--exchange-slot 1`, `2`, and `3` respectively (default slot 1). Use the same
+base `--exchange-port` in each process; reserve three consecutive free ports.
+Launch clients promptly: connection setup and each barrier have bounded waits.
 `[EXCHANGE] PASS` requires the acknowledged finish. Host `peer_confirmed` is
 the client's latest validated committed prefix; the client log's peer field
 only tracks its latest resync base (it does not receive host Progress reports).
@@ -114,6 +132,19 @@ Windows x64 observations:
 - The relay also injected an invalid stream version and separately withheld a
   Ready reply past the deadline. Both processes exited 8 without a PASS or
   accidental resume. These are injected failures, not unexpected test failures.
+- Four independent Woods processes reached tick 240 with group bootstrap and
+  periodic resync, all exiting 0. A four-process relay with 20/60 ms per-way
+  delay, staggered readiness and one client's corrupted Progress hash recovered
+  the whole group to epoch 4, then acknowledged tick 240 and exited 0 everywhere.
+- Four generated Happyland worlds reached tick 600, crossing receipt/revision
+  ring wrap, with common bootstrap/periodic resync and acknowledged finish.
+  All four processes exited 0 (window 12, three shared work ticks per pump).
+- Withheld Ready, withheld Applied and a disconnected third client each caused
+  all four processes to exit 8 without PASS. Withheld Ready left the host at
+  the old epoch; withheld Applied allowed installation but never group resume.
+- The ignored stub-world probe also checks three-peer all-ready/all-applied
+  gating, one host installation, duplicate readiness before/after application,
+  rejection of per-peer coordinator bypass, and whole-group timeout/disconnect.
 - An ignored stub-world exchange probe checks duplicate phase messages, freeze
   until Resume, slot spoofing, forged future acknowledgements, commit-before-
   offer, malformed size, bounded outbox exhaustion, timeout without epoch
@@ -122,13 +153,16 @@ Windows x64 observations:
 
 No permanent test suite or CI job was added. This does not establish real
 internet/loss acceptance, live menu integration, real audible/GPU output,
-natural match/level progression, more clients, Linux/macOS behavior or CM4 cost.
+natural match/level progression, Linux/macOS behavior or CM4 cost.
 
 ## Next integration gates
 
-Coordinate all peers before epoch/control/level transitions, negotiate the
+Coordinate all peers before control/level transitions, negotiate the
 experimental mode and fingerprints on the real LAN connection, integrate local
 input scheduling and heartbeat/backpressure policy, retain a completed display
 frame during replay, and verify real presentation. Keep conservative lockstep
 available. Do not enable normal LAN prediction merely because the isolated
-two-process exchange works.
+multi-process exchange works. In particular, the current menu path mutates
+pause/skip/end state before broadcasting it; that is incompatible with the
+owner's external-mutation guard. A confirmed control handoff must replace that
+ordering before a live opt-in can be safe. No menu opt-in is exposed yet.

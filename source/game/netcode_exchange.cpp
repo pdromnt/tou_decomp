@@ -36,7 +36,7 @@ bool NetcodeExchange::start(Role role, uint32_t gen, uint32_t epoch, uint8_t pla
     disconnect();
     if ((role != Host && role != Client) || !gen || !epoch || players < 2 || players > 4 || !slot || slot >= players)
         return false;
-    role_ = role; generation_ = gen; epoch_ = epoch; players_ = players; slot_ = slot;
+    role_ = role; generation_ = gen; epoch_ = epoch; players_ = players; slot_ = slot; coordinated_ = false;
     reset_history(0); peer_hash_ = 0; pending_ = ConfirmedState(); phase_ = Running; return true;
 }
 void NetcodeExchange::disconnect() {
@@ -107,12 +107,17 @@ bool NetcodeExchange::same_stamp(const std::vector<uint8_t> &in) const {
         Get32(in.data() + 8) == pending_.tick && Get64(in.data() + 12) == pending_.hash;
 }
 bool NetcodeExchange::begin_sync(const SimulationReconciliation &world, uint32_t epoch, uint32_t now) {
-    if (role_ != Host || (phase_ != Running && phase_ != NeedsSync) || world.epoch() != epoch_) return false;
+    if (coordinated_ || role_ != Host || (phase_ != Running && phase_ != NeedsSync) || world.epoch() != epoch_) return false;
     ConfirmedState state;
+    if (!world.export_confirmed(epoch, &state)) return false;
+    return offer(state, now);
+}
+bool NetcodeExchange::offer(const ConfirmedState &state, uint32_t now) {
     std::vector<uint8_t> bytes;
-    if (!world.export_confirmed(epoch, &state) || state.tick < peer_confirmed_ ||
+    if (role_ != Host || (phase_ != Running && phase_ != NeedsSync) || state.generation != generation_ ||
+        state.epoch <= epoch_ || state.players != players_ || state.tick < peer_confirmed_ ||
         !AuthorityState_Encode(state, &bytes) || !queue(SyncOffer, std::move(bytes))) return false;
-    pending_ = std::move(state); phase_ = AwaitReady; deadline_start_ = now; return true;
+    pending_ = state; phase_ = AwaitReady; deadline_start_ = now; return true;
 }
 bool NetcodeExchange::finish(uint32_t tick, uint32_t now) {
     if (role_ != Host || phase_ != Running || tick != peer_confirmed_) return false;
@@ -152,8 +157,12 @@ bool NetcodeExchange::receive(const Message &message, SimulationReconciliation *
         switch (message.type) {
         case SyncReady:
             if (role_ != Host) return fail();
-            if (phase_ == AwaitApplied) return stamp(SyncCommit) || fail();
+            if (phase_ == AwaitApplied || phase_ == HostApplied) return stamp(SyncCommit) || fail();
             if (phase_ == Running && epoch == epoch_) return true;
+            if (coordinated_) {
+                if (phase_ != AwaitReady && phase_ != HostReady) return fail();
+                phase_ = HostReady; return true;
+            }
             if (phase_ != AwaitReady || !world->apply_confirmed(pending_)) return fail();
             epoch_ = epoch; phase_ = AwaitApplied; return stamp(SyncCommit) || fail();
         case SyncCommit:
@@ -164,6 +173,10 @@ bool NetcodeExchange::receive(const Message &message, SimulationReconciliation *
         case SyncApplied:
             if (role_ != Host) return fail();
             if (phase_ == Running && epoch == epoch_) return stamp(SyncResume) || fail();
+            if (coordinated_) {
+                if (phase_ != AwaitApplied && phase_ != HostApplied) return fail();
+                phase_ = HostApplied; return true;
+            }
             if (phase_ != AwaitApplied) return fail();
             if (!stamp(SyncResume)) return fail();
             reset_history(pending_.tick); peer_hash_ = pending_.hash; phase_ = Running; return true;
@@ -237,4 +250,82 @@ bool NetcodeExchange::receive(const Message &message, SimulationReconciliation *
     }
     default: return fail();
     }
+}
+
+bool NetcodeHostExchange::start(uint32_t generation, uint32_t epoch, uint8_t players) {
+    disconnect();
+    if (players < 2 || players > 4) return false;
+    count_ = players - 1;
+    for (uint8_t i = 0; i < count_; ++i) {
+        if (!peers_[i].start(NetcodeExchange::Host, generation, epoch, players, i + 1)) {
+            disconnect(); return false;
+        }
+        peers_[i].coordinated_ = true;
+    }
+    active_ = true; return true;
+}
+void NetcodeHostExchange::disconnect() {
+    for (uint8_t i = 0; i < 3; ++i) peers_[i].disconnect();
+    count_ = 0; active_ = syncing_ = installed_ = false; pending_ = ConfirmedState();
+}
+NetcodeExchange *NetcodeHostExchange::peer(uint8_t slot) {
+    return active_ && slot && slot <= count_ ? &peers_[slot - 1] : NULL;
+}
+bool NetcodeHostExchange::running() const {
+    if (!active_ || syncing_) return false;
+    for (uint8_t i = 0; i < count_; ++i)
+        if (peers_[i].phase() != NetcodeExchange::Running) return false;
+    return true;
+}
+bool NetcodeHostExchange::needs_sync() const {
+    if (!active_ || syncing_) return false;
+    for (uint8_t i = 0; i < count_; ++i)
+        if (peers_[i].phase() == NetcodeExchange::NeedsSync) return true;
+    return false;
+}
+uint32_t NetcodeHostExchange::peer_confirmed() const {
+    if (!active_) return 0;
+    uint32_t tick = UINT32_MAX;
+    for (uint8_t i = 0; i < count_; ++i)
+        if (peers_[i].peer_confirmed() < tick) tick = peers_[i].peer_confirmed();
+    return tick;
+}
+bool NetcodeHostExchange::begin_sync(const SimulationReconciliation &world, uint32_t epoch, uint32_t now) {
+    if (!active_ || syncing_ || !world.export_confirmed(epoch, &pending_)) return false;
+    for (uint8_t i = 0; i < count_; ++i)
+        if (!peers_[i].offer(pending_, now)) { disconnect(); return false; }
+    syncing_ = true; installed_ = false; return true;
+}
+bool NetcodeHostExchange::poll(SimulationReconciliation *world, uint32_t now) {
+    if (!active_ || !world) return false;
+    for (uint8_t i = 0; i < count_; ++i)
+        if (!peers_[i].poll(now)) { disconnect(); return false; }
+    if (!syncing_) return true;
+    const NetcodeExchange::Phase expected = installed_ ? NetcodeExchange::HostApplied : NetcodeExchange::HostReady;
+    for (uint8_t i = 0; i < count_; ++i)
+        if (peers_[i].phase() != expected) return true;
+    if (!installed_) {
+        // The world belongs to the session, not to any individual connection.
+        if (!world->apply_confirmed(pending_)) { disconnect(); return false; }
+        LOG("[EXCHANGE] all-ready peers=%u epoch=%u tick=%u; host installed once\n",
+            unsigned(count_), pending_.epoch, pending_.tick);
+        for (uint8_t i = 0; i < count_; ++i) {
+            peers_[i].epoch_ = pending_.epoch;
+            peers_[i].phase_ = NetcodeExchange::AwaitApplied;
+            if (!peers_[i].stamp(NetcodeExchange::SyncCommit)) { disconnect(); return false; }
+        }
+        installed_ = true;
+    } else {
+        // Queue every Resume before permitting new input on any connection.
+        for (uint8_t i = 0; i < count_; ++i)
+            if (!peers_[i].stamp(NetcodeExchange::SyncResume)) { disconnect(); return false; }
+        for (uint8_t i = 0; i < count_; ++i) {
+            peers_[i].reset_history(pending_.tick); peers_[i].peer_hash_ = pending_.hash;
+            peers_[i].phase_ = NetcodeExchange::Running;
+        }
+        LOG("[EXCHANGE] all-applied peers=%u epoch=%u tick=%u; resume queued for all\n",
+            unsigned(count_), pending_.epoch, pending_.tick);
+        syncing_ = false; pending_ = ConfirmedState();
+    }
+    return true;
 }

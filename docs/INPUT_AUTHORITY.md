@@ -112,8 +112,8 @@ malformed records, and rejection after external round-state mutation. No
 permanent test suite or CI job was added.
 
 The [bounded peer exchange](NETCODE_EXCHANGE.md) now supplies receipt/revision
-acks, committed hash progress and a resync handshake in an isolated two-process
+acks, committed hash progress and a coordinated resync handshake in an isolated two-to-four-process
 TCP driver. It is not connected to normal LAN sessions. Live negotiation,
-multi-client barriers, input/clock/liveness integration, real audible/GPU delivery,
+control/level barriers, input/clock/liveness integration, real audible/GPU delivery,
 level/lobby transitions, remote/cross-platform checks and low-power costs remain
 gated. No live prediction is enabled.
