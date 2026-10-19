@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <vector>
 
@@ -31,18 +32,19 @@ const TouSocket kInvalidSocket = -1;
 namespace {
 
 const uint32_t kProtocolMagic = 0x4e554f54u; /* TOUN, little endian */
-const uint16_t kProtocolVersion = 4;
+const uint16_t kProtocolVersion = 5;
 /* The sim revision is independent of the app/release version. Bump it whenever
  * a gameplay or snapshot change can make equal commands produce different
  * state, even if the packet shapes remain compatible. Cosmetic releases do
  * not by themselves require a compatibility revision. */
-const char kSimulationBuildId[] = "tou-sim1-net4-snapshot3";
+const char kSimulationBuildId[] = "tou-sim1-net5-snapshot3";
 const uint16_t kDefaultPort = 27015;
 const uint32_t kMaximumPayload = 1024u * 1024u;
 const uint32_t kMaximumSnapshotPayload = 64u * 1024u * 1024u;
 const size_t kMaximumQueuedBytes = static_cast<size_t>(kMaximumSnapshotPayload) +
                                    4u * 1024u * 1024u;
-const uint32_t kInputDelay = 3;
+const uint32_t kDefaultInputDelay = 3;
+const uint32_t kMaximumInputDelay = 12;
 const uint32_t kChecksumInterval = 60;
 const size_t kCommandRingSize = 512;
 
@@ -62,7 +64,8 @@ enum MessageType {
     MESSAGE_LEVEL_READY = 12,
     MESSAGE_INITIAL_SNAPSHOT = 13,
     MESSAGE_ROSTER = 14,
-    MESSAGE_STATE_CORRECTION = 15
+    MESSAGE_STATE_CORRECTION = 15,
+    MESSAGE_INPUT_DELAY = 16
 };
 
 enum RejectReason {
@@ -82,6 +85,10 @@ struct Connection {
     uint32_t connect_started;
     uint32_t last_received_at;
     uint32_t last_ping_at;
+    bool ping_pending;
+    uint32_t rtt_samples;
+    uint32_t rtt_x8;
+    uint32_t variation_x4;
     uint8_t slot;
     uint8_t ship;
     uint8_t team;
@@ -92,6 +99,7 @@ struct Connection {
 
     Connection() : socket(kInvalidSocket), sent(0), last_received_sequence(0),
                    connect_started(0), last_received_at(0), last_ping_at(0),
+                   ping_pending(false), rtt_samples(0), rtt_x8(0), variation_x4(0),
                    slot(0xff), ship(0), team(0),
                    hello(false), ready_generation(0), connected(false), connecting(false) {}
 };
@@ -103,8 +111,11 @@ struct TickCommands {
     uint8_t actions[4];
     bool present[4];
     bool bundle;
+    uint32_t first_arrived_at;
+    bool arrival_recorded;
 
-    TickCommands() : tick(0), rng_state(0), rng_calls(0), bundle(false)
+    TickCommands() : tick(0), rng_state(0), rng_calls(0), bundle(false),
+                     first_arrived_at(0), arrival_recorded(false)
     {
         memset(actions, 0, sizeof(actions));
         memset(present, 0, sizeof(present));
@@ -155,7 +166,44 @@ LobbyEntry g_lobby[4] = {};
 uint8_t g_lobby_count = 0;
 bool g_correction_applied = false;
 bool g_abort_to_lobby = false;
+uint32_t g_host_input_delay = kDefaultInputDelay;
+uint32_t g_input_delay = kDefaultInputDelay;
+uint32_t g_wait_started = 0;
+bool g_waiting = false;
+uint64_t g_wait_total = 0;
+uint32_t g_wait_count = 0;
+uint32_t g_wait_max = 0;
+uint32_t g_arrival_age = 0;
+uint32_t g_last_poll = 0;
+bool g_polled = false;
+uint32_t g_poll_gap_max = 0;
+uint32_t g_last_diagnostic_log = 0;
 char g_status[160] = "LAN disabled";
+
+void ResetDiagnostics(void)
+{
+    g_waiting = false;
+    g_wait_total = 0;
+    g_wait_count = g_wait_max = g_arrival_age = g_poll_gap_max = 0;
+    g_polled = false;
+    g_last_diagnostic_log = Platform_GetTicks();
+}
+
+bool TickReady(bool ready)
+{
+    const uint32_t now = Platform_GetTicks();
+    if (!ready && !g_waiting) {
+        g_wait_started = now;
+        g_waiting = true;
+    } else if (ready && g_waiting) {
+        const uint32_t elapsed = now - g_wait_started;
+        g_wait_total += elapsed;
+        if (elapsed != 0) ++g_wait_count;
+        if (elapsed > g_wait_max) g_wait_max = elapsed;
+        g_waiting = false;
+    }
+    return ready;
+}
 
 void Put16(std::vector<uint8_t> *out, uint16_t value)
 {
@@ -505,11 +553,12 @@ void ResetTickTransportState(void)
     memset(g_host_checksums, 0, sizeof(g_host_checksums));
     memset(g_host_checksum_ticks, 0, sizeof(g_host_checksum_ticks));
     g_last_sampled_tick = 0;
+    g_waiting = false;
 }
 
 void SeedInputDelay(void)
 {
-    for (uint32_t tick = 1; tick <= kInputDelay; ++tick) {
+    for (uint32_t tick = 1; tick <= g_input_delay; ++tick) {
         TickCommands *commands = CommandsFor(tick);
         for (uint8_t slot = 0; slot < g_player_count; ++slot)
             commands->present[slot] = true;
@@ -521,7 +570,7 @@ bool IsMessageShapeValid(uint16_t type, size_t size)
     if (type == MESSAGE_DISCONNECT)
         return size == 1;
     if (type == MESSAGE_PING || type == MESSAGE_PONG)
-        return size == 0;
+        return size == 4;
     if (g_mode == MODE_HOST) {
         return (type == MESSAGE_HELLO && size == 26) ||
                (type == MESSAGE_COMMAND && size == 5) ||
@@ -530,7 +579,8 @@ bool IsMessageShapeValid(uint16_t type, size_t size)
     }
     if (g_mode == MODE_CLIENT) {
         return (type == MESSAGE_WELCOME && size == 1) ||
-               (type == MESSAGE_START && size == 13 + GAME_CONFIG_SIZE) ||
+               (type == MESSAGE_START && size == 17 + GAME_CONFIG_SIZE) ||
+               (type == MESSAGE_INPUT_DELAY && size == 4) ||
                (type == MESSAGE_COMMAND_BUNDLE && size >= 18 && size <= 21) ||
                (type == MESSAGE_GAMEPLAY_STATE && size == 4) ||
                (type == MESSAGE_ROSTER && size >= 1 && size <= 17 &&
@@ -709,6 +759,9 @@ void HandleMessage(Connection *connection, uint16_t type,
         connection->hello = true;
         uint8_t response[1] = {connection->slot};
         QueueMessage(connection, MESSAGE_WELCOME, response, sizeof(response));
+        std::vector<uint8_t> delay;
+        Put32(&delay, g_host_input_delay);
+        QueueMessage(connection, MESSAGE_INPUT_DELAY, delay.data(), delay.size());
         BroadcastRoster();
         SetStatus(Text_Get("lan.status.client_joined_format"),
                   static_cast<unsigned>(connection->slot + 1));
@@ -752,8 +805,24 @@ void HandleMessage(Connection *connection, uint16_t type,
         g_lobby_count = count;
         return;
     }
+    if (g_mode == MODE_CLIENT && type == MESSAGE_INPUT_DELAY) {
+        const uint32_t delay = Get32(payload);
+        if (g_match_active || delay < 1 || delay > kMaximumInputDelay) {
+            DisconnectLocalized(connection, "invalid input delay", "lan.disconnect.invalid_data");
+            return;
+        }
+        g_input_delay = delay;
+        return;
+    }
     if (g_mode == MODE_CLIENT && type == MESSAGE_START &&
-        size == 1 + 4 + 8 + GAME_CONFIG_SIZE) {
+        size == 17 + GAME_CONFIG_SIZE) {
+        const uint32_t delay = Get32(payload + 13 + GAME_CONFIG_SIZE);
+        if (delay < 1 || delay > kMaximumInputDelay) {
+            DisconnectLocalized(connection, "invalid match input delay", "lan.disconnect.invalid_data");
+            return;
+        }
+        g_input_delay = delay;
+        ResetDiagnostics();
         g_player_count = payload[0];
         if (g_local_slot >= g_player_count || g_player_count < 2 || g_player_count > 4) {
             DisconnectLocalized(connection, "invalid player assignment",
@@ -793,6 +862,10 @@ void HandleMessage(Connection *connection, uint16_t type,
         const uint32_t tick = Get32(payload);
         if (tick > SimulationState_Tick() && tick - SimulationState_Tick() < kCommandRingSize) {
             TickCommands *commands = CommandsFor(tick);
+            if (!commands->arrival_recorded) {
+                commands->first_arrived_at = Platform_GetTicks();
+                commands->arrival_recorded = true;
+            }
             commands->actions[connection->slot] = payload[4];
             commands->present[connection->slot] = Input_IsValidGameActions(payload[4]);
         }
@@ -806,6 +879,8 @@ void HandleMessage(Connection *connection, uint16_t type,
             return;
         TickCommands *commands = CommandsFor(tick);
         commands->rng_state = Get32(payload + 4);
+        commands->first_arrived_at = Platform_GetTicks();
+        commands->arrival_recorded = true;
         commands->rng_calls = Get64(payload + 8);
         commands->bundle = true;
         for (uint8_t slot = 0; slot < count; ++slot) {
@@ -910,11 +985,32 @@ void HandleMessage(Connection *connection, uint16_t type,
                             "lan.disconnect.session_ended");
         return;
     }
-    if (type == MESSAGE_PING && size == 0) {
-        QueueMessage(connection, MESSAGE_PONG, NULL, 0);
+    if (type == MESSAGE_PING && size == 4) {
+        QueueMessage(connection, MESSAGE_PONG, payload, size);
         return;
     }
-    if (type == MESSAGE_PONG && size == 0) {
+    if (type == MESSAGE_PONG && size == 4) {
+        if (!connection->ping_pending || Get32(payload) != connection->last_ping_at)
+            return; // Ignore stale/unsolicited echoes; no clock synchronization needed.
+        const uint32_t sample = Platform_GetTicks() - connection->last_ping_at;
+        connection->ping_pending = false;
+        if (sample > 10000u) return;
+        if (connection->rtt_samples == 0) {
+            connection->rtt_x8 = sample * 8;
+            connection->variation_x4 = sample * 2;
+        } else {
+            const uint32_t mean = connection->rtt_x8 / 8;
+            const uint32_t deviation = sample > mean ? sample - mean : mean - sample;
+            connection->variation_x4 = (connection->variation_x4 * 3) / 4 + deviation;
+            connection->rtt_x8 = (connection->rtt_x8 * 7) / 8 + sample;
+        }
+        if (connection->rtt_samples != UINT32_MAX) ++connection->rtt_samples;
+        LOG("[NET] peer=%u sample_rtt=%u rtt=%u variation=%u samples=%u queued=%llu poll_gap_max=%u\n",
+            connection == &g_server ? 0u : static_cast<unsigned>(connection->slot),
+            sample, connection->rtt_x8 / 8,
+            connection->variation_x4 / 4, connection->rtt_samples,
+            static_cast<unsigned long long>(connection->outgoing.size() - connection->sent),
+            g_poll_gap_max);
         return;
     }
 }
@@ -1109,9 +1205,13 @@ void PollHeartbeat(Connection *connection)
         DisconnectLocalized(connection, "peer timed out", "lan.disconnect.timed_out");
         return;
     }
-    if (now - connection->last_ping_at >= 2000u) {
-        QueueMessage(connection, MESSAGE_PING, NULL, 0);
+    if (connection->hello && now - connection->last_ping_at >=
+            (connection->ping_pending ? 4000u : 2000u)) {
+        std::vector<uint8_t> probe;
+        Put32(&probe, now);
+        QueueMessage(connection, MESSAGE_PING, probe.data(), probe.size());
         connection->last_ping_at = now;
+        connection->ping_pending = true;
     }
 }
 
@@ -1177,6 +1277,16 @@ bool Netplay_InitializeFromArguments(int argc, char **argv)
     g_dump_state = HasArgument(argc, argv, "--lan-dump-state");
 
     if (host_requested) {
+        const char *delay_arg = FindArgument(argc, argv, "--lan-input-delay");
+        if (delay_arg != NULL) {
+            char *end = NULL;
+            const unsigned long delay = strtoul(delay_arg, &end, 10);
+            if (!*delay_arg || *end || delay < 1 || delay > kMaximumInputDelay ||
+                !Netplay_SetInputDelay(static_cast<uint32_t>(delay))) {
+                SetStatus("%s", Text_Get("lan.error.input_delay"));
+                return false;
+            }
+        }
         uint16_t port = kDefaultPort;
         const char *port_arg = FindArgument(argc, argv, "--port");
         if (port_arg != NULL && !ParsePort(port_arg, &port))
@@ -1202,6 +1312,8 @@ bool Netplay_StartHostSession(uint16_t port, int team)
         return false;
     }
     g_mode = MODE_HOST;
+    g_input_delay = g_host_input_delay;
+    ResetDiagnostics();
     g_local_slot = 0;
     g_requested_team = static_cast<uint8_t>(team == 2 ? 1 : 0);
     if (StartHost(port))
@@ -1242,6 +1354,23 @@ void Netplay_CancelSession(void)
 
 void Netplay_Poll(void)
 {
+    if (g_mode != MODE_OFF) {
+        const uint32_t now = Platform_GetTicks();
+        if (g_polled && now - g_last_poll > g_poll_gap_max)
+            g_poll_gap_max = now - g_last_poll;
+        g_polled = true;
+        g_last_poll = now;
+        if (g_match_active && g_SubState != GAMEPLAY_ACTIVE)
+            g_waiting = false; // Intentional pauses are not missing-input stalls.
+        if (g_match_active && now - g_last_diagnostic_log >= 2000u) {
+            LOG("[NET] role=%s tick=%u delay=%u stalls=%u wait_ms=%llu max_wait=%u current_wait=%u arrival_age=%u poll_gap_max=%u\n",
+                g_mode == MODE_HOST ? "host" : "client", SimulationState_Tick(),
+                g_input_delay, g_wait_count, static_cast<unsigned long long>(g_wait_total),
+                g_wait_max, g_waiting ? now - g_wait_started : 0u,
+                g_arrival_age, g_poll_gap_max);
+            g_last_diagnostic_log = now;
+        }
+    }
     if (g_mode == MODE_HOST) {
         PruneDisconnectedLobbyClients();
         PollHostAccept();
@@ -1353,6 +1482,8 @@ void Netplay_Shutdown(void)
     memset(g_lobby, 0, sizeof(g_lobby));
     g_correction_applied = false;
     g_abort_to_lobby = false;
+    g_input_delay = kDefaultInputDelay;
+    ResetDiagnostics();
 }
 
 bool Netplay_IsEnabled(void) { return g_mode != MODE_OFF; }
@@ -1360,6 +1491,45 @@ bool Netplay_IsHost(void) { return g_mode == MODE_HOST; }
 bool Netplay_IsClient(void) { return g_mode == MODE_CLIENT; }
 bool Netplay_IsMatchActive(void) { return g_match_active; }
 const char *Netplay_Status(void) { return g_status; }
+
+uint32_t Netplay_InputDelay(void)
+{
+    return g_mode == MODE_CLIENT ? g_input_delay : g_host_input_delay;
+}
+
+bool Netplay_SetInputDelay(uint32_t ticks)
+{
+    if (g_match_active || g_mode == MODE_CLIENT || ticks < 1 || ticks > kMaximumInputDelay)
+        return false;
+    g_host_input_delay = g_input_delay = ticks;
+    if (g_mode == MODE_HOST) {
+        std::vector<uint8_t> payload;
+        Put32(&payload, ticks);
+        for (size_t i = 0; i < g_clients.size(); ++i)
+            if (g_clients[i].hello)
+                QueueMessage(&g_clients[i], MESSAGE_INPUT_DELAY, payload.data(), payload.size());
+    }
+    return true;
+}
+
+void Netplay_FormatDiagnostics(char *out, size_t out_size)
+{
+    uint32_t rtt = 0, variation = 0;
+    bool measured = false;
+    const size_t count = g_mode == MODE_HOST ? g_clients.size() : 1;
+    for (size_t i = 0; i < count && g_mode != MODE_OFF; ++i) {
+        const Connection &peer = g_mode == MODE_HOST ? g_clients[i] : g_server;
+        if (!peer.connected || !peer.hello || peer.rtt_samples == 0) continue;
+        measured = true;
+        if (peer.rtt_x8 / 8 > rtt) rtt = peer.rtt_x8 / 8;
+        if (peer.variation_x4 / 4 > variation) variation = peer.variation_x4 / 4;
+    }
+    if (out == NULL || out_size == 0) return;
+    if (measured)
+        snprintf(out, out_size, Text_Get("lan.diagnostics_format"), rtt, variation);
+    else
+        snprintf(out, out_size, "%s", Text_Get("lan.diagnostics_pending"));
+}
 
 void Netplay_BroadcastGameplayStateNow(void)
 {
@@ -1473,11 +1643,14 @@ bool Netplay_HostStartMatch(void)
     }
 
     std::vector<uint8_t> payload;
-    payload.reserve(13 + GAME_CONFIG_SIZE);
+    g_input_delay = g_host_input_delay;
+    ResetDiagnostics();
+    payload.reserve(17 + GAME_CONFIG_SIZE);
     payload.push_back(g_player_count);
     Put32(&payload, TOU_RandState());
     Put64(&payload, TOU_RandCallCount());
     payload.insert(payload.end(), g_GameConfig.bytes, g_GameConfig.bytes + GAME_CONFIG_SIZE);
+    Put32(&payload, g_input_delay);
     for (size_t i = 0; i < ready.size(); ++i)
         QueueMessage(ready[i], MESSAGE_START, payload.data(), payload.size());
 
@@ -1520,6 +1693,7 @@ void Netplay_OnLevelLoaded(void)
     if (!g_match_active)
         return;
     ++g_level_generation;
+    ResetDiagnostics();
     g_local_level_ready = true;
     g_initial_state_ready = false;
     ResetTickTransportState();
@@ -1557,9 +1731,12 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
                 return false;
         }
         std::vector<uint8_t> snapshot;
-        if (!SimulationState_Capture(&snapshot) || snapshot.empty() ||
-            !SimulationState_ValidateRoundTrip(snapshot) ||
-            snapshot.size() > kMaximumSnapshotPayload) {
+        const bool captured = SimulationState_Capture(&snapshot) && !snapshot.empty();
+        const bool round_trip = captured && SimulationState_ValidateRoundTrip(snapshot);
+        LOG("[NET] initial_snapshot captured=%d round_trip=%d bytes=%llu\n",
+            captured ? 1 : 0, round_trip ? 1 : 0,
+            static_cast<unsigned long long>(snapshot.size()));
+        if (!captured || !round_trip || snapshot.size() > kMaximumSnapshotPayload) {
             SetStatus("%s", Text_Get("lan.status.snapshot_failed"));
             g_SubState = GAMEPLAY_PAUSED;
             return false;
@@ -1576,7 +1753,7 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
         SetStatus("%s", Text_Get("lan.status.synchronized"));
     }
 
-    const uint32_t future_tick = tick + kInputDelay;
+    const uint32_t future_tick = tick + g_input_delay;
     if (future_tick > g_last_sampled_tick) {
         const uint8_t actions = SampleLocalActions();
         if (g_mode == MODE_HOST) {
@@ -1597,7 +1774,7 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
     if (g_mode == MODE_HOST) {
         for (uint8_t slot = 0; slot < g_player_count; ++slot) {
             if (!commands->present[slot])
-                return false;
+                return TickReady(false);
         }
         commands->rng_state = TOU_RandState();
         commands->rng_calls = TOU_RandCallCount();
@@ -1611,18 +1788,22 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
         for (size_t i = 0; i < g_clients.size(); ++i)
             QueueMessage(&g_clients[i], MESSAGE_COMMAND_BUNDLE, payload.data(), payload.size());
         DumpTickCommands(tick, *commands);
-        return true;
+        g_arrival_age = commands->arrival_recorded
+            ? Platform_GetTicks() - commands->first_arrived_at : 0;
+        return TickReady(true);
     }
 
     if (!commands->bundle)
-        return false;
+        return TickReady(false);
     for (uint8_t slot = 0; slot < g_player_count; ++slot) {
         if (!commands->present[slot])
-            return false;
+            return TickReady(false);
     }
     TOU_RestoreRandState(commands->rng_state, commands->rng_calls);
     DumpTickCommands(tick, *commands);
-    return true;
+    g_arrival_age = commands->arrival_recorded
+        ? Platform_GetTicks() - commands->first_arrived_at : 0;
+    return TickReady(true);
 }
 
 uint8_t Netplay_PlayerActions(int player, uint8_t local_fallback)

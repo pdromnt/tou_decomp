@@ -26,5 +26,9 @@ bool Netplay_LocalSessionControlsAllowed(void);
 const char *Netplay_Status(void);
 int Netplay_ConnectedPlayerCount(void);
 void Netplay_FormatRoster(char *out, size_t out_size);
+// Session-only host setting. Fixed for the entire match, in simulation ticks.
+bool Netplay_SetInputDelay(uint32_t ticks);
+uint32_t Netplay_InputDelay(void);
+void Netplay_FormatDiagnostics(char *out, size_t out_size);
 
 #endif

@@ -3,6 +3,10 @@
   "locale": "fi",
   "name": "Suomi",
   "strings": {
+    "lan.error.input_delay": "Syöteviiveen on oltava 1-12 askelta.",
+    "lan.diagnostics_format": "RTT: %u ms | Vaihtelu: %u ms (hitain yhteys)",
+    "lan.diagnostics_pending": "Mitataan edestakaista viivettä...",
+    "lan.input_delay_format": "Syöteviive: %u askelta (isäntä valitsee ennen alkua)",
     "gamepad.input.bottom": "Alapainike",
     "gamepad.input.right": "Oikea painike",
     "gamepad.input.left": "Vasen painike",

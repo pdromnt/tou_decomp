@@ -1,6 +1,7 @@
 # Advanced netcode plan
 
-Status: design and feasibility work on `advanced-netcode`, based on stable
+Status: Stage 1 implemented, with local checks below; remote acceptance and
+Stage 2 feasibility remain open. Work is on `advanced-netcode`, based on stable
 v0.11 (`0909331`). No rollback or transport replacement is implemented yet.
 Main keeps the existing TCP delayed-lockstep implementation until acceptance.
 
@@ -16,7 +17,7 @@ This work does not include matchmaking, NAT traversal, relay services, host
 migration, reconnect, spectators or mid-match joining. Direct IP and VPN play
 remain the connection model. Keep the existing network-player limit initially.
 
-## Source findings that shape the design
+## Stable v0.11 baseline findings that shape the design
 
 - `source/game/netplay.cpp` uses protocol 4, a fixed three-tick input lead,
   host command bundles, tick-zero snapshots and periodic checksum correction.
@@ -146,11 +147,36 @@ disconnect. Record input feel, correction frequency, stall time, replay CPU
 and history memory. Neither a successful build nor a same-PC match proves
 internet or cross-architecture acceptance.
 
-## First implementation slice
+## Current implementation slice and evidence
 
-Stage 1 only: latency/stall diagnostics and negotiated fixed input delay.
-Then Stage 2's local feasibility experiment. No ENet dependency, gameplay
-prediction or rollback toggle until those gates pass. Keep each slice in a
-separate reviewable commit; main remains the stable release line.
+Stage 1 now uses protocol 5 with timestamp-echo RTT probes, smoothed RTT
+variation, local receive-age/queue/polling diagnostics and missing-input wait
+statistics. The host selects a session-only 1-12 tick lead in the lobby, default
+3; it is announced to clients and frozen in the start payload. Translations
+cover all four shipped languages. Stable protocol 4 peers are incompatible.
+
+Local Windows x64 checks on 2026-10-19:
+
+- MSVC Release build, localization validation and whitespace checks pass.
+- Two fresh staged instances negotiated a seven-tick lead and progressed.
+- A temporary TCP proxy added 40 ms each way for 12 seconds, then alternated
+  20/60 ms per direction for another 12 seconds while preserving stream order.
+  It observed input tick 1482, bundle tick 1478 and checksum tick 1440, with no
+  state-correction packet. Echo samples reflected the added delay and variation;
+  wait diagnostics exposed host/client differences. This was idle-input play,
+  not a combat/load, packet-loss or real internet acceptance test.
+- The run exposed a pre-existing snapshot rejection when troopers are disabled:
+  a zero-count waypoint array is intentionally unallocated. Capture/restore now
+  permit that empty array, while rejecting non-empty data without a buffer.
+  The resulting 3,634,977-byte initial snapshot round-tripped successfully.
+- One-off socket probes confirmed rejection of protocol 4 packets and a
+  negotiated zero-tick delay. No permanent test suite was introduced.
+
+Still required: visual lobby acceptance, real remote measurements, other
+platforms and the wider session regression matrix. Stage 2's local feasibility
+experiment can proceed independently, but these checks are not a claim that
+network rollback is ready. No ENet dependency, gameplay prediction or rollback
+toggle until the relevant gates pass. Keep each slice in a separate reviewable
+commit; main remains the stable release line.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

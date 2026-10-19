@@ -130,6 +130,8 @@ static char s_LanPortDisplay[16] = "27015";
 static char s_LanStatus[160] = "";
 static char s_LanTeamText[32] = "Team 1";
 static char s_LanRoster[1024] = "";
+static char s_LanDiagnostics[160] = "";
+static char s_LanDelay[128] = "";
 static unsigned char s_LanPreviousKeys[256] = {0};
 static int s_LanTeam = 1;
 static LanEditField s_LanEditField = LAN_EDIT_NONE;
@@ -144,6 +146,16 @@ static char s_GamepadStatus[256];
 
 static void Update_Lan_Menu_Dynamic_Text(void)
 {
+    char diagnostics[sizeof(s_LanDiagnostics)];
+    Netplay_FormatDiagnostics(diagnostics, sizeof(diagnostics));
+    char delay[sizeof(s_LanDelay)];
+    snprintf(delay, sizeof(delay), Text_Get("lan.input_delay_format"),
+             static_cast<unsigned>(Netplay_InputDelay()));
+    if (strcmp(diagnostics, s_LanDiagnostics) || strcmp(delay, s_LanDelay)) {
+        snprintf(s_LanDiagnostics, sizeof(s_LanDiagnostics), "%s", diagnostics);
+        snprintf(s_LanDelay, sizeof(s_LanDelay), "%s", delay);
+        if (DAT_004877a4 == 0xF9) DAT_004877b1 = 1;
+    }
     snprintf(s_LanTeamText, sizeof(s_LanTeamText), Text_Get("lan.team_format"), s_LanTeam);
     snprintf(s_LanHostDisplay, sizeof(s_LanHostDisplay), "%s%s",
              s_LanJoinHost, s_LanEditField == LAN_EDIT_HOST ? "_" : "");
@@ -3081,7 +3093,7 @@ static int Lan_Text_Width(const char *text)
 }
 
 static void Add_Lan_Help_Text(const char *text, int y, int max_lines = 2,
-                              int color = 1)
+                              int color = 1, unsigned char nav = 0xff)
 {
     for (int line = 0; *text && line < max_lines && s_LanTextLineCount < 16;
          ++line, y += 16) {
@@ -3111,7 +3123,7 @@ static void Add_Lan_Help_Text(const char *text, int y, int max_lines = 2,
         s_LanTextLines[index][length] = 0;
         g_MenuStrings[0x170 + index] = s_LanTextLines[index];
         const int previous_count = DAT_004877a8;
-        FUN_00430200(0, y, 0x170 + index, color, 3, 0, 0, 1, 0xff);
+        FUN_00430200(0, y, 0x170 + index, color, 3, nav != 0xff, 0, 1, nav);
         if (DAT_004877a8 > previous_count) {
             MenuItem *item = &((MenuItem *)g_GameViewData)[previous_count];
             item->width = Lan_Text_Width(s_LanTextLines[index]);
@@ -3155,14 +3167,17 @@ static void Build_Lan_Menu_Page(void)
                 break;
             entry = separator + 3;
         }
+        Add_Lan_Help_Text(s_LanDelay, 292, 1, 0,
+                          Netplay_IsHost() ? 0xF3 : 0xff);
+        Add_Lan_Help_Text(s_LanDiagnostics, 312, 1);
         if (Netplay_IsHost()) {
-            FUN_00430200(0, 320, 0x15B, 2, 2, 1, 0, 1, 0x1E);
-            Add_Lan_Help_Text(Text_Get("lan.help.start"), 352);
+            FUN_00430200(0, 340, 0x15B, 2, 2, 1, 0, 1, 0x1E);
+            Add_Lan_Help_Text(Text_Get("lan.help.start"), 364);
         } else {
-            Add_Lan_Help_Text(Text_Get("lan.help.wait"), 328);
+            Add_Lan_Help_Text(Text_Get("lan.help.wait"), 348);
         }
-        Add_Lan_Help_Text(Text_Get("lan.help.ship"), 392);
-        FUN_00430200(0, 432, 0x15C, 2, 2, 1, 0, 1, 0xF7);
+        Add_Lan_Help_Text(Text_Get("lan.help.ship"), 400);
+        FUN_00430200(0, 448, 0x15C, 2, 2, 1, 0, 1, 0xF7);
         DAT_004877c9 = 0xF7;
     }
     g_FrameIndex = 0;
@@ -3475,6 +3490,13 @@ void FUN_0042a470(void)
         memcpy(s_LanPreviousKeys, g_KeyboardState, sizeof(s_LanPreviousKeys));
         DAT_004877a4 = 0xF6;
         Build_Lan_Join_Page();
+        return;
+
+    case 0xF3: /* Host chooses the fixed input lead for the next match. */
+        if (Netplay_IsHost())
+            Netplay_SetInputDelay(Netplay_InputDelay() % 12 + 1);
+        DAT_004877a4 = 0xF9;
+        Build_Lan_Menu_Page();
         return;
 
     case 0xF7: /* Cancel LAN session */

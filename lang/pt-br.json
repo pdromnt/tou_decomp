@@ -3,6 +3,10 @@
   "locale": "pt-BR",
   "name": "Português (Brasil)",
   "strings": {
+    "lan.error.input_delay": "O atraso de entrada deve ser de 1 a 12 ticks.",
+    "lan.diagnostics_format": "RTT: %u ms | Variação: %u ms (pior conexão)",
+    "lan.diagnostics_pending": "Medindo latência de ida e volta...",
+    "lan.input_delay_format": "Atraso de entrada: %u ticks (host escolhe antes de iniciar)",
     "gamepad.input.bottom": "Botão inferior",
     "gamepad.input.right": "Botão direito",
     "gamepad.input.left": "Botão esquerdo",

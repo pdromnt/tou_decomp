@@ -6,9 +6,9 @@ two teams, and no computer players. Everyone must use the same game package and
 level catalog.
 
 The v0.11 source comparison with Uprising's ENet implementation is documented
-in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). No transport or protocol
-change is included; latency measurements and tunable input delay are the
-recommended first steps before considering an ENet migration.
+in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). The `advanced-netcode`
+branch now has experimental protocol 5 diagnostics and negotiated input delay;
+it cannot connect to stable v0.11 protocol 4 peers. TCP lockstep remains in use.
 
 ## Start a session
 
@@ -20,6 +20,16 @@ Open **Team Deathmatch** from the main menu, then choose:
 The host selects **Host LAN Match**, waits for the connected-player roster to
 fill, and then selects **Start LAN Match**. The host is Team 1 and listens on
 TCP port `27015`.
+
+On `advanced-netcode`, click the yellow **Input delay** line in the host lobby
+to cycle from 1 to 12 ticks (default 3). Clients see the host's choice; it is
+locked when the match starts and is not saved in settings. At the default
+integer 16 ms tick interval, three ticks are approximately 48 ms of input lead.
+A larger lead may reduce missing-input stalls but adds control delay; it does
+not eliminate the host-to-client command-bundle trip. The lobby also displays
+smoothed round-trip latency and RTT variation, taking the maximum of each
+measurement across connected peers. Variation is an estimate, not one-way
+latency or a direct measurement of packet loss.
 
 Each client selects **Join LAN Match**, edits the host/IP and port fields,
 chooses Team 1 or Team 2, and selects **Connect**. Hostnames and IPv4 addresses
@@ -38,6 +48,8 @@ custom ports. The host launches the game from its extracted directory:
 
 Linux and macOS use `./TOU` in place of `TOU.exe`. The port and team arguments
 are optional; the defaults are port `27015` and Team 1.
+The experimental host also accepts `--lan-input-delay 7` (valid range 1-12).
+No flags are needed to select delay or see RTT in the lobby.
 
 Each client launches:
 
@@ -88,6 +100,16 @@ those session controls.
 Logs append to `debug.txt` when `--logging` is supplied. When reporting a LAN
 problem, keep the host and every client log and note each operating system,
 architecture, level, approximate tick/time, and the last action performed.
+Experimental `[NET]` lines include per-peer latest/smoothed RTT, smoothed RTT
+variation, sample count and outgoing queue bytes. Match summaries every two
+seconds include role, tick, negotiated delay, completed missing-input/bundle
+wait episodes, total/max completed wait, current wait, arrival age and maximum
+gap between network polls. Arrival age is time since local receipt of the first
+remote input (host) or bundle (client), not travel time or input sampling age.
+Intentional pauses and initial level barriers are excluded from input waits.
+Counters reset at level load; RTT estimates persist for the connection.
+Probe timing includes local polling and TCP queue delays: a screenshot, level
+load or busy frame can raise it without the physical link becoming slower.
 For a reproducible desync investigation, add `--lan-dump-state` to both command
 lines. It writes periodic `lan-host-*.snap` / `lan-client-*.snap` captures and
 matching action logs beside the executable; these can be large and may be

@@ -19,6 +19,10 @@ SOURCE = ROOT / "source/game/init.cpp"
 OUTPUT = ROOT / "lang"
 
 DIRECT_ENGLISH = {
+    "lan.error.input_delay": "Input delay must be between 1 and 12 ticks.",
+    "lan.diagnostics_format": "RTT: %u ms | Variation: %u ms (worst peer)",
+    "lan.diagnostics_pending": "Measuring round-trip latency...",
+    "lan.input_delay_format": "Input delay: %u ticks (host selects before start)",
     "gamepad.input.bottom": "Bottom Button",
     "gamepad.input.right": "Right Button",
     "gamepad.input.left": "Left Button",

@@ -3,6 +3,9 @@
 This is a source review of the local Uprising shipping implementation, not a
 claim of internet-latency testing or a plan to replace TOU's transport in v0.11.
 Uprising's local-only reconstruction lab was not inspected or modified.
+The TOU observations below describe stable v0.11. The experimental
+`advanced-netcode` branch implements the first diagnostics/input-delay slice;
+see its [current plan and evidence](ADVANCED_NETCODE.md).
 
 ## What Uprising does
 
