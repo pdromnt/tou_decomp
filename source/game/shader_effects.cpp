@@ -10,6 +10,7 @@
 #include "gfx_shader.h"
 #include "shader_effects.h"
 #include "platform.h"
+#include "presentation_events.h"
 
 namespace {
 unsigned char glow[640 * 480 * 4];
@@ -378,8 +379,23 @@ void ShaderEffects_ResetParticles(void)
     organicWidth = organicHeight = 0;
 }
 
+void ShaderEffects_SaveParticleTags(std::vector<uint8_t> *tags)
+{
+    tags->assign(exhaustOwners, exhaustOwners + sizeof(exhaustOwners));
+    tags->insert(tags->end(), weaponParticleKinds, weaponParticleKinds + sizeof(weaponParticleKinds));
+}
+void ShaderEffects_RestoreParticleTags(const std::vector<uint8_t> &tags)
+{
+    if (tags.size() != sizeof(exhaustOwners) + sizeof(weaponParticleKinds)) return;
+    memcpy(exhaustOwners, tags.data(), sizeof(exhaustOwners));
+    memcpy(weaponParticleKinds, tags.data() + sizeof(exhaustOwners), sizeof(weaponParticleKinds));
+}
+
 void ShaderEffects_ShipExplosion(int worldX, int worldY)
 {
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_EXPLOSION, worldX, worldY); return;
+    }
     if (!g_BetaShaderEffects || !ShaderPresentation_Available() ||
         g_GameState != GAME_STATE_GAMEPLAY || g_SubState != GAMEPLAY_ACTIVE) return;
     waves[nextWave] = {worldX, worldY, EffectsNow(), true};
@@ -475,6 +491,16 @@ void CaptureOrganicTerrain(void)
 
 void ShaderEffects_OrganicPixel(int worldX, int worldY, bool refreshOnly)
 {
+    if (PresentationEvents_Recording()) {
+        if (!DAT_0048782c || !DAT_00481f50 || worldX < 0 || worldY < 0 ||
+            worldX >= (int)DAT_004879f0 || worldY >= (int)DAT_004879f4) return;
+        const size_t offset = (size_t)worldY * DAT_00487a00 + worldX;
+        const uint32_t tag = 0x1000000u |
+            ((uint32_t)static_cast<unsigned char *>(DAT_0048782c)[offset] << 16) |
+            static_cast<unsigned short *>(DAT_00481f50)[offset];
+        PresentationEvents_Record(PRESENT_ORGANIC, worldX, worldY, (int)tag, refreshOnly ? 1 : 0);
+        return;
+    }
     // Keep tags while effects are toggled off, so existing waste lights up on enable.
     if (!ShaderPresentation_Available() || !DAT_0048782c || !DAT_00481f50 ||
         worldX < 0 || worldY < 0 || worldX >= (int)DAT_004879f0 || worldY >= (int)DAT_004879f4) return;
@@ -492,8 +518,22 @@ void ShaderEffects_OrganicPixel(int worldX, int worldY, bool refreshOnly)
         static_cast<unsigned short *>(DAT_00481f50)[offset];
 }
 
+void ShaderEffects_CommitOrganicPixel(int x, int y, uint32_t expected, bool refreshOnly)
+{
+    if (!DAT_0048782c || !DAT_00481f50 || x < 0 || y < 0 ||
+        x >= (int)DAT_004879f0 || y >= (int)DAT_004879f4) return;
+    const size_t offset = (size_t)y * DAT_00487a00 + x;
+    const uint32_t actual = 0x1000000u |
+        ((uint32_t)static_cast<unsigned char *>(DAT_0048782c)[offset] << 16) |
+        static_cast<unsigned short *>(DAT_00481f50)[offset];
+    if (actual == expected) ShaderEffects_OrganicPixel(x, y, refreshOnly);
+}
+
 void ShaderEffects_TurboBoost(int owner)
 {
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_BOOST, owner); return;
+    }
     if (!CanRecordWeaponLight() || owner < 0 || owner >= GAMEPLAY_PLAYER_CAPACITY) return;
     turboStarted[owner] = EffectsNow();
     turboLive[owner] = true;
@@ -501,6 +541,9 @@ void ShaderEffects_TurboBoost(int owner)
 
 void ShaderEffects_Laser(int startX, int startY, int endX, int endY)
 {
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_LASER, startX, startY, endX, endY); return;
+    }
     if (!CanRecordWeaponLight()) return;
     beams[nextBeam] = {startX, startY, endX, endY, EffectsNow(), true};
     nextBeam = (nextBeam + 1) % 64;
@@ -508,6 +551,9 @@ void ShaderEffects_Laser(int startX, int startY, int endX, int endY)
 
 void ShaderEffects_DiggerContact(int worldX, int worldY, int velocityX, int velocityY)
 {
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_SPARK, worldX, worldY, velocityX, velocityY); return;
+    }
     if (!CanRecordWeaponLight()) return;
     const uint32_t now = EffectsNow();
     sparks[nextSparks] = {worldX, worldY, std::atan2(-(float)velocityY, -(float)velocityX),
@@ -517,10 +563,11 @@ void ShaderEffects_DiggerContact(int worldX, int worldY, int velocityX, int velo
 
 void ShaderEffects_DiggerShipContact(int owner)
 {
-    if (!CanRecordWeaponLight() || !DAT_00487810 || !DAT_0048782c || !DAT_00487928 ||
+    const bool recording = PresentationEvents_Recording();
+    if ((!recording && !CanRecordWeaponLight()) || !DAT_00487810 || !DAT_0048782c || !DAT_00487928 ||
         !DAT_00487ab0 || owner < 0 || owner >= GAMEPLAY_PLAYER_CAPACITY) return;
-    const uint32_t now = EffectsNow();
-    if (diggerLive[owner] && now - diggerStarted[owner] < 40) return;
+    const uint32_t now = recording ? 0 : EffectsNow();
+    if (!recording && diggerLive[owner] && now - diggerStarted[owner] < 40) return;
     const PlayerData &player = *Player_Get(owner);
     const int *lut = static_cast<const int *>(DAT_00487ab0);
     // Sample the cutting face before the original terrain-removal operation.
@@ -538,7 +585,7 @@ void ShaderEffects_DiggerShipContact(int owner)
             const auto *properties = static_cast<const unsigned char *>(DAT_00487928) + tile * 32;
             if (properties[1] != 0 || properties[4] != 0) continue;
             ShaderEffects_DiggerContact(x, y, lut[angle], lut[(angle + 512) & 0x7ff]);
-            diggerStarted[owner] = now; diggerLive[owner] = true;
+            if (!recording) { diggerStarted[owner] = now; diggerLive[owner] = true; }
             return;
         }
     }

@@ -10,10 +10,10 @@ New defects should be added only after a concrete reproduction.
 ## Experimental Branch: Advanced Netcode
 
 - Follow the gated [advanced netcode plan](ADVANCED_NETCODE.md) on
-  `advanced-netcode`, separate from stable main. Next reconcile audio/VFX and
-  define a canonical batching policy; profile checkpoint/replay costs on
-  low-power hardware before enabling bounded network prediction. Remote and
-  cross-platform acceptance remain open.
+  `advanced-netcode`, separate from stable main. Verify real sound/GPU delivery
+  and weapon-specific producers, define confirmed-input/session transition
+  barriers, and profile low-power costs before enabling network prediction.
+  Remote and cross-platform acceptance remain open.
 
 ## Active Work: Presentation Shaders
 

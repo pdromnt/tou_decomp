@@ -11,6 +11,7 @@ int  Audio_PlaySample(AudioSampleHandle sample, int volume, int pan);
 void Audio_StopChannel(int channel);
 void Audio_SetChannelVolume(int channel, int volume);
 void Audio_SetChannelPan(int channel, int pan);
+unsigned int Audio_ChannelGeneration(int channel);
 void Audio_SetSfxMasterVolume(int volume);
 
 int  Audio_PlayMusic(const char *path, int volume, int paused);

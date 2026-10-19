@@ -1,8 +1,9 @@
 # Advanced netcode plan
 
-Status: Stages 1 and 2's local prototype implemented, with checks below; remote,
-presentation and cross-platform acceptance remain open. Work is on `advanced-netcode`, based on stable
-v0.11 (`0909331`). No rollback or transport replacement is implemented yet.
+Status: Stages 1-2 and Stage 3's event-journal prototype are implemented, with
+checks below; real presentation, remote and cross-platform acceptance remain
+open. Work is on `advanced-netcode`, based on stable v0.11 (`0909331`). No live
+network rollback or transport replacement is enabled yet.
 Main keeps the existing TCP delayed-lockstep implementation until acceptance.
 
 ## Goal and boundaries
@@ -184,7 +185,8 @@ session setup without its settings save/reload cycle. See
 The experiment exposed missing collision/visibility grids, fluid/edge scheduler
 phases, and stale fields inherited from inactive entity slots. Snapshot version
 4 includes the grids/timers and fixed pool storage, plus permits empty optional
-turret data. The LAN fingerprint is now `tou-sim1-net5-snapshot4`; older branch
+turret data. This slice advanced the fingerprint to `tou-sim1-net5-snapshot4`
+(superseded by Stage 3 below); older branch
 snapshots/replays are incompatible too. No original simulation behavior was
 changed to hide these mismatches.
 An extraction check preserved the ordered 45 core call sites; only the
@@ -215,13 +217,38 @@ are not Raspberry Pi budgets. Full-copy history is viable for experiments but
 not accepted as the final memory/CPU strategy; investigate checkpoint reuse,
 optional restore hashing and terrain deltas before enabling expensive windows.
 
-Still required: visual lobby acceptance, remote measurements, other platforms,
-audio/VFX reconciliation and the wider session regression matrix. Batching is
-recorded in this experiment: a canonical network-wide flag-reset policy must
-be defined, since wall-clock-dependent batch boundaries cannot simply be
-predicted identically on every peer. This remains a gate before live prediction.
-Next work is Stage 3's presentation/event boundary and this pacing policy, not
-an ENet migration. No network rollback toggle until the relevant gates pass.
-Keep each slice in a separate reviewable commit; main remains the stable line.
+### Event journal and canonical LAN ticks (Stage 3 prototype)
+
+The bounded [presentation timeline](PRESENTATION_TIMELINE.md) now buffers sound,
+mix changes and shader events by tick/ordinal, replacing them on resimulation
+and dispatching once on confirmation. Local checkpoints restore sound state
+and pool-indexed cosmetic tags without clearing committed effect rings.
+Physical channel generations protect sounds from stale virtual ownership.
+Only the developer diagnostic enables the timeline, using a dry-run sink;
+ordinary play still emits sound/VFX immediately.
+
+Experimental LAN resets transient flags per successfully prepared simulation
+tick, independent of catch-up grouping. Local play keeps legacy batch behavior.
+This intentional network change advances the identity to
+`tou-sim2-net5-snapshot4`; packet shapes remain protocol 5. Earlier branch
+builds are rejected by fingerprint.
+
+Sound-enabled checks matched state/RNG, event digests, sound timers/virtual
+references and particle tags. One 1200-tick 64-player Woods run with 9-versus-1
+grouping confirmed 8794 sounds and 108 explosions once to the dry-run sink.
+Jungle with troopers and 9-versus-2 grouping passed 600 ticks/75 alternate
+returns; the terminal countdown matched for 40 ticks. A one-off ignored probe
+exercised all dispatcher kinds, duplicate/stale confirmation, finalized-tick
+rejection, queue limits and physical-track generation changes with stub sinks.
+No CI test suite was added. A two-instance live TCP smoke advanced past tick
+600 without checksum correction under the new reset policy.
+
+Still required: real audible/GPU delivery, weapon-specific producer coverage,
+lobby/remote/other-platform acceptance, low-power budgets, and gating outer
+score/skip/end/unload transitions on a confirmed frontier when integrating the
+speculative loop. The diagnostic stops before those outer transitions. Next
+define the session/input frontier and bounded late-input/reconciliation policy;
+do not enable network prediction before presentation/barrier gates pass. Keep
+changes reviewable and main stable; this is not an ENet migration.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

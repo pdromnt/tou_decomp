@@ -1,4 +1,5 @@
 #include "audio_backend.h"
+#include "presentation_events.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_mixer/SDL_mixer.h>
@@ -14,6 +15,7 @@ struct SdlChannel {
     MIX_Track *track;
     int volume;
     int pan;
+    unsigned int generation;
 };
 
 static MIX_Mixer *s_Mixer = NULL;
@@ -68,7 +70,7 @@ int Audio_Init(void)
 
     s_Samples.clear();
     s_Samples.push_back(SdlSample{ NULL, false }); /* handle zero is invalid */
-    s_Channels.assign(AUDIO_CHANNEL_COUNT, SdlChannel{ NULL, 255, 128 });
+    s_Channels.assign(AUDIO_CHANNEL_COUNT, SdlChannel{ NULL, 255, 128, 0 });
     for (size_t i = 0; i < s_Channels.size(); i++) {
         s_Channels[i].track = MIX_CreateTrack(s_Mixer);
         if (s_Channels[i].track == NULL) {
@@ -133,6 +135,9 @@ int Audio_PlaySample(AudioSampleHandle sample, int volume, int pan)
     if (sample == 0 || sample >= s_Samples.size() || s_Channels.empty())
         return -1;
 
+    if (PresentationEvents_Recording())
+        return PresentationEvents_Play(sample, ClampByte(volume), ClampByte(pan));
+
     size_t selected = s_Channels.size();
     int quietest = 256;
     for (size_t i = 0; i < s_Channels.size(); i++) {
@@ -150,6 +155,7 @@ int Audio_PlaySample(AudioSampleHandle sample, int volume, int pan)
         return -1;
 
     SdlChannel &channel = s_Channels[selected];
+    ++channel.generation; // Invalidate stale virtual owners even if the new play fails.
     MIX_StopTrack(channel.track, 0);
     if (!MIX_SetTrackAudio(channel.track, s_Samples[sample].audio))
         return -1;
@@ -170,12 +176,26 @@ int Audio_PlaySample(AudioSampleHandle sample, int volume, int pan)
 
 void Audio_StopChannel(int channel)
 {
-    if (channel >= 0 && (size_t)channel < s_Channels.size())
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_STOP, channel); return;
+    }
+    if (channel >= 0 && (size_t)channel < s_Channels.size()) {
         MIX_StopTrack(s_Channels[(size_t)channel].track, 0);
+        ++s_Channels[(size_t)channel].generation;
+    }
+}
+
+unsigned int Audio_ChannelGeneration(int channel)
+{
+    return channel >= 0 && (size_t)channel < s_Channels.size()
+        ? s_Channels[(size_t)channel].generation : 0;
 }
 
 void Audio_SetChannelVolume(int channel, int volume)
 {
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_VOLUME, channel, ClampByte(volume)); return;
+    }
     if (channel < 0 || (size_t)channel >= s_Channels.size())
         return;
     s_Channels[(size_t)channel].volume = ClampByte(volume);
@@ -184,6 +204,9 @@ void Audio_SetChannelVolume(int channel, int volume)
 
 void Audio_SetChannelPan(int channel, int pan)
 {
+    if (PresentationEvents_Recording()) {
+        PresentationEvents_Record(PRESENT_PAN, channel, ClampByte(pan)); return;
+    }
     if (channel < 0 || (size_t)channel >= s_Channels.size())
         return;
     s_Channels[(size_t)channel].pan = ClampByte(pan);

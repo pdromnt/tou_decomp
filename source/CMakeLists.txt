@@ -84,6 +84,7 @@ set(TOU_SOURCES
     platform/gamepad.cpp
     game/simulation_state.cpp
     game/simulation_rewind.cpp
+    game/presentation_events.cpp
     game/netplay.cpp
     game/replay.cpp
     game/graphics.cpp

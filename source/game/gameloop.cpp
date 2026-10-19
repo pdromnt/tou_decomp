@@ -6,6 +6,7 @@
 #include "tou.h"
 #include "shader_effects.h"
 #include "platform.h"
+#include "presentation_events.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -202,11 +203,14 @@ namespace {
 const uint8_t *s_TickActions = NULL;
 size_t s_TickActionCount = 0;
 struct TickActionScope {
+    bool events;
     const uint8_t *previous_actions;
     size_t previous_count;
     unsigned char previous_input;
     TickActionScope(const uint8_t *actions, size_t count)
-        : previous_actions(s_TickActions), previous_count(s_TickActionCount),
+        : events(PresentationEvents_Enabled() &&
+                 PresentationEvents_BeginTick(SimulationState_Tick() + 1)),
+          previous_actions(s_TickActions), previous_count(s_TickActionCount),
           previous_input(g_ProcessInput)
     {
         s_TickActions = actions;
@@ -214,6 +218,7 @@ struct TickActionScope {
         if (actions != NULL) g_ProcessInput = 1;
     }
     ~TickActionScope() {
+        if (events) PresentationEvents_EndTick();
         s_TickActions = previous_actions;
         s_TickActionCount = previous_count;
         g_ProcessInput = previous_input;
@@ -234,6 +239,7 @@ uint8_t Gameplay_PlayerActions(int player, const unsigned char *bindings)
 bool Gameplay_AdvanceSimulation(const uint8_t *actions, size_t count)
 {
     TickActionScope input(actions, count);
+    if (PresentationEvents_Enabled() && !input.events) return false;
 
     /* Sub-frame counter: 0→1→2→...→7→0 */
     DAT_00489288++;
@@ -388,8 +394,10 @@ static void Gameplay_Tick(void)
     if (DAT_00483746 < 1) DAT_00483746 = 60;
     tick_interval = (unsigned int)(1000 / DAT_00483746);
 
-    /* Pre-tick setup: reset per-tick entity flags */
-    FUN_0045e1f0();
+    /* Local parity retains once-per-batch reset, even before a stalled tick.
+     * LAN must not depend on each machine's wall-clock catch-up grouping. */
+    const bool canonical_ticks = Netplay_IsMatchActive();
+    if (!canonical_ticks) FUN_0045e1f0();
 
     /* Wait until at least one tick interval has elapsed.
      * Original used a pure busy-wait (100% CPU). We use a zero-delay yield which
@@ -417,6 +425,7 @@ static void Gameplay_Tick(void)
             break;
         if (!Replay_PrepareSimulationTick(SimulationState_Tick() + 1))
             break;
+        if (canonical_ticks) FUN_0045e1f0();
         g_TimerAux++;
         const bool continue_batch = Gameplay_AdvanceSimulation(NULL, 0);
         const uint64_t checksum = SimulationState_Checksum();
@@ -712,6 +721,7 @@ int Init_New_Game(void)
  * The original binary tail-calls FUN_0041bad0 via JMP; here we call normally. */
 void Free_Game_Resources(void)
 {
+    PresentationEvents_Stop(); // Discard unconfirmed effects before unloading their level.
     Mem_Free(DAT_00481f50);    /* background RGB565 pixels */
     DAT_00481f50 = NULL;
     DAT_0048782c = NULL;       /* tilemap is part of DAT_00481f50 combined alloc */

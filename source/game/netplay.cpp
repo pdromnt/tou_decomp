@@ -1,5 +1,6 @@
 #include "tou.h"
 #include "netplay.h"
+#include "presentation_events.h"
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
@@ -37,7 +38,7 @@ const uint16_t kProtocolVersion = 5;
  * a gameplay or snapshot change can make equal commands produce different
  * state, even if the packet shapes remain compatible. Cosmetic releases do
  * not by themselves require a compatibility revision. */
-const char kSimulationBuildId[] = "tou-sim1-net5-snapshot4";
+const char kSimulationBuildId[] = "tou-sim2-net5-snapshot4";
 const uint16_t kDefaultPort = 27015;
 const uint32_t kMaximumPayload = 1024u * 1024u;
 const uint32_t kMaximumSnapshotPayload = 64u * 1024u * 1024u;
@@ -1425,6 +1426,7 @@ void Netplay_Poll(void)
 
 void Netplay_Shutdown(void)
 {
+    PresentationEvents_Stop();
     if (g_mode == MODE_HOST) {
         for (size_t i = 0; i < g_clients.size(); ++i) {
             uint8_t reason = 0;

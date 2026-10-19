@@ -51,6 +51,9 @@ the diagnostic's rules/player count. No permanent test suite or CI job is added.
 Options: ticks 1-100000 (default 600), rewind window 1-12 (default 8), players
 2-64 (default 2: first two scripted humans, remaining players AI), troopers 0/1
 (default 0), catch-up batch 1-9 (default 1), and round-end 0/1 (default 0).
+`--rewind-canonical 1` selects the experimental LAN per-tick reset policy;
+`--rewind-replay-batch 1` can then use a different replay grouping from the
+forward `--rewind-batch 9`. With canonical mode off, groupings must match.
 Commands exercise turning, thrust, brake, primary/secondary fire and detonation
 without sampling devices or drawing from gameplay RNG. World initialization
 can still use a time-based seed; each experiment records its own checkpoint,
@@ -75,8 +78,17 @@ Exit codes: 0 verified (possibly ending early at a terminal state), 2 invalid
 options/initialization, 3 snapshot failure, 4 history budget exceeded, 5 divergent
 state or alternate-return behavior. Failure logs the first differing offset.
 
-This diagnostic disables audio and presentation; it does not make duplicate
-sound/glow safe, validate real network prediction, or prove cross-platform
-determinism. The legacy reset runs once per catch-up batch, so matching batches
-are part of the recorded experiment. A network-wide batching policy remains
-to be designed before prediction can be enabled.
+The diagnostic now defaults to `--rewind-presentation 1`: audio logic is enabled
+but actual output is deferred to a dry-run sink. This requires an initialized
+audio backend (SDL's dummy audio backend is sufficient). Every replayed tick
+must match its event digest, player sound timers/identities/virtual channels and
+exhaust/weapon-particle tags, as well as the canonical world. Each window is
+confirmed twice to verify idempotency; event counts must not increase twice.
+`--rewind-presentation 0` retains the old sound-disabled simulation-only check.
+Exit code 6 indicates event/local-presentation divergence or timeline overflow.
+
+No GPU rendering or actual audible output is exercised here. Real sound/glow
+acceptance, network prediction and cross-platform determinism remain separate
+gates. See [presentation timeline](PRESENTATION_TIMELINE.md) for ownership and
+the remaining limits. Legacy local play still resets flags per catch-up batch;
+experimental LAN now uses the canonical per-tick policy.

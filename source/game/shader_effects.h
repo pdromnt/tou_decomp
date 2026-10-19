@@ -1,6 +1,8 @@
 #ifndef TOU_SHADER_EFFECTS_H
 #define TOU_SHADER_EFFECTS_H
 #include "render_backend.h"
+#include <stdint.h>
+#include <vector>
 
 void ShaderEffects_BeginFrame(void);
 void ShaderEffects_BeginViewport(int index);
@@ -22,6 +24,9 @@ void ShaderEffects_TagExhaustParticle(int index, int owner);
 int ShaderEffects_ExhaustParticleOwner(int index);
 void ShaderEffects_RemoveParticle(int index, int last);
 void ShaderEffects_ResetParticles(void);
+void ShaderEffects_SaveParticleTags(std::vector<uint8_t> *tags);
+void ShaderEffects_RestoreParticleTags(const std::vector<uint8_t> &tags);
+void ShaderEffects_CommitOrganicPixel(int x, int y, uint32_t tag, bool refreshOnly);
 void ShaderEffects_ShipExplosion(int worldX, int worldY);
 void ShaderEffects_TurboBoost(int owner);
 void ShaderEffects_Laser(int startX, int startY, int endX, int endY);

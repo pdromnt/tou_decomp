@@ -288,7 +288,7 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
     return true;
 }
 
-bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
+bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve_presentation)
 {
     if (snapshot == NULL || DAT_00481f50 == NULL || DAT_0048782c == NULL ||
         DAT_0048781c == NULL || DAT_00487814 == NULL ||
@@ -472,7 +472,8 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
     g_TrooperCount = trooper_count;
     g_ProjectileCount = projectile_count;
     g_ParticleCount = particle_count;
-    ShaderEffects_ResetParticles(); // Cosmetic tags are not authoritative snapshot data.
+    if (!preserve_presentation)
+        ShaderEffects_ResetParticles(); // Cosmetic tags are not authoritative snapshot data.
     g_FireParticleCount = fire_count;
     g_DebrisItemCount = debris_count;
     DAT_00489264 = misc_count;
