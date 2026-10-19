@@ -118,7 +118,7 @@ void Init_Game_Config(void);
 void Set_Config_Defaults(void);      /* hardcoded defaults → g_ConfigBlob (no I/O) */
 void Reset_Config_To_Defaults(void); /* defaults → g_ConfigBlob → settings.json */
 void Init_Math_Tables(int *buffer, unsigned int count);
-void FUN_0041a8c0(void);          /* session/level init */
+void FUN_0041a8c0(bool persist_settings = true); /* session/level init */
 void FUN_0045c300(void);          /* game mode presets (local) */
 
 /* ===== Function Prototypes: memory.cpp ===== */

@@ -100,6 +100,8 @@ forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
 | `source/game/input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
 | `source/game/gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `source/game/simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
+| `source/game/simulation_tick.h` | Unpaced tick entry and supplied-action boundary; legacy batch wrapper remains in gameloop.cpp |
+| `source/game/simulation_rewind.cpp` | Bounded local restore/resimulation feasibility and cost diagnostic (experimental branch) |
 | `source/game/replay.cpp` | Local command/snapshot recording and deterministic playback diagnostics |
 | `source/game/netplay.cpp` | Direct-IP LAN beta protocol and delayed command exchange |
 | `source/game/init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |

@@ -9,6 +9,9 @@ The v0.11 source comparison with Uprising's ENet implementation is documented
 in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). The `advanced-netcode`
 branch now has experimental protocol 5 diagnostics and negotiated input delay;
 it cannot connect to stable v0.11 protocol 4 peers. TCP lockstep remains in use.
+The local-rewind prototype also advances snapshot format/build identity to
+`tou-sim1-net5-snapshot4`, rejecting older experimental branch builds. The
+live network game still has no prediction or rollback.
 
 ## Start a session
 

@@ -22,6 +22,7 @@
 #include "gamestate.h"
 #include "localization.h"
 #include "simulation_state.h"
+#include "simulation_tick.h"
 #include "netplay.h"
 #include "replay.h"
 

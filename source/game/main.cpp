@@ -154,6 +154,17 @@ int main(int argc, char **argv)
         return result;
     }
 
+    const char *rewind_level = Argument_Value(argc, argv, "--verify-rewind");
+    if (rewind_level) {
+        g_LogEnabled = 1;
+        const int result = SimulationRewind_Run(argc, argv, rewind_level);
+        if (DAT_00481f50) Free_Game_Resources();
+        Shutdown_Runtime();
+        Platform_DestroyWindow();
+        SDL_Quit();
+        return result;
+    }
+
     Apply_Display_Settings();
     LOG("[INIT] Initializing %s renderer...\n", RenderBackend_Name());
     if (!RenderBackend_Initialize()) {

@@ -10,9 +10,10 @@ New defects should be added only after a concrete reproduction.
 ## Experimental Branch: Advanced Netcode
 
 - Follow the gated [advanced netcode plan](ADVANCED_NETCODE.md) on
-  `advanced-netcode`, separate from stable main. Start with latency/stall
-  measurements and negotiated input delay, then prove local rewind/replay
-  correctness and resource costs before enabling network prediction.
+  `advanced-netcode`, separate from stable main. Next reconcile audio/VFX and
+  define a canonical batching policy; profile checkpoint/replay costs on
+  low-power hardware before enabling bounded network prediction. Remote and
+  cross-platform acceptance remain open.
 
 ## Active Work: Presentation Shaders
 

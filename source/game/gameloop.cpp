@@ -198,12 +198,186 @@ void FUN_0045e1f0(void)
         player->flag_a3 = 0;
     }
 }
+namespace {
+const uint8_t *s_TickActions = NULL;
+size_t s_TickActionCount = 0;
+struct TickActionScope {
+    const uint8_t *previous_actions;
+    size_t previous_count;
+    unsigned char previous_input;
+    TickActionScope(const uint8_t *actions, size_t count)
+        : previous_actions(s_TickActions), previous_count(s_TickActionCount),
+          previous_input(g_ProcessInput)
+    {
+        s_TickActions = actions;
+        s_TickActionCount = count;
+        if (actions != NULL) g_ProcessInput = 1;
+    }
+    ~TickActionScope() {
+        s_TickActions = previous_actions;
+        s_TickActionCount = previous_count;
+        g_ProcessInput = previous_input;
+    }
+};
+}
+
+uint8_t Gameplay_PlayerActions(int player, const unsigned char *bindings)
+{
+    if (s_TickActions != NULL)
+        return player >= 0 && static_cast<size_t>(player) < s_TickActionCount
+            ? s_TickActions[player] : 0;
+    const uint8_t local = static_cast<uint8_t>(
+        Input_EncodeGameActions(g_KeyboardState, bindings) | Gamepad_PlayerActions(player));
+    return Replay_PlayerActions(player, Netplay_PlayerActions(player, local));
+}
+
+bool Gameplay_AdvanceSimulation(const uint8_t *actions, size_t count)
+{
+    TickActionScope input(actions, count);
+
+    /* Sub-frame counter: 0→1→2→...→7→0 */
+    DAT_00489288++;
+    if (DAT_00489288 >= 8) DAT_00489288 = 0;
+
+    /* Activation pair logic */
+    if (DAT_004892a5 != 0) {
+        DAT_004892a5++;
+        /* After 40 ticks of round-end countdown, trigger level transition.
+         * Original at 0x00461776: when DAT_004892a5 > 0x28, enter the
+         * natural match-complete state that stores the winner and scores. */
+        if (DAT_004892a5 > 0x28) {
+            g_SubState = GAMEPLAY_MATCH_COMPLETE;
+        }
+    }
+    if (DAT_004892a5 == 0 && DAT_004892a4 != 0 && DAT_0048373e == 0) {
+        DAT_004892a5 = 1;
+    }
+
+    /* ---- Subsystem calls ---- */
+    FUN_00460d50();                          /* 1-RoundTimer */
+    Memory_Trace_Check("1-RoundTimer");
+    FUN_004609e0();                          /* 2-SpatialGrid */
+    Memory_Trace_Check("2-SpatialGrid");
+    if ((DAT_00489288 & 1) == 0) {
+        FUN_00460660();                      /* 3-CollisionBitmap (half-rate) */
+        Memory_Trace_Check("3-CollisionBitmap");
+    }
+    FUN_00460ac0();                          /* 4-RelocateEdge */
+    Memory_Trace_Check("4-RelocateEdge");
+    FUN_00413720();                          /* 5-Spawner */
+    Memory_Trace_Check("5-Spawner");
+    FUN_00454340();                          /* 6-Emitters */
+    Memory_Trace_Check("6-Emitters");
+    FUN_0044b0b0();                          /* 7-EntityBehavior */
+    Memory_Trace_Check("7-EntityBehavior");
+    FUN_00434310();                          /* 8-DebrisAnim */
+    Memory_Trace_Check("8-DebrisAnim");
+    ParticleSystem_Update();                 /* 9-Animated particles */
+    Memory_Trace_Check("9-AnimatedParticles");
+
+    /* Inline: effect/particle rotation and timer decrement */
+    {
+        int i;
+        for (i = 0; i < DAT_00489264; i++) {
+            uint8_t *base = static_cast<uint8_t *>(DAT_00487780) + i * 0x20;
+            unsigned int *angle = reinterpret_cast<unsigned int *>(base + 0x10);
+            int *timer_a = reinterpret_cast<int *>(base + 0x08);
+            int *timer_b = reinterpret_cast<int *>(base + 0x0C);
+            *angle = (*angle + 0x10) & 0x7FF;
+            if (*timer_a > 0) (*timer_a)--;
+            if (*timer_b > 0) (*timer_b)--;
+        }
+    }
+
+    TrooperSystem_Update();                  /* 11-Troopers/cars */
+    Memory_Trace_Check("11-Troopers");
+    TurretSystem_UpdateTargeting();          /* 12-Turret LOS and firing */
+    Memory_Trace_Check("12-TurretTargeting");
+    FireParticleSystem_Update();             /* 13-Fire/smoke particles */
+    Memory_Trace_Check("13-FireParticles");
+    PickupSystem_Update();                   /* 14-Pickups */
+    Memory_Trace_Check("14-Pickups");
+    ExplosionSystem_UpdateLegacy();          /* 15-Legacy explosions */
+    Memory_Trace_Check("15-Explosions");
+    FUN_00453a80();                          /* 16-ItemAI */
+    Memory_Trace_Check("16-ItemAI");
+    TrapDoorSystem_Update();                 /* 17-Trap doors */
+    Memory_Trace_Check("17-TrapDoors");
+
+    /* Conditional: turret sound */
+    if (DAT_00483834 != 0) {
+        FUN_004133d0('\0');                   /* 18-TurretBehavior */
+        Memory_Trace_Check("18-TurretBehavior");
+    }
+
+    /* Conditional: trooper-related + round-end check */
+    if (DAT_00483835 != 0) {
+        if ((DAT_00489288 & 1) == 0) {
+            FUN_004533d0();                  /* 19-Elevators */
+        }
+        if (DAT_00489288 == 0) {
+            /* Every 8th tick: round-end check causes early return */
+            FUN_00453230();                  /* 20-WaypointCheck */
+            {
+                SimulationState_OnTickComplete();
+            }
+            return false;
+        }
+    }
+    FluidSystem_Update();                    /* 21-Fluid spread */
+    Memory_Trace_Check("21-FluidSpread");
+    FUN_0045e2c0();                          /* 22-Deaths */
+    Memory_Trace_Check("22-Deaths");
+
+    /* Inline: health clamping for specific game modes */
+    if (DAT_004892a8 == 1) {
+        char mode_byte = *((char *)&DAT_00483740 + 1);
+        if (mode_byte == 2 || mode_byte == 4) {
+            int p;
+            for (p = 0; p < DAT_00489240; p++) {
+                PlayerData *player = Player_Get(p);
+                if (player->health > 0x1000) player->health = 0x1000;
+            }
+        }
+    }
+
+    /* Incremental visibility map update (200 cells per tick) */
+    FUN_00449040('\0');
+
+    /* Inline: trooper tile validation */
+    {
+        int i;
+        for (i = 0; i < g_TrooperCount; i++) {
+            TrooperRecord *trooper = &g_TrooperPool[i];
+            trooper->palette_2c = 0;
+
+            /* Check tile at trooper position */
+            int tx = trooper->position_x >> 0x12;
+            int ty = trooper->position_y >> 0x12;
+            const uint8_t tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
+                (ty << (DAT_00487a18 & 0x1f)) + tx];
+            if (TerrainProperty_Read(tile_idx, 0x01) == 1) {
+                trooper->animation_state_24 = 0;
+            } else {
+                char stale = (char)trooper->animation_state_24;
+                stale++;
+                if (stale >= 6) stale = 0;
+                trooper->animation_state_24 = (uint8_t)stale;
+            }
+        }
+    }
+    {
+        SimulationState_OnTickComplete();
+    }
+    return true;
+}
+
 
 /* ===== Gameplay_Tick (0045DAA0) ===== */
 /* Fixed-timestep game simulation loop.
  * Called from Game_Update_Render when g_SubState == 0 (active gameplay).
  * Implements the full framework from the original with all subsystem calls.
- * Individual subsystems are stubbed pending decompilation. */
+ */
 static void Gameplay_Tick(void)
 {
     unsigned int tick_interval;
@@ -244,146 +418,12 @@ static void Gameplay_Tick(void)
         if (!Replay_PrepareSimulationTick(SimulationState_Tick() + 1))
             break;
         g_TimerAux++;
-
-        /* Sub-frame counter: 0→1→2→...→7→0 */
-        DAT_00489288++;
-        if (DAT_00489288 >= 8) DAT_00489288 = 0;
-
-        /* Activation pair logic */
-        if (DAT_004892a5 != 0) {
-            DAT_004892a5++;
-            /* After 40 ticks of round-end countdown, trigger level transition.
-             * Original at 0x00461776: when DAT_004892a5 > 0x28, enter the
-             * natural match-complete state that stores the winner and scores. */
-            if (DAT_004892a5 > 0x28) {
-                g_SubState = GAMEPLAY_MATCH_COMPLETE;
-            }
-        }
-        if (DAT_004892a5 == 0 && DAT_004892a4 != 0 && DAT_0048373e == 0) {
-            DAT_004892a5 = 1;
-        }
-
-        /* ---- Subsystem calls ---- */
-        FUN_00460d50();                          /* 1-RoundTimer */
-        Memory_Trace_Check("1-RoundTimer");
-        FUN_004609e0();                          /* 2-SpatialGrid */
-        Memory_Trace_Check("2-SpatialGrid");
-        if ((DAT_00489288 & 1) == 0) {
-            FUN_00460660();                      /* 3-CollisionBitmap (half-rate) */
-            Memory_Trace_Check("3-CollisionBitmap");
-        }
-        FUN_00460ac0();                          /* 4-RelocateEdge */
-        Memory_Trace_Check("4-RelocateEdge");
-        FUN_00413720();                          /* 5-Spawner */
-        Memory_Trace_Check("5-Spawner");
-        FUN_00454340();                          /* 6-Emitters */
-        Memory_Trace_Check("6-Emitters");
-        FUN_0044b0b0();                          /* 7-EntityBehavior */
-        Memory_Trace_Check("7-EntityBehavior");
-        FUN_00434310();                          /* 8-DebrisAnim */
-        Memory_Trace_Check("8-DebrisAnim");
-        ParticleSystem_Update();                 /* 9-Animated particles */
-        Memory_Trace_Check("9-AnimatedParticles");
-
-        /* Inline: effect/particle rotation and timer decrement */
-        {
-            int i;
-            for (i = 0; i < DAT_00489264; i++) {
-                uint8_t *base = static_cast<uint8_t *>(DAT_00487780) + i * 0x20;
-                unsigned int *angle = reinterpret_cast<unsigned int *>(base + 0x10);
-                int *timer_a = reinterpret_cast<int *>(base + 0x08);
-                int *timer_b = reinterpret_cast<int *>(base + 0x0C);
-                *angle = (*angle + 0x10) & 0x7FF;
-                if (*timer_a > 0) (*timer_a)--;
-                if (*timer_b > 0) (*timer_b)--;
-            }
-        }
-
-        TrooperSystem_Update();                  /* 11-Troopers/cars */
-        Memory_Trace_Check("11-Troopers");
-        TurretSystem_UpdateTargeting();          /* 12-Turret LOS and firing */
-        Memory_Trace_Check("12-TurretTargeting");
-        FireParticleSystem_Update();             /* 13-Fire/smoke particles */
-        Memory_Trace_Check("13-FireParticles");
-        PickupSystem_Update();                   /* 14-Pickups */
-        Memory_Trace_Check("14-Pickups");
-        ExplosionSystem_UpdateLegacy();          /* 15-Legacy explosions */
-        Memory_Trace_Check("15-Explosions");
-        FUN_00453a80();                          /* 16-ItemAI */
-        Memory_Trace_Check("16-ItemAI");
-        TrapDoorSystem_Update();                 /* 17-Trap doors */
-        Memory_Trace_Check("17-TrapDoors");
-
-        /* Conditional: turret sound */
-        if (DAT_00483834 != 0) {
-            FUN_004133d0('\0');                   /* 18-TurretBehavior */
-            Memory_Trace_Check("18-TurretBehavior");
-        }
-
-        /* Conditional: trooper-related + round-end check */
-        if (DAT_00483835 != 0) {
-            if ((DAT_00489288 & 1) == 0) {
-                FUN_004533d0();                  /* 19-Elevators */
-            }
-            if (DAT_00489288 == 0) {
-                /* Every 8th tick: round-end check causes early return */
-                FUN_00453230();                  /* 20-WaypointCheck */
-                {
-                    const uint64_t checksum = SimulationState_OnTickComplete();
-                    Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
-                    Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
-                }
-                return;
-            }
-        }
-        FluidSystem_Update();                    /* 21-Fluid spread */
-        Memory_Trace_Check("21-FluidSpread");
-        FUN_0045e2c0();                          /* 22-Deaths */
-        Memory_Trace_Check("22-Deaths");
-
-        /* Inline: health clamping for specific game modes */
-        if (DAT_004892a8 == 1) {
-            char mode_byte = *((char *)&DAT_00483740 + 1);
-            if (mode_byte == 2 || mode_byte == 4) {
-                int p;
-                for (p = 0; p < DAT_00489240; p++) {
-                    PlayerData *player = Player_Get(p);
-                    if (player->health > 0x1000) player->health = 0x1000;
-                }
-            }
-        }
-
-        /* Incremental visibility map update (200 cells per tick) */
-        FUN_00449040('\0');
-
-        /* Inline: trooper tile validation */
-        {
-            int i;
-            for (i = 0; i < g_TrooperCount; i++) {
-                TrooperRecord *trooper = &g_TrooperPool[i];
-                trooper->palette_2c = 0;
-
-                /* Check tile at trooper position */
-                int tx = trooper->position_x >> 0x12;
-                int ty = trooper->position_y >> 0x12;
-                const uint8_t tile_idx = static_cast<unsigned char *>(DAT_0048782c)[
-                    (ty << (DAT_00487a18 & 0x1f)) + tx];
-                if (TerrainProperty_Read(tile_idx, 0x01) == 1) {
-                    trooper->animation_state_24 = 0;
-                } else {
-                    char stale = (char)trooper->animation_state_24;
-                    stale++;
-                    if (stale >= 6) stale = 0;
-                    trooper->animation_state_24 = (uint8_t)stale;
-                }
-            }
-        }
-        {
-            const uint64_t checksum = SimulationState_OnTickComplete();
-            Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
-            Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
-        }
-    }  /* end tick loop */
+        const bool continue_batch = Gameplay_AdvanceSimulation(NULL, 0);
+        const uint64_t checksum = SimulationState_Checksum();
+        Netplay_AfterSimulationTick(SimulationState_Tick(), checksum);
+        Replay_AfterSimulationTick(SimulationState_Tick(), checksum);
+        if (!continue_batch) return;
+    }
 }
 
 /* ===== Game_Update_Render (00461710) - Gameplay frame ===== */

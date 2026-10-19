@@ -1,7 +1,7 @@
 # Advanced netcode plan
 
-Status: Stage 1 implemented, with local checks below; remote acceptance and
-Stage 2 feasibility remain open. Work is on `advanced-netcode`, based on stable
+Status: Stages 1 and 2's local prototype implemented, with checks below; remote,
+presentation and cross-platform acceptance remain open. Work is on `advanced-netcode`, based on stable
 v0.11 (`0909331`). No rollback or transport replacement is implemented yet.
 Main keeps the existing TCP delayed-lockstep implementation until acceptance.
 
@@ -172,11 +172,56 @@ Local Windows x64 checks on 2026-10-19:
 - One-off socket probes confirmed rejection of protocol 4 packets and a
   negotiated zero-tick delay. No permanent test suite was introduced.
 
-Still required: visual lobby acceptance, real remote measurements, other
-platforms and the wider session regression matrix. Stage 2's local feasibility
-experiment can proceed independently, but these checks are not a claim that
-network rollback is ready. No ENet dependency, gameplay prediction or rollback
-toggle until the relevant gates pass. Keep each slice in a separate reviewable
-commit; main remains the stable release line.
+### Local rewind prototype (Stage 2)
+
+`Gameplay_AdvanceSimulation` now advances one tick without pacing or network/
+replay completion hooks, with supplied actions injected at the original input
+call site. Normal play retains its existing catch-up loop, batch flag resets,
+subsystem/RNG order and alternate trooper return. The diagnostic runs the full
+session setup without its settings save/reload cycle. See
+[rewind diagnostics](REPLAY_DIAGNOSTICS.md#local-rewind-feasibility-experiment).
+
+The experiment exposed missing collision/visibility grids, fluid/edge scheduler
+phases, and stale fields inherited from inactive entity slots. Snapshot version
+4 includes the grids/timers and fixed pool storage, plus permits empty optional
+turret data. The LAN fingerprint is now `tou-sim1-net5-snapshot4`; older branch
+snapshots/replays are incompatible too. No original simulation behavior was
+changed to hide these mismatches.
+An extraction check preserved the ordered 45 core call sites; only the
+network/replay completion hooks moved to the outer pacing wrapper.
+
+Representative Windows x64 runs after these fixes:
+
+| Scenario | Verified ticks | Observed coverage |
+| --- | ---: | --- |
+| Minibase, 2 scripted humans | 1200 | Turning/firing, entities, deployed object, terrain mutation |
+| Woods, 64 players, batch 9 | 1200 | 2266 entities, 250 fire particles, 5000 fluid sources, 111 deaths, 22055 changed tiles |
+| Jungle, troopers on, batch 9 | 1200 | 150 alternate tick returns, 1320 fluid sources, 6113 changed tiles |
+| Happyland, 12-tick history | 1200 | Generated terrain and scripted input |
+| Minibase, forced end countdown | 40 | Terminal substate reproduced before any level unload |
+
+World initialization may be time-seeded; figures are observations of individual
+runs, not fixed golden expectations. Comparison includes every serialized byte
+and RNG state/call count after every replayed tick. Sound and rendering were
+disabled; this is not presentation or physical-input acceptance. A subsequent
+two-instance TCP smoke advanced beyond tick 600 without checksum correction.
+
+In the representative Woods run, the eight-tick history used about 48.0 MiB of
+snapshot vector capacity; largest serialized state was 4,586,417 bytes. Actual
+replayed simulation cost averaged 8.36 ms/window and peaked at 11.19 ms; restore
+averaged 4.10 ms and peaked at 5.13 ms. Diagnostic windows including per-tick
+capture/comparison averaged 24.95 ms, peaking at 30.61 ms. These desktop numbers
+are not Raspberry Pi budgets. Full-copy history is viable for experiments but
+not accepted as the final memory/CPU strategy; investigate checkpoint reuse,
+optional restore hashing and terrain deltas before enabling expensive windows.
+
+Still required: visual lobby acceptance, remote measurements, other platforms,
+audio/VFX reconciliation and the wider session regression matrix. Batching is
+recorded in this experiment: a canonical network-wide flag-reset policy must
+be defined, since wall-clock-dependent batch boundaries cannot simply be
+predicted identically on every peer. This remains a gate before live prediction.
+Next work is Stage 3's presentation/event boundary and this pacing policy, not
+an ENet migration. No network rollback toggle until the relevant gates pass.
+Keep each slice in a separate reviewable commit; main remains the stable line.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

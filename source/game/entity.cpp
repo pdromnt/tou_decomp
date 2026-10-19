@@ -4864,8 +4864,6 @@ static void FUN_0044b990(void)
         player->buttons = 0;
     }
 
-    const unsigned char *keyState = g_KeyboardState;
-
     /* Map key bindings to button flags for each human player */
     for (i = 0; i < DAT_00489240; i++) {
         PlayerData *player = Player_Get(i);
@@ -4873,10 +4871,7 @@ static void FUN_0044b990(void)
         if (player->ai_level != 0)
             continue;
 
-        const uint8_t local_actions = static_cast<uint8_t>(Input_EncodeGameActions(
-            keyState, player->key_scan_codes) | Gamepad_PlayerActions(i));
-        player->buttons = Replay_PlayerActions(
-            i, Netplay_PlayerActions(i, local_actions));
+        player->buttons = Gameplay_PlayerActions(i, player->key_scan_codes);
     }
 }
 

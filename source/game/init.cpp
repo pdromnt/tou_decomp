@@ -6057,7 +6057,7 @@ void FUN_0045c300(void)
 /* Called at the start of each game round. Sets up player counts, key bindings,
  * team assignments, ship type availability, team color LUTs, entity density,
  * and stat arrays. Core multiplayer initialization function. */
-void FUN_0041a8c0(void)
+void FUN_0041a8c0(bool persist_settings)
 {
     int i, j;
 
@@ -6092,7 +6092,7 @@ void FUN_0041a8c0(void)
     /* 3. Save and reload the one canonical config record in local play.
      * A LAN match uses a temporary host-authored record; persisting it here
      * corrupts the player's normal split-screen count, teams, and controls. */
-    if (!Netplay_IsMatchActive()) {
+    if (persist_settings && !Netplay_IsMatchActive()) {
         Save_Options_Config();
         Load_Options_Config();
     }
