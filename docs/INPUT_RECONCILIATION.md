@@ -150,9 +150,14 @@ overflow/conflict and reset while replaying. No permanent suite was introduced.
 
 ## Still gated
 
+The [input authority prototype](INPUT_AUTHORITY.md) now distinguishes provisional
+and sealed host revisions and imports scoped confirmed checkpoints under a new
+epoch. It remains diagnostic-only; direct receipt and revision-fed owners cannot
+mix input sources. Resync resets the local event journal at the imported base.
+
 Real audible/GPU delivery, weapon-specific producers, live clock/authority
-integration, host/client input revisions, confirmed-only resync checkpoints,
-full level/lobby transitions, remote/cross-platform checks, and low-power
+integration and acknowledged resync transport, full level/lobby transitions,
+remote/cross-platform checks, and low-power
 memory/CPU budgets remain open. The rolling schedule is synthetic and still
 drains at each window's oracle horizon; it does not prove continuous internet
 play, real packet loss, transport behavior or a render loop during resimulation.

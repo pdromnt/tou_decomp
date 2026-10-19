@@ -15,7 +15,7 @@ struct PresentationCheckpoint {
     bool operator==(const PresentationCheckpoint &other) const;
 };
 // Experimental, game-thread-only timeline. Ordinary play never enables it.
-void PresentationEvents_Start(bool deliver);
+void PresentationEvents_Start(bool deliver, uint32_t base = 0);
 void PresentationEvents_Stop(void);
 bool PresentationEvents_Enabled(void);
 bool PresentationEvents_Recording(void);

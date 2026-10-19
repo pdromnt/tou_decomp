@@ -291,7 +291,8 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
     return true;
 }
 
-bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve_presentation)
+static bool RestoreSnapshot(const uint8_t *snapshot, size_t size, bool preserve_presentation,
+                            bool validate_only, uint32_t expected_tick)
 {
     if (snapshot == NULL || DAT_00481f50 == NULL || DAT_0048782c == NULL ||
         DAT_0048781c == NULL || DAT_00487814 == NULL ||
@@ -403,6 +404,7 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve
         sizeof(DAT_00487784) + sizeof(DAT_00489e9c) + 32u;
     if (reader.remaining() != expected_body)
         return false;
+    if (validate_only) return tick == expected_tick;
 
     if (!reader.raw(&DAT_00489288, sizeof(DAT_00489288)) ||
         !reader.raw(&DAT_004892a4, sizeof(DAT_004892a4)) ||
@@ -497,6 +499,16 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve
     TOU_RestoreRandState(rng_state, rng_calls);
     g_last_checksum = Fnv1a64(snapshot, size);
     return true;
+}
+
+bool SimulationState_Validate(const uint8_t *snapshot, size_t size, uint32_t expected_tick)
+{
+    return RestoreSnapshot(snapshot, size, true, true, expected_tick);
+}
+
+bool SimulationState_Restore(const uint8_t *snapshot, size_t size, bool preserve_presentation)
+{
+    return RestoreSnapshot(snapshot, size, preserve_presentation, false, 0);
 }
 
 bool SimulationState_ValidateRoundTrip(const std::vector<uint8_t> &snapshot)

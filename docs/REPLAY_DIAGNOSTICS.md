@@ -124,3 +124,13 @@ the same. `[JITTER]` reports sliced frames, deferred arrivals, waits, clamped
 clock debt, maximum work and pump timings. Each confirmed prefix must match the
 oracle before commit. This schedule drains at each oracle-window boundary;
 it is not continuous real-network, rendering or packet-loss acceptance.
+
+Use `--rewind-late-input 3` for synthetic host revisions and confirmed resync.
+Provisional inputs cannot confirm; corrected/sealed inputs arrive in reverse
+order, stale revisions/epochs are ignored, and records use the actual codecs.
+Periodic confirmed-state imports must reject malformed snapshots without world
+mutation and continue under a newer epoch. `[AUTHORITY]` reports revision and
+resync counts; event counts reset at each imported base. Other late-input
+restrictions remain unchanged. See [input authority](INPUT_AUTHORITY.md) for
+the protocol sketch, evidence, structural-validation scope and remaining live
+transport gates. This is not a two-peer networking run.

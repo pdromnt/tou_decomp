@@ -62,3 +62,8 @@ The experimental [reconciliation owner](INPUT_RECONCILIATION.md) pairs these
 world snapshots with local presentation checkpoints and uses them to correct
 actual delayed-input predictions in the developer diagnostic. Ordinary LAN
 still uses lockstep and does not create speculative snapshot history.
+
+`SimulationState_Validate` shares restore's structural/context checks but performs
+no world writes and verifies an expected tick. The experimental
+[confirmed-resync path](INPUT_AUTHORITY.md) uses this before import. It does not
+authenticate the sender or semantically sanitize every runtime record.

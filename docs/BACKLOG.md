@@ -13,8 +13,9 @@ New defects should be added only after a concrete reproduction.
   `advanced-netcode`, separate from stable main. Verify real sound/GPU delivery
   and weapon-specific producers, exercise confirmed-input/session transition
   barriers across full match/level changes, integrate the bounded local pump
-  with live clock/authority and host/client revisions/resync, and
-  profile low-power costs before live prediction. The local checkpoint owner
+  with live clock/authority/acks and resync delivery barriers, run combined
+  rolling host/client checks, and profile low-power costs before live prediction.
+  The local checkpoint owner
   and late-input oracle are described in [input reconciliation](INPUT_RECONCILIATION.md).
   Remote and cross-platform acceptance remain open.
 

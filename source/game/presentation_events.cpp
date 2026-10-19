@@ -83,11 +83,11 @@ bool PresentationEvents_DiscardAfter(uint32_t tick)
     return true;
 }
 
-void PresentationEvents_Start(bool should_deliver)
+void PresentationEvents_Start(bool should_deliver, uint32_t base)
 {
     PresentationEvents_Stop();
     enabled = true; deliver = should_deliver; healthy = true;
-    current = confirmed = 0; next_voice = 0; committed_count = 0;
+    current = confirmed = base; next_voice = 0; committed_count = 0;
     memset(kind_counts, 0, sizeof(kind_counts));
     for (int i = 0; i < 64; ++i) voices[i] = -1;
 }

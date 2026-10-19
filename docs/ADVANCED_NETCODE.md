@@ -1,7 +1,8 @@
 # Advanced netcode plan
 
-Status: Stages 1-2 and Stage 3's event-journal prototype are implemented, with
-checks below; real presentation, remote and cross-platform acceptance remain
+Status: Stages 1-2, Stage 3's event journal and Stage 4's local reconciliation,
+pacing and authority/resync prototypes are implemented, with checks below;
+real presentation, live prediction, remote and cross-platform acceptance remain
 open. Work is on `advanced-netcode`, based on stable v0.11 (`0909331`). No live
 network rollback or transport replacement is enabled yet.
 Main keeps the existing TCP delayed-lockstep implementation until acceptance.
@@ -61,7 +62,8 @@ window. Specify handling of action edges such as detonation rather than
 inventing additional presses. Inputs for confirmed ticks are immutable;
 duplicates are idempotent, conflicting duplicates are protocol errors. Late
 inputs beyond the window cannot rewrite finalized scores or level changes.
-The exact late-input/resync policy is a design gate, not yet decided.
+The local late-input/resync policy is prototyped below; live transport and
+acknowledgement policy remain design gates.
 
 ## Staged implementation and exit gates
 
@@ -331,9 +333,29 @@ arrivals across 326 sliced replay frames without exceeding one tick per frame.
 Full measurements, stub-probe failure checks and synthetic-schedule limitations
 are in [input reconciliation](INPUT_RECONCILIATION.md).
 
+### Input authority and confirmed resync (Stage 4 local prototype)
+
+The [authority records](INPUT_AUTHORITY.md) distinguish provisional canonical
+commands from immutable sealed inputs, with per-tick revisions and a separate
+resync epoch. Revision-fed clients cannot mix direct receipts into their ledger.
+The host publisher exports actually used commands; confirmed snapshot export
+uses the retained committed anchor rather than the speculative current world.
+Resync preflights scope, size, integrity and snapshot structure before mutation,
+then resets input/presentation history at a newer epoch. External same-tick
+score/control changes block export/import rather than being silently undone.
+These experimental record codecs have no live LAN message types yet.
+
+The authority diagnostic (`--rewind-late-input 3`) passed corrected tick-by-tick
+world/RNG/presentation equality, stale revision/epoch checks, repeated confirmed
+imports and continuation across Woods, Jungle, Happyland and a forced ending.
+A stub-world probe additionally covers host confirmed-anchor selection,
+coalesced arrivals during replay and sealed-history conflicts. Exact evidence
+and trust/validation limits are in the linked guide; these are not live peer
+or authentication tests.
+
 Still required: real audible/GPU delivery, weapon-specific producers, live
-clock/authority integration, authoritative host/client input revisions and
-confirmed-only resync, full host-controlled pause/skip/end and multi-level/lobby
+clock/authority/ack integration and resync delivery barriers, combined rolling
+host/client runs, full host-controlled pause/skip/end and multi-level/lobby
 acceptance, remote/cross-platform checks, and low-power budgets. No live
 prediction, rollback toggle or ENet migration is enabled. Keep main stable.
 

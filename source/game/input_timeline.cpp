@@ -59,10 +59,49 @@ bool InputTimeline::prepare(uint32_t tick, uint8_t *actions)
     memcpy(slot->before, last_, players_);
     for (size_t p = 0; p < players_; ++p) {
         // Holding last input preserves held-button edges; never invent a new press.
-        slot->used[p] = (slot->mask & (1u << p)) ? slot->actual[p] : last_[p];
+        slot->used[p] = (slot->mask & (1u << p)) ? slot->actual[p] :
+            slot->authority.revision ? slot->authority.actions[p] : last_[p];
         actions[p] = slot->used[p];
     }
     slot->prepared = true;
+    return true;
+}
+InputTimeline::Result InputTimeline::revise(const AuthoritativeInput &in)
+{
+    if (!ready_ || replay_end_ || !AuthorityInput_Valid(in) || in.players != players_) return Invalid;
+    if (in.generation != generation_) return WrongGeneration;
+    if (in.tick > simulated_ && in.tick - simulated_ >= Capacity) return TooFar;
+    Frame &existing = frames_[in.tick % Capacity];
+    if (existing.tick == in.tick && existing.authority.revision) {
+        const AuthoritativeInput &old = existing.authority;
+        if (old.epoch != in.epoch) return WrongGeneration;
+        if (in.revision < old.revision) return StaleRevision;
+        if (in.revision == old.revision) return AuthorityInput_Equal(old, in) ? Duplicate : Conflict;
+        if (old.sealed && (!in.sealed || memcmp(old.actions, in.actions, players_) != 0)) return Conflict;
+    }
+    if (in.tick <= confirmed_ || in.tick <= oldest_) return TooOld;
+    Frame *slot = frame(in.tick);
+    if (!slot) return TooFar;
+    // Direct receipts and authority are separate owner modes. Never reinterpret
+    // a received actual action as a replaceable host prediction.
+    if (slot->mask && !slot->authority.revision) return Conflict;
+    slot->authority = in;
+    if (in.sealed) {
+        memcpy(slot->actual, in.actions, players_);
+        slot->mask = static_cast<uint8_t>((1u << players_) - 1u);
+    }
+    if (slot->ran && memcmp(slot->used, in.actions, players_) != 0)
+        if (!dirty_ || in.tick < dirty_) dirty_ = in.tick;
+    confirm();
+    return Accepted;
+}
+bool InputTimeline::used(uint32_t tick, uint8_t *actions, bool *sealed) const
+{
+    if (!ready_ || !actions || !sealed) return false;
+    const Frame &slot = frames_[tick % Capacity];
+    if (slot.tick != tick || !slot.ran || !slot.prepared) return false;
+    memcpy(actions, slot.used, players_);
+    *sealed = tick <= confirmed_;
     return true;
 }
 bool InputTimeline::simulated(uint32_t tick)

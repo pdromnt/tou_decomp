@@ -2,16 +2,19 @@
 #define TOU_INPUT_TIMELINE_H
 #include <stdint.h>
 #include <stddef.h>
+#include "input_authority.h"
 
 // Pure game-thread input ledger. No sockets, world mutation or snapshot ownership.
 class InputTimeline {
 public:
     enum { Capacity = 512, Players = 4, MaximumPrediction = 12 };
     // Deferred is returned only by the reconciliation owner during sliced replay.
-    enum Result { Accepted, Duplicate, Conflict, TooOld, WrongGeneration, TooFar, Invalid, Deferred };
+    enum Result { Accepted, Duplicate, Conflict, TooOld, WrongGeneration, TooFar, Invalid, Deferred, StaleRevision };
     bool reset(uint32_t generation, uint8_t players, uint32_t prediction,
                uint32_t base = 0, const uint8_t *previous = NULL);
     Result submit(uint32_t generation, uint32_t tick, uint8_t player, uint8_t actions);
+    Result revise(const AuthoritativeInput &input);
+    bool used(uint32_t tick, uint8_t *actions, bool *sealed) const;
     bool prepare(uint32_t tick, uint8_t *actions);
     bool simulated(uint32_t tick);
     // Caller must restore world/local presentation at dirty_from()-1 first.
@@ -29,6 +32,7 @@ private:
         uint32_t tick = 0;
         uint8_t actual[Players] = {}, used[Players] = {}, before[Players] = {}, mask = 0;
         bool ran = false, prepared = false;
+        AuthoritativeInput authority;
     };
     Frame frames_[Capacity];
     Frame *frame(uint32_t tick);

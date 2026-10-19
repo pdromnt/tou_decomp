@@ -1,6 +1,7 @@
 #include "tou.h"
 #include "simulation_reconciliation.h"
 #include <algorithm>
+#include <string.h>
 
 void SimulationReconciliation::stop()
 {
@@ -12,15 +13,17 @@ void SimulationReconciliation::stop()
         history_[i] = Checkpoint();
 }
 bool SimulationReconciliation::start(uint32_t generation, uint8_t players,
-    uint32_t window, size_t budget, bool deliver)
+    uint32_t window, size_t budget, bool deliver, InputMode mode)
 {
     stop();
     if (!window || window > InputTimeline::MaximumPrediction ||
         players != DAT_00489240 || SimulationState_Tick() != 0 ||
         Netplay_IsEnabled() || Replay_IsActive() || PresentationEvents_Enabled() ||
-        !inputs_.reset(generation, players, window)) return false;
+        (mode != DirectInputs && mode != HostRevisions) || !inputs_.reset(generation, players, window)) return false;
     window_ = window; players_ = players; budget_ = budget;
     generation_ = generation;
+    epoch_ = 1; base_tick_ = 0; memset(base_actions_, 0, sizeof(base_actions_));
+    mode_ = mode; deliver_ = deliver;
     corrections_ = truncated_ = 0; replayed_ = 0; peak_ = 0;
     PresentationEvents_Start(deliver);
     ready_ = true;
@@ -69,9 +72,10 @@ bool SimulationReconciliation::capture(bool continued)
     return true;
 }
 InputTimeline::Result SimulationReconciliation::submit(uint32_t generation,
-    uint32_t tick, uint8_t player, uint8_t actions)
+    uint32_t tick, uint8_t player, uint8_t actions, uint32_t epoch)
 {
-    if (!aligned()) { fail(); return InputTimeline::Invalid; }
+    if (!aligned() || mode_ != DirectInputs) { fail(); return InputTimeline::Invalid; }
+    if (generation != generation_ || epoch != epoch_) return InputTimeline::WrongGeneration;
     if (replaying()) {
         if (generation != generation_) return InputTimeline::WrongGeneration;
         if (!tick || player >= players_ || (actions & 0x80)) {
@@ -81,20 +85,111 @@ InputTimeline::Result SimulationReconciliation::submit(uint32_t generation,
             fail(); return InputTimeline::TooFar;
         }
         for (uint32_t i = 0; i < queued_; ++i)
-            if (pending_[i].tick == tick && pending_[i].player == player) {
+            if (!pending_[i].revision && pending_[i].tick == tick && pending_[i].player == player) {
                 if (pending_[i].actions == actions) return InputTimeline::Duplicate;
                 fail(); return InputTimeline::Conflict;
             }
         if (queued_ == MaximumQueuedInputs) {
             fail(); return InputTimeline::TooFar;
         }
-        pending_[queued_++] = PendingInput{tick, player, actions};
+        PendingInput input; input.tick = tick; input.player = player; input.actions = actions;
+        pending_[queued_++] = input;
         return InputTimeline::Deferred;
     }
     const InputTimeline::Result result = inputs_.submit(generation, tick, player, actions);
     if (result == InputTimeline::Invalid || result == InputTimeline::Conflict || result == InputTimeline::TooFar)
         fail();
     return result;
+}
+InputTimeline::Result SimulationReconciliation::revise(const AuthoritativeInput &in)
+{
+    if (!aligned() || mode_ != HostRevisions) { fail(); return InputTimeline::Invalid; }
+    if (in.generation != generation_ || in.epoch != epoch_) return InputTimeline::WrongGeneration;
+    if (!AuthorityInput_Valid(in) || in.players != players_) { fail(); return InputTimeline::Invalid; }
+    if (replaying()) {
+        if (in.tick > replay_end_ && in.tick - replay_end_ >= InputTimeline::Capacity) {
+            fail(); return InputTimeline::TooFar;
+        }
+        for (uint32_t i = 0; i < queued_; ++i) {
+            PendingInput &queued = pending_[i];
+            if (!queued.revision || queued.tick != in.tick) continue;
+            const AuthoritativeInput &old = queued.authority;
+            if (in.revision < old.revision) return InputTimeline::StaleRevision;
+            if (in.revision == old.revision) {
+                if (AuthorityInput_Equal(old, in)) return InputTimeline::Duplicate;
+                fail(); return InputTimeline::Conflict;
+            }
+            if (old.sealed && (!in.sealed || memcmp(old.actions, in.actions, players_) != 0)) {
+                fail(); return InputTimeline::Conflict;
+            }
+            queued.authority = in; return InputTimeline::Deferred;
+        }
+        if (queued_ == MaximumQueuedInputs) { fail(); return InputTimeline::TooFar; }
+        PendingInput queued; queued.tick = in.tick; queued.revision = true; queued.authority = in;
+        pending_[queued_++] = queued;
+        return InputTimeline::Deferred;
+    }
+    const InputTimeline::Result result = inputs_.revise(in);
+    if (result == InputTimeline::Invalid || result == InputTimeline::Conflict || result == InputTimeline::TooFar)
+        fail();
+    return result;
+}
+bool SimulationReconciliation::canonical_input(uint32_t tick, uint8_t *actions, bool *sealed) const
+{
+    return aligned() && mode_ == DirectInputs && !replaying() && !inputs_.dirty_from() &&
+        inputs_.used(tick, actions, sealed);
+}
+bool SimulationReconciliation::world_matches_checkpoint() const
+{
+    const Checkpoint *current = checkpoint(inputs_.simulated_tick());
+    std::vector<uint8_t> state;
+    return current && SimulationState_Capture(&state) && state == current->state;
+}
+bool SimulationReconciliation::export_confirmed(uint32_t new_epoch, ConfirmedState *out) const
+{
+    if (!out || !aligned() || mode_ != DirectInputs || replaying() || inputs_.dirty_from() ||
+        new_epoch <= epoch_ || !world_matches_checkpoint()) return false;
+    const uint32_t tick = PresentationEvents_ConfirmedTick();
+    const Checkpoint *base = checkpoint(tick);
+    if (!base || tick != inputs_.confirmed_tick()) return false;
+    ConfirmedState value;
+    value.generation = generation_; value.epoch = new_epoch; value.tick = tick;
+    value.players = static_cast<uint8_t>(players_);
+    bool sealed = false;
+    if (tick == base_tick_) memcpy(value.actions, base_actions_, players_);
+    else if (!inputs_.used(tick, value.actions, &sealed) || !sealed) return false;
+    value.state = base->state;
+    value.hash = AuthorityState_Hash(value.state.data(), value.state.size());
+    if (!AuthorityState_Valid(value)) return false;
+    *out = std::move(value); return true;
+}
+bool SimulationReconciliation::apply_confirmed(const ConfirmedState &state)
+{
+    if (!aligned() || state.generation != generation_ || state.epoch <= epoch_ || state.players != players_ ||
+        state.tick < PresentationEvents_ConfirmedTick() ||
+        (state.tick > std::max(replay_end_, inputs_.simulated_tick()) &&
+         state.tick - std::max(replay_end_, inputs_.simulated_tick()) >= InputTimeline::Capacity) ||
+        !AuthorityState_Valid(state) ||
+        !SimulationState_Validate(state.state.data(), state.state.size(), state.tick) ||
+        !world_matches_checkpoint()) return false;
+    // Allocate/validate everything possible before touching the running world.
+    Checkpoint candidate;
+    candidate.tick = state.tick; candidate.state = state.state;
+    PresentationEvents_Capture(&candidate.local); // Allocate local tag capacity now.
+    if (candidate.state.capacity() + candidate.local.particle_tags.capacity() > budget_ / (window_ + 1)) return false;
+    InputTimeline replacement;
+    if (!replacement.reset(generation_, static_cast<uint8_t>(players_), window_, state.tick, state.actions)) return false;
+    if (!SimulationState_Restore(state.state.data(), state.state.size())) { fail(); return false; }
+    PresentationEvents_Start(deliver_, state.tick); // Stop owned loops; never import remote mixer handles.
+    PresentationEvents_Capture(&candidate.local);
+    candidate.valid = true;
+    for (size_t i = 0; i <= window_; ++i) history_[i] = Checkpoint();
+    history_[state.tick % (window_ + 1)] = std::move(candidate);
+    inputs_ = replacement;
+    epoch_ = state.epoch; base_tick_ = state.tick;
+    memcpy(base_actions_, state.actions, sizeof(base_actions_));
+    queued_ = replay_end_ = debt_ms_ = 0;
+    return true;
 }
 SimulationReconciliation::Result SimulationReconciliation::run_tick()
 {
@@ -124,7 +219,8 @@ bool SimulationReconciliation::drain_inputs()
     queued_ = 0;
     for (uint32_t i = 0; i < count; ++i) {
         const PendingInput &input = pending_[i];
-        const InputTimeline::Result result = inputs_.submit(generation_, input.tick, input.player, input.actions);
+        const InputTimeline::Result result = input.revision ? inputs_.revise(input.authority) :
+            inputs_.submit(generation_, input.tick, input.player, input.actions);
         if (result == InputTimeline::Invalid || result == InputTimeline::Conflict || result == InputTimeline::TooFar)
             return false;
     }

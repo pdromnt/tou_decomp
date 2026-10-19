@@ -157,18 +157,24 @@ int RollingWindow(SimulationReconciliation *session, const std::vector<Frame> &e
 
 // Compare actual late-input reconciliation against an all-inputs-known oracle.
 // The oracle is diagnostic-only; the owner never reads its states or commands.
-int LateInputRun(int ticks, int window, int players, bool rolling, uint32_t frame_budget)
+int LateInputRun(int ticks, int window, int players, int mode, uint32_t frame_budget)
 {
+    const bool rolling = mode == 2, authority = mode == 3;
     SimulationReconciliation session;
     if (!session.start(1, static_cast<uint8_t>(players), static_cast<uint32_t>(window),
-                       kHistoryBudget / 2)) return 7;
+                       kHistoryBudget / 2, false, authority ? SimulationReconciliation::HostRevisions :
+                       SimulationReconciliation::DirectInputs)) return 7;
+    InputAuthorityPublisher publisher;
+    if (authority && !publisher.reset(1, 1, static_cast<uint8_t>(players))) return 7;
+    uint32_t resyncs = 0, revisions = 0;
+    uint8_t previous[4] = {};
     unsigned int verified = 0, predicted = 0, clean_windows = 0, early_returns = 0;
     size_t peak_bytes = 0;
     Timing oracle_time, forward_time, replay_time;
     RollingStats rolling_stats;
     bool terminal = false;
-    LOG("[LATE] begin ticks=%d window=%d players=%d rolling=%d frame_budget=%u full-world=1 event_sink=dry-run rendering=off\n",
-        ticks, window, players, rolling ? 1 : 0, frame_budget);
+    LOG("[LATE] begin ticks=%d window=%d players=%d mode=%d frame_budget=%u full-world=1 event_sink=dry-run rendering=off\n",
+        ticks, window, players, mode, frame_budget);
     while (verified < static_cast<unsigned int>(ticks) && !terminal) {
         const uint32_t start = session.simulated_tick();
         const SimulationReconciliation::Checkpoint base = *session.checkpoint(start);
@@ -202,10 +208,21 @@ int LateInputRun(int ticks, int window, int players, bool rolling, uint32_t fram
             continue;
         }
         begin = Clock::now();
+        std::vector<AuthoritativeInput> provisional;
         for (size_t n = 0; n < expected.size(); ++n) {
             const uint32_t tick = start + static_cast<uint32_t>(n) + 1;
             // Only local input arrives on time. Every remote input is withheld.
-            if (session.submit(1, tick, 0, expected[n].actions[0]) != InputTimeline::Accepted) return 7;
+            if (authority) {
+                uint8_t guess[4] = {};
+                memcpy(guess, previous, static_cast<size_t>(players)); guess[0] = expected[n].actions[0];
+                AuthoritativeInput input, decoded;
+                std::vector<uint8_t> bytes;
+                if (publisher.publish(tick, guess, false, &input) != InputAuthorityPublisher::Changed ||
+                    !AuthorityInput_Encode(input, &bytes) || !AuthorityInput_Decode(bytes.data(), bytes.size(), &decoded) ||
+                    session.revise(decoded) != InputTimeline::Accepted || session.revise(decoded) != InputTimeline::Duplicate)
+                    return 7;
+                provisional.push_back(input); ++revisions;
+            } else if (session.submit(1, tick, 0, expected[n].actions[0]) != InputTimeline::Accepted) return 7;
             const SimulationReconciliation::Result result = session.advance();
             if (result != SimulationReconciliation::Advanced && result != SimulationReconciliation::Terminal)
                 return 7;
@@ -220,6 +237,19 @@ int LateInputRun(int ticks, int window, int players, bool rolling, uint32_t fram
         // earliest-dirty selection and out-of-order confirmation holes.
         for (size_t n = expected.size(); n > 0; --n) {
             const uint32_t tick = start + static_cast<uint32_t>(n);
+            if (authority) {
+                AuthoritativeInput sealed, decoded;
+                std::vector<uint8_t> bytes;
+                if (publisher.publish(tick, expected[n - 1].actions, true, &sealed) != InputAuthorityPublisher::Changed ||
+                    !AuthorityInput_Encode(sealed, &bytes) || !AuthorityInput_Decode(bytes.data(), bytes.size(), &decoded) ||
+                    session.revise(decoded) != InputTimeline::Accepted || session.revise(decoded) != InputTimeline::Duplicate)
+                    return 7;
+                if (n <= provisional.size() && session.revise(provisional[n - 1]) != InputTimeline::StaleRevision) return 7;
+                decoded.epoch += 1;
+                if (session.revise(decoded) != InputTimeline::WrongGeneration) return 7;
+                ++revisions;
+                continue;
+            }
             for (int p = players - 1; p >= 1; --p) {
                 const uint8_t action = expected[n - 1].actions[p];
                 if (session.submit(99, tick, static_cast<uint8_t>(p), action) != InputTimeline::WrongGeneration ||
@@ -271,6 +301,33 @@ int LateInputRun(int ticks, int window, int players, bool rolling, uint32_t fram
         const uint64_t once = PresentationEvents_CommittedCount();
         if (!session.confirm() || once != PresentationEvents_CommittedCount()) return 6;
         peak_bytes = std::max(peak_bytes, oracle_bytes + session.peak_bytes());
+        if (authority) {
+            memcpy(previous, expected.back().actions, static_cast<size_t>(players));
+            // Exercise a real confirmed snapshot import regularly. The sender
+            // here is a synthetic authority, not a running network host.
+            if (!terminal && verified % static_cast<unsigned int>(window * 4) == 0) {
+                ConfirmedState state, decoded;
+                std::vector<uint8_t> bytes, before, after;
+                state.generation = 1; state.epoch = session.epoch() + 1; state.tick = session.confirmed_tick();
+                state.players = static_cast<uint8_t>(players);
+                memcpy(state.actions, previous, static_cast<size_t>(players));
+                state.state = expected.back().state; // Synthetic host's all-inputs-known checkpoint.
+                state.hash = AuthorityState_Hash(state.state.data(), state.state.size());
+                if (!AuthorityState_Encode(state, &bytes) || !AuthorityState_Decode(bytes.data(), bytes.size(), &decoded) ||
+                    !SimulationState_Capture(&before)) return 7;
+                ConfirmedState corrupt = decoded;
+                corrupt.state[0] ^= 1;
+                // Recompute the checksum to prove structural preflight, not
+                // merely integrity checking, rejects a malformed snapshot.
+                corrupt.hash = AuthorityState_Hash(corrupt.state.data(), corrupt.state.size());
+                if (session.apply_confirmed(corrupt) || !SimulationState_Capture(&after) || before != after ||
+                    !session.healthy() || !session.apply_confirmed(decoded) || session.apply_confirmed(decoded) ||
+                    !SimulationState_Capture(&after) || before != after || !session.can_finalize()) return 7;
+                if (!publisher.reset(1, session.epoch(), static_cast<uint8_t>(players), session.simulated_tick())) return 7;
+                if (!provisional.empty() && session.revise(provisional.back()) != InputTimeline::WrongGeneration) return 7;
+                ++resyncs;
+            }
+        }
     }
     if (rolling) {
         LOG("[JITTER] PASS verified=%u frames=%u forward=%u corrections=%u replayed=%llu sliced_frames=%u deferred_inputs=%u waiting_frames=%u clamps=%u max_work=%u budget=%u early_returns=%u terminal=%d history_and_oracle_peak=%llu\n",
@@ -287,6 +344,8 @@ int LateInputRun(int ticks, int window, int players, bool rolling, uint32_t fram
         verified, predicted, session.corrections(), static_cast<unsigned long long>(session.replayed_ticks()),
         clean_windows, session.truncated_tails(), early_returns, terminal ? 1 : 0,
         static_cast<unsigned long long>(peak_bytes));
+    if (authority) LOG("[AUTHORITY] PASS revisions=%u confirmed_resyncs=%u sealed_only=1 stale_epoch_revision_rejected=1 malformed_resync_no_world_mutation=1\n",
+        revisions, resyncs);
     LOG("[LATE] ms mean/max oracle_with_capture=%.3f/%.3f prediction_with_capture=%.3f/%.3f reconciliation_with_capture=%.3f/%.3f confirmed_events=%llu\n",
         oracle_time.mean(), oracle_time.maximum, forward_time.mean(), forward_time.maximum,
         replay_time.mean(), replay_time.maximum, static_cast<unsigned long long>(PresentationEvents_CommittedCount()));
@@ -306,7 +365,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     const int presentation = Option(argc, argv, "--rewind-presentation", 1, 0, 1);
     const int canonical = Option(argc, argv, "--rewind-canonical", 0, 0, 1);
     const int replay_batch = Option(argc, argv, "--rewind-replay-batch", batch, 1, 9);
-    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 2);
+    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 3);
     const int frame_budget = Option(argc, argv, "--rewind-frame-budget", 3, 1, 12);
     if (ticks < 0 || window < 0 || players < 0 || troopers < 0 || batch < 0 || ending < 0 || presentation < 0 || canonical < 0 || replay_batch < 0 ||
         late < 0 || frame_budget < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
@@ -361,7 +420,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     g_SubState = GAMEPLAY_ACTIVE;
     if (ending) DAT_004892a5 = 1; // Exercise the actual countdown to match complete.
     SimulationState_SetChecksumInterval(0);
-    if (late) return LateInputRun(ticks, window, players, late == 2, static_cast<uint32_t>(frame_budget));
+    if (late) return LateInputRun(ticks, window, players, late, static_cast<uint32_t>(frame_budget));
     struct TimelineScope {
         ~TimelineScope() { PresentationEvents_Stop(); }
     } timeline;

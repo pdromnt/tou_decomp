@@ -9,6 +9,7 @@
 class SimulationReconciliation {
 public:
     SimulationReconciliation() = default;
+    enum InputMode { DirectInputs, HostRevisions };
     enum Result { Advanced, Waiting, Terminal, Replayed, Unchanged, Failed, Replaying };
     struct FrameWork {
         Result result = Unchanged;
@@ -24,10 +25,15 @@ public:
     };
     ~SimulationReconciliation() { stop(); }
     bool start(uint32_t generation, uint8_t players, uint32_t window,
-               size_t budget, bool deliver = false);
+               size_t budget, bool deliver = false, InputMode mode = DirectInputs);
     void stop();
     InputTimeline::Result submit(uint32_t generation, uint32_t tick,
-                                 uint8_t player, uint8_t actions);
+                                 uint8_t player, uint8_t actions, uint32_t epoch = 1);
+    InputTimeline::Result revise(const AuthoritativeInput &input);
+    bool canonical_input(uint32_t tick, uint8_t *actions, bool *sealed) const;
+    bool export_confirmed(uint32_t new_epoch, ConfirmedState *state) const;
+    bool apply_confirmed(const ConfirmedState &state);
+    uint32_t epoch() const { return epoch_; }
     Result advance();
     Result reconcile(uint32_t max_ticks = InputTimeline::MaximumPrediction);
     // Shared replay/forward tick budget, at most one restore per call. Tick time
@@ -53,10 +59,16 @@ private:
     Checkpoint history_[InputTimeline::MaximumPrediction + 1];
     bool capture(bool continued);
     bool aligned() const;
+    bool world_matches_checkpoint() const;
     Result fail();
     Result run_tick();
     bool drain_inputs();
-    struct PendingInput { uint32_t tick; uint8_t player, actions; };
+    struct PendingInput {
+        uint32_t tick = 0;
+        uint8_t player = 0, actions = 0;
+        bool revision = false;
+        AuthoritativeInput authority;
+    };
     enum { MaximumQueuedInputs = 128 };
     PendingInput pending_[MaximumQueuedInputs];
     bool ready_ = false, failed_ = false;
@@ -64,5 +76,9 @@ private:
     uint64_t replayed_ = 0;
     size_t budget_ = 0, peak_ = 0;
     uint32_t generation_ = 0, replay_end_ = 0, queued_ = 0, debt_ms_ = 0;
+    uint32_t epoch_ = 1, base_tick_ = 0;
+    uint8_t base_actions_[4] = {};
+    InputMode mode_ = DirectInputs;
+    bool deliver_ = false;
 };
 #endif
