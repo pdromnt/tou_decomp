@@ -10,6 +10,7 @@ class SimulationReconciliation {
 public:
     SimulationReconciliation() = default;
     enum InputMode { DirectInputs, HostRevisions };
+    enum Control { OpenPauseMenu = 1, ResumeMatch, SkipLevel, EndMatch };
     enum Result { Advanced, Waiting, Terminal, Replayed, Unchanged, Failed, Replaying };
     struct FrameWork {
         Result result = Unchanged;
@@ -32,6 +33,9 @@ public:
     InputTimeline::Result revise(const AuthoritativeInput &input);
     bool canonical_input(uint32_t tick, uint8_t *actions, bool *sealed) const;
     bool export_confirmed(uint32_t new_epoch, ConfirmedState *state) const;
+    // Prepare a controlled anchor without changing the running world. Requires
+    // quiescing at a fully confirmed current tick; applied only by the barrier.
+    bool export_controlled(uint32_t new_epoch, Control control, ConfirmedState *state) const;
     bool apply_confirmed(const ConfirmedState &state);
     uint32_t epoch() const { return epoch_; }
     Result advance();

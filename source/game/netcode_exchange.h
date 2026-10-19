@@ -58,17 +58,20 @@ public:
     bool start(uint32_t generation, uint32_t epoch, uint8_t players);
     bool begin_sync(const SimulationReconciliation &world, uint32_t epoch, uint32_t now);
     bool poll(SimulationReconciliation *world, uint32_t now);
+    bool begin_control(const SimulationReconciliation &world, uint32_t epoch,
+                       SimulationReconciliation::Control control, uint32_t now);
     void disconnect();
     bool running() const;
     bool needs_sync() const;
     uint32_t peer_confirmed() const;
     NetcodeExchange *peer(uint8_t slot);
 private:
+    bool offer_all(const ConfirmedState &state, uint32_t now);
     NetcodeExchange peers_[3];
     ConfirmedState pending_;
     uint8_t count_ = 0;
     bool active_ = false, syncing_ = false, installed_ = false;
 };
 // Loopback-only developer harness. Never used by live LAN.
-int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int players, int slot);
+int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int players, int slot, int controls);
 #endif

@@ -150,6 +150,13 @@ overflow/conflict and reset while replaying. No permanent suite was introduced.
 
 ## Still gated
 
+The owner also prepares [confirmed control anchors](NETCODE_EXCHANGE.md) for
+pause-menu/resume/skip/end. Preparation requires a fully confirmed current
+tick, scopes/restores the original control fields during capture, and leaves
+the running world unchanged. The all-peer barrier applies the candidate under
+a new epoch. This does not run outer scoring or level I/O, and irreversible
+transitions must wait for the group's release as well as world confirmation.
+
 The [input authority prototype](INPUT_AUTHORITY.md) now distinguishes provisional
 and sealed host revisions and imports scoped confirmed checkpoints under a new
 epoch. It remains diagnostic-only; direct receipt and revision-fed owners cannot

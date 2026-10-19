@@ -14,7 +14,7 @@ New defects should be added only after a concrete reproduction.
   and weapon-specific producers, exercise confirmed-input/session transition
   barriers across full match/level changes, integrate the bounded local pump
   and peer exchange with live mode/clock/input/liveness negotiation and
-  all-peer control/level barriers, and profile low-power costs before live prediction.
+  confirmed menu/score/level handoffs, and profile low-power costs before live prediction.
   The local checkpoint owner and late-input oracle are described in
   [input reconciliation](INPUT_RECONCILIATION.md).
   Isolated two-to-four-process progress/group-resync checks live in [peer exchange](NETCODE_EXCHANGE.md).

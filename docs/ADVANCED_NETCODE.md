@@ -382,6 +382,24 @@ host-controlled pause/skip/end and multi-level/lobby acceptance,
 remote/cross-platform checks, and low-power budgets. No live
 prediction, rollback toggle or ENet migration is enabled. Keep main stable.
 The menu opt-in stays gated: existing host menu state changes happen before
-broadcast and must become confirmed control handoffs before using the owner.
+broadcast and must use the confirmed handoff before using the owner.
+
+### Confirmed controls (Stage 4 session prototype)
+
+The host can now quiesce at a fully confirmed current tick and prepare a
+pause-menu/resume/skip/end snapshot without changing its running state. The
+existing all-ready/all-applied barrier installs that controlled anchor once
+under a new epoch. Invalid source states and speculative or externally changed
+worlds cannot prepare controls. Full snapshots make this conservative but
+bandwidth-heavy; the original menu path has not been switched over.
+
+Four-process Woods runs passed pause/resume with continuation, and separate
+pause/skip and pause/end anchors with final hash agreement. The delayed relay
+combined pause/resume with checksum recovery; withheld control Ready/Applied
+aborted all participants without premature installation/group release. Owner
+probes cover scoped-capture failure and legacy counter/countdown semantics.
+See [peer exchange](NETCODE_EXCHANGE.md) for commands and precise limits.
+Actual scoring, level teardown/reload, generation restart, lobby return and
+real rendering/audio still require live-driver integration and acceptance.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

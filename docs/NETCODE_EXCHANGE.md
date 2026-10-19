@@ -74,6 +74,43 @@ to another networking mode. Normal Running-phase liveness remains the future
 live driver's heartbeat/transport responsibility. This protocol assumes reliable
 ordered delivery, not unreliable UDP with arbitrary lost control messages.
 
+## Confirmed control handoffs
+
+`NetcodeHostExchange::begin_control` prepares pause-menu, resume, skip-level
+and end-match anchors using the existing snapshot barrier. These are not
+immediate edits followed by a broadcast:
+
+1. Stop admitting forward ticks. Keep receiving inputs, publishing revisions,
+   reconciling and committing until the current simulated tick is fully
+   confirmed. Already-simulated local inputs must drain too; otherwise the
+   host can wait forever for its own missing input. The diagnostic bounds this
+   quiescence wait to five seconds.
+2. `export_controlled` requires a clean, fully confirmed current world and a
+   valid source state. It briefly scopes only the substate, low-byte level
+   counter and ending countdown while capturing a candidate, restoring the
+   running fields on return or capture/allocation failure. It performs no
+   audio/GPU delivery, score update, full-world restore or level I/O.
+3. The controlled snapshot's hash binds the requested result. The host remains
+   unchanged until every Ready, installs the new epoch once, then waits for
+   every Applied before allowing the driver to continue. Clients install only
+   on Commit. Delayed old-epoch inputs cannot undo the control.
+
+OpenPauseMenu requires active play and enters the ESC menu, not the single-player
+P-key pause. Resume accepts pause/ESC/preview. Skip/end require ESC/preview and
+enter the original level-advance state with countdown zero; end additionally
+sets the low byte of the level counter to the host's active-level count, retaining
+the original upper bytes. Skip leaves the counter untouched. Invalid requests
+return false without starting a barrier or changing the running world.
+
+This correctness prototype transfers a **full snapshot for each control**, even
+resume. Bandwidth/memory/latency optimization remains open. UI pacing/redraw,
+score changes, actual level teardown/load, generation restart and returning to
+the lobby are still the live driver's job. The world may be confirmed while the
+group is awaiting Applied: irreversible transitions must also require the
+session's `running()` gate, not only `world.can_finalize()`.
+As with any resync, installation resets the owned presentation journal/loops;
+real pause-time shader retention and audible continuity are not verified here.
+
 ## Bounds and driver scope
 
 - At most 128 queued messages and 64 MiB plus 64 KiB of queued payload per peer.
@@ -93,7 +130,8 @@ ordered delivery, not unreliable UDP with arbitrary lost control messages.
   Slots are explicit diagnostic arguments, not a negotiated lobby or discovery.
 - It seeds generated-level construction deterministically and uses scripted
   actions, initialized sound logic with a dry-run sink, and no renderer. It
-  neither saves settings nor uses physical input, lobby UI or match transitions.
+  neither saves settings nor uses physical input or lobby UI. Control diagnostics
+  stop at the confirmed transition anchor, before actual score/level teardown.
   A live driver still needs input resampling policy after an epoch reset.
 - It binds/connects only `127.0.0.1`. Matching binaries/assets/configuration are
   a fixture prerequisite, not negotiated/authenticated by this diagnostic lane.
@@ -113,6 +151,12 @@ For four processes add `--rewind-players 4` everywhere and launch three clients
 with `--exchange-slot 1`, `2`, and `3` respectively (default slot 1). Use the same
 base `--exchange-port` in each process; reserve three consecutive free ports.
 Launch clients promptly: connection setup and each barrier have bounded waits.
+Add `--exchange-controls 1` to all processes for pause/resume followed by normal
+continuation and finish, `2` for pause/skip, or `3` for pause/end-match (default
+`0`: no scripted controls). Pause is requested near one-quarter of the target;
+skip/end stop at that confirmed tick and acknowledge its controlled hash. These
+modes require `[EXCHANGE] controls PASS` as well as the normal PASS. They check
+states, counter/countdown and agreement, not the outer scoring/next-level route.
 `[EXCHANGE] PASS` requires the acknowledged finish. Host `peer_confirmed` is
 the client's latest validated committed prefix; the client log's peer field
 only tracks its latest resync base (it does not receive host Progress reports).
@@ -145,6 +189,17 @@ Windows x64 observations:
 - The ignored stub-world probe also checks three-peer all-ready/all-applied
   gating, one host installation, duplicate readiness before/after application,
   rejection of per-peer coordinator bypass, and whole-group timeout/disconnect.
+- Four independent Woods processes passed pause/resume with continuation to
+  tick 240, and separate pause/skip and pause/end runs with acknowledged final
+  controlled hashes. Pause preparation did not change the host's running state.
+  Four generated Happyland processes also passed pause/resume and tick-240 finish.
+- A four-process 20/60 ms per-way relay passed pause/resume plus one-peer
+  checksum recovery, reaching epoch 6/tick 240. Holding one client's control
+  Ready or Applied past the deadline aborted all four without PASS: Ready did
+  not install the pause; Applied did not release the group.
+- Owner probes check invalid source/enum requests, no mutation on preparation
+  or controlled capture failure, rejection while speculative, resume continuation,
+  skip/end counter/countdown semantics, and low-byte preservation.
 - An ignored stub-world exchange probe checks duplicate phase messages, freeze
   until Resume, slot spoofing, forged future acknowledgements, commit-before-
   offer, malformed size, bounded outbox exhaustion, timeout without epoch
@@ -157,12 +212,12 @@ natural match/level progression, Linux/macOS behavior or CM4 cost.
 
 ## Next integration gates
 
-Coordinate all peers before control/level transitions, negotiate the
+Integrate confirmed controls with actual menu/score/level transitions, negotiate the
 experimental mode and fingerprints on the real LAN connection, integrate local
 input scheduling and heartbeat/backpressure policy, retain a completed display
 frame during replay, and verify real presentation. Keep conservative lockstep
 available. Do not enable normal LAN prediction merely because the isolated
 multi-process exchange works. In particular, the current menu path mutates
 pause/skip/end state before broadcasting it; that is incompatible with the
-owner's external-mutation guard. A confirmed control handoff must replace that
+owner's external-mutation guard. The confirmed control handoff must replace that
 ordering before a live opt-in can be safe. No menu opt-in is exposed yet.

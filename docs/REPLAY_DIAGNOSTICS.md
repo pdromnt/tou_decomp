@@ -142,6 +142,10 @@ Add `--rewind-players 3` or `4` to every process for more clients and assign
 distinct `--exchange-slot 1` through `players - 1` on clients (default 1).
 The host reserves consecutive ports starting at the base port, one per client;
 all processes specify the same base. Slots are diagnostic-only, not negotiated.
+`--exchange-controls 1` exercises confirmed pause/resume with continuation;
+`2` exercises pause/skip and `3` pause/end, stopping before outer level teardown.
+Specify the same mode everywhere (default 0). Scripted controls must report
+`[EXCHANGE] controls PASS` as well as the acknowledged final hash PASS.
 It requires canonical ticks, sound logic enabled, at least
 four ticks and no forced ending. Its generated maps use a shared fixed seed.
 `[EXCHANGE] PASS` requires committed state/hash agreement and acknowledged finish;

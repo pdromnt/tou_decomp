@@ -291,7 +291,18 @@ uint32_t NetcodeHostExchange::peer_confirmed() const {
     return tick;
 }
 bool NetcodeHostExchange::begin_sync(const SimulationReconciliation &world, uint32_t epoch, uint32_t now) {
-    if (!active_ || syncing_ || !world.export_confirmed(epoch, &pending_)) return false;
+    ConfirmedState state;
+    if (!active_ || syncing_ || !world.export_confirmed(epoch, &state)) return false;
+    return offer_all(state, now);
+}
+bool NetcodeHostExchange::begin_control(const SimulationReconciliation &world, uint32_t epoch,
+    SimulationReconciliation::Control control, uint32_t now) {
+    ConfirmedState state;
+    if (!running() || !world.export_controlled(epoch, control, &state)) return false;
+    return offer_all(state, now);
+}
+bool NetcodeHostExchange::offer_all(const ConfirmedState &state, uint32_t now) {
+    pending_ = state;
     for (uint8_t i = 0; i < count_; ++i)
         if (!peers_[i].offer(pending_, now)) { disconnect(); return false; }
     syncing_ = true; installed_ = false; return true;

@@ -163,6 +163,40 @@ bool SimulationReconciliation::export_confirmed(uint32_t new_epoch, ConfirmedSta
     if (!AuthorityState_Valid(value)) return false;
     *out = std::move(value); return true;
 }
+bool SimulationReconciliation::export_controlled(uint32_t new_epoch, Control control, ConfirmedState *out) const
+{
+    if (!out || !can_finalize()) return false;
+    if ((control == OpenPauseMenu && g_SubState != GAMEPLAY_ACTIVE) ||
+        (control == ResumeMatch && g_SubState != GAMEPLAY_PAUSED && g_SubState != GAMEPLAY_EXIT_MENU &&
+         g_SubState != GAMEPLAY_LEVEL_PREVIEW) ||
+        ((control == SkipLevel || control == EndMatch) && g_SubState != GAMEPLAY_EXIT_MENU &&
+         g_SubState != GAMEPLAY_LEVEL_PREVIEW) || control < OpenPauseMenu || control > EndMatch) return false;
+    ConfirmedState candidate;
+    if (!export_confirmed(new_epoch, &candidate)) return false;
+    // Snapshot capture is game-thread-only and has no presentation side effects.
+    // Restore just these fields even if capture/allocation fails; do not restore
+    // an entire world (which would disturb local audio/particle ownership).
+    struct ControlScope {
+        GameplaySubState substate;
+        decltype(DAT_0048693c) level;
+        decltype(DAT_004892a5) countdown;
+        ControlScope() : substate(g_SubState), level(DAT_0048693c), countdown(DAT_004892a5) {}
+        ~ControlScope() { g_SubState = substate; DAT_0048693c = level; DAT_004892a5 = countdown; }
+    } restore;
+    switch (control) {
+    case OpenPauseMenu: g_SubState = GAMEPLAY_EXIT_MENU; break;
+    case ResumeMatch: g_SubState = GAMEPLAY_ACTIVE; break;
+    case EndMatch:
+        *reinterpret_cast<unsigned char *>(&DAT_0048693c) = g_GameConfig.values.active_level_count;
+        // Fall through: exit and skip use the original level-advance path.
+    case SkipLevel: g_SubState = GAMEPLAY_LEVEL_ADVANCE; DAT_004892a5 = 0; break;
+    default: return false;
+    }
+    if (!SimulationState_Capture(&candidate.state)) return false;
+    candidate.hash = AuthorityState_Hash(candidate.state.data(), candidate.state.size());
+    if (!AuthorityState_Valid(candidate)) return false;
+    *out = std::move(candidate); return true;
+}
 bool SimulationReconciliation::apply_confirmed(const ConfirmedState &state)
 {
     if (!aligned() || state.generation != generation_ || state.epoch <= epoch_ || state.players != players_ ||

@@ -149,8 +149,9 @@ Socket Connect(bool host, uint16_t port) {
 }
 }
 
-int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int players, int slot) {
-    if (players < 2 || players > 4 || slot < 1 || slot >= players || unsigned(port) + players - 2 > 65535) return 8;
+int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int players, int slot, int controls) {
+    if (players < 2 || players > 4 || slot < 1 || slot >= players || controls < 0 || controls > 3 ||
+        unsigned(port) + players - 2 > 65535) return 8;
 #ifdef _WIN32
     struct SocketScope {
         bool ready;
@@ -182,6 +183,9 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int 
     if (host && !publisher.reset(1, 1, static_cast<uint8_t>(players))) return 8;
     const uint32_t start = Platform_GetTicks(); uint32_t last = start, sampled = 0, epoch = 1, resyncs = 0, frames = 0;
     bool periodic_sync = false;
+    int control_stage = 0;
+    uint32_t pause_started = 0, quiesce_started = 0;
+    bool pause_seen = false, resume_seen = false, terminal_seen = false;
     struct Delayed { uint32_t tick, due; uint8_t action; };
     std::vector<Delayed> delayed;
     LOG("[EXCHANGE] begin role=%s players=%d slot=%d ticks=%d window=%d port=%u loopback-only=1 dry-run-events=1\n",
@@ -200,10 +204,43 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int 
         if (world.epoch() != epoch) {
             epoch = world.epoch(); sampled = world.simulated_tick(); delayed.clear(); ++resyncs;
             if (host && !publisher.reset(1, epoch, static_cast<uint8_t>(players), world.simulated_tick())) return 8;
+            if (controls) {
+                if (g_SubState == GAMEPLAY_EXIT_MENU) { pause_seen = true; pause_started = now; }
+                if (pause_seen && g_SubState == GAMEPLAY_ACTIVE) resume_seen = true;
+                if (g_SubState == GAMEPLAY_LEVEL_ADVANCE) terminal_seen = true;
+                LOG("[EXCHANGE] control anchor role=%s epoch=%u tick=%u state=%u level=%u countdown=%u\n",
+                    host ? "host" : "client", epoch, world.simulated_tick(), unsigned(g_SubState),
+                    unsigned(static_cast<unsigned char>(DAT_0048693c)), unsigned(static_cast<unsigned char>(DAT_004892a5)));
+            }
         }
-        if ((host ? group.running() : exchange.phase() == NetcodeExchange::Running) && epoch > 1) {
+        if (host && group.running() && controls && control_stage == 2 &&
+            g_SubState == GAMEPLAY_EXIT_MENU && now - pause_started >= 100) {
+            const SimulationReconciliation::Control control = controls == 1 ? SimulationReconciliation::ResumeMatch :
+                controls == 2 ? SimulationReconciliation::SkipLevel : SimulationReconciliation::EndMatch;
+            if (!group.begin_control(world, epoch + 1, control, now)) return 8;
+            control_stage = 3;
+        }
+        if (host && group.running() && control_stage == 3 && g_SubState == GAMEPLAY_LEVEL_ADVANCE) {
+            if (!world.can_finalize()) return 8;
+            for (int i = 1; i < players; ++i)
+                if (!group.peer(static_cast<uint8_t>(i))->finish(world.simulated_tick(), now)) return 8;
+        }
+        if ((host ? group.running() : exchange.phase() == NetcodeExchange::Running) && epoch > 1 &&
+            g_SubState == GAMEPLAY_ACTIVE) {
             const uint32_t target = static_cast<uint32_t>(ticks);
-            if (!world.replaying() && sampled < target && sampled < world.simulated_tick() + 1) {
+            if (host && controls && !control_stage && world.simulated_tick() >= target / 4) {
+                control_stage = 1;
+                quiesce_started = now;
+                LOG("[EXCHANGE] quiesce for pause tick=%u confirmed=%u\n", world.simulated_tick(), world.confirmed_tick());
+            }
+            const bool quiescing = host && control_stage == 1;
+            if (quiescing && now - quiesce_started >= 5000) {
+                LOG("[EXCHANGE] control quiescence timed out\n"); return 8;
+            }
+            // Drain already-simulated local input too: a bounded catch-up pump
+            // can be ahead of the scripted sampler when quiescence is requested.
+            if ((!quiescing || sampled < world.simulated_tick()) && !world.replaying() &&
+                sampled < target && sampled < world.simulated_tick() + 1) {
                 ++sampled;
                 if (host) {
                     if (world.submit(1, sampled, 0, Action(sampled, 0), epoch) != InputTimeline::Accepted) return 8;
@@ -217,7 +254,8 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int 
                     if (!exchange.receipt(delayed[n - 1].tick, delayed[n - 1].action)) return 8;
                     delayed.erase(delayed.begin() + n - 1);
                 }
-            const SimulationReconciliation::FrameWork work = world.pump(elapsed, 3, target);
+            const SimulationReconciliation::FrameWork work = world.pump(quiescing ? 0 : elapsed, 3,
+                quiescing ? world.simulated_tick() : target);
             if (work.result == SimulationReconciliation::Failed || work.forward_ticks + work.replay_ticks > 3) return 8;
             if (!world.replaying() && !world.dirty_from()) {
                 if (host) {
@@ -234,7 +272,10 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int 
                 }
                 if (!world.confirm()) return 8;
                 if (!host && !exchange.progress(world)) return 8;
-                if (host && !periodic_sync && world.confirmed_tick() >= target / 2) {
+                if (quiescing && world.can_finalize()) {
+                    if (!group.begin_control(world, epoch + 1, SimulationReconciliation::OpenPauseMenu, now)) return 8;
+                    control_stage = 2;
+                } else if (host && !periodic_sync && world.confirmed_tick() >= target / 2) {
                     if (!group.begin_sync(world, epoch + 1, now)) return 8;
                     periodic_sync = true;
                 } else if (host && world.confirmed_tick() == target && group.peer_confirmed() == target) {
@@ -259,6 +300,11 @@ int ExchangeDiagnostic_Run(int ticks, int window, bool host, uint16_t port, int 
         }
         ++frames;
         if (closed) {
+            if (controls && (!pause_seen || (controls == 1 ? !resume_seen : !terminal_seen))) return 8;
+            if (controls > 1 && (g_SubState != GAMEPLAY_LEVEL_ADVANCE || DAT_004892a5 != 0 ||
+                static_cast<unsigned char>(DAT_0048693c) != (controls == 3 ? g_GameConfig.values.active_level_count : 0))) return 8;
+            if (controls) LOG("[EXCHANGE] controls PASS mode=%d pause=%d resume=%d terminal=%d\n",
+                controls, int(pause_seen), int(resume_seen), int(terminal_seen));
             LOG("[EXCHANGE] PASS role=%s tick=%u peer_confirmed=%u epoch=%u resyncs=%u frames=%u corrections=%u replayed=%llu sent=%llu received=%llu\n",
                 host ? "host" : "client", world.simulated_tick(), host ? group.peer_confirmed() : exchange.peer_confirmed(), epoch, resyncs, frames,
                 world.corrections(), static_cast<unsigned long long>(world.replayed_ticks()),

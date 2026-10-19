@@ -370,9 +370,10 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     const int exchange_role = Option(argc, argv, "--exchange-role", 0, 0, 1);
     const int exchange_port = Option(argc, argv, "--exchange-port", 27961, 1024, 65535);
     const int exchange_slot = Option(argc, argv, "--exchange-slot", 1, 1, 3);
+    const int exchange_controls = Option(argc, argv, "--exchange-controls", 0, 0, 3);
     const int frame_budget = Option(argc, argv, "--rewind-frame-budget", 3, 1, 12);
     if (ticks < 0 || window < 0 || players < 0 || troopers < 0 || batch < 0 || ending < 0 || presentation < 0 || canonical < 0 || replay_batch < 0 ||
-        late < 0 || exchange_role < 0 || exchange_port < 0 || exchange_slot < 0 ||
+        late < 0 || exchange_role < 0 || exchange_port < 0 || exchange_slot < 0 || exchange_controls < 0 ||
         (late == 4 && (players < 2 || exchange_slot >= players || exchange_port + players - 2 > 65535 || ending || ticks < 4)) ||
         frame_budget < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
                              batch != 1 || replay_batch != 1)) ||
@@ -428,7 +429,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     if (ending) DAT_004892a5 = 1; // Exercise the actual countdown to match complete.
     SimulationState_SetChecksumInterval(0);
     if (late == 4) return ExchangeDiagnostic_Run(ticks, window, exchange_role == 0,
-        static_cast<uint16_t>(exchange_port), players, exchange_slot);
+        static_cast<uint16_t>(exchange_port), players, exchange_slot, exchange_controls);
     if (late) return LateInputRun(ticks, window, players, late, static_cast<uint32_t>(frame_budget));
     struct TimelineScope {
         ~TimelineScope() { PresentationEvents_Stop(); }
