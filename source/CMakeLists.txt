@@ -87,6 +87,7 @@ set(TOU_SOURCES
     game/replay.cpp
     game/graphics.cpp
     platform/platform_sdl.cpp
+    platform/screenshots.cpp
     platform/render_backend.cpp
     platform/gfx_sdl.cpp
     platform/gfx_shader.cpp
@@ -188,8 +189,8 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_NAME "Tunnels of Underworld"
         MACOSX_BUNDLE_GUI_IDENTIFIER "fi.iobox.tou"
         MACOSX_BUNDLE_ICON_FILE "icon.icns"
-        MACOSX_BUNDLE_BUNDLE_VERSION "0.10"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.10"
+        MACOSX_BUNDLE_BUNDLE_VERSION "0.11"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "0.11"
     )
 endif()
 

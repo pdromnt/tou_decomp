@@ -5,6 +5,11 @@ It supports one local player per computer, one host plus up to three clients,
 two teams, and no computer players. Everyone must use the same game package and
 level catalog.
 
+The v0.11 source comparison with Uprising's ENet implementation is documented
+in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). No transport or protocol
+change is included; latency measurements and tunable input delay are the
+recommended first steps before considering an ENet migration.
+
 ## Start a session
 
 Open **Team Deathmatch** from the main menu, then choose:

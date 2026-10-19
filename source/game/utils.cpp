@@ -1,4 +1,5 @@
 #include "tou.h"
+#include "platform.h"
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -14,7 +15,8 @@ void Log(const char *format, ...) {
   vsnprintf(buffer, sizeof(buffer), format, args);
   va_end(args);
   printf("%s", buffer);
-  FILE *f = fopen("debug.txt", "a");
+  const std::string path = Platform_UserFilePath("debug.txt");
+  FILE *f = path.empty() ? NULL : fopen(path.c_str(), "a");
   if (f) {
     fprintf(f, "%s", buffer);
     fclose(f);

@@ -94,6 +94,7 @@ forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
 | --- | --- |
 | `source/game/main.cpp` | Portable SDL entry point and application lifecycle |
 | `source/platform/platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
+| `source/platform/screenshots.cpp` | F12 request state, exclusive PNG filenames and final-frame screenshot writing |
 | `source/platform/input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
 | `source/platform/gamepad.cpp` | SDL3 gamepad discovery, connection slots, focus/neutral guards, menu navigation, and simulation action translation |
 | `source/game/input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
@@ -211,7 +212,8 @@ The executable expects these paths relative to its working directory:
 | `swap/` | Precomputed level sky/height-map data |
 | `help/` | Original gameplay help plus updated runtime, menu, and level-editor guidance |
 | `lang/` | UTF-8 language catalogs; English is the per-key fallback |
-| `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
+| `settings.json` | User configuration beside the assets on Windows/Linux, or `~/ToU/settings.json` on macOS |
+| `screenshots/` | F12 final-frame PNGs beside the game on Windows/Linux, or `~/ToU/screenshots/` on macOS |
 
 `source/scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local
@@ -308,6 +310,21 @@ normal `UserSettings` model contains only user-facing choices, validates values,
 and maps them into recovered runtime state at the load/save boundary. Writes use
 a same-directory temporary file followed by replacement.
 
+`Platform_UserFilePath` separates writable user data from asset lookup. macOS
+uses `SDL_GetUserFolder(SDL_FOLDER_HOME)` plus `ToU/`; assets remain inside the
+bundle. Settings and optional debug logs use this directory. A missing home
+settings file can migrate the old app-local JSON read-only; an existing home
+file takes precedence. Windows/Linux keep their executable-relative data paths.
+
+F12 queues a one-shot screenshot; key-repeat is ignored. The GL backend reads
+the final default backbuffer after scaling and effects, before swapping, then
+flips rows into PNG orientation. SDL fallback reads its final render target
+before presenting. Both capture drawable resolution (including letterboxing),
+not the authoritative 640x480 frame, and neither changes simulation state.
+PNG encoding uses SDL's existing PNG writer with exclusive file creation.
+No new vendored codec or screenshot flag is required. Readback/encoding are
+synchronous and can briefly delay a frame, including network polling.
+
 The optional `gamepad` section stores four connection-slot assignments, global
 deadzone/sensitivity, and four binding arrays. Missing fields retain defaults;
 factory reset restores those defaults too. The saved button namespace reserves
@@ -373,7 +390,8 @@ mixed XInput/BLE devices and reconnect still require hardware acceptance.
 
 `.github/workflows/build.yml` builds Windows x86/x64/ARM64 with MSVC, plus
 Linux and macOS x64/ARM64 targets once per pull request and on direct pushes to
-`main`. It stages the complete runtime and checks each produced architecture.
+`main`, skipping Markdown-only changes. Manual builds are still available.
+It stages the complete runtime and checks each produced architecture.
 It is build-only; publishing remains exclusive to the manually dispatched
 release workflow, which creates one archive per platform and architecture.
 

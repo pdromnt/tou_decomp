@@ -55,10 +55,18 @@ Download the archive matching your operating system and architecture, then
 extract it completely. Run `TOU.exe` on Windows, `TOU` on Linux, or `TOU.app`
 on macOS. Keep the executable/app with its packaged asset directories.
 
-The game writes `settings.json` beside its assets. In a macOS package that is
-`TOU.app/Contents/Resources`. The original default controls were designed for a
+The game writes `settings.json` beside its assets on Windows/Linux. On macOS,
+user data lives in `~/ToU/`, including `~/ToU/settings.json`; replacing the app
+does not replace your settings. Existing app-local settings are imported when
+the home-folder file is missing. The original default controls were designed for a
 Windows keyboard; MacBook users should remap them under **Options → Controls**.
 Right Option and Right Command are practical primary-action choices.
+
+Press **F12** to save a PNG of the final rendered game window, including menus,
+HUD, scaling and any enabled shader effects. Screenshots go into `screenshots/`
+beside the game on Windows/Linux, or `~/ToU/screenshots/` on macOS. Window borders
+and other desktop windows are not captured. Filenames are timestamped and never
+overwrite existing images. Screenshot readback/encoding may briefly hitch a frame.
 
 The reconstructed game identifies itself as
 `Tunnels of Underworld - RE/Decompiled - v{version}` so it cannot be confused with
@@ -176,7 +184,8 @@ cmake --build source/.build/x64 --config Release --parallel 8
 ```
 
 The `Build` GitHub Actions workflow runs once for each pull request and for
-direct pushes to `main`. It builds Windows x86, Windows/Linux x64 and ARM64,
+direct pushes to `main`, except Markdown-only (`.md`) changes. Manual runs remain
+available. It builds Windows x86, Windows/Linux x64 and ARM64,
 and macOS Intel and Apple Silicon, validates localization, checks executable
 architecture, and stages the full runtime. It never publishes a release.
 

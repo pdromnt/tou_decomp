@@ -8,6 +8,15 @@ remain untouched. No shader changes gameplay visibility or lighting rules.
 
 ## Use It
 
+**F12** saves the final presented frame as PNG, including scaling, bloom,
+flames, distortion, HUD and menus. The capture is at drawable/window pixel
+resolution, not the raw software framebuffer. Images are written beside the
+game in `screenshots/` on Windows/Linux or `~/ToU/screenshots/` on macOS.
+GPU readback and PNG encoding happen only on request and can briefly hitch.
+F12 capture has been checked on Windows with OpenGL/FSR/effects and the SDL
+Direct3D fallback. macOS/Retina and Linux (including GLES) runtime capture still need
+hardware acceptance; successful Windows capture does not establish those paths.
+
 Launch normally. Choose **Options > Details & Visuals > Display and Rendering
 Settings > Scaling > FSR 1 (beta)**, or turn on **Shader effects (beta)** in the
 same screen. No launch flags are required. A compatible shader backend is

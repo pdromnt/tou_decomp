@@ -1,6 +1,7 @@
 /* SDL-owned window and event boundary. */
 #include "tou.h"
 #include "platform.h"
+#include "screenshots.h"
 #include <SDL3/SDL.h>
 #include <string>
 
@@ -13,6 +14,13 @@
 #endif
 
 static SDL_Window *s_PlatformWindow = NULL;
+static std::string s_UserDirectory;
+
+std::string Platform_UserFilePath(const char *name)
+{
+    if (s_UserDirectory.empty()) return std::string();
+    return s_UserDirectory + "/" + name;
+}
 
 static SDL_Window *Create_Shader_Window(const char *title, int width, int height,
                                         int profile, int major, int minor)
@@ -44,8 +52,7 @@ int Platform_SetRuntimeDirectory(void)
 
     std::string runtime_path(base_path);
 #if defined(__APPLE__)
-    /* SDL returns Contents/MacOS for an app bundle. Assets and the deliberately
-     * app-local settings.json live together in Contents/Resources. */
+    /* Assets remain read-only inside the app; user data is resolved separately. */
     runtime_path += "../Resources";
 #endif
     if (TOU_CHDIR(runtime_path.c_str()) != 0) {
@@ -53,6 +60,13 @@ int Platform_SetRuntimeDirectory(void)
             runtime_path.c_str());
         return 0;
     }
+    s_UserDirectory = runtime_path;
+#if defined(__APPLE__)
+    const char *home = SDL_GetUserFolder(SDL_FOLDER_HOME);
+    if (!home || !*home) return 0;
+    s_UserDirectory = std::string(home) + "/ToU";
+    if (!SDL_CreateDirectory(s_UserDirectory.c_str())) return 0;
+#endif
     return 1;
 }
 
@@ -162,6 +176,11 @@ int Platform_PollEvent(PlatformEvent *event)
     event->x = 0;
     event->y = 0;
     switch (sdl_event.type) {
+    case SDL_EVENT_KEY_DOWN:
+        if (sdl_event.key.scancode == SDL_SCANCODE_F12 && !sdl_event.key.repeat &&
+            (SDL_GetWindowFlags(s_PlatformWindow) & SDL_WINDOW_INPUT_FOCUS))
+            Screenshot_Request();
+        break;
     case SDL_EVENT_QUIT:
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         event->type = PLATFORM_EVENT_QUIT;

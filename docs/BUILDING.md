@@ -75,6 +75,9 @@ The local game output remains `TOU.exe`, `TOU` or `TOU.app` at the repository
 root, beside the assets. Editor/compiler binaries go in root `level-editor/`;
 that generated directory is ignored and is distinct from `source/level-editor/`.
 Local settings, logs, build trees and packages remain untracked.
+On macOS settings and optional debug logs live under `~/ToU/`, outside the app.
+F12 screenshots use `~/ToU/screenshots/` on macOS and root `screenshots/` on
+Windows/Linux; captures are not release inputs.
 Build caches, staging and release archives live under ignored `source/.build/`;
 they are disposable outputs, not shipping source. CI uses `source/.build/ci/`
 and `source/.build/stage/`. Do not relocate an existing CMake cache: configure a
@@ -93,6 +96,9 @@ documentation and notices. It does not ship `source/`, build caches, settings or
 the original reference tools. macOS assets/notices remain inside `TOU.app`.
 Release archives are written to `source/.build/dist/`; Windows uses ZIP and Unix uses tar.gz.
 The manual release workflow still builds all seven supported desktop targets.
+Automatic push/PR CI skips changes containing only `.md` files. HTML help,
+localization and code changes still trigger CI; manual builds/releases are not
+filtered.
 
 ## Developer utilities
 

@@ -3,6 +3,7 @@
 #include "tou.h"
 #include "gfx_shader.h"
 #include "shader_effects.h"
+#include "screenshots.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
 #include <string>
@@ -61,6 +62,8 @@ std::string JoinSources(const char *const (&chunks)[N])
  X(void, TexImage2D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *)) \
  X(void, TexSubImage2D, (GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *)) \
  X(void, PixelStorei, (GLenum, GLint)) \
+ X(void, ReadBuffer, (GLenum)) \
+ X(void, ReadPixels, (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *)) \
  X(void, GenFramebuffers, (GLsizei, GLuint *)) \
  X(void, DeleteFramebuffers, (GLsizei, const GLuint *)) \
  X(void, BindFramebuffer, (GLenum, GLuint)) \
@@ -559,6 +562,24 @@ bool ShaderPresentation_Present(const Framebuffer *frame)
     if (pGetError() != GL_NO_ERROR) {
         LOG("[SHADER] Presentation failed\n");
         return false;
+    }
+    if (Screenshot_Pending()) {
+        // Read the final backbuffer after FSR, bloom, flames and refraction.
+        SDL_Surface *surface = SDL_CreateSurface(pixelWidth, pixelHeight, SDL_PIXELFORMAT_RGBA32);
+        if (!surface) Screenshot_Failed(SDL_GetError());
+        else {
+            pReadBuffer(GL_BACK);
+            pPixelStorei(GL_PACK_ALIGNMENT, 1);
+            pPixelStorei(GL_PACK_ROW_LENGTH, surface->pitch / 4);
+            pReadPixels(0, 0, pixelWidth, pixelHeight, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
+            const GLenum error = pGetError();
+            pPixelStorei(GL_PACK_ROW_LENGTH, 0);
+            pPixelStorei(GL_PACK_ALIGNMENT, 4);
+            if (error != GL_NO_ERROR) Screenshot_Failed("OpenGL framebuffer readback failed");
+            else if (!SDL_FlipSurface(surface, SDL_FLIP_VERTICAL)) Screenshot_Failed(SDL_GetError());
+            else Screenshot_Save(surface);
+            SDL_DestroySurface(surface);
+        }
     }
     return SDL_GL_SwapWindow(window);
 }

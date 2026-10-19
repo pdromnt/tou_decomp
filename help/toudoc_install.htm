@@ -19,8 +19,16 @@
               <b>TOU.app</b> on macOS. Keep the program with its packaged data,
               level, music, sound, ship, and help directories.</p>
             <p>TOU saves modern settings in <b>settings.json</b> beside its
-              assets. In a macOS package this is inside
-              <b>TOU.app/Contents/Resources</b>.</p>
+              assets on Windows/Linux. On macOS they live in
+              <b>~/ToU/settings.json</b>, outside the app and disk image.
+              Existing app-local settings are imported if the home-folder file
+              is missing, so replacing the app preserves your preferences.</p>
+            <p>Press <b>F12</b> to capture the final rendered window as PNG,
+              including HUD, menus, scaling and enabled shader effects, but not
+              window borders or other apps. Screenshots are saved in
+              <b>screenshots/</b> beside the game on Windows/Linux, or
+              <b>~/ToU/screenshots/</b> on macOS. Timestamped filenames keep
+              existing captures safe.</p>
             <h2 align="left"><a name="sysreq">2.1 System Requirements</a></h2>
             <p align="left">Use the package matching your platform:</p>
             <ul>

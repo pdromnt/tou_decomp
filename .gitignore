@@ -57,5 +57,6 @@ settings.json.tmp
 /build*/
 /stage*/
 /level-editor/
+/screenshots/
 __pycache__/
 *.pyc

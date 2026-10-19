@@ -2,6 +2,7 @@
 #define TOU_PLATFORM_H
 
 #include <stdint.h>
+#include <string>
 
 typedef enum PlatformEventType {
     PLATFORM_EVENT_NONE = 0,
@@ -18,6 +19,7 @@ typedef struct PlatformEvent {
 } PlatformEvent;
 
 int   Platform_SetRuntimeDirectory(void);
+std::string Platform_UserFilePath(const char *name);
 int   Platform_CreateWindow(const char *title, int width, int height);
 int   Platform_RecreatePlainWindow(void);
 void  Platform_ShowWindow(void);

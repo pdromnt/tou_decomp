@@ -6,6 +6,7 @@
 #include "render_backend.h"
 #include "platform.h"
 #include "gfx_shader.h"
+#include "screenshots.h"
 #include <SDL3/SDL.h>
 
 static SDL_Window *s_Window = NULL;
@@ -136,8 +137,16 @@ static int SDLBackend_Present(const Framebuffer *framebuffer)
 
     SDL_SetRenderDrawColor(s_Renderer, 0, 0, 0, 255);
     if (!SDL_RenderClear(s_Renderer) ||
-        !SDL_RenderTexture(s_Renderer, s_Texture, NULL, &target) ||
-        !SDL_RenderPresent(s_Renderer)) {
+        !SDL_RenderTexture(s_Renderer, s_Texture, NULL, &target)) {
+        LOG("[GFX] SDL presentation failed: %s\n", SDL_GetError());
+        return 0;
+    }
+    if (Screenshot_Pending()) {
+        SDL_Surface *surface = SDL_RenderReadPixels(s_Renderer, NULL);
+        if (surface) { Screenshot_Save(surface); SDL_DestroySurface(surface); }
+        else Screenshot_Failed(SDL_GetError());
+    }
+    if (!SDL_RenderPresent(s_Renderer)) {
         LOG("[GFX] SDL presentation failed: %s\n", SDL_GetError());
         return 0;
     }

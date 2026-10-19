@@ -11,14 +11,13 @@
 
 #include "gamestate.h"
 #include "gfx.h"
+#include "platform.h"
 
 using nlohmann::json;
 
 namespace {
 
 const int SETTINGS_SCHEMA_VERSION = 1;
-const char *const SETTINGS_PATH = "settings.json";
-const char *const SETTINGS_TEMP_PATH = "settings.json.tmp";
 std::string g_Language = "en";
 std::string g_RecentLanHost = "127.0.0.1";
 int g_RecentLanPort = 27015;
@@ -569,7 +568,19 @@ void Settings_Apply(const UserSettings &settings)
 
 SettingsLoadResult Settings_LoadJson(void)
 {
-    std::ifstream input(SETTINGS_PATH, std::ios::binary);
+    const std::string path = Platform_UserFilePath("settings.json");
+    std::ifstream input(path.c_str(), std::ios::binary);
+#if defined(__APPLE__)
+    bool migrated = false;
+    if (!input.is_open()) {
+        SDL_PathInfo info{};
+        if (SDL_GetPathInfo(path.c_str(), &info) && info.type != SDL_PATHTYPE_NONE)
+            return SETTINGS_LOAD_INVALID; // Never replace an existing unreadable user file.
+        input.clear();
+        input.open("settings.json", std::ios::binary); // Old bundle-local settings: read only.
+        migrated = input.is_open();
+    }
+#endif
     if (!input.is_open()) return SETTINGS_LOAD_MISSING;
     try {
         json root;
@@ -591,6 +602,10 @@ SettingsLoadResult Settings_LoadJson(void)
         OverlayJson(settings, root);
         settings.schemaVersion = SETTINGS_SCHEMA_VERSION;
         Settings_Apply(settings);
+#if defined(__APPLE__)
+        if (migrated && !Settings_SaveJson())
+            LOG("[CFG] Could not migrate app-local settings into ~/ToU\n");
+#endif
         LOG("[CFG] Loaded settings.json (schema %d)\n", schemaVersion);
         return SETTINGS_LOAD_OK;
     } catch (const std::exception &error) {
@@ -601,6 +616,11 @@ SettingsLoadResult Settings_LoadJson(void)
 
 bool Settings_SaveJson(void)
 {
+    const std::string path = Platform_UserFilePath("settings.json");
+    const std::string temporary = Platform_UserFilePath("settings.json.tmp");
+    const char *const SETTINGS_PATH = path.c_str();
+    const char *const SETTINGS_TEMP_PATH = temporary.c_str();
+    if (path.empty() || temporary.empty()) return false;
     try {
         const json root = SettingsToJson(Settings_CaptureCurrent());
         std::ofstream output(SETTINGS_TEMP_PATH,
