@@ -8,7 +8,7 @@
 namespace {
 
 const uint8_t kSnapshotMagic[8] = {'T', 'O', 'U', 'S', 'N', 'A', 'P', 0};
-const uint32_t kSnapshotVersion = 3;
+const uint32_t kSnapshotVersion = 4;
 const int kWaypointRecordLimit = 1400000 / 0x1c;
 const int kSpawnPointLimit = 0xc00 / 0x0c;
 const int kDecorationLimit = 0x800 / 0x10;
@@ -158,8 +158,9 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
 {
     if (snapshot == NULL || DAT_00481f50 == NULL || DAT_0048782c == NULL ||
         DAT_00487810 == NULL || DAT_0048781c == NULL || DAT_00487a00 <= 0 ||
-        DAT_004879f4 == 0 || DAT_00481f48 == NULL ||
+        DAT_004879f4 == 0 || (DAT_00481f48 == NULL && DAT_0048927c != 0) ||
         (DAT_00487820 == NULL && DAT_004892c8 != 0) ||
+        DAT_00487814 == NULL || DAT_00489ea4 == NULL || DAT_00489ea8 == NULL ||
         DAT_00489e84 == NULL || DAT_004876a0 == NULL || DAT_00487aa0 == NULL ||
         DAT_00489e98 == NULL ||
         !ValidCount(DAT_00489240, GAMEPLAY_PLAYER_CAPACITY) ||
@@ -252,16 +253,18 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
     for (int i = 0; i < DAT_00489240; ++i)
         WritePlayer(&writer, *Player_Get(i));
 
-    writer.raw(g_EntityPool, static_cast<size_t>(g_EntityCount) * sizeof(Entity));
-    writer.raw(g_TrooperPool, static_cast<size_t>(g_TrooperCount) * sizeof(TrooperRecord));
-    writer.raw(g_ProjectilePool, static_cast<size_t>(g_ProjectileCount) * sizeof(ProjectileRecord));
-    writer.raw(g_ParticlePool, static_cast<size_t>(g_ParticleCount) * sizeof(ParticleRecord));
-    writer.raw(DAT_00481f2c, static_cast<size_t>(g_FireParticleCount) * 0x20u);
-    writer.raw(g_DebrisItemPool, static_cast<size_t>(g_DebrisItemCount) * sizeof(DebrisItemRecord));
-    writer.raw(DAT_00487780, static_cast<size_t>(DAT_00489264) * 0x20u);
-    writer.raw(DAT_00487a9c, static_cast<size_t>(DAT_0048926c) * 0x20u);
-    writer.raw(DAT_00489e7c, static_cast<size_t>(g_FluidSourceCount) * 0x20u);
-    writer.raw(DAT_00489e80, static_cast<size_t>(DAT_00489270) * 0x20u);
+    // Some recovered spawners only initialize selected fields in the next free
+    // slot. Inactive storage is therefore future simulation state too.
+    writer.raw(g_EntityPool, static_cast<size_t>(ENTITY_STORAGE_CAPACITY) * sizeof(Entity));
+    writer.raw(g_TrooperPool, static_cast<size_t>(TROOPER_CAPACITY) * sizeof(TrooperRecord));
+    writer.raw(g_ProjectilePool, static_cast<size_t>(PROJECTILE_CAPACITY) * sizeof(ProjectileRecord));
+    writer.raw(g_ParticlePool, static_cast<size_t>(PARTICLE_CAPACITY) * sizeof(ParticleRecord));
+    writer.raw(DAT_00481f2c, static_cast<size_t>(EDGE_RECORD_CAPACITY) * 0x20u);
+    writer.raw(g_DebrisItemPool, static_cast<size_t>(DEBRIS_ITEM_CAPACITY) * sizeof(DebrisItemRecord));
+    writer.raw(DAT_00487780, static_cast<size_t>(25) * 0x20u);
+    writer.raw(DAT_00487a9c, static_cast<size_t>(100) * 0x20u);
+    writer.raw(DAT_00489e7c, static_cast<size_t>(FLUID_SOURCE_CAPACITY) * 0x20u);
+    writer.raw(DAT_00489e80, static_cast<size_t>(16) * 0x20u);
     writer.raw(DAT_00481f48, static_cast<size_t>(DAT_0048927c) * 0x08u);
     writer.raw(DAT_00487820, static_cast<size_t>(DAT_004892c8) * 0x1cu);
     writer.raw(DAT_00489e84, static_cast<size_t>(g_MapEdgeCount) * 0x10u);
@@ -273,13 +276,23 @@ bool SimulationState_Capture(std::vector<uint8_t> *snapshot)
     const size_t cells = static_cast<size_t>(DAT_00487a00) * DAT_004879f4;
     writer.raw(DAT_00481f50, cells * sizeof(uint16_t));
     writer.raw(DAT_0048782c, cells);
+    // These caches are read before a full rebuild (collision at half rate,
+    // incremental visibility and pathfinding); future-state caches cannot be
+    // left behind when restoring an earlier terrain/player state.
+    writer.raw(DAT_00487814, static_cast<size_t>(DAT_004879fc + 1) * (DAT_004879f8 + 1));
+    const size_t shadow_bytes = static_cast<size_t>(DAT_00487a08 + 1) * (DAT_00487a04 + 1);
+    writer.raw(DAT_00489ea4, shadow_bytes);
+    writer.raw(DAT_00489ea8, shadow_bytes);
+    writer.raw(&DAT_00487784, sizeof(DAT_00487784)); // Fluid spread phase.
+    writer.raw(&DAT_00489e9c, sizeof(DAT_00489e9c)); // Periodic edge relocation.
     return true;
 }
 
 bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
 {
     if (snapshot == NULL || DAT_00481f50 == NULL || DAT_0048782c == NULL ||
-        DAT_0048781c == NULL || DAT_00481f48 == NULL ||
+        DAT_0048781c == NULL || DAT_00487814 == NULL ||
+        DAT_00489ea4 == NULL || DAT_00489ea8 == NULL ||
         DAT_00489e84 == NULL || DAT_004876a0 == NULL || DAT_00487aa0 == NULL ||
         DAT_00489e98 == NULL)
         return false;
@@ -333,6 +346,7 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
         !ValidCount(misc_count, 25) || !ValidCount(explosion_count, 100) ||
         !ValidCount(fluid_count, FLUID_SOURCE_CAPACITY) || !ValidCount(wall_count, 16) ||
         DAT_00489280 < 0 || !ValidCount(turret_count, DAT_00489280) ||
+        (turret_count != 0 && DAT_00481f48 == NULL) ||
         !ValidCount(waypoint_count, kWaypointRecordLimit) ||
         (waypoint_count != 0 && DAT_00487820 == NULL) ||
         !ValidCount(map_edge_count, MAP_EDGE_CAPACITY) ||
@@ -364,23 +378,26 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
         sizeof(DAT_00486e68) + sizeof(DAT_00486fa8) +
         sizeof(DAT_004870e8) + sizeof(DAT_00487228) +
         static_cast<size_t>(player_count) * player_bytes +
-        static_cast<size_t>(entity_count) * sizeof(Entity) +
-        static_cast<size_t>(trooper_count) * sizeof(TrooperRecord) +
-        static_cast<size_t>(projectile_count) * sizeof(ProjectileRecord) +
-        static_cast<size_t>(particle_count) * sizeof(ParticleRecord) +
-        static_cast<size_t>(fire_count) * 0x20u +
-        static_cast<size_t>(debris_count) * sizeof(DebrisItemRecord) +
-        static_cast<size_t>(misc_count) * 0x20u +
-        static_cast<size_t>(explosion_count) * 0x20u +
-        static_cast<size_t>(fluid_count) * 0x20u +
-        static_cast<size_t>(wall_count) * 0x20u +
+        static_cast<size_t>(ENTITY_STORAGE_CAPACITY) * sizeof(Entity) +
+        static_cast<size_t>(TROOPER_CAPACITY) * sizeof(TrooperRecord) +
+        static_cast<size_t>(PROJECTILE_CAPACITY) * sizeof(ProjectileRecord) +
+        static_cast<size_t>(PARTICLE_CAPACITY) * sizeof(ParticleRecord) +
+        static_cast<size_t>(EDGE_RECORD_CAPACITY) * 0x20u +
+        static_cast<size_t>(DEBRIS_ITEM_CAPACITY) * sizeof(DebrisItemRecord) +
+        static_cast<size_t>(25) * 0x20u +
+        static_cast<size_t>(100) * 0x20u +
+        static_cast<size_t>(FLUID_SOURCE_CAPACITY) * 0x20u +
+        static_cast<size_t>(16) * 0x20u +
         static_cast<size_t>(turret_count) * 0x08u +
         static_cast<size_t>(waypoint_count) * 0x1cu +
         static_cast<size_t>(map_edge_count) * 0x10u +
         static_cast<size_t>(spawn_count) * 0x0cu +
         static_cast<size_t>(decoration_count) * 0x10u +
         static_cast<size_t>(static_entity_count) * 0x10u +
-        kEntityTrackingBytes + cells * (sizeof(uint16_t) + 1u);
+        kEntityTrackingBytes + cells * (sizeof(uint16_t) + 1u) +
+        static_cast<size_t>(DAT_004879fc + 1) * (DAT_004879f8 + 1) +
+        2u * static_cast<size_t>(DAT_00487a08 + 1) * (DAT_00487a04 + 1) +
+        sizeof(DAT_00487784) + sizeof(DAT_00489e9c);
     if (reader.remaining() != expected_body)
         return false;
 
@@ -422,16 +439,16 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
         if (!ReadPlayer(&reader, Player_Get(i)))
             return false;
     }
-    if (!reader.raw(g_EntityPool, static_cast<size_t>(entity_count) * sizeof(Entity)) ||
-        !reader.raw(g_TrooperPool, static_cast<size_t>(trooper_count) * sizeof(TrooperRecord)) ||
-        !reader.raw(g_ProjectilePool, static_cast<size_t>(projectile_count) * sizeof(ProjectileRecord)) ||
-        !reader.raw(g_ParticlePool, static_cast<size_t>(particle_count) * sizeof(ParticleRecord)) ||
-        !reader.raw(DAT_00481f2c, static_cast<size_t>(fire_count) * 0x20u) ||
-        !reader.raw(g_DebrisItemPool, static_cast<size_t>(debris_count) * sizeof(DebrisItemRecord)) ||
-        !reader.raw(DAT_00487780, static_cast<size_t>(misc_count) * 0x20u) ||
-        !reader.raw(DAT_00487a9c, static_cast<size_t>(explosion_count) * 0x20u) ||
-        !reader.raw(DAT_00489e7c, static_cast<size_t>(fluid_count) * 0x20u) ||
-        !reader.raw(DAT_00489e80, static_cast<size_t>(wall_count) * 0x20u) ||
+    if (!reader.raw(g_EntityPool, static_cast<size_t>(ENTITY_STORAGE_CAPACITY) * sizeof(Entity)) ||
+        !reader.raw(g_TrooperPool, static_cast<size_t>(TROOPER_CAPACITY) * sizeof(TrooperRecord)) ||
+        !reader.raw(g_ProjectilePool, static_cast<size_t>(PROJECTILE_CAPACITY) * sizeof(ProjectileRecord)) ||
+        !reader.raw(g_ParticlePool, static_cast<size_t>(PARTICLE_CAPACITY) * sizeof(ParticleRecord)) ||
+        !reader.raw(DAT_00481f2c, static_cast<size_t>(EDGE_RECORD_CAPACITY) * 0x20u) ||
+        !reader.raw(g_DebrisItemPool, static_cast<size_t>(DEBRIS_ITEM_CAPACITY) * sizeof(DebrisItemRecord)) ||
+        !reader.raw(DAT_00487780, static_cast<size_t>(25) * 0x20u) ||
+        !reader.raw(DAT_00487a9c, static_cast<size_t>(100) * 0x20u) ||
+        !reader.raw(DAT_00489e7c, static_cast<size_t>(FLUID_SOURCE_CAPACITY) * 0x20u) ||
+        !reader.raw(DAT_00489e80, static_cast<size_t>(16) * 0x20u) ||
         !reader.raw(DAT_00481f48, static_cast<size_t>(turret_count) * 0x08u) ||
         !reader.raw(DAT_00487820, static_cast<size_t>(waypoint_count) * 0x1cu) ||
         !reader.raw(DAT_00489e84, static_cast<size_t>(map_edge_count) * 0x10u) ||
@@ -441,8 +458,13 @@ bool SimulationState_Restore(const uint8_t *snapshot, size_t size)
         !reader.raw(DAT_0048781c, kEntityTrackingBytes)) {
         return false;
     }
+    const size_t shadow_bytes = static_cast<size_t>(DAT_00487a08 + 1) * (DAT_00487a04 + 1);
     if (!reader.raw(DAT_00481f50, cells * sizeof(uint16_t)) ||
-        !reader.raw(DAT_0048782c, cells) || reader.remaining() != 0) {
+        !reader.raw(DAT_0048782c, cells) ||
+        !reader.raw(DAT_00487814, static_cast<size_t>(DAT_004879fc + 1) * (DAT_004879f8 + 1)) ||
+        !reader.raw(DAT_00489ea4, shadow_bytes) || !reader.raw(DAT_00489ea8, shadow_bytes) ||
+        !reader.raw(&DAT_00487784, sizeof(DAT_00487784)) ||
+        !reader.raw(&DAT_00489e9c, sizeof(DAT_00489e9c)) || reader.remaining() != 0) {
         return false;
     }
 
