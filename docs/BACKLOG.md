@@ -7,6 +7,13 @@ here as a wall of checked boxes.
 
 New defects should be added only after a concrete reproduction.
 
+## Experimental Branch: Advanced Netcode
+
+- Follow the gated [advanced netcode plan](ADVANCED_NETCODE.md) on
+  `advanced-netcode`, separate from stable main. Start with latency/stall
+  measurements and negotiated input delay, then prove local rewind/replay
+  correctness and resource costs before enabling network prediction.
+
 ## Active Work: Presentation Shaders
 
 - Confirm macOS OpenGL and Linux/GLES compatibility and Raspberry Pi CM4

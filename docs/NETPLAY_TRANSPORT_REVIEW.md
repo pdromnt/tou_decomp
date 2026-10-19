@@ -48,3 +48,4 @@ It would require protocol/version handling, UDP firewall guidance, loss/jitter
 testing and full multiplayer acceptance, not just linking another library.
 
 For the current implementation and limitations, see [LAN beta](LAN_BETA.md).
+For the experimental branch roadmap, see [advanced netcode](ADVANCED_NETCODE.md).
