@@ -2,6 +2,7 @@
 #include "tou.h"
 #include "presentation_events.h"
 #include "simulation_reconciliation.h"
+#include "netcode_exchange.h"
 #include <algorithm>
 #include <chrono>
 #include <stdio.h>
@@ -365,10 +366,13 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     const int presentation = Option(argc, argv, "--rewind-presentation", 1, 0, 1);
     const int canonical = Option(argc, argv, "--rewind-canonical", 0, 0, 1);
     const int replay_batch = Option(argc, argv, "--rewind-replay-batch", batch, 1, 9);
-    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 3);
+    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 4);
+    const int exchange_role = Option(argc, argv, "--exchange-role", 0, 0, 1);
+    const int exchange_port = Option(argc, argv, "--exchange-port", 27961, 1024, 65535);
     const int frame_budget = Option(argc, argv, "--rewind-frame-budget", 3, 1, 12);
     if (ticks < 0 || window < 0 || players < 0 || troopers < 0 || batch < 0 || ending < 0 || presentation < 0 || canonical < 0 || replay_batch < 0 ||
-        late < 0 || frame_budget < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
+        late < 0 || exchange_role < 0 || exchange_port < 0 || (late == 4 && (players != 2 || ending || ticks < 4)) ||
+        frame_budget < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
                              batch != 1 || replay_batch != 1)) ||
         (!canonical && replay_batch != batch) ||
         Netplay_IsEnabled() || Replay_IsActive()) {
@@ -410,6 +414,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     DAT_0048693c = 0;
     if (!Init_New_Game()) return 2;
     FUN_0041a8c0(false); // Full live session setup, without saving/loading JSON.
+    if (late == 4) TOU_Srand(0x544f5558); // Same generated-level dimensions in both isolated processes.
     if (!Menu_Init_And_Loop()) {
         LOG("[REWIND] initialization failed: %s\n", DAT_00489d7c);
         return 2;
@@ -420,6 +425,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     g_SubState = GAMEPLAY_ACTIVE;
     if (ending) DAT_004892a5 = 1; // Exercise the actual countdown to match complete.
     SimulationState_SetChecksumInterval(0);
+    if (late == 4) return ExchangeDiagnostic_Run(ticks, window, exchange_role == 0, static_cast<uint16_t>(exchange_port));
     if (late) return LateInputRun(ticks, window, players, late, static_cast<uint32_t>(frame_budget));
     struct TimelineScope {
         ~TimelineScope() { PresentationEvents_Stop(); }

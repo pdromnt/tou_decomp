@@ -1,7 +1,8 @@
 # Advanced netcode plan
 
 Status: Stages 1-2, Stage 3's event journal and Stage 4's local reconciliation,
-pacing and authority/resync prototypes are implemented, with checks below;
+pacing/authority prototypes and an isolated two-process exchange are implemented,
+with checks below;
 real presentation, live prediction, remote and cross-platform acceptance remain
 open. Work is on `advanced-netcode`, based on stable v0.11 (`0909331`). No live
 network rollback or transport replacement is enabled yet.
@@ -353,10 +354,25 @@ coalesced arrivals during replay and sealed-history conflicts. Exact evidence
 and trust/validation limits are in the linked guide; these are not live peer
 or authentication tests.
 
+### Bounded two-process exchange (Stage 4 transport prototype)
+
+The [per-peer exchange](NETCODE_EXCHANGE.md) separates received/stored acks from
+committed-prefix hash progress, retains bounded outstanding records, and freezes
+normal input/simulation through Offer/Ready/Commit/Applied/Resume resync phases.
+An isolated loopback TCP driver connects two real simulation owners with
+scripted inputs and a shared work budget; normal LAN remains unchanged.
+
+Minibase, Jungle with troopers and generated Happyland passed committed-hash
+agreement, initial/periodic resync and acknowledged finish. A 20/60 ms per-way
+stream relay injected a checksum mismatch: both Woods processes recovered and
+finished tick 240 in epoch 4. Invalid framing and withheld handshake replies
+aborted both processes rather than resuming unsafely. Bounds, phase semantics,
+one-off probes and explicit limitations are recorded in the linked guide.
+
 Still required: real audible/GPU delivery, weapon-specific producers, live
-clock/authority/ack integration and resync delivery barriers, combined rolling
-host/client runs, full host-controlled pause/skip/end and multi-level/lobby
-acceptance, remote/cross-platform checks, and low-power budgets. No live
+mode/fingerprint/clock/input/liveness integration, multi-peer barriers, full
+host-controlled pause/skip/end and multi-level/lobby acceptance,
+remote/cross-platform checks, and low-power budgets. No live
 prediction, rollback toggle or ENet migration is enabled. Keep main stable.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

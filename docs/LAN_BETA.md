@@ -20,6 +20,8 @@ The input ledger tracks simulated/confirmed frontiers; live prediction remains
 zero. Initial synchronization also runs while the level preview is visible.
 The [local reconciliation prototype](INPUT_RECONCILIATION.md) is diagnostic-only;
 it does not enable prediction or rollback in a live session.
+The separate [peer exchange diagnostic](NETCODE_EXCHANGE.md) exercises two
+processes on loopback; it is not an alternate mode in this LAN flow yet.
 
 ## Start a session
 

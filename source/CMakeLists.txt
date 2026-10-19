@@ -87,6 +87,8 @@ set(TOU_SOURCES
     game/presentation_events.cpp
     game/input_timeline.cpp
     game/input_authority.cpp
+    game/netcode_exchange.cpp
+    game/exchange_diagnostic.cpp
     game/simulation_reconciliation.cpp
     game/netplay.cpp
     game/replay.cpp

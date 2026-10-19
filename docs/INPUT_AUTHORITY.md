@@ -111,7 +111,9 @@ coalescing mid-replay revisions, immutable sealed input, publisher ring wrap,
 malformed records, and rejection after external round-state mutation. No
 permanent test suite or CI job was added.
 
-Still gated: live peer receipt envelopes, authority/ack scheduling, resync
-request/response barriers and reliable delivery dependencies, combined rolling
-host/client runs, real audible/GPU delivery, level/lobby transitions, remote
-and cross-platform checks, and low-power costs. No live prediction is enabled.
+The [bounded peer exchange](NETCODE_EXCHANGE.md) now supplies receipt/revision
+acks, committed hash progress and a resync handshake in an isolated two-process
+TCP driver. It is not connected to normal LAN sessions. Live negotiation,
+multi-client barriers, input/clock/liveness integration, real audible/GPU delivery,
+level/lobby transitions, remote/cross-platform checks and low-power costs remain
+gated. No live prediction is enabled.

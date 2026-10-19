@@ -134,3 +134,13 @@ resync counts; event counts reset at each imported base. Other late-input
 restrictions remain unchanged. See [input authority](INPUT_AUTHORITY.md) for
 the protocol sketch, evidence, structural-validation scope and remaining live
 transport gates. This is not a two-peer networking run.
+
+Mode `--rewind-late-input 4` is the separate two-process TCP exchange diagnostic.
+Use `--exchange-role 0` for host and `1` for client, with the same
+`--exchange-port` (default 27961) and level/options in isolated asset directories.
+It requires exactly two players, canonical ticks, sound logic enabled, at least
+four ticks and no forced ending. Its generated maps use a shared fixed seed.
+`[EXCHANGE] PASS` requires committed state/hash agreement and acknowledged finish;
+exit 8 indicates framing, transport, exchange, barrier or overall timeout failure.
+See [peer exchange](NETCODE_EXCHANGE.md) for commands, injected-delay/failure
+evidence, bounds and remaining live LAN gates. The peer driver is loopback-only.
