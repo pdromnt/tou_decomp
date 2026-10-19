@@ -9,7 +9,12 @@
 class SimulationReconciliation {
 public:
     SimulationReconciliation() = default;
-    enum Result { Advanced, Waiting, Terminal, Replayed, Unchanged, Failed };
+    enum Result { Advanced, Waiting, Terminal, Replayed, Unchanged, Failed, Replaying };
+    struct FrameWork {
+        Result result = Unchanged;
+        uint32_t replay_ticks = 0, forward_ticks = 0, pending_ticks = 0;
+        bool clamped = false;
+    };
     struct Checkpoint {
         uint32_t tick = 0;
         bool valid = false, continued = false;
@@ -24,7 +29,10 @@ public:
     InputTimeline::Result submit(uint32_t generation, uint32_t tick,
                                  uint8_t player, uint8_t actions);
     Result advance();
-    Result reconcile();
+    Result reconcile(uint32_t max_ticks = InputTimeline::MaximumPrediction);
+    // Shared replay/forward tick budget, at most one restore per call. Tick time
+    // matches the existing 16 ms loop. No hard wall-time bound for one tick.
+    FrameWork pump(uint32_t elapsed_ms, uint32_t max_ticks, uint32_t target_tick = UINT32_MAX);
     bool confirm();
     bool can_finalize() const;
     const Checkpoint *checkpoint(uint32_t tick) const;
@@ -36,6 +44,8 @@ public:
     uint32_t truncated_tails() const { return truncated_; }
     size_t peak_bytes() const { return peak_; }
     bool healthy() const { return ready_ && !failed_; }
+    bool replaying() const { return replay_end_ != 0; }
+    uint32_t queued_inputs() const { return queued_; }
 private:
     SimulationReconciliation(const SimulationReconciliation &) = delete;
     SimulationReconciliation &operator=(const SimulationReconciliation &) = delete;
@@ -45,9 +55,14 @@ private:
     bool aligned() const;
     Result fail();
     Result run_tick();
+    bool drain_inputs();
+    struct PendingInput { uint32_t tick; uint8_t player, actions; };
+    enum { MaximumQueuedInputs = 128 };
+    PendingInput pending_[MaximumQueuedInputs];
     bool ready_ = false, failed_ = false;
     uint32_t window_ = 0, players_ = 0, corrections_ = 0, truncated_ = 0;
     uint64_t replayed_ = 0;
     size_t budget_ = 0, peak_ = 0;
+    uint32_t generation_ = 0, replay_end_ = 0, queued_ = 0, debt_ms_ = 0;
 };
 #endif

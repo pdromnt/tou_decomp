@@ -65,9 +65,99 @@ bool Capture(std::vector<uint8_t> *state, Timing *time)
     return result;
 }
 
+struct RollingStats {
+    unsigned int frames = 0, verified = 0, predicted = 0, early_returns = 0;
+    unsigned int waiting = 0, slices = 0, deferred = 0, clamps = 0, maximum_work = 0;
+    uint64_t clock = 0;
+    Timing pump;
+};
+
+int RollingWindow(SimulationReconciliation *session, const std::vector<Frame> &expected,
+                  uint32_t start, int players, int window, uint32_t budget, RollingStats *stats)
+{
+    struct Packet { uint64_t due; uint32_t tick; uint8_t player, actions; bool sent; };
+    std::vector<Packet> packets;
+    const uint64_t origin = stats->clock;
+    const uint32_t end = start + static_cast<uint32_t>(expected.size());
+    for (size_t n = 0; n < expected.size(); ++n) {
+        const uint32_t tick = start + static_cast<uint32_t>(n) + 1;
+        for (int p = 0; p < players; ++p) {
+            const uint32_t delay = p == 0 ? 0 :
+                ((tick * 17u + static_cast<uint32_t>(p) * 11u) % static_cast<uint32_t>(window + 5)) * 16u +
+                (tick % 17u == 0 ? static_cast<uint32_t>(window) * 32u : 0);
+            packets.push_back(Packet{origin + n * 16u + delay, tick, static_cast<uint8_t>(p),
+                                     expected[n].actions[p], false});
+        }
+    }
+    uint32_t checked = start;
+    const uint32_t cadence[] = {16, 8, 24, 16, 80, 0, 16, 12, 20};
+    for (uint32_t frame = 0; frame < 4096; ++frame) {
+        const uint32_t elapsed = cadence[stats->frames % (sizeof(cadence) / sizeof(cadence[0]))];
+        stats->clock += elapsed;
+        ++stats->frames;
+        // The schedule is stateless, separate from gameplay RNG. Reverse
+        // traversal deliberately permits newer ticks to arrive before holes.
+        for (size_t n = packets.size(); n > 0; --n) {
+            Packet &packet = packets[n - 1];
+            if (packet.sent || packet.due > stats->clock) continue;
+            if (session->submit(99, packet.tick, packet.player, packet.actions) != InputTimeline::WrongGeneration)
+                return 7;
+            const InputTimeline::Result result = session->submit(1, packet.tick, packet.player, packet.actions);
+            if (result != InputTimeline::Accepted && result != InputTimeline::Deferred) return 7;
+            if (result == InputTimeline::Deferred) ++stats->deferred;
+            if (session->submit(1, packet.tick, packet.player, packet.actions) != InputTimeline::Duplicate)
+                return 7;
+            packet.sent = true;
+        }
+        const uint64_t emitted = PresentationEvents_CommittedCount();
+        const uint32_t corrections = session->corrections();
+        const Clock::time_point begin = Clock::now();
+        const SimulationReconciliation::FrameWork work = session->pump(elapsed, budget, end);
+        stats->pump.add(begin);
+        const uint32_t total = work.forward_ticks + work.replay_ticks;
+        stats->maximum_work = std::max(stats->maximum_work, total);
+        stats->predicted += work.forward_ticks;
+        if (work.result == SimulationReconciliation::Failed || total > budget ||
+            session->corrections() - corrections > 1 || work.pending_ticks > static_cast<uint32_t>(window) ||
+            PresentationEvents_CommittedCount() != emitted) return 7;
+        if (work.clamped) ++stats->clamps;
+        if (session->replaying()) ++stats->slices;
+        if (!total) ++stats->waiting;
+        if (session->replaying() || session->dirty_from()) {
+            if (session->confirm() || session->can_finalize()) return 7;
+            continue;
+        }
+        for (uint32_t tick = checked + 1; tick <= session->confirmed_tick(); ++tick) {
+            const Frame &oracle = expected[tick - start - 1];
+            const SimulationReconciliation::Checkpoint *actual = session->checkpoint(tick);
+            if (!actual || actual->state != oracle.state || actual->continued != oracle.continue_batch) {
+                size_t offset = 0;
+                if (actual)
+                    while (offset < actual->state.size() && offset < oracle.state.size() &&
+                           actual->state[offset] == oracle.state[offset]) ++offset;
+                LOG("[JITTER] WORLD DIVERGENCE tick=%u offset=%llu\n", tick, static_cast<unsigned long long>(offset));
+                return 5;
+            }
+            if (actual->events != oracle.events || !(actual->local == oracle.presentation)) {
+                LOG("[JITTER] PRESENTATION DIVERGENCE tick=%u\n", tick); return 6;
+            }
+            if (!actual->continued) ++stats->early_returns;
+            ++stats->verified;
+            checked = tick;
+        }
+        if (!session->confirm()) return 7;
+        const uint64_t once = PresentationEvents_CommittedCount();
+        if (!session->confirm() || once != PresentationEvents_CommittedCount()) return 6;
+        if (checked == end) return session->can_finalize() ? 0 : 7;
+    }
+    LOG("[JITTER] frame limit reached start=%u simulated=%u confirmed=%u dirty=%u queued=%u\n",
+        start, session->simulated_tick(), session->confirmed_tick(), session->dirty_from(), session->queued_inputs());
+    return 7;
+}
+
 // Compare actual late-input reconciliation against an all-inputs-known oracle.
 // The oracle is diagnostic-only; the owner never reads its states or commands.
-int LateInputRun(int ticks, int window, int players)
+int LateInputRun(int ticks, int window, int players, bool rolling, uint32_t frame_budget)
 {
     SimulationReconciliation session;
     if (!session.start(1, static_cast<uint8_t>(players), static_cast<uint32_t>(window),
@@ -75,9 +165,10 @@ int LateInputRun(int ticks, int window, int players)
     unsigned int verified = 0, predicted = 0, clean_windows = 0, early_returns = 0;
     size_t peak_bytes = 0;
     Timing oracle_time, forward_time, replay_time;
+    RollingStats rolling_stats;
     bool terminal = false;
-    LOG("[LATE] begin ticks=%d window=%d players=%d full-world=1 event_sink=dry-run rendering=off\n",
-        ticks, window, players);
+    LOG("[LATE] begin ticks=%d window=%d players=%d rolling=%d frame_budget=%u full-world=1 event_sink=dry-run rendering=off\n",
+        ticks, window, players, rolling ? 1 : 0, frame_budget);
     while (verified < static_cast<unsigned int>(ticks) && !terminal) {
         const uint32_t start = session.simulated_tick();
         const SimulationReconciliation::Checkpoint base = *session.checkpoint(start);
@@ -103,6 +194,13 @@ int LateInputRun(int ticks, int window, int players)
         if (!SimulationState_Restore(base.state.data(), base.state.size(), true)) return 3;
         PresentationEvents_Restore(base.local);
         if (!PresentationEvents_DiscardAfter(start)) return 6;
+        if (rolling) {
+            const int result = RollingWindow(&session, expected, start, players, window, frame_budget, &rolling_stats);
+            if (result) return result;
+            verified += static_cast<unsigned int>(expected.size());
+            peak_bytes = std::max(peak_bytes, oracle_bytes + session.peak_bytes());
+            continue;
+        }
         begin = Clock::now();
         for (size_t n = 0; n < expected.size(); ++n) {
             const uint32_t tick = start + static_cast<uint32_t>(n) + 1;
@@ -174,6 +272,17 @@ int LateInputRun(int ticks, int window, int players)
         if (!session.confirm() || once != PresentationEvents_CommittedCount()) return 6;
         peak_bytes = std::max(peak_bytes, oracle_bytes + session.peak_bytes());
     }
+    if (rolling) {
+        LOG("[JITTER] PASS verified=%u frames=%u forward=%u corrections=%u replayed=%llu sliced_frames=%u deferred_inputs=%u waiting_frames=%u clamps=%u max_work=%u budget=%u early_returns=%u terminal=%d history_and_oracle_peak=%llu\n",
+            rolling_stats.verified, rolling_stats.frames, rolling_stats.predicted, session.corrections(),
+            static_cast<unsigned long long>(session.replayed_ticks()), rolling_stats.slices, rolling_stats.deferred,
+            rolling_stats.waiting, rolling_stats.clamps, rolling_stats.maximum_work, frame_budget,
+            rolling_stats.early_returns, terminal ? 1 : 0, static_cast<unsigned long long>(peak_bytes));
+        LOG("[JITTER] pump_ms mean=%.3f max=%.3f confirmed_events=%llu (oracle/comparison excluded)\n",
+            rolling_stats.pump.mean(), rolling_stats.pump.maximum,
+            static_cast<unsigned long long>(PresentationEvents_CommittedCount()));
+        return 0;
+    }
     LOG("[LATE] PASS verified=%u predicted=%u corrections=%u replayed=%llu clean_windows=%u truncated_tails=%u early_returns=%u terminal=%d history_and_oracle_peak=%llu\n",
         verified, predicted, session.corrections(), static_cast<unsigned long long>(session.replayed_ticks()),
         clean_windows, session.truncated_tails(), early_returns, terminal ? 1 : 0,
@@ -197,9 +306,10 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     const int presentation = Option(argc, argv, "--rewind-presentation", 1, 0, 1);
     const int canonical = Option(argc, argv, "--rewind-canonical", 0, 0, 1);
     const int replay_batch = Option(argc, argv, "--rewind-replay-batch", batch, 1, 9);
-    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 1);
+    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 2);
+    const int frame_budget = Option(argc, argv, "--rewind-frame-budget", 3, 1, 12);
     if (ticks < 0 || window < 0 || players < 0 || troopers < 0 || batch < 0 || ending < 0 || presentation < 0 || canonical < 0 || replay_batch < 0 ||
-        late < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
+        late < 0 || frame_budget < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
                              batch != 1 || replay_batch != 1)) ||
         (!canonical && replay_batch != batch) ||
         Netplay_IsEnabled() || Replay_IsActive()) {
@@ -251,7 +361,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     g_SubState = GAMEPLAY_ACTIVE;
     if (ending) DAT_004892a5 = 1; // Exercise the actual countdown to match complete.
     SimulationState_SetChecksumInterval(0);
-    if (late) return LateInputRun(ticks, window, players);
+    if (late) return LateInputRun(ticks, window, players, late == 2, static_cast<uint32_t>(frame_budget));
     struct TimelineScope {
         ~TimelineScope() { PresentationEvents_Stop(); }
     } timeline;

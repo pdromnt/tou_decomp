@@ -7,7 +7,8 @@
 class InputTimeline {
 public:
     enum { Capacity = 512, Players = 4, MaximumPrediction = 12 };
-    enum Result { Accepted, Duplicate, Conflict, TooOld, WrongGeneration, TooFar, Invalid };
+    // Deferred is returned only by the reconciliation owner during sliced replay.
+    enum Result { Accepted, Duplicate, Conflict, TooOld, WrongGeneration, TooFar, Invalid, Deferred };
     bool reset(uint32_t generation, uint8_t players, uint32_t prediction,
                uint32_t base = 0, const uint8_t *previous = NULL);
     Result submit(uint32_t generation, uint32_t tick, uint8_t player, uint8_t actions);

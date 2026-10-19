@@ -314,8 +314,25 @@ behavior. Windows x64 runs passed Minibase, Woods, Jungle with troopers,
 generated Happyland, window sizes 1/8/12 and the forced ending countdown.
 Details and precise limitations are recorded in the linked guide.
 
-Still required: real audible/GPU delivery, weapon-specific producers, rolling
-arrival schedules and pacing, authoritative host/client input revisions and
+### Rolling arrivals and bounded frame work (Stage 4 pacing prototype)
+
+The checkpoint owner can now replay incrementally, deferring arrivals in a
+bounded/deduplicated queue until the current replay boundary. A shared frame
+pump admits at most the chosen replay-plus-forward tick budget and one restore
+per call, with bounded elapsed clock debt. Confirmation and speculative output
+remain blocked while dirty or mid-replay. Tick admission is bounded, not the
+wall-clock cost of an individual restore/tick.
+
+The rolling diagnostic (`--rewind-late-input 2`) compares confirmed prefixes
+under partial/reordered arrivals, longer-than-window delays, duplicates and
+0-80 ms synthetic frame intervals. Woods/Jungle/Happyland and the forced ending
+passed with 1/3/12 work budgets. The one-tick Jungle run handled 481 deferred
+arrivals across 326 sliced replay frames without exceeding one tick per frame.
+Full measurements, stub-probe failure checks and synthetic-schedule limitations
+are in [input reconciliation](INPUT_RECONCILIATION.md).
+
+Still required: real audible/GPU delivery, weapon-specific producers, live
+clock/authority integration, authoritative host/client input revisions and
 confirmed-only resync, full host-controlled pause/skip/end and multi-level/lobby
 acceptance, remote/cross-platform checks, and low-power budgets. No live
 prediction, rollback toggle or ENet migration is enabled. Keep main stable.

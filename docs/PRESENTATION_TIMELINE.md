@@ -77,7 +77,7 @@ Still required before live prediction:
 - Exercise the new confirmed-only score/level transition guard through full
   match/level changes. The terminal diagnostic verifies that the guard is
   closed before event commit and open afterwards, but does not unload a level.
-- Extend the [local reconciliation owner](INPUT_RECONCILIATION.md) to rolling
-  arrivals, live authority/resync and pacing, then profile on low-power hardware.
+- Integrate the [bounded local reconciliation pump](INPUT_RECONCILIATION.md)
+  with live authority/resync and clock pacing, then profile on low-power hardware.
 
 No user-facing rollback toggle, network prediction or ENet migration is enabled.

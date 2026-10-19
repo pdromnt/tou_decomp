@@ -116,3 +116,11 @@ It writes no settings and performs no rendering or audible playback. This mode
 uses the actual checkpoint owner, not just a standalone input-ledger model.
 See [input reconciliation](INPUT_RECONCILIATION.md) for ownership, evidence and
 the remaining live-network gates.
+
+Use `--rewind-late-input 2` for rolling partial arrivals, jitter and sliced
+resimulation, with `--rewind-frame-budget 1` (or 1-12, default 3) to bound shared
+replay/forward ticks per synthetic frame. Other late-input restrictions remain
+the same. `[JITTER]` reports sliced frames, deferred arrivals, waits, clamped
+clock debt, maximum work and pump timings. Each confirmed prefix must match the
+oracle before commit. This schedule drains at each oracle-window boundary;
+it is not continuous real-network, rendering or packet-loss acceptance.
