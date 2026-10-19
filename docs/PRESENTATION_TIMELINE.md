@@ -77,7 +77,7 @@ Still required before live prediction:
 - Exercise the new confirmed-only score/level transition guard through full
   match/level changes. The terminal diagnostic verifies that the guard is
   closed before event commit and open afterwards, but does not unload a level.
-- Integrate the bounded input ledger with world/presentation checkpoint
-  ownership and live reconciliation, then profile on low-power hardware.
+- Extend the [local reconciliation owner](INPUT_RECONCILIATION.md) to rolling
+  arrivals, live authority/resync and pacing, then profile on low-power hardware.
 
 No user-facing rollback toggle, network prediction or ENet migration is enabled.

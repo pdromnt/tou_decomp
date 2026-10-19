@@ -1,6 +1,7 @@
 /* Bounded developer experiment, not a live rollback mode or a CI test suite. */
 #include "tou.h"
 #include "presentation_events.h"
+#include "simulation_reconciliation.h"
 #include <algorithm>
 #include <chrono>
 #include <stdio.h>
@@ -64,6 +65,125 @@ bool Capture(std::vector<uint8_t> *state, Timing *time)
     return result;
 }
 
+// Compare actual late-input reconciliation against an all-inputs-known oracle.
+// The oracle is diagnostic-only; the owner never reads its states or commands.
+int LateInputRun(int ticks, int window, int players)
+{
+    SimulationReconciliation session;
+    if (!session.start(1, static_cast<uint8_t>(players), static_cast<uint32_t>(window),
+                       kHistoryBudget / 2)) return 7;
+    unsigned int verified = 0, predicted = 0, clean_windows = 0, early_returns = 0;
+    size_t peak_bytes = 0;
+    Timing oracle_time, forward_time, replay_time;
+    bool terminal = false;
+    LOG("[LATE] begin ticks=%d window=%d players=%d full-world=1 event_sink=dry-run rendering=off\n",
+        ticks, window, players);
+    while (verified < static_cast<unsigned int>(ticks) && !terminal) {
+        const uint32_t start = session.simulated_tick();
+        const SimulationReconciliation::Checkpoint base = *session.checkpoint(start);
+        std::vector<Frame> expected;
+        size_t oracle_bytes = base.state.capacity() + base.local.particle_tags.capacity();
+        Clock::time_point begin = Clock::now();
+        for (int n = 0; n < window && verified + expected.size() < static_cast<unsigned int>(ticks); ++n) {
+            Frame frame;
+            Commands(&frame, SimulationState_Tick() + 1);
+            FUN_0045e1f0();
+            frame.continue_batch = Gameplay_AdvanceSimulation(frame.actions, GAMEPLAY_PLAYER_CAPACITY);
+            if (!PresentationEvents_Healthy()) return 6;
+            frame.events = PresentationEvents_Digest(SimulationState_Tick());
+            PresentationEvents_Capture(&frame.presentation);
+            if (!SimulationState_Capture(&frame.state)) return 3;
+            oracle_bytes += frame.state.capacity() + frame.presentation.particle_tags.capacity();
+            if (oracle_bytes > kHistoryBudget / 2) return 4;
+            terminal = g_SubState != GAMEPLAY_ACTIVE;
+            expected.push_back(std::move(frame));
+            if (terminal) break;
+        }
+        oracle_time.add(begin);
+        if (!SimulationState_Restore(base.state.data(), base.state.size(), true)) return 3;
+        PresentationEvents_Restore(base.local);
+        if (!PresentationEvents_DiscardAfter(start)) return 6;
+        begin = Clock::now();
+        for (size_t n = 0; n < expected.size(); ++n) {
+            const uint32_t tick = start + static_cast<uint32_t>(n) + 1;
+            // Only local input arrives on time. Every remote input is withheld.
+            if (session.submit(1, tick, 0, expected[n].actions[0]) != InputTimeline::Accepted) return 7;
+            const SimulationReconciliation::Result result = session.advance();
+            if (result != SimulationReconciliation::Advanced && result != SimulationReconciliation::Terminal)
+                return 7;
+            ++predicted;
+            if (session.can_finalize()) return 7;
+            if (result == SimulationReconciliation::Terminal) break;
+        }
+        forward_time.add(begin);
+        const uint64_t before_commit = PresentationEvents_CommittedCount();
+        const uint32_t frontier = session.simulated_tick();
+        // Deliver newest tick/player first, including duplicates. This exposes
+        // earliest-dirty selection and out-of-order confirmation holes.
+        for (size_t n = expected.size(); n > 0; --n) {
+            const uint32_t tick = start + static_cast<uint32_t>(n);
+            for (int p = players - 1; p >= 1; --p) {
+                const uint8_t action = expected[n - 1].actions[p];
+                if (session.submit(99, tick, static_cast<uint8_t>(p), action) != InputTimeline::WrongGeneration ||
+                    session.submit(1, tick, static_cast<uint8_t>(p), action) != InputTimeline::Accepted ||
+                    session.submit(1, tick, static_cast<uint8_t>(p), action) != InputTimeline::Duplicate)
+                    return 7;
+            }
+            if (tick > frontier && session.submit(1, tick, 0, expected[n - 1].actions[0]) != InputTimeline::Accepted)
+                return 7;
+        }
+        if (session.dirty_from() && session.confirm()) return 7;
+        begin = Clock::now();
+        const SimulationReconciliation::Result corrected = session.reconcile();
+        replay_time.add(begin);
+        if (corrected != SimulationReconciliation::Replayed && corrected != SimulationReconciliation::Unchanged)
+            return 7;
+        if (corrected == SimulationReconciliation::Unchanged) ++clean_windows;
+        // A speculative early ending can disappear after correction. Simulate
+        // the remaining known ticks, never crossing the authoritative terminal.
+        const uint32_t end = start + static_cast<uint32_t>(expected.size());
+        while (session.simulated_tick() < end) {
+            const SimulationReconciliation::Result result = session.advance();
+            if (result != SimulationReconciliation::Advanced && result != SimulationReconciliation::Terminal)
+                return 7;
+            if (result == SimulationReconciliation::Terminal && session.simulated_tick() < end) return 5;
+        }
+        for (size_t n = 0; n < expected.size(); ++n) {
+            const uint32_t tick = start + static_cast<uint32_t>(n) + 1;
+            const SimulationReconciliation::Checkpoint *actual = session.checkpoint(tick);
+            const Frame &oracle = expected[n];
+            if (!actual || actual->state != oracle.state || actual->continued != oracle.continue_batch) {
+                size_t offset = 0;
+                if (actual)
+                    while (offset < actual->state.size() && offset < oracle.state.size() &&
+                           actual->state[offset] == oracle.state[offset]) ++offset;
+                LOG("[LATE] WORLD DIVERGENCE tick=%u offset=%llu\n", tick, static_cast<unsigned long long>(offset));
+                return 5;
+            }
+            if (actual->events != oracle.events || !(actual->local == oracle.presentation)) {
+                LOG("[LATE] PRESENTATION DIVERGENCE tick=%u\n", tick); return 6;
+            }
+            if (!actual->continued) ++early_returns;
+            ++verified;
+        }
+        if (terminal && Gameplay_TransitionsAllowed()) return 7;
+        if (session.confirmed_tick() != end || session.dirty_from() ||
+            PresentationEvents_CommittedCount() != before_commit || !session.confirm() ||
+            !session.can_finalize() || (terminal && !Gameplay_TransitionsAllowed())) return 7;
+        const uint64_t once = PresentationEvents_CommittedCount();
+        if (!session.confirm() || once != PresentationEvents_CommittedCount()) return 6;
+        peak_bytes = std::max(peak_bytes, oracle_bytes + session.peak_bytes());
+    }
+    LOG("[LATE] PASS verified=%u predicted=%u corrections=%u replayed=%llu clean_windows=%u truncated_tails=%u early_returns=%u terminal=%d history_and_oracle_peak=%llu\n",
+        verified, predicted, session.corrections(), static_cast<unsigned long long>(session.replayed_ticks()),
+        clean_windows, session.truncated_tails(), early_returns, terminal ? 1 : 0,
+        static_cast<unsigned long long>(peak_bytes));
+    LOG("[LATE] ms mean/max oracle_with_capture=%.3f/%.3f prediction_with_capture=%.3f/%.3f reconciliation_with_capture=%.3f/%.3f confirmed_events=%llu\n",
+        oracle_time.mean(), oracle_time.maximum, forward_time.mean(), forward_time.maximum,
+        replay_time.mean(), replay_time.maximum, static_cast<unsigned long long>(PresentationEvents_CommittedCount()));
+    return 0;
+}
+
 }
 
 int SimulationRewind_Run(int argc, char **argv, const char *level)
@@ -77,7 +197,10 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     const int presentation = Option(argc, argv, "--rewind-presentation", 1, 0, 1);
     const int canonical = Option(argc, argv, "--rewind-canonical", 0, 0, 1);
     const int replay_batch = Option(argc, argv, "--rewind-replay-batch", batch, 1, 9);
+    const int late = Option(argc, argv, "--rewind-late-input", 0, 0, 1);
     if (ticks < 0 || window < 0 || players < 0 || troopers < 0 || batch < 0 || ending < 0 || presentation < 0 || canonical < 0 || replay_batch < 0 ||
+        late < 0 || (late && (!canonical || !presentation || players > InputTimeline::Players ||
+                             batch != 1 || replay_batch != 1)) ||
         (!canonical && replay_batch != batch) ||
         Netplay_IsEnabled() || Replay_IsActive()) {
         LOG("[REWIND] invalid options or conflicting LAN/replay mode\n");
@@ -106,7 +229,7 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     g_GameConfig.values.level_order[0] = index;
     g_GameConfig.values.level_flags[0] = 0;
     g_GameConfig.values.player_count = static_cast<uint8_t>(players);
-    g_GameConfig.values.human_player_count = 2;
+    g_GameConfig.values.human_player_count = static_cast<uint8_t>(late ? players : 2);
     g_GameConfig.values.troopers_enabled = static_cast<uint8_t>(troopers);
     g_GameConfig.values.turret_density = 1;
     for (int p = 0; p < players; ++p) {
@@ -127,6 +250,8 @@ int SimulationRewind_Run(int argc, char **argv, const char *level)
     g_GameConfig.values.troopers_enabled = static_cast<uint8_t>(troopers);
     g_SubState = GAMEPLAY_ACTIVE;
     if (ending) DAT_004892a5 = 1; // Exercise the actual countdown to match complete.
+    SimulationState_SetChecksumInterval(0);
+    if (late) return LateInputRun(ticks, window, players);
     struct TimelineScope {
         ~TimelineScope() { PresentationEvents_Stop(); }
     } timeline;

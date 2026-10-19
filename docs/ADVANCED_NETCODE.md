@@ -299,10 +299,25 @@ Local Windows x64 evidence for this slice:
   restore/capture/comparison. These remain desktop, time-seeded observations,
   not low-power budgets or real output acceptance.
 
-Still required: real audible/GPU delivery, weapon-specific producers, full
-host-controlled pause/skip/end and multi-level/lobby acceptance, remote and
-cross-platform checks, low-power budgets, and integrating the ledger with
-checkpoint ownership/live reconciliation. No live prediction, rollback toggle
-or ENet migration is enabled. Keep main stable.
+### Checkpoint-owned local reconciliation (Stage 4 prototype)
+
+The [input reconciliation owner](INPUT_RECONCILIATION.md) now connects the
+ledger to actual world restore/replay plus matching local presentation state.
+It bounds the history/work window, fails closed on invalid input/checkpoint
+state, replaces unconfirmed events, and handles a corrected terminal tick
+without confirming an unused speculative tail. It is not created by live LAN.
+
+The new `--rewind-late-input 1` mode compares late/reversed/duplicated remote
+input against an all-inputs-known oracle at every corrected tick, including
+world/RNG, local presentation metadata, event digests and alternate-return
+behavior. Windows x64 runs passed Minibase, Woods, Jungle with troopers,
+generated Happyland, window sizes 1/8/12 and the forced ending countdown.
+Details and precise limitations are recorded in the linked guide.
+
+Still required: real audible/GPU delivery, weapon-specific producers, rolling
+arrival schedules and pacing, authoritative host/client input revisions and
+confirmed-only resync, full host-controlled pause/skip/end and multi-level/lobby
+acceptance, remote/cross-platform checks, and low-power budgets. No live
+prediction, rollback toggle or ENet migration is enabled. Keep main stable.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

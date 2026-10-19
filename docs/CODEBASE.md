@@ -99,6 +99,7 @@ forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
 | `source/platform/gamepad.cpp` | SDL3 gamepad discovery, connection slots, focus/neutral guards, menu navigation, and simulation action translation |
 | `source/game/input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
 | `source/game/input_timeline.cpp` | Bounded input ledger, simulated/confirmed frontiers and late-input replay bookkeeping (experimental branch) |
+| `source/game/simulation_reconciliation.cpp` | Experimental checkpoint/journal owner and late-input world resimulation; see `docs/INPUT_RECONCILIATION.md` |
 | `source/game/gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `source/game/simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
 | `source/game/simulation_tick.h` | Unpaced tick entry and supplied-action boundary; legacy batch wrapper remains in gameloop.cpp |

@@ -71,6 +71,17 @@ bool PresentationEvents_CanFinalize(uint32_t tick)
 {
     return !enabled || (healthy && tick <= confirmed);
 }
+uint32_t PresentationEvents_ConfirmedTick(void) { return confirmed; }
+bool PresentationEvents_DiscardAfter(uint32_t tick)
+{
+    if (!enabled || !healthy || recording || tick < confirmed) return false;
+    for (size_t i = 0; i < kHistory; ++i)
+        if (history[i].number > tick) {
+            history[i].number = 0;
+            history[i].events.clear();
+        }
+    return true;
+}
 
 void PresentationEvents_Start(bool should_deliver)
 {

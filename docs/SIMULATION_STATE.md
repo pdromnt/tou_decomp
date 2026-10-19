@@ -57,3 +57,8 @@ presentation checkpoints, but performs no rendering or audible playback. See
 [presentation timeline](PRESENTATION_TIMELINE.md). Snapshot version 5 rejects
 earlier data, and the LAN simulation
 build fingerprint was advanced accordingly on `advanced-netcode` only.
+
+The experimental [reconciliation owner](INPUT_RECONCILIATION.md) pairs these
+world snapshots with local presentation checkpoints and uses them to correct
+actual delayed-input predictions in the developer diagnostic. Ordinary LAN
+still uses lockstep and does not create speculative snapshot history.

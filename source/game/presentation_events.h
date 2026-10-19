@@ -28,6 +28,8 @@ uint64_t PresentationEvents_Digest(uint32_t tick);
 bool PresentationEvents_CommitThrough(uint32_t tick);
 bool PresentationEvents_Healthy(void);
 bool PresentationEvents_CanFinalize(uint32_t tick);
+uint32_t PresentationEvents_ConfirmedTick(void);
+bool PresentationEvents_DiscardAfter(uint32_t tick);
 uint64_t PresentationEvents_CommittedCount(void);
 uint64_t PresentationEvents_CommittedKindCount(PresentationEventKind kind);
 void PresentationEvents_Capture(PresentationCheckpoint *checkpoint);

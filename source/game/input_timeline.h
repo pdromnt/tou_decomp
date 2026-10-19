@@ -15,6 +15,8 @@ public:
     bool simulated(uint32_t tick);
     // Caller must restore world/local presentation at dirty_from()-1 first.
     bool begin_replay(uint32_t from);
+    // A corrected terminal tick may invalidate the remaining speculative tail.
+    bool truncate_replay(uint32_t tick);
     bool retain_from(uint32_t state_tick);
     uint32_t simulated_tick() const { return simulated_; }
     uint32_t confirmed_tick() const { return confirmed_; }

@@ -112,3 +112,13 @@ bool InputTimeline::retain_from(uint32_t state_tick)
     oldest_ = state_tick;
     return true;
 }
+bool InputTimeline::truncate_replay(uint32_t tick)
+{
+    if (!ready_ || !replay_end_ || tick != simulated_ || tick < dirty_ ||
+        tick >= replay_end_) return false;
+    for (uint32_t n = tick + 1; n <= replay_end_; ++n)
+        frames_[n % Capacity].ran = frames_[n % Capacity].prepared = false;
+    dirty_ = replay_end_ = 0;
+    confirm();
+    return true;
+}

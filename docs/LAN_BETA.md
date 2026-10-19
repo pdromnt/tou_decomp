@@ -18,6 +18,8 @@ Inputs, checksums and pause/skip controls carry the level generation. Controls
 wait for their effective confirmed tick rather than interrupting catch-up.
 The input ledger tracks simulated/confirmed frontiers; live prediction remains
 zero. Initial synchronization also runs while the level preview is visible.
+The [local reconciliation prototype](INPUT_RECONCILIATION.md) is diagnostic-only;
+it does not enable prediction or rollback in a live session.
 
 ## Start a session
 

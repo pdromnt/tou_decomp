@@ -96,3 +96,23 @@ acceptance, network prediction and cross-platform determinism remain separate
 gates. See [presentation timeline](PRESENTATION_TIMELINE.md) for ownership and
 the remaining limits. Legacy local play still resets flags per catch-up batch;
 experimental LAN now uses the canonical per-tick policy.
+
+## Late-input correction experiment
+
+Add `--rewind-late-input 1 --rewind-canonical 1` to `--verify-rewind LEVEL`
+to compare real delayed-input correction with an all-inputs-known oracle.
+This requires presentation enabled, 2-4 players, and the default batch/replay
+batch of 1; `--rewind-window` selects 1-12 ticks. For example:
+
+```text
+TOU --verify-rewind jungle --rewind-late-input 1 --rewind-canonical 1 --rewind-players 4 --rewind-troopers 1 --rewind-window 12 --rewind-ticks 600 --logging
+```
+
+The `[LATE]` log reports corrected/replayed ticks, matching late-input windows,
+truncated speculative tails, timings and retained owner/oracle vector capacity.
+Exit code 7 indicates a reconciliation/frontier/confirmation failure; earlier
+snapshot, budget, world and presentation failure codes retain their meaning.
+It writes no settings and performs no rendering or audible playback. This mode
+uses the actual checkpoint owner, not just a standalone input-ledger model.
+See [input reconciliation](INPUT_RECONCILIATION.md) for ownership, evidence and
+the remaining live-network gates.

@@ -12,8 +12,10 @@ New defects should be added only after a concrete reproduction.
 - Follow the gated [advanced netcode plan](ADVANCED_NETCODE.md) on
   `advanced-netcode`, separate from stable main. Verify real sound/GPU delivery
   and weapon-specific producers, exercise confirmed-input/session transition
-  barriers across full match/level changes, integrate checkpoint ownership and
-  late-input reconciliation, and profile low-power costs before prediction.
+  barriers across full match/level changes, extend local reconciliation to
+  rolling arrival/pacing and authoritative host/client revisions/resync, and
+  profile low-power costs before live prediction. The local checkpoint owner
+  and late-input oracle are described in [input reconciliation](INPUT_RECONCILIATION.md).
   Remote and cross-platform acceptance remain open.
 
 ## Active Work: Presentation Shaders
