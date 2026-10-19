@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FONT_FILES = ("f_large.tga", "f_mini.tga", "f_med.tga", "f_tiny5d.tga")
 ORIGINAL_ORDER = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ["Å", "Ä", "Ö"] + \
     list("abcdefghijklmnopqrstuvwxyz") + ["å", "ä", "ö"] + list("0123456789") + \

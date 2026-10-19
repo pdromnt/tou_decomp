@@ -73,7 +73,7 @@ repeated as four horizontal/vertical pairs with contiguous bilinear taps.
 Only the smoothed halo is blended into the presented frame; there is no sharp
 native-resolution core contribution. The targets remain 640 x 480, so the
 extra passes increase GPU cost rather than mask resolution.
-The source is pinned in `third_party/gaussian_blur`, embedded at build time,
+The source is pinned in `source/third_party/gaussian_blur`, embedded at build time,
 and attributed in the installed `TOU-BLOOM-LICENSE.txt` notice.
 It does not change the authoritative RGB565 framebuffer or rerun simulation.
 This is artistic bloom, not physical lighting or a replacement for game LOS.
@@ -180,7 +180,7 @@ Exhaustive edge-case and low-power performance checks remain pending.
 
 ## Future VFX Boundary
 
-`gfx_shader.cpp` owns the context, shaders, input texture, and intermediate
+`source/platform/gfx_shader.cpp` owns the context, shaders, input texture, and intermediate
 targets. FSR and bloom demonstrate multipass pipelines; additional passes could
 apply CRT styling, colour grading, or screen-space distortion. Keep effects
 optional and provide a no-effects path for pixel clarity and low-power GPUs.
@@ -224,4 +224,4 @@ Local Windows compilation, GPU shader compilation, and hands-on visual
 acceptance of FSR, bloom, team-coloured exhaust flames, ship-death refraction,
 and corrected LOS colours are recorded. This does not establish every edge case
 or low-power performance. Cross-platform shader runtime acceptance and the
-remaining focused checks in `BACKLOG.md` remain pending.
+remaining focused checks in `docs/BACKLOG.md` remain pending.

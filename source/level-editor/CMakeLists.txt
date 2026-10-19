@@ -17,7 +17,7 @@ target_link_libraries(tou-level-compiler PRIVATE tou_level)
 
 set(TOU_LEVEL_EDITOR_SOURCES
     editor/main.cpp
-    ${CMAKE_SOURCE_DIR}/stb_image.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb/stb_image.c
 )
 
 if(WIN32)
@@ -47,13 +47,13 @@ target_compile_features(tou-level-editor PRIVATE cxx_std_17)
 target_compile_definitions(tou-level-editor PRIVATE
     TOU_ASSET_ROOT="${CMAKE_SOURCE_DIR}"
 )
-target_include_directories(tou-level-editor PRIVATE ${CMAKE_SOURCE_DIR})
+target_include_directories(tou-level-editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb)
 target_link_libraries(tou-level-editor PRIVATE
     tou_level
     SDL3::SDL3
 )
 
-set(TOU_LEVEL_TOOL_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+set(TOU_LEVEL_TOOL_OUTPUT "${TOU_REPOSITORY_ROOT}/level-editor")
 set_target_properties(tou-level-compiler tou-level-editor PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TOU_LEVEL_TOOL_OUTPUT}"
 )

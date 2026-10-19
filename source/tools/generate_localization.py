@@ -14,8 +14,8 @@ import re
 import unicodedata
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "init.cpp"
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "source/game/init.cpp"
 OUTPUT = ROOT / "lang"
 
 DIRECT_ENGLISH = {

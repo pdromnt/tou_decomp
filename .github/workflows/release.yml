@@ -50,36 +50,36 @@ jobs:
             runner: windows-latest
             platform: windows-x86
             cmake_arch: Win32
-            executable: stage/TOU.exe
+            executable: source/.build/stage/TOU.exe
             expected_machine: "0x014C"
           - name: Windows x64
             runner: windows-latest
             platform: windows-x64
             cmake_arch: x64
-            executable: stage/TOU.exe
+            executable: source/.build/stage/TOU.exe
             expected_machine: "0x8664"
           - name: Windows ARM64
             runner: windows-11-arm
             platform: windows-arm64
             cmake_arch: ARM64
-            executable: stage/TOU.exe
+            executable: source/.build/stage/TOU.exe
             expected_machine: "0xAA64"
           - name: Linux x64
             runner: ubuntu-24.04
             platform: linux-x64
-            executable: stage/TOU
+            executable: source/.build/stage/TOU
           - name: Linux ARM64
             runner: ubuntu-24.04-arm
             platform: linux-arm64
-            executable: stage/TOU
+            executable: source/.build/stage/TOU
           - name: macOS Intel
             runner: macos-15-intel
             platform: macos-x64
-            executable: stage/TOU.app/Contents/MacOS/TOU
+            executable: source/.build/stage/TOU.app/Contents/MacOS/TOU
           - name: macOS Apple Silicon
             runner: macos-15
             platform: macos-arm64
-            executable: stage/TOU.app/Contents/MacOS/TOU
+            executable: source/.build/stage/TOU.app/Contents/MacOS/TOU
 
     runs-on: ${{ matrix.runner }}
 
@@ -103,16 +103,16 @@ jobs:
       - name: Configure Windows build
         if: runner.os == 'Windows'
         shell: pwsh
-        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B source/.build/ci -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
 
       - name: Configure Unix build
         if: runner.os != 'Windows'
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B source/.build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build and stage game
         run: |
-          cmake --build build --config Release --parallel 2
-          cmake --install build --config Release --prefix stage
+          cmake --build source/.build/ci --config Release --parallel 2
+          cmake --install source/.build/ci --config Release --prefix source/.build/stage
 
       - name: Verify Windows executable architecture
         if: runner.os == 'Windows'
@@ -121,8 +121,8 @@ jobs:
           $expected = [Convert]::ToUInt16(
             '${{ matrix.expected_machine }}'.Substring(2), 16)
           $executables = @(
-            'stage/TOU.exe',
-            'stage/level-editor/tou-level-editor.exe'
+            'source/.build/stage/TOU.exe',
+            'source/.build/stage/level-editor/tou-level-editor.exe'
           )
           foreach ($path in $executables) {
             $executable = Resolve-Path -LiteralPath $path -ErrorAction Stop
@@ -148,9 +148,9 @@ jobs:
         shell: bash
         run: |
           executable="${{ matrix.executable }}"
-          editor=stage/level-editor/tou-level-editor
+          editor=source/.build/stage/level-editor/tou-level-editor
           case "${{ matrix.platform }}" in
-            macos-*) editor="stage/level-editor/TOU Level Editor.app/Contents/MacOS/TOU Level Editor" ;;
+            macos-*) editor="source/.build/stage/level-editor/TOU Level Editor.app/Contents/MacOS/TOU Level Editor" ;;
           esac
           file "$executable"
           file "$editor"
@@ -178,17 +178,18 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: >-
-          ./scripts/package-release.ps1
+          ./source/scripts/package-release.ps1
           -Version $env:RELEASE_TAG
           -Platform ${{ matrix.platform }}
           -ExecutablePath ${{ matrix.executable }}
-          -LevelEditorDirectory stage/level-editor
+          -LevelEditorDirectory source/.build/stage/level-editor
 
       - name: Upload release archive
         uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}
-          path: dist/*
+          path: source/.build/dist/*
+          include-hidden-files: true
           if-no-files-found: error
 
   publish:

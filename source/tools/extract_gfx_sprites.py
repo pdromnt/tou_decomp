@@ -54,7 +54,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("indices", nargs="+", type=parse_index, help="Sprite indices, decimal or 0xHEX")
     parser.add_argument("--archive", type=Path, default=Path("data/all3.gfx"))
-    parser.add_argument("--output", type=Path, default=Path("artwork/extracted-sprites"))
+    parser.add_argument("--output", type=Path, default=Path("source/resources/artwork/extracted-sprites"))
     args = parser.parse_args()
 
     wanted = set(args.indices)

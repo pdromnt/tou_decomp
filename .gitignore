@@ -51,6 +51,11 @@ settings.json
 settings.json.tmp
 
 # Generated runtime and release artifacts
+/source/.build/
+# Also ignore legacy/custom root output locations.
 /dist/
 /build*/
+/stage*/
+/level-editor/
 __pycache__/
+*.pyc

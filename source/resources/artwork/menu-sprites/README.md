@@ -3,7 +3,7 @@
 These PNG files were extracted losslessly from `data/all3.gfx` with:
 
 ```powershell
-python tools/extract_gfx_sprites.py 0x38 0x3C 0x3D 0x3E 0x3F --output artwork/menu-sprites
+python source/tools/extract_gfx_sprites.py 0x38 0x3C 0x3D 0x3E 0x3F --output source/resources/artwork/menu-sprites
 ```
 
 | File | Atlas ID | Baked text |
@@ -23,7 +23,7 @@ by the game, with localized text drawn at runtime.
 Import the finished backplates with:
 
 ```powershell
-python tools/replace_gfx_sprites.py 0x37 0x38 0x3C 0x3D 0x3E 0x3F
+python source/tools/replace_gfx_sprites.py 0x37 0x38 0x3C 0x3D 0x3E 0x3F
 ```
 
 The importer rejects dimension changes and safely converts Photoshop alpha to

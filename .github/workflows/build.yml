@@ -22,7 +22,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
       - name: Validate UTF-8 catalogs and English extraction
-        run: python3 tools/validate_localization.py
+        run: python3 source/tools/validate_localization.py
 
   native:
     name: ${{ matrix.name }}
@@ -78,34 +78,34 @@ jobs:
       - name: Configure Windows build
         if: runner.os == 'Windows'
         shell: pwsh
-        run: cmake -S . -B build -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B source/.build/ci -A ${{ matrix.cmake_arch }} -DCMAKE_BUILD_TYPE=Release
 
       - name: Configure Unix build
         if: runner.os != 'Windows'
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B source/.build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build game
-        run: cmake --build build --config Release --parallel 2
+        run: cmake --build source/.build/ci --config Release --parallel 2
 
       - name: Stage runtime
-        run: cmake --install build --config Release --prefix stage
+        run: cmake --install source/.build/ci --config Release --prefix source/.build/stage
 
       - name: Verify native architecture
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          executable=stage/TOU
-          editor=stage/level-editor/tou-level-editor
+          executable=source/.build/stage/TOU
+          editor=source/.build/stage/level-editor/tou-level-editor
           case "${{ matrix.platform }}" in
             macos-*)
-              executable=stage/TOU.app/Contents/MacOS/TOU
-              editor="stage/level-editor/TOU Level Editor.app/Contents/MacOS/TOU Level Editor"
+              executable=source/.build/stage/TOU.app/Contents/MacOS/TOU
+              editor="source/.build/stage/level-editor/TOU Level Editor.app/Contents/MacOS/TOU Level Editor"
               ;;
           esac
           case "${{ matrix.platform }}" in
             linux-*)
-              test -f stage/level-editor/level-editor-icon.png
-              test -f stage/level-editor/tou-level-editor.desktop
+              test -f source/.build/stage/level-editor/level-editor-icon.png
+              test -f source/.build/stage/level-editor/tou-level-editor.desktop
               ;;
           esac
           file "$executable"
@@ -133,13 +133,13 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          test -f stage/TOU.app/Contents/Info.plist
-          test -f stage/TOU.app/Contents/Resources/icon.icns
-          test -f "stage/level-editor/TOU Level Editor.app/Contents/Info.plist"
-          test -f "stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor.icns"
-          test -f "stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor-icon.png"
+          test -f source/.build/stage/TOU.app/Contents/Info.plist
+          test -f source/.build/stage/TOU.app/Contents/Resources/icon.icns
+          test -f "source/.build/stage/level-editor/TOU Level Editor.app/Contents/Info.plist"
+          test -f "source/.build/stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor.icns"
+          test -f "source/.build/stage/level-editor/TOU Level Editor.app/Contents/Resources/level-editor-icon.png"
           for directory in data ggstuff help lang levels music sfx ships swap; do
-            test -d "stage/TOU.app/Contents/Resources/$directory"
+            test -d "source/.build/stage/TOU.app/Contents/Resources/$directory"
           done
 
       - name: Verify Windows executable architecture
@@ -149,8 +149,8 @@ jobs:
           $expected = [Convert]::ToUInt16(
             '${{ matrix.expected_machine }}'.Substring(2), 16)
           $executables = @(
-            'stage/TOU.exe',
-            'stage/level-editor/tou-level-editor.exe'
+            'source/.build/stage/TOU.exe',
+            'source/.build/stage/level-editor/tou-level-editor.exe'
           )
           foreach ($path in $executables) {
             $executable = Resolve-Path -LiteralPath $path -ErrorAction Stop
@@ -175,5 +175,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: tou-${{ matrix.platform }}
-          path: stage
+          path: source/.build/stage
+          include-hidden-files: true
           if-no-files-found: error

@@ -21,10 +21,11 @@ the original converter's uninitialized bytes.
 Configure the repository normally, then build one or all of these targets:
 
 ```text
-cmake --build build --target tou-level-compiler tou-level-editor
+cmake --build source/.build/native --target tou-level-compiler tou-level-editor
 ```
 
-The interactive tools are written to `makelev/bin`.
+The interactive tools are written to `level-editor/` at the repository root,
+beside the runtime assets. Run build commands from the repository root.
 
 ## CLI
 
@@ -107,7 +108,8 @@ The GG tab edits the theme, shape mode, procedural densities, exact seed, and up
 to 16 two-line sign records. Its canvas remains the editable constraint map;
 `Preview`/`P` launches the actual TOU generator and overlays the resulting final
 terrain. Any edit marks that preview stale. See
-[`../docs/GG_LEVELS.md`](../docs/GG_LEVELS.md) for the split between authored
+the repository's `docs/GG_LEVELS.md` (also included in the packaged editor's
+`docs/` folder) for the split between authored
 data, theme assets, and runtime generation.
 
 The turret selector and map use the seven recovered projectile sprite families,

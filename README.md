@@ -35,9 +35,19 @@ The modern runtime now provides:
 
 The source still looks like a decompilation. Original addresses, raw offsets,
 and Ghidra-style names remain where changing them without binary evidence could
-alter behavior. See [CODEBASE.md](CODEBASE.md) before refactoring,
-[BACKLOG.md](BACKLOG.md) for actual future work, and [docs/](docs/) for the
+alter behavior. See [Codebase](docs/CODEBASE.md) before refactoring,
+[Backlog](docs/BACKLOG.md) for actual future work, and [docs/](docs/) for the
 recovered formats and subsystem notes.
+
+## Repository Layout
+
+Game code lives in `source/game/`; SDL input/audio/windowing and GPU presentation
+live in `source/platform/`. The editor and compiler are in `source/level-editor/`.
+Build/release scripts, asset/localization utilities, resources and dependencies
+have their own folders inside `source/`. Architecture and format documentation
+lives in `docs/`; runtime assets remain at the repository root.
+
+See [Building](docs/BUILDING.md) for the folder map and build/package commands.
 
 ## Running a Release
 
@@ -127,7 +137,7 @@ Release archives include a separate `level-editor/` directory containing:
 - `tou-level-editor`, the visual normal/GG project editor; and
 - `tou-level-compiler`, the command-line compiler and inspector.
 
-Start with [makelev/README.md](makelev/README.md) or the packaged HTML
+Start with [source/level-editor/README.md](source/level-editor/README.md) or the packaged HTML
 [level-making guide](help/toudoc_makelev.htm). The recovered binary format is
 documented in [docs/LEVEL_FORMAT.md](docs/LEVEL_FORMAT.md).
 
@@ -137,13 +147,18 @@ Requirements:
 
 - a C/C++ compiler for the target platform;
 - CMake 3.24 or newer; and
-- Ninja or GNU Make.
+- Ninja, GNU Make, or Visual Studio's build tools.
 
 The build fetches pinned SDL3 and SDL_mixer releases and links them statically:
 
+On Windows, `./source/scripts/build.ps1 -Architecture x64` (or `source/scripts/build.bat`)
+uses MSVC. Use `-Architecture Win32` or `ARM64` for the other Windows targets.
+The game is written beside the assets, and editor tools go into `level-editor/`.
+For Linux/macOS or a configured Ninja toolchain:
+
 ```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel 8
+cmake -S . -B source/.build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build source/.build/native --parallel 8
 ```
 
 The output is `TOU.exe` on Windows, `TOU` on Linux, or `TOU.app` on macOS.
@@ -156,8 +171,8 @@ can include Windows Gaming Input and GameInput backends. Older MinGW toolchains
 may omit these and fail to detect some Xbox Bluetooth controllers. For example:
 
 ```powershell
-cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64
-cmake --build build-msvc --config Release --parallel 8
+cmake -S . -B source/.build/x64 -G "Visual Studio 17 2022" -A x64
+cmake --build source/.build/x64 --config Release --parallel 8
 ```
 
 The `Build` GitHub Actions workflow runs once for each pull request and for
@@ -168,10 +183,10 @@ architecture, and stages the full runtime. It never publishes a release.
 To create the Windows x64 archive layout used by CI:
 
 ```powershell
-cmake --install build --config Release --prefix stage
-./scripts/package-release.ps1 -Version local -Platform windows-x64 `
-  -ExecutablePath ./stage/TOU.exe `
-  -LevelEditorDirectory ./stage/level-editor
+cmake --install source/.build/x64 --config Release --prefix source/.build/stage
+./source/scripts/package-release.ps1 -Version local -Platform windows-x64 `
+  -ExecutablePath ./source/.build/stage/TOU.exe `
+  -LevelEditorDirectory ./source/.build/stage/level-editor
 ```
 
 ## Releases
@@ -196,7 +211,7 @@ permissions survive extraction.
 ## Contributing
 
 Behavior changes need evidence from the original executable. Refactors must
-keep the x86 parity build and native builds working without accidentally
+keep x86 and the other native builds working without accidentally
 changing fixed-point arithmetic, RNG order, callback dispatch, or update order.
 A successful build is not gameplay acceptance.
 

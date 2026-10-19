@@ -18,7 +18,7 @@ The original converter routines used for this reconstruction are:
 | `00403670` | Ceiling log2 helper |
 | `00421540` | Original game payload, placement, and RLE loader |
 
-Recompiling the checked-in `makelev/Jungle.*` sources with the original tool
+Recompiling the checked-in `source/level-editor/fixtures/jungle/` sources with the original tool
 produces a 157,417-byte file. It differs from shipped `levels/jungle.lev` at
 only three unused bytes in its sole 20-byte placement record. All meaningful
 header, config, JPEG, parallax, placement, and RLE bytes match.
@@ -204,7 +204,7 @@ ends when the next run's first byte is the literal `FF`; the writer emits
 `FF FF`. Palette index 33 is valid (`0x84`..`0x87` first byte depending on run
 length) and must not be confused with that terminator. Runtime tiles are filled
 left-to-right, top-to-bottom inside the seven-pixel border and remapped through
-the recovered table in `level.cpp`.
+the recovered table in `source/game/level.cpp`.
 
 ## Related `.swp` cache
 

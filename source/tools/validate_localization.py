@@ -29,7 +29,7 @@ def main() -> None:
         loaded[locale] = strings
 
     if loaded["en"] != expected_english:
-        raise SystemExit("en.json is stale; run tools/generate_localization.py")
+        raise SystemExit("en.json is stale; run source/tools/generate_localization.py")
     english_keys = set(loaded["en"])
     supported_glyphs = set(range(32, 127)) | {
         0xA1, 0xBF, 0xBD, 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC7,

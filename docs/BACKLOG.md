@@ -2,7 +2,7 @@
 
 The settings, localization, level-editor, portable-runtime, simulation, and
 direct-IP LAN foundations are complete. Their implementation and forensic
-notes live in `CODEBASE.md` and `docs/`; they are intentionally not duplicated
+notes live in `docs/CODEBASE.md` and the other `docs/` guides; they are intentionally not duplicated
 here as a wall of checked boxes.
 
 New defects should be added only after a concrete reproduction.

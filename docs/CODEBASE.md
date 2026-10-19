@@ -45,12 +45,12 @@ that typed buffer and a single active `Viewport` record. Lifted renderer bodies
 may still create local integer views where preserving original 32-bit pointer
 arithmetic matters; those views no longer leak through subsystem call sites.
 
-`RenderBackend` owns platform presentation. `gfx_sdl.cpp` selects the compatible
+`RenderBackend` owns platform presentation. `source/platform/gfx_sdl.cpp` selects the compatible
 shader backend or uploads the unchanged framebuffer to a streaming SDL texture
 as a fallback. Simulation and software rendering code do not access SDL renderer
 objects directly.
 
-Normal launches try `gfx_shader.cpp`: OpenGL 4.1 (with a Linux
+Normal launches try `source/platform/gfx_shader.cpp`: OpenGL 4.1 (with a Linux
 GLES 3.1 context fallback), embedded AMD FSR 1 EASU/RCAS, and selectable scaling.
 Unsupported contexts/shaders fall back to SDL presentation; failed shader
 initialization recreates a plain window before initializing SDL's renderer.
@@ -59,7 +59,7 @@ the accepted 70% sharpening preset with denoising, and falls back to Pixel art
 when the shader backend is unavailable.
 Filters and beta effects are selected in the Display menu, without launch flags.
 
-`shader_effects.cpp` supplies optional presentation-only emission/visibility
+`source/game/shader_effects.cpp` supplies optional presentation-only emission/visibility
 metadata for explosion bloom, team-coloured tapered exhaust, and ship-death
 refraction. Weapon-specific metadata adds yellow Turbo plumes, MK1 waste pulses,
 traced laser light, Digger cutting sparks and Gamma Boom refraction. It never
@@ -81,59 +81,68 @@ disable effects, and reset/snapshot import clears transient presentation state.
 
 ## Source Map
 
+Paths below are relative to the repository root. Source is grouped under
+`source/game/` (recovered gameplay and game-facing rendering), `source/platform/`
+(SDL services, controller input, audio and presentation), and
+`source/level-editor/` (editor, compiler and level library). Build scripts live
+in `source/scripts/`; asset/localization utilities live in `source/tools/`.
+Icons/resource scripts are in `source/resources/`, vendored dependencies in
+`source/third_party/`, and build helpers in `source/cmake/`. The root CMake file
+forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
+
 | Module | Responsibility |
 | --- | --- |
-| `main.cpp` | Portable SDL entry point and application lifecycle |
-| `platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
-| `input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
-| `gamepad.cpp` | SDL3 gamepad discovery, connection slots, focus/neutral guards, menu navigation, and simulation action translation |
-| `input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
-| `gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
-| `simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
-| `replay.cpp` | Local command/snapshot recording and deterministic playback diagnostics |
-| `netplay.cpp` | Direct-IP LAN beta protocol and delayed command exchange |
-| `init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
-| `config.h` | Byte-exact compatibility layout used by recovered runtime code |
-| `settings.cpp` | Typed, validated JSON settings and legacy-config migration |
-| `menu.cpp` | Menu behavior, player setup, rendering helpers, config interaction |
-| `sim.cpp` | Ordered subsystem updates, particles, fluids, turrets, pickups, and legacy entity fallback |
-| `entity.cpp` | Player ships, ship AI, physics, weapons, collisions, and entity lifecycle |
-| `entity_callbacks.cpp` | Recovered original-address callbacks for weapons/effects |
-| `original_semantics.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
-| `effects.cpp` | Explosions, particles, lighting, terrain effects |
-| `graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
-| `render_backend.cpp` | Presentation-backend interface and SDL dispatch |
-| `gfx_sdl.cpp` | Shader-backend selection and SDL streaming-texture fallback |
-| `gfx_shader.cpp` | Automatic OpenGL/GLES presentation, optional FSR 1, bloom, flame compositing, refraction |
-| `shader_effects.cpp` | Presentation-only emission/flame masks, exhaust tags, shockwave events, LOS/HUD gating |
-| `hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
-| `assets.cpp` | Font and image asset loading |
-| `level.cpp` | `.lev` loading and swap/height-map data |
-| `gg_gen.cpp` | Procedural GG level/theme generation |
-| `sound.cpp` | Recovered music selection, sample table, and sound lifecycle |
-| `audio_backend.h` | Narrow channel/sample/music interface used by game logic |
-| `audio_sdl.cpp` | Primary SDL_mixer backend with legacy volume/pan semantics |
-| `intro.cpp` | Intro presentation |
-| `memory.cpp` | Recovered allocation and shared-memory helpers |
-| `math.cpp` | Original fixed-point trigonometry table and safe math compatibility helpers |
-| `utils.cpp` | Optional debug logging |
-| `tou.h` | Aggregate include retained while source files migrate to narrower headers |
-| `types.h` | Shared recovered structures |
-| `gfx.h` | Graphics, assets, typed framebuffer/viewport, effects, and HUD declarations |
-| `input.h` | Shared legacy scan-code state and keyboard/mouse declarations |
-| `sound.h` | Game-facing sound and positional-audio declarations |
-| `level.h` | Level data, loading, and GG generator declarations |
-| `entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
-| `gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
-| `platform.h` | Portable window, events, timing, dialogs, and display services |
-| `fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
-| `terrain_properties.h` | Byte-exact terrain-property record shape without guessed broad semantics |
-| `sprite_atlas.h` | Width-preserving read view over the legacy parallel sprite descriptor tables |
+| `source/game/main.cpp` | Portable SDL entry point and application lifecycle |
+| `source/platform/platform_sdl.cpp` | SDL window, display modes, event queue, focus, and dialogs |
+| `source/platform/input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
+| `source/platform/gamepad.cpp` | SDL3 gamepad discovery, connection slots, focus/neutral guards, menu navigation, and simulation action translation |
+| `source/game/input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
+| `source/game/gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
+| `source/game/simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
+| `source/game/replay.cpp` | Local command/snapshot recording and deterministic playback diagnostics |
+| `source/game/netplay.cpp` | Direct-IP LAN beta protocol and delayed command exchange |
+| `source/game/init.cpp` | Defaults, config persistence, menus, asset discovery, startup data |
+| `source/game/config.h` | Byte-exact compatibility layout used by recovered runtime code |
+| `source/game/settings.cpp` | Typed, validated JSON settings and legacy-config migration |
+| `source/game/menu.cpp` | Menu behavior, player setup, rendering helpers, config interaction |
+| `source/game/sim.cpp` | Ordered subsystem updates, particles, fluids, turrets, pickups, and legacy entity fallback |
+| `source/game/entity.cpp` | Player ships, ship AI, physics, weapons, collisions, and entity lifecycle |
+| `source/game/entity_callbacks.cpp` | Recovered original-address callbacks for weapons/effects |
+| `source/game/original_semantics.cpp` | Original MSVC RNG, raw little-endian access, wrapping math, x87 conversion |
+| `source/game/effects.cpp` | Explosions, particles, lighting, terrain effects |
+| `source/game/graphics.cpp` | Backend-neutral RGB565 frame composition, primitives, sprites |
+| `source/platform/render_backend.cpp` | Presentation-backend interface and SDL dispatch |
+| `source/platform/gfx_sdl.cpp` | Shader-backend selection and SDL streaming-texture fallback |
+| `source/platform/gfx_shader.cpp` | Automatic OpenGL/GLES presentation, optional FSR 1, bloom, flame compositing, refraction |
+| `source/game/shader_effects.cpp` | Presentation-only emission/flame masks, exhaust tags, shockwave events, LOS/HUD gating |
+| `source/game/hud.cpp` | Match HUD, weapon grid, Mark selector, scores |
+| `source/game/assets.cpp` | Font and image asset loading |
+| `source/game/level.cpp` | `.lev` loading and swap/height-map data |
+| `source/game/gg_gen.cpp` | Procedural GG level/theme generation |
+| `source/game/sound.cpp` | Recovered music selection, sample table, and sound lifecycle |
+| `source/platform/audio_backend.h` | Narrow channel/sample/music interface used by game logic |
+| `source/platform/audio_sdl.cpp` | Primary SDL_mixer backend with legacy volume/pan semantics |
+| `source/game/intro.cpp` | Intro presentation |
+| `source/game/memory.cpp` | Recovered allocation and shared-memory helpers |
+| `source/game/math.cpp` | Original fixed-point trigonometry table and safe math compatibility helpers |
+| `source/game/utils.cpp` | Optional debug logging |
+| `source/game/tou.h` | Aggregate include retained while source files migrate to narrower headers |
+| `source/game/types.h` | Shared recovered structures |
+| `source/platform/gfx.h` | Graphics, assets, typed framebuffer/viewport, effects, and HUD declarations |
+| `source/platform/input.h` | Shared legacy scan-code state and keyboard/mouse declarations |
+| `source/game/sound.h` | Game-facing sound and positional-audio declarations |
+| `source/game/level.h` | Level data, loading, and GG generator declarations |
+| `source/game/entity.h` | Entity pools, simulation, AI, collision, and spawning declarations |
+| `source/game/gamestate.h` | Application state, config, menu, lifecycle, and memory declarations |
+| `source/platform/platform.h` | Portable window, events, timing, dialogs, and display services |
+| `source/game/fixed_point.h` | Verified 18-fractional-bit world-coordinate constants |
+| `source/game/terrain_properties.h` | Byte-exact terrain-property record shape without guessed broad semantics |
+| `source/game/sprite_atlas.h` | Width-preserving read view over the legacy parallel sprite descriptor tables |
 | `docs/LEVEL_FORMAT.md` | Recovered `.lev` v1.4, placement, RLE, and swap-data format |
 | `docs/GG_LEVELS.md` | GG authoring model, theme assets, seeds, and runtime generation |
 | `docs/LEVEL_PALETTE.json` | Machine-readable attribute colors and placement-marker families |
-| `tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
-| `makelev/` | Native level library, CLI/compiler, SDL3 attribute painter, and fixtures |
+| `source/tools/inspect_level.py` | Read-only `.lev` validator, inspector, and byte comparator |
+| `source/level-editor/` | Native level library, CLI/compiler, SDL3 attribute painter, and fixtures |
 | `docs/SPRITE_FORMAT.md` | Recovered `.gfx` frame stream and pixel encodings |
 | `docs/SHIP_FORMAT.md` | Recovered `.SHP` metadata, stats, and sprite-frame layout |
 | `docs/TERRAIN_PROPERTIES.md` | Evidence ledger for the 256 x 0x20 terrain-property table |
@@ -145,7 +154,7 @@ disable effects, and reset/snapshot import clears transient presentation state.
 
 ## Simulation Boundaries
 
-The original update order remains centralized in `gameloop.cpp`. The following
+The original update order remains centralized in `source/game/gameloop.cpp`. The following
 named entry points identify recovered subsystem boundaries without changing
 their relative order:
 
@@ -158,7 +167,7 @@ their relative order:
 - `ParticleSystem_Update`
 - `FireParticleSystem_Update`
 
-Ship intelligence is bounded inside `entity.cpp` by `AI_UpdateShip` and
+Ship intelligence is bounded inside `source/game/entity.cpp` by `AI_UpdateShip` and
 `AI_ScanNearbyThreats`. These names describe observed responsibility; they do
 not authorize reordering RNG calls, pool iteration, callbacks, or state writes.
 Further source-file extraction is safe only in evidence-backed slices. Use the
@@ -169,10 +178,10 @@ obtain hands-on gameplay acceptance before merging the move.
 
 Network play sits below SDL and above the recovered simulation. Physical keys
 become the original seven logical action bits, which can then come from local
-input, replay, or `netplay.cpp` without changing entity update order. The LAN
+input, replay, or `source/game/netplay.cpp` without changing entity update order. The LAN
 beta uses conservative delayed TCP lockstep, host RNG sequencing, and periodic
 snapshot-derived hashes. Presentation state remains local. See
-`docs/LAN_BETA.md`; `BACKLOG.md` contains only active future candidates and the
+`docs/LAN_BETA.md`; `docs/BACKLOG.md` contains only active future candidates and the
 rules that constrain new work.
 
 The beta remains conservative: a peer loss tears down the lockstep session,
@@ -181,7 +190,7 @@ divergent client. Handshake compatibility covers simulation build identity,
 normal/GG level content, ships, and gameplay data. It is still delayed TCP
 lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
-The simulation compatibility ID in `netplay.cpp` uses an independent `sim`
+The simulation compatibility ID in `source/game/netplay.cpp` uses an independent `sim`
 revision plus protocol/snapshot identities, not the app's release version.
 Advance the simulation revision when equal inputs can produce different
 authoritative state; do not bump it solely for cosmetic changes. Changing the
@@ -204,11 +213,11 @@ The executable expects these paths relative to its working directory:
 | `lang/` | UTF-8 language catalogs; English is the per-key fallback |
 | `settings.json` | User configuration generated beside the assets on first run (`TOU.app/Contents/Resources` on macOS) |
 
-`scripts/package-release.ps1` is the canonical list of files included in a
+`source/scripts/package-release.ps1` is the canonical list of files included in a
 release. It packages runtime files only: repository Markdown and the local
 `settings.json` and legacy `options.cfg` files are intentionally excluded. The
 compiler/editor ship as a clean `level-editor/` runtime directory containing
-the two tools and focused format documentation, never the `makelev/` source
+the two tools and focused format documentation, never the `source/level-editor/` source
 tree. Keep the packaging script synchronized when adding a required runtime
 path.
 
@@ -223,17 +232,17 @@ behaviorally equivalent to the original executable. It provides:
 - the original x87 float-to-integer sequence on 32-bit x86, with an explicit
   truncation equivalent on hosts without x87.
 
-`tou.h` maps normal `rand` and `srand` calls to this implementation. Do not
+`source/game/tou.h` maps normal `rand` and `srand` calls to this implementation. Do not
 replace it with the host CRT or a C++ random engine.
 
 ## Entity Callback Architecture
 
 The original game stores callback addresses in 128-byte entity records. During
 the first decomp pass, much of that behavior became a large approximate switch
-in `sim.cpp`. The parity pass restored address-based dispatch:
+in `source/game/sim.cpp`. The parity pass restored address-based dispatch:
 
 1. `EntityCallbacks_Init` installs the recovered callback table.
-2. `sim.cpp` reads the guest callback address from entity offset `+0x34`.
+2. `source/game/sim.cpp` reads the guest callback address from entity offset `+0x34`.
 3. `EntityCallbacks_Dispatch` runs a lifted callback when available.
 4. Unknown/unlifted callbacks continue through the legacy fallback path.
 5. `EntityCallbacks_RemoveAt` preserves the original selective compaction and
@@ -244,7 +253,7 @@ identity keys, not host function pointers.
 
 ### Entity record layout
 
-`types.h` documents the verified `Entity` record and asserts its 0x80-byte size
+`source/game/types.h` documents the verified `Entity` record and asserts its 0x80-byte size
 and stable offsets. `Init_Memory_Pools` allocates 2600 physical records; the
 gameplay loop's 2500 limit is an active-entity cap, not the allocation size.
 
@@ -256,7 +265,7 @@ names are intentional where different subtypes reuse the same offset.
 
 ### Player record layout
 
-`types.h` also documents the verified portions of the original 0x598-byte
+`source/game/types.h` also documents the verified portions of the original 0x598-byte
 `PlayerData` record. The storage pool is now a `PlayerData *`, and
 `Player_Get(index)` is the common typed boundary. This conversion was delayed
 until the last direct byte-offset call sites had been lifted.
@@ -294,7 +303,7 @@ operations into independent field assignments can change behavior.
 
 ## Config Ownership
 
-`settings.cpp` owns the versioned, human-readable `settings.json` format. Its
+`source/game/settings.cpp` owns the versioned, human-readable `settings.json` format. Its
 normal `UserSettings` model contains only user-facing choices, validates values,
 and maps them into recovered runtime state at the load/save boundary. Writes use
 a same-directory temporary file followed by replacement.
@@ -307,7 +316,7 @@ existing axis bindings. Controller choices remain local and are not included in
 simulation snapshots or LAN settings. See `docs/GAMEPADS.md` for controls and
 hardware acceptance boundaries.
 
-`GameConfig` in `config.h` remains a 6405-byte compatibility record because
+`GameConfig` in `source/game/config.h` remains a 6405-byte compatibility record because
 recovered menu and gameplay code still address that layout directly. It is no
 longer the persistence format. If JSON is absent, a compatible legacy
 `options.cfg` is imported once and retained as a backup; after that JSON is
@@ -316,7 +325,7 @@ so menu writes and runtime reads cannot drift into stale copies.
 
 `g_ConfigBlob` remains as a byte view for menu descriptors and fields whose
 semantics are not proven yet. It is not separate storage. Offset assertions in
-`config.h` protect the known binary layout, and the obsolete two-way sync
+`source/game/config.h` protect the known binary layout, and the obsolete two-way sync
 functions have been removed.
 
 The ten bytes at original addresses `0x483963..0x48396c` are per-level physics
@@ -325,31 +334,31 @@ the old reconstruction wrote them past the end of the config allocation.
 
 ## Localization and Fonts
 
-`localization.cpp` loads UTF-8 catalogs from `lang/`, overlays the selected
+`source/game/localization.cpp` loads UTF-8 catalogs from `lang/`, overlays the selected
 language on authoritative English, and temporarily binds recovered numeric menu
 slots to readable catalog keys. New code should use `Text_Get()` directly.
 
 The renderer decodes UTF-8 into TOU's original byte-sized bitmap glyph table.
-The original four atlases are never rewritten: `tools/generate_latin_fonts.py`
+The original four atlases are never rewritten: `source/tools/generate_latin_fonts.py`
 builds separate Latin supplements for Spanish and Brazilian Portuguese from
 the original letter shapes. Regenerate catalogs with
-`tools/generate_localization.py` and validate them with
-`tools/validate_localization.py`. `tools/bootstrap_translations.py` can fill
+`source/tools/generate_localization.py` and validate them with
+`source/tools/validate_localization.py`. `source/tools/bootstrap_translations.py` can fill
 new catalog gaps for human review; it is an opt-in maintainer helper and never
 runs in builds or CI.
 
 ## Building and Cleaning
 
 ```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel 8
+cmake -S . -B source/.build/native -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build source/.build/native --parallel 8
 ```
 
 The primary CMake build fetches pinned SDL3 and SDL_mixer, links them statically,
-and builds for the host architecture. Windows builds embed `icon.ico` through
-`tou.rc`; other platforms do not compile the Windows resource file. Maintained
+and builds for the host architecture. Windows builds embed `source/resources/icon.ico` through
+`source/resources/tou.rc`; other platforms do not compile the Windows resource file. Maintained
 game source is compiled with warnings treated as errors. Generated build trees,
-objects, executables, logs, and `dist/` packages are ignored by Git.
+objects, executables, logs, and `source/.build/dist/` packages are ignored by Git.
 
 The pinned SDL source receives documented build-time patches on Windows:
 SDL's legacy `timeBeginPeriod` hook and unconditional WinMM link are removed.
@@ -375,7 +384,7 @@ native `TOU.app` bundle with its icon and all runtime assets under
 
 The FSR and Gaussian-blur sources are vendored at pinned revisions and embedded
 by CMake; no runtime shader/source files are required. CMake installation and
-`scripts/package-release.ps1` both include `THIRD_PARTY_NOTICES.md`,
+`source/scripts/package-release.ps1` both include `THIRD_PARTY_NOTICES.md`,
 `TOU-FSR-LICENSE.txt`, and `TOU-BLOOM-LICENSE.txt`. On macOS, the app resource
 directory also carries those notices. Do not strip them from release archives.
 

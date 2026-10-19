@@ -176,7 +176,7 @@ void SetEditorWindowIcon(SDL_Window *window) {
         base / "level-editor-icon.png",
         base / "../Resources/level-editor-icon.png",
         std::filesystem::path(TOU_ASSET_ROOT) /
-            "makelev/resources/level-editor-icon.png",
+            "source/level-editor/resources/level-editor-icon.png",
     }};
     for (const std::filesystem::path &candidate : candidates) {
         if (!std::filesystem::is_regular_file(candidate)) {

@@ -1,9 +1,9 @@
 # Authoritative Simulation State
 
-`simulation_state.cpp` defines the portable boundary used by replay diagnostics
+`source/game/simulation_state.cpp` defines the portable boundary used by replay diagnostics
 and LAN state correction. Snapshot version 3 is a little-endian, fixed-width
 format. All supported targets are little-endian and the serialized runtime
-records have compile-time size and offset assertions in `types.h`.
+records have compile-time size and offset assertions in `source/game/types.h`.
 
 ## Included state
 

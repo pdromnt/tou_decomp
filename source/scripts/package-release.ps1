@@ -8,9 +8,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $OutputDirectory = Join-Path $repositoryRoot "dist"
+    $OutputDirectory = Join-Path $repositoryRoot "source/.build/dist"
 }
 
 $distRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -56,8 +56,8 @@ $requiredDirectories = @(
 # These sources are embedded in the game, so their full notices must travel
 # with archives too (copying asset directories alone drops installed notices).
 $thirdPartyFiles = @(
-    @{ Source = "third_party/fsr/LICENSE.txt"; Name = "TOU-FSR-LICENSE.txt" },
-    @{ Source = "third_party/gaussian_blur/LICENSE.md"; Name = "TOU-BLOOM-LICENSE.txt" },
+    @{ Source = "source/third_party/fsr/LICENSE.txt"; Name = "TOU-FSR-LICENSE.txt" },
+    @{ Source = "source/third_party/gaussian_blur/LICENSE.md"; Name = "TOU-BLOOM-LICENSE.txt" },
     @{ Source = "THIRD_PARTY_NOTICES.md"; Name = "THIRD_PARTY_NOTICES.md" }
 )
 foreach ($notice in $thirdPartyFiles) {

@@ -56,7 +56,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("indices", nargs="+", type=parse_index)
     parser.add_argument("--archive", type=Path, default=Path("data/all3.gfx"))
-    parser.add_argument("--input", type=Path, default=Path("artwork/menu-sprites"))
+    parser.add_argument("--input", type=Path, default=Path("source/resources/artwork/menu-sprites"))
     args = parser.parse_args()
 
     data = bytearray(args.archive.read_bytes())

@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 LANGUAGES = {
     "es": ("es", "es.json", "Español"),
     "pt-BR": ("pt", "pt-br.json", "Português (Brasil)"),

@@ -9,9 +9,9 @@ SDL3, SDL_mixer, nlohmann/json, and stb_image retain their upstream terms.
 
 - Source: https://github.com/GPUOpen-Effects/FidelityFX-FSR
 - Revision: `a21ffb8f6c13233ba336352bdff293894c706575`
-- Files: `third_party/fsr/ffx_a.h`, `third_party/fsr/ffx_fsr1.h`
+- Files: `source/third_party/fsr/ffx_a.h`, `source/third_party/fsr/ffx_fsr1.h`
 - Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
-- License: MIT; full text in [third_party/fsr/LICENSE.txt](third_party/fsr/LICENSE.txt).
+- License: MIT; full text in [source/third_party/fsr/LICENSE.txt](source/third_party/fsr/LICENSE.txt).
 - Packaged full notice: `TOU-FSR-LICENSE.txt`.
 
 The vendored headers are unmodified. TOU embeds them at build time and supplies
@@ -21,9 +21,9 @@ GLSL adapters for EASU and RCAS, including desktop/GLES presentation integration
 
 - Source: https://github.com/Experience-Monks/glsl-fast-gaussian-blur
 - Revision: `5dbb6e97aa43d4be9369bdd88e835f47023c5e2a`
-- File: `third_party/gaussian_blur/13.glsl`
+- File: `source/third_party/gaussian_blur/13.glsl`
 - Copyright (c) 2015 Jam3.
-- License: MIT; full text in [third_party/gaussian_blur/LICENSE.md](third_party/gaussian_blur/LICENSE.md).
+- License: MIT; full text in [source/third_party/gaussian_blur/LICENSE.md](source/third_party/gaussian_blur/LICENSE.md).
 - Packaged full notice: `TOU-BLOOM-LICENSE.txt`.
 
 The vendored kernel is unmodified. The runtime strips its glslify export pragma

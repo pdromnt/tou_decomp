@@ -4,7 +4,7 @@ The original runtime creates a 256-entry table at `DAT_00487928`; each entry is
 exactly `0x20` bytes. `FUN_0041EAE0` (`0041EAE0`) writes the defaults and every
 hard-coded tile override before levels load.
 
-`terrain_properties.h` deliberately types only that physical shape. It does
+`source/game/terrain_properties.h` deliberately types only that physical shape. It does
 not expose `IsSolid`, `IsWalkable`, or `IsFluid`: individual consumers use the
 same byte for narrower and sometimes different decisions, so a friendly global
 name would currently claim more than the binary evidence proves.
