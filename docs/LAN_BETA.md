@@ -18,10 +18,54 @@ Inputs, checksums and pause/skip controls carry the level generation. Controls
 wait for their effective confirmed tick rather than interrupting catch-up.
 The input ledger tracks simulated/confirmed frontiers; live prediction remains
 zero. Initial synchronization also runs while the level preview is visible.
-The [local reconciliation prototype](INPUT_RECONCILIATION.md) is diagnostic-only;
-it does not enable prediction or rollback in a live session.
+The [local reconciliation prototype](INPUT_RECONCILIATION.md) keeps prediction
+diagnostic-only; the optional control-only anchor below does not replay physics.
 The separate [peer exchange diagnostic](NETCODE_EXCHANGE.md) exercises two to four
-processes on loopback; it is not an alternate mode in this LAN flow yet.
+processes on loopback. Only its confirmed-control barrier is integrated below,
+not its predicted input/revision lane.
+
+## Opt-in confirmed controls (experimental branch only)
+
+Launch **every participant** with `--lan-confirmed-controls` to use confirmed
+pause/resume/skip/end handoffs in the existing LAN menus or direct-IP CLI flow.
+This selects protocol **7**, build identity `tou-sim2-net7-snapshot5-controls1`.
+It cannot mix with default protocol 6 or stable v0.11 protocol 4 peers; mismatches
+disconnect rather than silently switching mode. No menu toggle is exposed yet.
+
+Gameplay still uses delayed TCP lockstep with zero prediction. The host remains
+the only operator of ESC, next-level, end-match and preview-resume controls.
+Each control transfers a full confirmed snapshot and waits for all clients.
+Clients finish through the host's target tick before acknowledging; no side
+may score/unload a level before its handoff releases. Resume reseeds neutral
+input lead, and epoch-scoped commands/bundles/checksums discard old queued input.
+P and window focus retain the existing multiplayer no-pause rules.
+
+The last completed frame is held while the world is borrowed by the barrier.
+Control installation preserves local sound ownership and particle tags, without
+starting/stopping the prediction event journal. This has source/stub verification,
+not human audible/shader acceptance. Full snapshots are bandwidth-heavy and the
+handoff deadline is five seconds. Timeout, malformed control or checksum mismatch
+aborts the whole session to the LAN-screen route; per-client correction is not
+used in this opt-in mode. Default protocol 6 behavior is unchanged.
+
+Windows x64 scripted runs exercised two and four real LAN processes through
+pause/resume, skip, actual round accounting, next-level teardown/load and preview,
+resume and end-match to the stats route. Each round accounted once, with no
+awarded wins for skip/end. A 20/60 ms per-way relay passed the same route while
+injecting stale commands/bundles and a wrong-generation control. Withheld Ready,
+bad packet version and a current-epoch checksum mismatch returned both peers
+to the LAN-screen route. Closing the third client during a four-player handoff
+returned all three remaining processes to the LAN route without releasing it.
+These are loopback/fault-injection observations, not
+remote, cross-platform, physical-controller or visual/audio acceptance.
+
+Developer route probe (use isolated asset/settings directories): host flags
+`--lan-host --lan-auto-start --lan-confirmed-controls --lan-control-script --logging`;
+clients use `--lan-join HOST:PORT --lan-confirmed-controls --logging`.
+`--lan-auto-start-players N` makes CLI auto-start wait for 2-4 total players
+(default 2). The script drives actual control APIs and level/scoring code, not
+keyboard injection; `[NET] live control script PASS` marks the host reaching
+the final stats route. It is not a permanent test suite or CI job.
 
 ## Start a session
 

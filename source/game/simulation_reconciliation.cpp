@@ -5,8 +5,9 @@
 
 void SimulationReconciliation::stop()
 {
-    if (ready_) PresentationEvents_Stop();
+    if (ready_ && !control_only_) PresentationEvents_Stop();
     ready_ = failed_ = false;
+    control_only_ = false;
     replay_end_ = queued_ = debt_ms_ = 0;
     inputs_ = InputTimeline();
     for (size_t i = 0; i < InputTimeline::MaximumPrediction + 1; ++i)
@@ -32,11 +33,27 @@ bool SimulationReconciliation::start(uint32_t generation, uint8_t players,
     }
     return true;
 }
+bool SimulationReconciliation::start_live_control(uint32_t generation, uint8_t players, uint32_t epoch, size_t budget)
+{
+    stop();
+    const uint32_t tick = SimulationState_Tick();
+    if (!Netplay_ControlAnchorReady(tick) ||
+        Replay_IsActive() || PresentationEvents_Enabled() || !epoch || players != DAT_00489240 ||
+        !inputs_.reset(generation, players, 0, tick)) return false;
+    generation_ = generation; players_ = players; epoch_ = epoch; base_tick_ = tick;
+    window_ = 1; budget_ = budget; mode_ = DirectInputs; control_only_ = true;
+    memset(base_actions_, 0, sizeof(base_actions_));
+    corrections_ = truncated_ = 0; replayed_ = 0; peak_ = 0;
+    ready_ = true;
+    if (!capture(false)) { stop(); return false; }
+    return true;
+}
 bool SimulationReconciliation::aligned() const
 {
     return healthy() && SimulationState_Tick() == inputs_.simulated_tick() &&
-        PresentationEvents_Enabled() && PresentationEvents_Healthy() &&
-        PresentationEvents_ConfirmedTick() <= inputs_.confirmed_tick();
+        (control_only_ ? !PresentationEvents_Enabled() :
+         (PresentationEvents_Enabled() && PresentationEvents_Healthy() &&
+          PresentationEvents_ConfirmedTick() <= inputs_.confirmed_tick()));
 }
 SimulationReconciliation::Result SimulationReconciliation::fail()
 {
@@ -58,8 +75,8 @@ bool SimulationReconciliation::capture(bool continued)
     if (slot.valid && slot.tick != tick && slot.tick >= inputs_.confirmed_tick()) return false;
     slot.valid = false;
     if (!SimulationState_Capture(&slot.state)) return false;
-    PresentationEvents_Capture(&slot.local);
-    slot.events = tick ? PresentationEvents_Digest(tick) : 0;
+    if (!control_only_) PresentationEvents_Capture(&slot.local);
+    slot.events = tick && !control_only_ ? PresentationEvents_Digest(tick) : 0;
     slot.tick = tick; slot.continued = continued;
     size_t bytes = 0;
     for (size_t i = 0; i <= window_; ++i) {
@@ -74,7 +91,7 @@ bool SimulationReconciliation::capture(bool continued)
 InputTimeline::Result SimulationReconciliation::submit(uint32_t generation,
     uint32_t tick, uint8_t player, uint8_t actions, uint32_t epoch)
 {
-    if (!aligned() || mode_ != DirectInputs) { fail(); return InputTimeline::Invalid; }
+    if (control_only_ || !aligned() || mode_ != DirectInputs) { fail(); return InputTimeline::Invalid; }
     if (generation != generation_ || epoch != epoch_) return InputTimeline::WrongGeneration;
     if (replaying()) {
         if (generation != generation_) return InputTimeline::WrongGeneration;
@@ -149,7 +166,7 @@ bool SimulationReconciliation::export_confirmed(uint32_t new_epoch, ConfirmedSta
 {
     if (!out || !aligned() || mode_ != DirectInputs || replaying() || inputs_.dirty_from() ||
         new_epoch <= epoch_ || !world_matches_checkpoint()) return false;
-    const uint32_t tick = PresentationEvents_ConfirmedTick();
+    const uint32_t tick = control_only_ ? inputs_.confirmed_tick() : PresentationEvents_ConfirmedTick();
     const Checkpoint *base = checkpoint(tick);
     if (!base || tick != inputs_.confirmed_tick()) return false;
     ConfirmedState value;
@@ -200,7 +217,8 @@ bool SimulationReconciliation::export_controlled(uint32_t new_epoch, Control con
 bool SimulationReconciliation::apply_confirmed(const ConfirmedState &state)
 {
     if (!aligned() || state.generation != generation_ || state.epoch <= epoch_ || state.players != players_ ||
-        state.tick < PresentationEvents_ConfirmedTick() ||
+        state.tick < (control_only_ ? inputs_.confirmed_tick() : PresentationEvents_ConfirmedTick()) ||
+        (control_only_ && state.tick != inputs_.simulated_tick()) ||
         (state.tick > std::max(replay_end_, inputs_.simulated_tick()) &&
          state.tick - std::max(replay_end_, inputs_.simulated_tick()) >= InputTimeline::Capacity) ||
         !AuthorityState_Valid(state) ||
@@ -209,13 +227,15 @@ bool SimulationReconciliation::apply_confirmed(const ConfirmedState &state)
     // Allocate/validate everything possible before touching the running world.
     Checkpoint candidate;
     candidate.tick = state.tick; candidate.state = state.state;
-    PresentationEvents_Capture(&candidate.local); // Allocate local tag capacity now.
+    if (!control_only_) PresentationEvents_Capture(&candidate.local); // Allocate local tag capacity now.
     if (candidate.state.capacity() + candidate.local.particle_tags.capacity() > budget_ / (window_ + 1)) return false;
     InputTimeline replacement;
-    if (!replacement.reset(generation_, static_cast<uint8_t>(players_), window_, state.tick, state.actions)) return false;
-    if (!SimulationState_Restore(state.state.data(), state.state.size())) { fail(); return false; }
-    PresentationEvents_Start(deliver_, state.tick); // Stop owned loops; never import remote mixer handles.
-    PresentationEvents_Capture(&candidate.local);
+    if (!replacement.reset(generation_, static_cast<uint8_t>(players_), control_only_ ? 0 : window_, state.tick, state.actions)) return false;
+    if (!SimulationState_Restore(state.state.data(), state.state.size(), control_only_)) { fail(); return false; }
+    if (!control_only_) {
+        PresentationEvents_Start(deliver_, state.tick); // Stop owned loops; never import remote mixer handles.
+        PresentationEvents_Capture(&candidate.local);
+    }
     candidate.valid = true;
     for (size_t i = 0; i <= window_; ++i) history_[i] = Checkpoint();
     history_[state.tick % (window_ + 1)] = std::move(candidate);
@@ -238,7 +258,7 @@ SimulationReconciliation::Result SimulationReconciliation::run_tick()
 }
 SimulationReconciliation::Result SimulationReconciliation::advance()
 {
-    if (!aligned()) return fail();
+    if (control_only_ || !aligned()) return fail();
     if (inputs_.dirty_from() || replaying()) return Waiting; // Reconcile before advancing time.
     if (g_SubState != GAMEPLAY_ACTIVE) return Terminal;
     // Even known input cannot outrun uncommitted effects/checkpoint retention.
@@ -337,6 +357,7 @@ SimulationReconciliation::FrameWork SimulationReconciliation::pump(uint32_t elap
 }
 bool SimulationReconciliation::confirm()
 {
+    if (control_only_) return can_finalize();
     if (!aligned()) { fail(); return false; }
     if (inputs_.dirty_from() || replaying()) return false;
     const uint32_t tick = inputs_.confirmed_tick();

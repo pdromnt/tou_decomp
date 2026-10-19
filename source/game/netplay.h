@@ -23,7 +23,13 @@ bool Netplay_PrepareSimulationTick(uint32_t tick);
 uint8_t Netplay_PlayerActions(int player, uint8_t local_fallback);
 void Netplay_AfterSimulationTick(uint32_t tick, uint64_t checksum);
 bool Netplay_LocalSessionControlsAllowed(void);
-// True only through the current level's confirmed input frontier during LAN.
+enum NetplayControl { NETPLAY_PAUSE = 1, NETPLAY_RESUME, NETPLAY_SKIP, NETPLAY_END };
+bool Netplay_UsesConfirmedControls(void);
+// True means the opt-in path consumed the request; never fall back on failure.
+bool Netplay_RequestControl(NetplayControl control);
+bool Netplay_RenderAllowed(void);
+bool Netplay_ControlAnchorReady(uint32_t tick);
+// True through the confirmed input frontier and only after a control handoff.
 bool Netplay_CanFinalizeSimulationTick(uint32_t tick);
 const char *Netplay_Status(void);
 int Netplay_ConnectedPlayerCount(void);

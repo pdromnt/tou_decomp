@@ -1,7 +1,8 @@
 # Advanced netcode plan
 
 Status: Stages 1-2, Stage 3's event journal and Stage 4's local reconciliation,
-pacing/authority prototypes and an isolated two-process exchange are implemented,
+pacing/authority prototypes, an isolated multi-process exchange and opt-in live
+confirmed controls are implemented,
 with checks below;
 real presentation, live prediction, remote and cross-platform acceptance remain
 open. Work is on `advanced-netcode`, based on stable v0.11 (`0909331`). No live
@@ -308,7 +309,8 @@ The [input reconciliation owner](INPUT_RECONCILIATION.md) now connects the
 ledger to actual world restore/replay plus matching local presentation state.
 It bounds the history/work window, fails closed on invalid input/checkpoint
 state, replaces unconfirmed events, and handles a corrected terminal tick
-without confirming an unused speculative tail. It is not created by live LAN.
+without confirming an unused speculative tail. This prediction owner is not
+created by live LAN; live controls use a separate no-physics/no-journal anchor.
 
 The new `--rewind-late-input 1` mode compares late/reversed/duplicated remote
 input against an all-inputs-known oracle at every corrected tick, including
@@ -377,12 +379,11 @@ one client's bad hash by resyncing the whole group. Withheld Ready/Applied and
 a disconnected third client aborted all four processes without unsafe resume.
 
 Still required: real audible/GPU delivery, weapon-specific producers, live
-mode/fingerprint/clock/input/liveness integration, full
-host-controlled pause/skip/end and multi-level/lobby acceptance,
+prediction clock/input/liveness integration, natural-win/repeated-match acceptance,
 remote/cross-platform checks, and low-power budgets. No live
 prediction, rollback toggle or ENet migration is enabled. Keep main stable.
-The menu opt-in stays gated: existing host menu state changes happen before
-broadcast and must use the confirmed handoff before using the owner.
+The prediction menu opt-in stays gated. The separate CLI control opt-in below
+replaces immediate menu mutation without enabling physics prediction.
 
 ### Confirmed controls (Stage 4 session prototype)
 
@@ -391,7 +392,7 @@ pause-menu/resume/skip/end snapshot without changing its running state. The
 existing all-ready/all-applied barrier installs that controlled anchor once
 under a new epoch. Invalid source states and speculative or externally changed
 worlds cannot prepare controls. Full snapshots make this conservative but
-bandwidth-heavy; the original menu path has not been switched over.
+bandwidth-heavy; it is used by the opt-in live control path below.
 
 Four-process Woods runs passed pause/resume with continuation, and separate
 pause/skip and pause/end anchors with final hash agreement. The delayed relay
@@ -399,7 +400,32 @@ combined pause/resume with checksum recovery; withheld control Ready/Applied
 aborted all participants without premature installation/group release. Owner
 probes cover scoped-capture failure and legacy counter/countdown semantics.
 See [peer exchange](NETCODE_EXCHANGE.md) for commands and precise limits.
-Actual scoring, level teardown/reload, generation restart, lobby return and
-real rendering/audio still require live-driver integration and acceptance.
+The isolated diagnostic stops at the anchor; the live adapter below exercises
+actual scoring and level teardown/reload. Human rendering/audio acceptance is
+still required.
+
+### Live confirmed controls (Stage 4 lockstep adapter)
+
+`--lan-confirmed-controls` on all participants selects protocol 7 and a separate
+build identity, reusing normal LAN menus, matching-asset checks, sockets and
+heartbeats. The per-peer exchange carries only the all-peer control barrier.
+A borrowed control owner requires an exact confirmed live tick, advances no
+physics, owns no event journal and preserves local sound/particle ownership.
+The driver holds the completed frame while frozen, blocks scoring/teardown
+until release, then reseeds neutral input lead under the new epoch. Default
+protocol 6 remains available and mixed modes fail closed.
+
+Two/four real Windows x64 LAN processes passed scripted pause/resume, skip,
+one-time round accounting, resource reload/generation-2 preview/resume and end
+to the stats route. A delayed relay passed stale input/bundle and wrong-generation
+control injections; withheld Ready, bad version and bad current-epoch checksum
+returned both peers to the LAN-screen route. The opt-in aborts rather than using
+partial one-peer checksum correction. These are real route/log observations,
+not physical-menu, remote, audio/visual, cross-platform or low-power acceptance.
+
+Next: integrate live predicted input/revisions with bounded pacing and display
+retention during partial replay, verify real presentation, optimize control
+snapshot cost, and complete natural-win/repeated-match acceptance. No live
+prediction/rollback toggle or ENet migration is enabled.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

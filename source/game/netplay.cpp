@@ -2,6 +2,7 @@
 #include "netplay.h"
 #include "presentation_events.h"
 #include "input_timeline.h"
+#include "netcode_exchange.h"
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
@@ -12,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <utility>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -67,7 +69,8 @@ enum MessageType {
     MESSAGE_INITIAL_SNAPSHOT = 13,
     MESSAGE_ROSTER = 14,
     MESSAGE_STATE_CORRECTION = 15,
-    MESSAGE_INPUT_DELAY = 16
+    MESSAGE_INPUT_DELAY = 16,
+    MESSAGE_CONTROL_EXCHANGE = 17
 };
 
 enum RejectReason {
@@ -168,6 +171,7 @@ int g_last_broadcast_substate = -1;
 bool g_local_level_ready = false;
 bool g_initial_state_ready = false;
 bool g_auto_start = false;
+uint32_t g_auto_start_players = 2;
 bool g_dump_state = false;
 uint32_t g_level_generation = 0;
 LobbyEntry g_lobby[4] = {};
@@ -187,6 +191,20 @@ bool g_polled = false;
 uint32_t g_poll_gap_max = 0;
 uint32_t g_last_diagnostic_log = 0;
 char g_status[160] = "LAN disabled";
+// Explicit protocol-7 opt-in: control barriers only, never live prediction.
+bool g_confirmed_controls = false;
+bool g_handoff_active = false, g_handoff_waiting = false;
+uint32_t g_control_epoch = 1, g_handoff_started = 0, g_handoff_tick = 0;
+SimulationReconciliation g_control_world;
+NetcodeHostExchange g_control_host;
+NetcodeExchange g_control_client;
+NetcodeExchange::Message g_control_offer;
+bool g_control_script = false;
+int g_control_script_stage = 0;
+uint32_t g_control_script_pause = 0;
+
+uint16_t ProtocolVersion() { return g_confirmed_controls ? 7 : kProtocolVersion; }
+size_t EpochBytes() { return g_confirmed_controls ? 4u : 0u; }
 
 void ResetDiagnostics(void)
 {
@@ -334,6 +352,10 @@ uint64_t GameplayAssetFingerprint(void)
 
 uint64_t SimulationBuildFingerprint(void)
 {
+    if (g_confirmed_controls) {
+        const char id[] = "tou-sim2-net7-snapshot5-controls1";
+        return HashBytes(14695981039346656037ull, id, sizeof(id));
+    }
     return HashBytes(14695981039346656037ull, kSimulationBuildId,
                      sizeof(kSimulationBuildId));
 }
@@ -455,7 +477,8 @@ void DisconnectLocalized(Connection *connection, const char *detail,
 void QueueMessage(Connection *connection, MessageType type,
                   const uint8_t *payload, size_t payload_size)
 {
-    const size_t limit = (type == MESSAGE_INITIAL_SNAPSHOT ||
+    const size_t limit = type == MESSAGE_CONTROL_EXCHANGE ? static_cast<size_t>(kMaximumSnapshotPayload) + 64u :
+                         (type == MESSAGE_INITIAL_SNAPSHOT ||
                           type == MESSAGE_STATE_CORRECTION)
         ? static_cast<size_t>(kMaximumSnapshotPayload) + 8u : kMaximumPayload;
     if (connection == NULL || !connection->connected || payload_size > limit)
@@ -473,7 +496,7 @@ void QueueMessage(Connection *connection, MessageType type,
         return;
     }
     Put32(&connection->outgoing, kProtocolMagic);
-    Put16(&connection->outgoing, kProtocolVersion);
+    Put16(&connection->outgoing, ProtocolVersion());
     Put16(&connection->outgoing, static_cast<uint16_t>(type));
     Put32(&connection->outgoing, static_cast<uint32_t>(payload_size));
     Put32(&connection->outgoing, g_sequence++);
@@ -582,22 +605,24 @@ void SeedInputDelay(void)
 
 bool IsMessageShapeValid(uint16_t type, size_t size)
 {
+    if (type == MESSAGE_CONTROL_EXCHANGE)
+        return g_confirmed_controls && size >= 22 && size <= static_cast<size_t>(kMaximumSnapshotPayload) + 64u;
     if (type == MESSAGE_DISCONNECT)
         return size == 1;
     if (type == MESSAGE_PING || type == MESSAGE_PONG)
         return size == 4;
     if (g_mode == MODE_HOST) {
         return (type == MESSAGE_HELLO && size == 26) ||
-               (type == MESSAGE_COMMAND && size == 9) ||
-               (type == MESSAGE_CHECKSUM && size == 16) ||
+               (type == MESSAGE_COMMAND && size == 9 + EpochBytes()) ||
+               (type == MESSAGE_CHECKSUM && size == 16 + EpochBytes()) ||
                (type == MESSAGE_LEVEL_READY && size == 4);
     }
     if (g_mode == MODE_CLIENT) {
         return (type == MESSAGE_WELCOME && size == 1) ||
                (type == MESSAGE_START && size == 17 + GAME_CONFIG_SIZE) ||
                (type == MESSAGE_INPUT_DELAY && size == 4) ||
-               (type == MESSAGE_COMMAND_BUNDLE && size >= 22 && size <= 25) ||
-               (type == MESSAGE_GAMEPLAY_STATE && size == 12) ||
+               (type == MESSAGE_COMMAND_BUNDLE && size >= 22 + EpochBytes() && size <= 25 + EpochBytes()) ||
+               (!g_confirmed_controls && type == MESSAGE_GAMEPLAY_STATE && size == 12) ||
                (type == MESSAGE_ROSTER && size >= 1 && size <= 17 &&
                 ((size - 1) % 4) == 0) ||
                (type == MESSAGE_REJECT && size == 1) ||
@@ -786,9 +811,122 @@ void ApplyControlBarriers(void)
     }
 }
 
+void ResetHandoff()
+{
+    g_control_host.disconnect(); g_control_client.disconnect(); g_control_world.stop();
+    g_control_offer = NetcodeExchange::Message();
+    g_handoff_active = g_handoff_waiting = false;
+}
+
+void PollHandoff()
+{
+    if (!g_confirmed_controls || !g_match_active || g_abort_to_lobby) return;
+    const uint32_t now = Platform_GetTicks();
+    if ((g_handoff_active || g_handoff_waiting) && now - g_handoff_started >= 5000) {
+        LOG("[NET] confirmed control deadline expired\n"); g_abort_to_lobby = true; return;
+    }
+    if (g_handoff_waiting && SimulationState_Tick() >= g_handoff_tick) {
+        if (SimulationState_Tick() != g_handoff_tick ||
+            !g_control_world.start_live_control(g_level_generation, g_player_count, g_control_epoch,
+                                               128u * 1024u * 1024u) ||
+            !g_control_client.start(NetcodeExchange::Client, g_level_generation, g_control_epoch,
+                                    g_player_count, g_local_slot) ||
+            !g_control_client.receive(g_control_offer, &g_control_world, now)) {
+            g_abort_to_lobby = true; return;
+        }
+        g_handoff_active = true; g_handoff_waiting = false;
+        g_control_offer = NetcodeExchange::Message();
+    }
+    if (!g_handoff_active) return;
+    if (g_mode == MODE_HOST ? !g_control_host.poll(&g_control_world, now) : !g_control_client.poll(now)) {
+        g_abort_to_lobby = true; return;
+    }
+    const size_t count = g_mode == MODE_HOST ? g_clients.size() : 1;
+    for (size_t i = 0; i < count; ++i) {
+        Connection *connection = g_mode == MODE_HOST ? &g_clients[i] : &g_server;
+        NetcodeExchange *exchange = g_mode == MODE_HOST ? g_control_host.peer(connection->slot) : &g_control_client;
+        if (!connection->connected || !exchange) { g_abort_to_lobby = true; return; }
+        NetcodeExchange::Message message;
+        while (exchange->take(&message)) {
+            std::vector<uint8_t> bytes;
+            Put16(&bytes, static_cast<uint16_t>(message.type));
+            bytes.insert(bytes.end(), message.bytes.begin(), message.bytes.end());
+            QueueMessage(connection, MESSAGE_CONTROL_EXCHANGE, bytes.data(), bytes.size());
+            if (!connection->connected) { g_abort_to_lobby = true; return; }
+        }
+        Flush(connection);
+    }
+    const bool complete = g_mode == MODE_HOST ? g_control_host.running() :
+        g_control_client.phase() == NetcodeExchange::Running;
+    if (!complete) return;
+    const uint32_t base = SimulationState_Tick();
+    g_control_epoch = g_control_world.epoch();
+    ResetHandoff(); // Borrowed control owners never stop/reset presentation.
+    ResetTickTransportState();
+    if (!g_inputs.reset(g_level_generation, g_player_count, 0, base)) { g_abort_to_lobby = true; return; }
+    for (uint32_t tick = base + 1; tick <= base + g_input_delay; ++tick) {
+        TickCommands *commands = CommandsFor(tick);
+        for (uint8_t player = 0; player < g_player_count; ++player) {
+            commands->present[player] = true;
+            if (g_inputs.submit(g_level_generation, tick, player, 0) != InputTimeline::Accepted) {
+                g_abort_to_lobby = true; return;
+            }
+        }
+    }
+    g_last_sampled_tick = base;
+    g_TimerStart = g_FrameTimer = now; g_TimerAux = 0; g_NeedsRedraw = 2;
+    LOG("[NET] confirmed control released generation=%u epoch=%u tick=%u state=%u level=%u\n",
+        g_level_generation, g_control_epoch, base, unsigned(g_SubState), unsigned(static_cast<unsigned char>(DAT_0048693c)));
+}
+
 void HandleMessage(Connection *connection, uint16_t type,
                    const uint8_t *payload, size_t size)
 {
+    if (type == MESSAGE_CONTROL_EXCHANGE) {
+        if (!g_confirmed_controls || !g_match_active || !g_initial_state_ready || !connection->hello) {
+            g_abort_to_lobby = true; return;
+        }
+        NetcodeExchange::Message message; message.type = static_cast<NetcodeExchange::Type>(Get16(payload));
+        message.bytes.assign(payload + 2, payload + size);
+        const bool allowed = g_mode == MODE_HOST ?
+            (message.type == NetcodeExchange::SyncReady || message.type == NetcodeExchange::SyncApplied) :
+            (message.type == NetcodeExchange::SyncOffer || message.type == NetcodeExchange::SyncCommit ||
+             message.type == NetcodeExchange::SyncResume);
+        if (!allowed || !NetcodeExchange::valid_size(message.type, message.bytes.size())) {
+            g_abort_to_lobby = true; return;
+        }
+        if (g_mode == MODE_CLIENT && message.type == NetcodeExchange::SyncOffer) {
+            ConfirmedState state;
+            if (!AuthorityState_Decode(message.bytes.data(), message.bytes.size(), &state)) { g_abort_to_lobby = true; return; }
+            if (state.generation != g_level_generation || state.epoch <= g_control_epoch) return;
+            if (g_handoff_active) {
+                if (!g_control_client.receive(message, &g_control_world, Platform_GetTicks())) g_abort_to_lobby = true;
+                return;
+            }
+            if (g_handoff_waiting) {
+                if (message.bytes != g_control_offer.bytes) g_abort_to_lobby = true;
+                return;
+            }
+            if (state.players != g_player_count ||
+                state.tick < SimulationState_Tick() || state.tick - SimulationState_Tick() >= kCommandRingSize ||
+                !SimulationState_Validate(state.state.data(), state.state.size(), state.tick)) {
+                g_abort_to_lobby = true; return;
+            }
+            g_control_offer = std::move(message); g_handoff_tick = state.tick;
+            g_handoff_started = Platform_GetTicks(); g_handoff_waiting = true;
+            return;
+        }
+        if (Get32(message.bytes.data()) != g_level_generation || Get32(message.bytes.data() + 4) < g_control_epoch) return;
+        if (!g_handoff_active) {
+            if (Get32(message.bytes.data() + 4) == g_control_epoch) return; // Completed duplicate.
+            g_abort_to_lobby = true; return;
+        }
+        NetcodeExchange *exchange = g_mode == MODE_HOST ? g_control_host.peer(connection->slot) : &g_control_client;
+        if (!exchange || !exchange->receive(message, &g_control_world, Platform_GetTicks())) g_abort_to_lobby = true;
+        if (!g_abort_to_lobby && g_mode == MODE_CLIENT && message.type == NetcodeExchange::SyncResume)
+            PollHandoff(); // Reseed before any following new-epoch bundle in this same read.
+        return;
+    }
     if (g_mode == MODE_HOST && type == MESSAGE_HELLO && !connection->hello) {
         if (payload[0] >= 9 || payload[1] >= 2) {
             RejectClient(connection, REJECT_INVALID_PROFILE);
@@ -825,6 +963,7 @@ void HandleMessage(Connection *connection, uint16_t type,
         return;
     }
     if (g_mode == MODE_CLIENT && type == MESSAGE_WELCOME) {
+        if (g_confirmed_controls && g_match_active) { g_abort_to_lobby = true; return; }
         if (payload[0] == 0 || payload[0] >= 4) {
             DisconnectLocalized(connection, "invalid player slot",
                                 "lan.disconnect.invalid_data");
@@ -917,8 +1056,10 @@ void HandleMessage(Connection *connection, uint16_t type,
     }
     if (g_mode == MODE_HOST && type == MESSAGE_COMMAND && connection->hello && g_initial_state_ready) {
         const uint32_t generation = Get32(payload);
-        const uint32_t tick = Get32(payload + 4);
-        if (!AcceptInput(connection, g_inputs.submit(generation, tick, connection->slot, payload[8])))
+        if (g_confirmed_controls && (g_handoff_active || Get32(payload + 4) != g_control_epoch)) return;
+        const uint8_t *command = payload + EpochBytes();
+        const uint32_t tick = Get32(command + 4);
+        if (!AcceptInput(connection, g_inputs.submit(generation, tick, connection->slot, command[8])))
             return;
         if (tick > SimulationState_Tick() && tick - SimulationState_Tick() < kCommandRingSize) {
             TickCommands *commands = CommandsFor(tick);
@@ -926,32 +1067,34 @@ void HandleMessage(Connection *connection, uint16_t type,
                 commands->first_arrived_at = Platform_GetTicks();
                 commands->arrival_recorded = true;
             }
-            commands->actions[connection->slot] = payload[8];
+            commands->actions[connection->slot] = command[8];
             commands->present[connection->slot] = true;
         }
         return;
     }
     if (g_mode == MODE_CLIENT && type == MESSAGE_COMMAND_BUNDLE && g_initial_state_ready) {
         const uint32_t generation = Get32(payload);
-        const uint32_t tick = Get32(payload + 4);
-        const uint8_t count = payload[20];
+        if (g_confirmed_controls && (g_handoff_active || Get32(payload + 4) != g_control_epoch)) return;
+        const uint8_t *bundle = payload + EpochBytes();
+        const uint32_t tick = Get32(bundle + 4);
+        const uint8_t count = bundle[20];
         if (generation != g_level_generation) return;
-        if (count != g_player_count || size != static_cast<size_t>(21 + count)) {
+        if (count != g_player_count || size != static_cast<size_t>(21 + count) + EpochBytes()) {
             DisconnectLocalized(connection, "invalid input bundle", "lan.disconnect.invalid_data");
             return;
         }
         for (uint8_t slot = 0; slot < count; ++slot)
-            if (!Input_IsValidGameActions(payload[21 + slot])) {
+            if (!Input_IsValidGameActions(bundle[21 + slot])) {
                 DisconnectLocalized(connection, "invalid input action", "lan.disconnect.invalid_data");
                 return;
             }
         for (uint8_t slot = 0; slot < count; ++slot)
-            if (!AcceptInput(connection, g_inputs.submit(generation, tick, slot, payload[21 + slot])))
+            if (!AcceptInput(connection, g_inputs.submit(generation, tick, slot, bundle[21 + slot])))
                 return;
         if (tick <= SimulationState_Tick()) return;
         TickCommands *commands = CommandsFor(tick);
-        const uint32_t rng_state = Get32(payload + 8);
-        const uint64_t rng_calls = Get64(payload + 12);
+        const uint32_t rng_state = Get32(bundle + 8);
+        const uint64_t rng_calls = Get64(bundle + 12);
         if (commands->bundle && (commands->rng_state != rng_state || commands->rng_calls != rng_calls)) {
             DisconnectLocalized(connection, "conflicting bundle RNG", "lan.disconnect.invalid_data");
             return;
@@ -962,17 +1105,23 @@ void HandleMessage(Connection *connection, uint16_t type,
         commands->rng_calls = rng_calls;
         commands->bundle = true;
         for (uint8_t slot = 0; slot < count; ++slot) {
-            commands->actions[slot] = payload[21 + slot];
+            commands->actions[slot] = bundle[21 + slot];
             commands->present[slot] = true;
         }
         return;
     }
     if (g_mode == MODE_HOST && type == MESSAGE_CHECKSUM) {
         if (Get32(payload) != g_level_generation) return;
-        const uint32_t tick = Get32(payload + 4);
-        const uint64_t remote = Get64(payload + 8);
+        if (g_confirmed_controls && (g_handoff_active || Get32(payload + 4) != g_control_epoch)) return;
+        const uint8_t *checksum = payload + EpochBytes();
+        const uint32_t tick = Get32(checksum + 4);
+        const uint64_t remote = Get64(checksum + 8);
         const size_t index = tick % kCommandRingSize;
         if (g_host_checksum_ticks[index] == tick && g_host_checksums[index] != remote) {
+            if (g_confirmed_controls) {
+                LOG("[NET] confirmed-control session checksum mismatch tick=%u; aborting whole session\n", tick);
+                g_abort_to_lobby = true; return;
+            }
             std::vector<uint8_t> snapshot;
             if (!SimulationState_Capture(&snapshot) || snapshot.empty() ||
                 !SimulationState_ValidateRoundTrip(snapshot) ||
@@ -1009,6 +1158,7 @@ void HandleMessage(Connection *connection, uint16_t type,
     }
     if (g_mode == MODE_CLIENT && type == MESSAGE_INITIAL_SNAPSHOT &&
         g_match_active && g_local_level_ready) {
+        if (g_confirmed_controls && g_initial_state_ready) { g_abort_to_lobby = true; return; }
         const uint32_t generation = Get32(payload);
         if (generation != g_level_generation) {
             DisconnectLocalized(connection, "host synchronized the wrong level generation",
@@ -1028,6 +1178,7 @@ void HandleMessage(Connection *connection, uint16_t type,
     }
     if (g_mode == MODE_CLIENT && type == MESSAGE_STATE_CORRECTION &&
         g_match_active && g_initial_state_ready) {
+        if (g_confirmed_controls) { g_abort_to_lobby = true; return; }
         const uint32_t generation = Get32(payload);
         const uint32_t tick = Get32(payload + 4);
         if (generation != g_level_generation ||
@@ -1135,9 +1286,11 @@ void Receive(Connection *connection)
         const uint32_t payload_limit =
             (g_mode == MODE_CLIENT && type == MESSAGE_INITIAL_SNAPSHOT)
                 ? kMaximumSnapshotPayload + 4u :
+            (g_mode == MODE_CLIENT && type == MESSAGE_CONTROL_EXCHANGE)
+                ? kMaximumSnapshotPayload + 64u :
             (g_mode == MODE_CLIENT && type == MESSAGE_STATE_CORRECTION)
                 ? kMaximumSnapshotPayload + 8u : kMaximumPayload;
-        if (magic != kProtocolMagic || version != kProtocolVersion ||
+        if (magic != kProtocolMagic || version != ProtocolVersion() ||
             payload_size > payload_limit || sequence == 0 ||
             sequence <= connection->last_received_sequence) {
             DisconnectLocalized(connection, "protocol mismatch",
@@ -1342,6 +1495,11 @@ uint8_t SampleLocalActions(void)
 
 bool Netplay_InitializeFromArguments(int argc, char **argv)
 {
+    g_confirmed_controls = HasArgument(argc, argv, "--lan-confirmed-controls");
+    g_control_script = HasArgument(argc, argv, "--lan-control-script");
+    if (g_control_script && !g_confirmed_controls) {
+        SetStatus("--lan-control-script requires --lan-confirmed-controls"); return false;
+    }
     const bool host_requested = HasArgument(argc, argv, "--lan-host");
     const char *join = FindArgument(argc, argv, "--lan-join");
     if (!host_requested && join == NULL)
@@ -1356,6 +1514,14 @@ bool Netplay_InitializeFromArguments(int argc, char **argv)
     g_dump_state = HasArgument(argc, argv, "--lan-dump-state");
 
     if (host_requested) {
+        const char *players_arg = FindArgument(argc, argv, "--lan-auto-start-players");
+        if (players_arg != NULL) {
+            char *end = NULL; const unsigned long count = strtoul(players_arg, &end, 10);
+            if (!*players_arg || *end || count < 2 || count > 4) {
+                SetStatus("--lan-auto-start-players requires 2-4 total players"); return false;
+            }
+            g_auto_start_players = static_cast<uint32_t>(count);
+        }
         const char *delay_arg = FindArgument(argc, argv, "--lan-input-delay");
         if (delay_arg != NULL) {
             char *end = NULL;
@@ -1468,7 +1634,7 @@ void Netplay_Poll(void)
             g_poll_gap_max = now - g_last_poll;
         g_polled = true;
         g_last_poll = now;
-        if (g_match_active && g_SubState != GAMEPLAY_ACTIVE)
+        if (g_match_active && (g_SubState != GAMEPLAY_ACTIVE || g_handoff_active))
             g_waiting = false; // Intentional pauses are not missing-input stalls.
         if (g_match_active && now - g_last_diagnostic_log >= 2000u) {
             LOG("[NET] role=%s tick=%u delay=%u stalls=%u wait_ms=%llu max_wait=%u current_wait=%u arrival_age=%u poll_gap_max=%u simulated=%u confirmed=%u\n",
@@ -1496,6 +1662,36 @@ void Netplay_Poll(void)
         Flush(&g_server);
         ApplyControlBarriers();
     }
+    PollHandoff();
+    // Developer-only route probe: actual control API, scoring and level loader;
+    // no keyboard injection and never selected by ordinary menu sessions.
+    if (g_control_script && g_mode == MODE_HOST && g_match_active && !g_abort_to_lobby &&
+        !g_handoff_active && !g_handoff_waiting) {
+        const uint32_t now = Platform_GetTicks(), tick = SimulationState_Tick();
+        if (g_control_script_stage == 7 && g_GameState == GAME_STATE_GAME_OVER) {
+            LOG("[NET] live control script PASS generations=%u level=%u\n", g_level_generation,
+                unsigned(static_cast<unsigned char>(DAT_0048693c)));
+            g_control_script_stage = 8;
+        } else if (g_GameState == GAME_STATE_GAMEPLAY && Netplay_ControlAnchorReady(tick)) {
+            NetplayControl request = NETPLAY_PAUSE; bool send = false;
+            if (!g_control_script_stage && g_SubState == GAMEPLAY_ACTIVE && tick >= 30) {
+                g_control_script_stage = 1; g_control_script_pause = now; send = true;
+            } else if (g_control_script_stage == 1 && g_SubState == GAMEPLAY_EXIT_MENU && now - g_control_script_pause >= 250) {
+                request = NETPLAY_RESUME; g_control_script_stage = 2; send = true;
+            } else if (g_control_script_stage == 2 && g_SubState == GAMEPLAY_ACTIVE && tick >= 90) {
+                g_control_script_stage = 3; send = true;
+            } else if (g_control_script_stage == 3 && g_SubState == GAMEPLAY_EXIT_MENU) {
+                request = NETPLAY_SKIP; g_control_script_stage = 4; send = true;
+            } else if (g_control_script_stage == 4 && g_level_generation >= 2 && g_SubState == GAMEPLAY_LEVEL_PREVIEW) {
+                request = NETPLAY_RESUME; g_control_script_stage = 5; send = true;
+            } else if (g_control_script_stage == 5 && g_SubState == GAMEPLAY_ACTIVE && tick >= 60) {
+                g_control_script_stage = 6; send = true;
+            } else if (g_control_script_stage == 6 && g_SubState == GAMEPLAY_EXIT_MENU) {
+                request = NETPLAY_END; g_control_script_stage = 7; send = true;
+            }
+            if (send) Netplay_RequestControl(request);
+        }
+    }
     if (g_mode == MODE_HOST && g_match_active && g_SubState != g_last_broadcast_substate) {
         Netplay_BroadcastGameplayStateNow();
         g_last_broadcast_substate = g_SubState;
@@ -1504,7 +1700,7 @@ void Netplay_Poll(void)
         bool all_ready = true;
         for (size_t i = 0; i < g_clients.size(); ++i)
             all_ready = all_ready && g_clients[i].connected && g_clients[i].hello;
-        if (all_ready && Netplay_HostStartMatch()) {
+        if (all_ready && Netplay_ConnectedPlayerCount() >= static_cast<int>(g_auto_start_players) && Netplay_HostStartMatch()) {
             DAT_0048764a = 1;
             GameState_Transition(GAME_STATE_QUICK_RESTART);
         }
@@ -1516,6 +1712,7 @@ void Netplay_Poll(void)
          * forever. This is deferred until polling completes because receive
          * and flush loops hold references into the connection arrays. */
         g_abort_to_lobby = false;
+        LOG("[NET] aborting whole session; returning to LAN screen\n");
         g_match_active = false;
         Netplay_Shutdown();
         DAT_004877a4 = 0xF9;
@@ -1525,6 +1722,7 @@ void Netplay_Poll(void)
 
 void Netplay_Shutdown(void)
 {
+    ResetHandoff(); g_control_epoch = 1;
     PresentationEvents_Stop();
     if (g_mode == MODE_HOST) {
         for (size_t i = 0; i < g_clients.size(); ++i) {
@@ -1577,6 +1775,7 @@ void Netplay_Shutdown(void)
     g_initial_state_ready = false;
     g_last_broadcast_substate = -1;
     g_auto_start = false;
+    g_auto_start_players = 2;
     g_dump_state = false;
     g_level_generation = 0;
     g_lobby_count = 0;
@@ -1634,6 +1833,7 @@ void Netplay_FormatDiagnostics(char *out, size_t out_size)
 
 void Netplay_BroadcastGameplayStateNow(void)
 {
+    if (g_confirmed_controls) return;
     if (g_mode != MODE_HOST || !g_match_active || !g_initial_state_ready ||
         g_GameState != GAME_STATE_GAMEPLAY ||
         !IsControlState(static_cast<uint8_t>(g_SubState)) ||
@@ -1760,6 +1960,7 @@ bool Netplay_HostStartMatch(void)
         QueueMessage(ready[i], MESSAGE_START, payload.data(), payload.size());
 
     g_match_active = true;
+    g_control_script_stage = 0;
     g_last_broadcast_substate = -1;
     g_last_sampled_tick = 0;
     g_local_level_ready = false;
@@ -1797,7 +1998,10 @@ void Netplay_OnLevelLoaded(void)
 {
     if (!g_match_active)
         return;
+    ResetHandoff(); g_control_epoch = 1;
     ++g_level_generation;
+    LOG("[NET] level loaded role=%s generation=%u level=%u\n", g_mode == MODE_HOST ? "host" : "client",
+        g_level_generation, unsigned(static_cast<unsigned char>(DAT_0048693c)));
     g_last_broadcast_substate = -1;
     ResetDiagnostics();
     g_local_level_ready = true;
@@ -1820,6 +2024,9 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
     if (!g_match_active)
         return true;
     Netplay_Poll();
+
+    if (g_abort_to_lobby || g_mode == MODE_OFF || g_handoff_active ||
+        (g_handoff_waiting && tick > g_handoff_tick)) return false;
 
     if (g_SubState != GAMEPLAY_ACTIVE) return false;
 
@@ -1846,6 +2053,7 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
         } else {
             std::vector<uint8_t> payload;
             Put32(&payload, g_level_generation);
+            if (g_confirmed_controls) Put32(&payload, g_control_epoch);
             Put32(&payload, future_tick);
             payload.push_back(actions);
             QueueMessage(&g_server, MESSAGE_COMMAND, payload.data(), payload.size());
@@ -1862,6 +2070,7 @@ bool Netplay_PrepareSimulationTick(uint32_t tick)
         commands->bundle = true;
         std::vector<uint8_t> payload;
         Put32(&payload, g_level_generation);
+        if (g_confirmed_controls) Put32(&payload, g_control_epoch);
         Put32(&payload, tick);
         Put32(&payload, commands->rng_state);
         Put64(&payload, commands->rng_calls);
@@ -1899,9 +2108,37 @@ bool Netplay_LocalSessionControlsAllowed(void)
         Netplay_CanFinalizeSimulationTick(SimulationState_Tick()));
 }
 
+bool Netplay_UsesConfirmedControls(void) { return g_confirmed_controls && g_match_active; }
+bool Netplay_ControlAnchorReady(uint32_t tick)
+{
+    return Netplay_UsesConfirmedControls() && g_GameState == GAME_STATE_GAMEPLAY && !g_abort_to_lobby &&
+        g_local_level_ready && g_initial_state_ready && !g_handoff_active &&
+        tick == SimulationState_Tick() && tick == g_inputs.simulated_tick() && g_inputs.can_finalize(tick);
+}
+bool Netplay_RenderAllowed(void) { return !g_handoff_active; }
+bool Netplay_RequestControl(NetplayControl control)
+{
+    if (!Netplay_UsesConfirmedControls()) return false;
+    if (g_mode != MODE_HOST || g_handoff_active || g_handoff_waiting) return true;
+    const uint32_t now = Platform_GetTicks();
+    if (!Netplay_ControlAnchorReady(SimulationState_Tick()) || control < NETPLAY_PAUSE || control > NETPLAY_END ||
+        !g_control_world.start_live_control(g_level_generation, g_player_count, g_control_epoch, 128u * 1024u * 1024u) ||
+        !g_control_host.start(g_level_generation, g_control_epoch, g_player_count) ||
+        !g_control_host.begin_control(g_control_world, g_control_epoch + 1,
+                                     static_cast<SimulationReconciliation::Control>(control), now)) {
+        LOG("[NET] could not prepare confirmed control=%u\n", unsigned(control));
+        g_abort_to_lobby = true; return true;
+    }
+    g_handoff_active = true; g_handoff_started = now;
+    LOG("[NET] confirmed control requested=%u generation=%u epoch=%u tick=%u\n",
+        unsigned(control), g_level_generation, g_control_epoch, SimulationState_Tick());
+    PollHandoff();
+    return true;
+}
+
 bool Netplay_CanFinalizeSimulationTick(uint32_t tick)
 {
-    return !g_match_active || (g_initial_state_ready && g_inputs.can_finalize(tick));
+    return !g_match_active || (g_initial_state_ready && !g_handoff_active && !g_handoff_waiting && g_inputs.can_finalize(tick));
 }
 
 void Netplay_AfterSimulationTick(uint32_t tick, uint64_t checksum)
@@ -1936,6 +2173,7 @@ void Netplay_AfterSimulationTick(uint32_t tick, uint64_t checksum)
     } else {
         std::vector<uint8_t> payload;
         Put32(&payload, g_level_generation);
+        if (g_confirmed_controls) Put32(&payload, g_control_epoch);
         Put32(&payload, tick);
         Put64(&payload, checksum);
         QueueMessage(&g_server, MESSAGE_CHECKSUM, payload.data(), payload.size());

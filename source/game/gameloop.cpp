@@ -463,6 +463,9 @@ bool Gameplay_TransitionsAllowed(void)
 
 void Game_Update_Render(void)
 {
+    // A confirmed control owner temporarily borrows a frozen world. Preserve
+    // the last completed frame until every participant releases the handoff.
+    if (!Netplay_RenderAllowed()) { Platform_Delay(1); return; }
     /* NOTE: Cursor sync is handled by the SDL main loop
      * so it runs for ALL game states, not just g_GameState==0. */
 
@@ -505,6 +508,7 @@ void Game_Update_Render(void)
         if (g_SubState == GAMEPLAY_LEVEL_PREVIEW && Netplay_LocalSessionControlsAllowed()) {
             if ((unsigned char)DAT_0048693c == 0) {
                 /* First level — no stats to show, start immediately */
+                if (Netplay_RequestControl(NETPLAY_RESUME)) return;
                 g_SubState = GAMEPLAY_ACTIVE;
                 g_NeedsRedraw = 2;
                 g_TimerStart = Platform_GetTicks();
@@ -512,6 +516,7 @@ void Game_Update_Render(void)
                 g_FrameTimer = Platform_GetTicks();
             } else {
                 if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
+                    if (Netplay_RequestControl(NETPLAY_END)) return;
                     g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                     *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
                     Netplay_BroadcastGameplayStateNow();
@@ -519,6 +524,7 @@ void Game_Update_Render(void)
                 if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                     DAT_00489ee8 = now_input + 500;
                     DAT_00489eec = 0x1C;
+                    if (Netplay_RequestControl(NETPLAY_RESUME)) return;
                     g_SubState = GAMEPLAY_ACTIVE;
                     g_NeedsRedraw = 2;
                     g_TimerStart = Platform_GetTicks();
@@ -533,6 +539,10 @@ void Game_Update_Render(void)
         if (g_SubState == GAMEPLAY_EXIT_MENU && Netplay_LocalSessionControlsAllowed()) {
             /* F10 (scan 0x44): exit to menu */
             if ((g_KeyboardState[0x44] & 0x80) != 0 && now_input >= DAT_00489ee8) {
+                if (Netplay_UsesConfirmedControls()) {
+                    DAT_00489ee8 = now_input + 500; DAT_00489eec = 0x44;
+                    Netplay_RequestControl(NETPLAY_END); return;
+                }
                 *(unsigned char *)&DAT_0048693c = g_GameConfig.values.active_level_count;
                 g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
@@ -542,6 +552,7 @@ void Game_Update_Render(void)
             if ((g_KeyboardState[0x1C] & 0x80) != 0 && now_input >= DAT_00489ee8) {
                 DAT_00489ee8 = now_input + 500;
                 DAT_00489eec = 0x1C;
+                if (Netplay_RequestControl(NETPLAY_SKIP)) return;
                 g_SubState = GAMEPLAY_LEVEL_ADVANCE;
                 DAT_004892a5 = 0;
                 g_NeedsRedraw = 1;
@@ -569,8 +580,16 @@ void Game_Update_Render(void)
          * Excluded from states 3 and 4. */
         if (Netplay_LocalSessionControlsAllowed() &&
             g_SubState != GAMEPLAY_ROUND_COMPLETE &&
-            g_SubState != GAMEPLAY_LEVEL_PREVIEW) {
+            g_SubState != GAMEPLAY_LEVEL_PREVIEW &&
+            (!Netplay_UsesConfirmedControls() || g_SubState == GAMEPLAY_ACTIVE ||
+             g_SubState == GAMEPLAY_EXIT_MENU || g_SubState == GAMEPLAY_PAUSED)) {
             if ((g_KeyboardState[0x01] & 0x80) != 0 && now_input >= DAT_00489ee8) {
+                if (Netplay_UsesConfirmedControls()) {
+                    DAT_00489ee8 = now_input + 500; DAT_00489eec = 0x01;
+                    Netplay_RequestControl(g_SubState == GAMEPLAY_EXIT_MENU || g_SubState == GAMEPLAY_PAUSED ?
+                        NETPLAY_RESUME : NETPLAY_PAUSE);
+                    return;
+                }
                 g_SubState = (g_SubState != GAMEPLAY_EXIT_MENU)
                     ? GAMEPLAY_EXIT_MENU : GAMEPLAY_ACTIVE;
                 DAT_00489ee8 = now_input + 500;
@@ -597,6 +616,7 @@ void Game_Update_Render(void)
         g_SubState = GAMEPLAY_ACTIVE;
         if ((unsigned char)DAT_0048693c >= g_GameConfig.values.active_level_count) {
             /* All rounds completed → game over / scoreboard path */
+            if (Netplay_IsMatchActive()) LOG("[NET] match reached stats level=%u\n", unsigned(static_cast<unsigned char>(DAT_0048693c)));
             GameState_Transition(GAME_STATE_GAME_OVER);
         } else {
             /* More rounds to play → reload menu with next level */
@@ -655,6 +675,9 @@ void Game_Update_Render(void)
         }
 
         /* Fall through to rendering — stats overlay will be drawn this frame */
+        if (Netplay_IsMatchActive()) LOG("[NET] round accounted tick=%u level=%u wins=%u,%u,%u,%u\n",
+            SimulationState_Tick(), unsigned(static_cast<unsigned char>(DAT_0048693c)),
+            unsigned(g_TeamWins[0]), unsigned(g_TeamWins[1]), unsigned(g_TeamWins[2]), unsigned(g_TeamWins[3]));
     }
 
     /* ---- Game logic update ---- */
@@ -683,6 +706,8 @@ void Game_Update_Render(void)
     }
 
     /* ---- Rendering ---- */
+    // Polling inside a catch-up tick can start a handoff after the entry check.
+    if (!Netplay_RenderAllowed()) { Platform_Delay(1); return; }
     Render_Frame();
 
     /* NOTE: No additional frame rate limiter here.

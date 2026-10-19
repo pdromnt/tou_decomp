@@ -5,8 +5,9 @@ acknowledgements and confirmed resync into one per-peer state machine. It owns
 neither the world nor a socket. `NetcodeHostExchange` coordinates one host world
 across up to three clients. `source/game/exchange_diagnostic.cpp` supplies
 a separate loopback-only reliable TCP driver for two to four real game processes.
-Neither module is used by normal LAN menus or matches. Live LAN is still
-protocol 6 delayed lockstep; no user-facing prediction mode is enabled.
+The diagnostic driver is isolated. The core exchange's control barrier is also
+used by the [opt-in live LAN control mode](LAN_BETA.md); default LAN remains
+protocol 6 delayed lockstep. No live prediction mode is enabled.
 
 ## Receipt versus commitment
 
@@ -110,6 +111,53 @@ group is awaiting Applied: irreversible transitions must also require the
 session's `running()` gate, not only `world.can_finalize()`.
 As with any resync, installation resets the owned presentation journal/loops;
 real pause-time shader retention and audible continuity are not verified here.
+That applies to the prediction-owning diagnostic. The live control-only owner
+below deliberately preserves presentation and never starts a journal.
+
+## Live control-only adapter
+
+`--lan-confirmed-controls` selects protocol 7 on the real LAN connection. The
+existing HELLO asset/catalog checks also compare a mode-specific build identity;
+packet version mismatches fail before gameplay. Inputs stay in delayed lockstep.
+Message 17 wraps a two-byte exchange type plus its existing bytes. Only
+Offer/Commit/Resume are accepted from the host and Ready/Applied from clients.
+Receipt/revision/progress/end diagnostic messages cannot enter this lane.
+
+The host's menu requests a control before mutating state. A client defers the
+Offer until its ordinary lockstep ledger reaches the exact target tick. Then
+`start_live_control` borrows that confirmed current world, creates no event
+journal, and refuses physics input/advancement. During ownership, gameplay and
+rendering hold the completed frame; network/heartbeat polling continues. Both
+entry and post-catch-up rendering checks cover a handoff starting mid-frame.
+The controlled restore preserves presentation, including local audio handles
+and particle tags. Stopping the borrowed owner never stops local sounds.
+
+After release, each side resets its command ledger at that same tick, seeds
+neutral input lead and resets pacing/redraw. Commands, bundles and checksums
+in protocol 7 add an epoch immediately after the generation; old epochs are
+ignored. Client Resume handling reseeds inline before parsing the next bundle
+in the same socket read. Level load starts a new generation with epoch 1.
+Default protocol 6 shapes and delayed-control path remain available unchanged.
+
+The group gate blocks irreversible outer scoring/level teardown until release.
+The regular scoring, resource loader and stats path then run normally, once per
+round. Heartbeat/queue safeguards remain on the existing LAN transport; any
+handoff timeout/failure or checksum mismatch aborts the whole session rather
+than attempting a one-client correction during an epoch barrier. A five-second
+deadline covers the complete handoff including snapshot transfer. No silent
+fallback, reconnect, late join or reduced quorum is implemented.
+
+Two/four-process Windows x64 live runs passed pause/resume, skip, accounting,
+resource teardown/reload, generation-2 preview/resume and end to the stats route.
+The delayed relay passed stale epoch commands/bundles and wrong-generation
+control injection. Withheld Ready, bad stream version and current-epoch bad
+checksum returned both peers to the LAN-screen route.
+The four-player disconnect probe also closed the third client mid-handoff;
+all remaining processes returned to LAN without releasing the control.
+Owner probes verify
+confirmed-only admission, presentation-preserving restore/stop and no physics
+ticks/journal ownership. No human audio/visual or cross-platform acceptance is
+claimed. See [LAN beta](LAN_BETA.md) for opt-in and developer-script commands.
 
 ## Bounds and driver scope
 
@@ -206,18 +254,16 @@ Windows x64 observations:
   application and the checksum-recovery barrier. It uses a shared zero-tick
   stub for phase checks; independent worlds are evidenced by the process runs.
 
-No permanent test suite or CI job was added. This does not establish real
-internet/loss acceptance, live menu integration, real audible/GPU output,
-natural match/level progression, Linux/macOS behavior or CM4 cost.
+No permanent test suite or CI job was added. The isolated diagnostic evidence
+does not establish live prediction, real internet/loss acceptance, audible/GPU
+output, natural match progression, Linux/macOS behavior or CM4 cost.
 
 ## Next integration gates
 
-Integrate confirmed controls with actual menu/score/level transitions, negotiate the
-experimental mode and fingerprints on the real LAN connection, integrate local
-input scheduling and heartbeat/backpressure policy, retain a completed display
-frame during replay, and verify real presentation. Keep conservative lockstep
-available. Do not enable normal LAN prediction merely because the isolated
-multi-process exchange works. In particular, the current menu path mutates
-pause/skip/end state before broadcasting it; that is incompatible with the
-owner's external-mutation guard. The confirmed control handoff must replace that
-ordering before a live opt-in can be safe. No menu opt-in is exposed yet.
+Integrate predicted input/revisions and the bounded pump with the live clock,
+input sampler and real sound/GPU delivery, retaining a completed display during
+partial replay. Exercise natural wins, repeated matches, physical menu controls,
+remote/cross-platform behavior and low-power costs. Optimize full-snapshot
+controls before treating their latency/bandwidth as accepted. Keep conservative
+lockstep available. The CLI control opt-in is not a rollback toggle or evidence
+that live prediction is ready; no menu toggle is exposed yet.

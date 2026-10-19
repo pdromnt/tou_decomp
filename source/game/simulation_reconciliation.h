@@ -4,8 +4,8 @@
 #include "presentation_events.h"
 
 // Experimental game-thread owner; no sockets, pacing, rendering, or level I/O.
-// Owns full-copy world/local checkpoints and the presentation journal lifetime.
-// Never created by ordinary gameplay or live LAN yet.
+// Prediction mode owns full-copy world/local checkpoints and the event journal.
+// Live lockstep may borrow a control-only anchor; prediction remains isolated.
 class SimulationReconciliation {
 public:
     SimulationReconciliation() = default;
@@ -27,6 +27,9 @@ public:
     ~SimulationReconciliation() { stop(); }
     bool start(uint32_t generation, uint8_t players, uint32_t window,
                size_t budget, bool deliver = false, InputMode mode = DirectInputs);
+    // Borrow an already-confirmed live lockstep anchor for controls only.
+    // Never owns a journal, advances physics, or changes local presentation.
+    bool start_live_control(uint32_t generation, uint8_t players, uint32_t epoch, size_t budget);
     void stop();
     InputTimeline::Result submit(uint32_t generation, uint32_t tick,
                                  uint8_t player, uint8_t actions, uint32_t epoch = 1);
@@ -48,6 +51,7 @@ public:
     const Checkpoint *checkpoint(uint32_t tick) const;
     uint32_t simulated_tick() const { return inputs_.simulated_tick(); }
     uint32_t confirmed_tick() const { return inputs_.confirmed_tick(); }
+    uint32_t committed_tick() const { return control_only_ ? inputs_.confirmed_tick() : PresentationEvents_ConfirmedTick(); }
     uint32_t dirty_from() const { return inputs_.dirty_from(); }
     uint64_t replayed_ticks() const { return replayed_; }
     uint32_t corrections() const { return corrections_; }
@@ -84,5 +88,6 @@ private:
     uint8_t base_actions_[4] = {};
     InputMode mode_ = DirectInputs;
     bool deliver_ = false;
+    bool control_only_ = false;
 };
 #endif

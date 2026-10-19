@@ -89,7 +89,7 @@ bool NetcodeExchange::revision(const AuthoritativeInput &in, const SimulationRec
 bool NetcodeExchange::progress(const SimulationReconciliation &world) {
     if (role_ != Client || phase_ != Running || !world.healthy() || world.replaying() || world.dirty_from() || world.epoch() != epoch_)
         return false;
-    const uint32_t tick = PresentationEvents_ConfirmedTick();
+    const uint32_t tick = world.committed_tick();
     if (tick == last_progress_) return true;
     const SimulationReconciliation::Checkpoint *checkpoint = world.checkpoint(tick);
     if (!checkpoint || tick < last_progress_) return false;
@@ -144,7 +144,7 @@ bool NetcodeExchange::receive(const Message &message, SimulationReconciliation *
             if (phase_ == AwaitResume) return stamp(SyncApplied) || fail();
         }
         if (state.epoch <= epoch_) return true;
-        if (phase_ != Running || state.players != players_ || state.tick < PresentationEvents_ConfirmedTick() ||
+        if (phase_ != Running || state.players != players_ || state.tick < world->committed_tick() ||
             !SimulationState_Validate(state.state.data(), state.state.size(), state.tick)) return fail();
         pending_ = std::move(state); phase_ = Prepared; deadline_start_ = now;
         return stamp(SyncReady) || fail();
@@ -192,7 +192,7 @@ bool NetcodeExchange::receive(const Message &message, SimulationReconciliation *
     if (message.type == End || message.type == EndAck) {
         const uint32_t tick = Get32(data + 8); const uint64_t hash = Get64(data + 12);
         if (message.type == End) {
-            if (role_ != Client || (phase_ != Running && phase_ != Closed) || tick != PresentationEvents_ConfirmedTick()) return fail();
+            if (role_ != Client || (phase_ != Running && phase_ != Closed) || tick != world->committed_tick()) return fail();
             const SimulationReconciliation::Checkpoint *checkpoint = world->checkpoint(tick);
             if (!checkpoint || hash != AuthorityState_Hash(checkpoint->state.data(), checkpoint->state.size())) return fail();
             if (!queue(EndAck, in)) return fail();

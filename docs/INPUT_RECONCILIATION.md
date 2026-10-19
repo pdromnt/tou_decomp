@@ -2,15 +2,19 @@
 
 `source/game/simulation_reconciliation.cpp` connects the bounded input ledger
 to real world restore/resimulation and local presentation checkpoints. It is
-used only by the developer late-input diagnostic on `advanced-netcode`.
-Live LAN remains TCP lockstep, with prediction set to zero. No menus, normal
-local play, wire formats, or compatibility fingerprints change in this slice.
+used for prediction only by developer late-input diagnostics on `advanced-netcode`.
+The opt-in live confirmed-control adapter borrows a current lockstep anchor,
+not physics ownership. Live LAN still has zero prediction. Normal local play
+and default protocol 6 are unchanged; opt-in controls use separate protocol 7.
 
 ## Ownership and bounds
 
 - One game-thread owner for one loaded level, starting at simulation tick zero.
-  Starting while LAN, replay playback/recording, or another event journal is
-  active is rejected. The caller must stop the owner before level teardown.
+  Starting a prediction owner while LAN, replay playback/recording, or another
+  event journal is active is rejected. The caller stops it before level teardown.
+  The explicit live control-only entry instead requires a confirmed current
+  LAN anchor, cannot submit inputs/advance physics, owns no journal, preserves
+  presentation on restore/stop and is detached before releasing scoring/load.
 - Two to four players in the diagnostic; the ledger supports up to four.
   A configured window of 1-12 ticks bounds prediction and total replay length.
 - A ring of window-plus-one full world snapshots, paired with local sound/
@@ -159,11 +163,12 @@ transitions must wait for the group's release as well as world confirmation.
 
 The [input authority prototype](INPUT_AUTHORITY.md) now distinguishes provisional
 and sealed host revisions and imports scoped confirmed checkpoints under a new
-epoch. It remains diagnostic-only; direct receipt and revision-fed owners cannot
-mix input sources. Resync resets the local event journal at the imported base.
+epoch. Prediction remains diagnostic-only; direct receipt and revision-fed owners cannot
+mix input sources. Prediction-owner resync resets the event journal at the
+imported base; live control-only anchors never start/stop that journal.
 
 Real audible/GPU delivery, weapon-specific producers, live clock/authority
-integration of the [isolated peer exchange](NETCODE_EXCHANGE.md), full level/lobby transitions,
+integration of the [isolated peer exchange](NETCODE_EXCHANGE.md), natural-win/repeated-match acceptance,
 remote/cross-platform checks, and low-power
 memory/CPU budgets remain open. The rolling schedule is synthetic and still
 drains at each window's oracle horizon; it does not prove continuous internet

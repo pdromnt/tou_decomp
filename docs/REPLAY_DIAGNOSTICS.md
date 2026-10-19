@@ -152,3 +152,13 @@ four ticks and no forced ending. Its generated maps use a shared fixed seed.
 exit 8 indicates framing, transport, exchange, barrier or overall timeout failure.
 See [peer exchange](NETCODE_EXCHANGE.md) for commands, injected-delay/failure
 evidence, bounds and remaining live LAN gates. The peer driver is loopback-only.
+
+The separate real-LAN route probe uses `--lan-confirmed-controls` everywhere and
+`--lan-control-script` only on a host with `--lan-auto-start`. It calls the real
+control API and outer scoring/level loader rather than stopping at an anchor.
+Use isolated asset/settings directories: this is ordinary gameplay startup,
+with its usual configuration/save behavior. `--lan-auto-start-players N` waits
+for 2-4 total peers (default 2). The host logs `[NET] live control script PASS`
+after pause/resume, skip/accounting/reload/preview/resume and end to the stats
+route. Clients must each account twice and reach the same stats route. This is
+not a human menu, sound/GPU or internet acceptance check. See [LAN beta](LAN_BETA.md).

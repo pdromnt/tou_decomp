@@ -1,10 +1,11 @@
 # Experimental input authority and confirmed resync
 
-This is a local prototype on `advanced-netcode`, not a new live networking
-mode. `source/game/input_authority.cpp` defines bounded canonical records and
+Input prediction remains a local prototype on `advanced-netcode`.
+`source/game/input_authority.cpp` defines bounded canonical records and
 their codecs; the reconciliation owner applies them only in `HostRevisions`
-mode. Existing LAN remains protocol 6 TCP lockstep. Its packets, simulation
-fingerprint and snapshot version are unchanged by this slice.
+mode. Default LAN remains protocol 6 TCP lockstep. The separate protocol 7
+control opt-in reuses confirmed-state envelopes, not live predicted revisions;
+see [peer exchange](NETCODE_EXCHANGE.md). Snapshot format stays at version 5.
 
 ## Input ownership
 
@@ -113,7 +114,7 @@ permanent test suite or CI job was added.
 
 The [bounded peer exchange](NETCODE_EXCHANGE.md) now supplies receipt/revision
 acks, committed hash progress and a coordinated resync handshake in an isolated two-to-four-process
-TCP driver. It is not connected to normal LAN sessions. Live negotiation,
-menu integration of confirmed control anchors, input/clock/liveness integration, real audible/GPU delivery,
-level/lobby transitions, remote/cross-platform checks and low-power costs remain
+TCP driver. Only its control barrier is connected to opt-in live LAN sessions.
+Prediction input/clock/liveness integration, real audible/GPU delivery,
+natural-win/repeated-match acceptance, remote/cross-platform checks and low-power costs remain
 gated. No live prediction is enabled.
