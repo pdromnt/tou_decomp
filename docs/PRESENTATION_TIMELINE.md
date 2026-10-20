@@ -68,7 +68,7 @@ or CI job, nor a test of SDL/GPU delivery quality.
 The probe also checked that a physical-track generation change prevents later
 virtual stop, volume and pan commands from touching the new owner.
 
-Still required before live prediction:
+Still required for live prediction acceptance:
 
 - Verify real audible output, loop transitions, voice stealing, focus/mute and
   multi-viewport rendering; dry-run equality cannot establish their quality.
@@ -77,7 +77,8 @@ Still required before live prediction:
 - Exercise the new confirmed-only score/level transition guard through full
   match/level changes. The terminal diagnostic verifies that the guard is
   closed before event commit and open afterwards, but does not unload a level.
-- Integrate the [bounded local reconciliation pump](INPUT_RECONCILIATION.md)
-  with live authority/resync and clock pacing, then profile on low-power hardware.
+- Profile the integrated [bounded reconciliation pump](INPUT_RECONCILIATION.md)
+  with live authority/resync and clock pacing on low-power hardware.
 
-No user-facing rollback toggle, network prediction or ENet migration is enabled.
+The experimental branch now exposes live prediction under LAN Network settings.
+It is not an accepted replacement for default lockstep; no ENet migration is enabled.

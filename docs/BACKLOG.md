@@ -11,14 +11,13 @@ New defects should be added only after a concrete reproduction.
 
 - Follow the gated [advanced netcode plan](ADVANCED_NETCODE.md) on
   `advanced-netcode`, separate from stable main. Verify real sound/GPU delivery
-  and weapon-specific producers. Integrate the bounded local pump
-  and predicted peer inputs with live clock/sampling/liveness and completed-frame
-  retention during replay. Verify natural wins/repeated matches and physical
+  and weapon-specific producers. Accept the new LAN-only Network settings page
+  and live prediction mode with real players. Verify natural wins/repeated matches and physical
   controls, optimize full-snapshot control cost, and profile low-power budgets.
   The local checkpoint owner and late-input oracle are described in
   [input reconciliation](INPUT_RECONCILIATION.md).
   Isolated two-to-four-process progress/group-resync checks live in [peer exchange](NETCODE_EXCHANGE.md).
-  The protocol-7 control-only LAN opt-in is documented in [LAN beta](LAN_BETA.md).
+  Protocol-7 control-only and protocol-8 prediction choices are documented in [LAN beta](LAN_BETA.md).
   Remote and cross-platform acceptance remain open.
 
 ## Active Work: Presentation Shaders

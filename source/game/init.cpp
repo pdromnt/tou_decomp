@@ -146,6 +146,10 @@ static char s_GamepadStatus[256];
 
 static void Update_Lan_Menu_Dynamic_Text(void)
 {
+    static uint32_t last_prediction_window = 0;
+    const uint32_t prediction_window = Netplay_PredictionWindow();
+    if (last_prediction_window != prediction_window && DAT_004877a4 == 0xF2) DAT_004877b1 = 1;
+    last_prediction_window = prediction_window;
     char diagnostics[sizeof(s_LanDiagnostics)];
     Netplay_FormatDiagnostics(diagnostics, sizeof(diagnostics));
     char delay[sizeof(s_LanDelay)];
@@ -154,7 +158,7 @@ static void Update_Lan_Menu_Dynamic_Text(void)
     if (strcmp(diagnostics, s_LanDiagnostics) || strcmp(delay, s_LanDelay)) {
         snprintf(s_LanDiagnostics, sizeof(s_LanDiagnostics), "%s", diagnostics);
         snprintf(s_LanDelay, sizeof(s_LanDelay), "%s", delay);
-        if (DAT_004877a4 == 0xF9) DAT_004877b1 = 1;
+        if (DAT_004877a4 == 0xF9 || DAT_004877a4 == 0xF2) DAT_004877b1 = 1;
     }
     snprintf(s_LanTeamText, sizeof(s_LanTeamText), Text_Get("lan.team_format"), s_LanTeam);
     snprintf(s_LanHostDisplay, sizeof(s_LanHostDisplay), "%s%s",
@@ -3145,10 +3149,11 @@ static void Build_Lan_Menu_Page(void)
     if (!Netplay_IsEnabled()) {
         FUN_00430200(0, 160, 0x157, 2, 2, 1, 0, 1, 0xFA);
         Add_Lan_Help_Text(Text_Get("lan.help.host"), 192);
-        FUN_00430200(0, 272, 0x158, 2, 2, 1, 0, 1, 0xF6);
-        Add_Lan_Help_Text(Text_Get("lan.help.join"), 304);
-        Add_Lan_Help_Text(Text_Get("lan.help.ship"), 368);
-        FUN_00430200(0, 432, 0x0F, 2, 0, 1, 0, 1, 0xF8);
+        FUN_00430200(0, 248, 0x158, 2, 2, 1, 0, 1, 0xF6);
+        Add_Lan_Help_Text(Text_Get("lan.help.join"), 280);
+        Add_Lan_Help_Text(Text_Get("lan.settings.title"), 336, 1, 1, 0xF2);
+        Add_Lan_Help_Text(Text_Get("lan.help.ship"), 392);
+        FUN_00430200(0, 448, 0x0F, 2, 0, 1, 0, 1, 0xF8);
         DAT_004877c9 = 0xF8;
     } else {
         char count[64];
@@ -3167,8 +3172,7 @@ static void Build_Lan_Menu_Page(void)
                 break;
             entry = separator + 3;
         }
-        Add_Lan_Help_Text(s_LanDelay, 292, 1, 0,
-                          Netplay_IsHost() ? 0xF3 : 0xff);
+        Add_Lan_Help_Text(Text_Get("lan.settings.title"), 292, 1, 1, 0xF2);
         Add_Lan_Help_Text(s_LanDiagnostics, 312, 1);
         if (Netplay_IsHost()) {
             FUN_00430200(0, 340, 0x15B, 2, 2, 1, 0, 1, 0x1E);
@@ -3182,6 +3186,35 @@ static void Build_Lan_Menu_Page(void)
     }
     g_FrameIndex = 0;
     DAT_004877b1 = 0;
+}
+
+static void Build_Lan_Settings_Page(void)
+{
+    s_LanTextLineCount = 0;
+    FUN_00430200(0, 64, 0x15D, 1, 0, 0, 0, 1, 0xff);
+    Add_Lan_Help_Text(Text_Get("lan.settings.title"), 108, 2);
+    const bool mode_editable = !Netplay_IsEnabled();
+    const bool host_editable = !Netplay_IsEnabled() || (Netplay_IsHost() && !Netplay_IsMatchActive());
+    const NetplayNetworkMode mode = Netplay_NetworkMode();
+    const char *mode_key = mode == NETPLAY_PREDICTED ? "lan.settings.prediction" :
+        mode == NETPLAY_CONFIRMED ? "lan.settings.confirmed" : "lan.settings.lockstep";
+    char line[256];
+    snprintf(line, sizeof(line), Text_Get("lan.settings.mode_format"), Text_Get(mode_key));
+    Add_Lan_Help_Text(line, 152, 2, mode_editable ? 1 : 2, mode_editable ? 0xF1 : 0xff);
+    const char *help_key = mode == NETPLAY_PREDICTED ? "lan.settings.prediction_help" :
+        mode == NETPLAY_CONFIRMED ? "lan.settings.confirmed_help" : "lan.settings.lockstep_help";
+    Add_Lan_Help_Text(Text_Get(help_key), 196, 2, 2);
+    snprintf(line, sizeof(line), Text_Get("lan.settings.delay_format"), Netplay_InputDelay());
+    Add_Lan_Help_Text(line, 264, 1, host_editable ? 1 : 2, host_editable ? 0xF3 : 0xff);
+    Add_Lan_Help_Text(Text_Get("lan.settings.delay_help"), 296, 2, 2);
+    if (mode == NETPLAY_PREDICTED) {
+        snprintf(line, sizeof(line), Text_Get("lan.settings.window_format"), Netplay_PredictionWindow());
+        Add_Lan_Help_Text(line, 344, 1, host_editable ? 1 : 2, host_editable ? 0xF0 : 0xff);
+        Add_Lan_Help_Text(Text_Get("lan.settings.window_help"), 376, 2, 2);
+    }
+    Add_Lan_Help_Text(Text_Get(mode_editable ? "lan.settings.before_connect" : "lan.settings.locked"), 416, 2, 1);
+    FUN_00430200(0, 448, 0x0F, 2, 0, 1, 0, 1, 0xF9);
+    DAT_004877c9 = 0xF9; g_FrameIndex = 0; DAT_004877b1 = 0;
 }
 
 /* Pick the most readable of two existing bitmap fonts that fits a fixed-width
@@ -3493,10 +3526,21 @@ void FUN_0042a470(void)
         return;
 
     case 0xF3: /* Host chooses the fixed input lead for the next match. */
-        if (Netplay_IsHost())
-            Netplay_SetInputDelay(Netplay_InputDelay() % 12 + 1);
-        DAT_004877a4 = 0xF9;
-        Build_Lan_Menu_Page();
+        Netplay_SetInputDelay(Netplay_InputDelay() % 12 + 1);
+        DAT_004877a4 = 0xF2;
+        Build_Lan_Settings_Page();
+        return;
+
+    case 0xF2: /* Networking settings live under LAN, never general options. */
+        Build_Lan_Settings_Page();
+        return;
+    case 0xF1:
+        Netplay_SetNetworkMode(static_cast<NetplayNetworkMode>((Netplay_NetworkMode() + 1) % 3));
+        DAT_004877a4 = 0xF2; Build_Lan_Settings_Page();
+        return;
+    case 0xF0:
+        Netplay_SetPredictionWindow(Netplay_PredictionWindow() % 12 + 1);
+        DAT_004877a4 = 0xF2; Build_Lan_Settings_Page();
         return;
 
     case 0xF7: /* Cancel LAN session */

@@ -19,6 +19,20 @@ SOURCE = ROOT / "source/game/init.cpp"
 OUTPUT = ROOT / "lang"
 
 DIRECT_ENGLISH = {
+    "lan.settings.title": "Network settings",
+    "lan.settings.mode_format": "Mode: %s",
+    "lan.settings.lockstep": "Lockstep (safe)",
+    "lan.settings.confirmed": "Lockstep + confirmed controls",
+    "lan.settings.prediction": "Prediction (beta)",
+    "lan.settings.lockstep_help": "Waits for everyone's input. Lowest CPU and memory cost.",
+    "lan.settings.confirmed_help": "Lockstep with all-player pause/skip/end handoffs. Uses full snapshots.",
+    "lan.settings.prediction_help": "Predicts missing input and replays corrections. Experimental; higher CPU and memory cost.",
+    "lan.settings.delay_format": "Input lead: %u ticks",
+    "lan.settings.delay_help": "Host setting: more lead tolerates jitter but delays your controls.",
+    "lan.settings.window_format": "Prediction window: %u ticks",
+    "lan.settings.window_help": "Host setting: maximum speculative ticks. Larger windows need more memory.",
+    "lan.settings.before_connect": "Choose the same mode on every computer before connecting.",
+    "lan.settings.locked": "Mode locked while connected. Host settings apply to the next match.",
     "lan.error.input_delay": "Input delay must be between 1 and 12 ticks.",
     "lan.diagnostics_format": "RTT: %u ms | Variation: %u ms (worst peer)",
     "lan.diagnostics_pending": "Measuring round-trip latency...",

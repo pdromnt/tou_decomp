@@ -2,11 +2,11 @@
 
 Status: Stages 1-2, Stage 3's event journal and Stage 4's local reconciliation,
 pacing/authority prototypes, an isolated multi-process exchange and opt-in live
-confirmed controls are implemented,
+confirmed controls and the LAN-only live prediction beta are implemented,
 with checks below;
-real presentation, live prediction, remote and cross-platform acceptance remain
+real presentation, natural-win/repeated-match, remote and cross-platform acceptance remain
 open. Work is on `advanced-netcode`, based on stable v0.11 (`0909331`). No live
-network rollback or transport replacement is enabled yet.
+transport replacement is enabled yet. Live prediction is opt-in on this branch.
 Main keeps the existing TCP delayed-lockstep implementation until acceptance.
 
 ## Goal and boundaries
@@ -309,8 +309,8 @@ The [input reconciliation owner](INPUT_RECONCILIATION.md) now connects the
 ledger to actual world restore/replay plus matching local presentation state.
 It bounds the history/work window, fails closed on invalid input/checkpoint
 state, replaces unconfirmed events, and handles a corrected terminal tick
-without confirming an unused speculative tail. This prediction owner is not
-created by live LAN; live controls use a separate no-physics/no-journal anchor.
+without confirming an unused speculative tail. Protocol 8 now creates this
+prediction owner in live LAN; protocol-7 controls use a separate no-physics/no-journal anchor.
 
 The new `--rewind-late-input 1` mode compares late/reversed/duplicated remote
 input against an all-inputs-known oracle at every corrected tick, including
@@ -346,7 +346,7 @@ uses the retained committed anchor rather than the speculative current world.
 Resync preflights scope, size, integrity and snapshot structure before mutation,
 then resets input/presentation history at a newer epoch. External same-tick
 score/control changes block export/import rather than being silently undone.
-These experimental record codecs have no live LAN message types yet.
+These experimental record codecs now travel in protocol 8's typed exchange lane.
 
 The authority diagnostic (`--rewind-late-input 3`) passed corrected tick-by-tick
 world/RNG/presentation equality, stale revision/epoch checks, repeated confirmed
@@ -378,11 +378,10 @@ periodic resync and acknowledged finish; a delayed four-process relay recovered
 one client's bad hash by resyncing the whole group. Withheld Ready/Applied and
 a disconnected third client aborted all four processes without unsafe resume.
 
-Still required: real audible/GPU delivery, weapon-specific producers, live
-prediction clock/input/liveness integration, natural-win/repeated-match acceptance,
-remote/cross-platform checks, and low-power budgets. No live
-prediction, rollback toggle or ENet migration is enabled. Keep main stable.
-The prediction menu opt-in stays gated. The separate CLI control opt-in below
+Still required: real audible/GPU delivery, weapon-specific producers,
+natural-win/repeated-match acceptance, remote/cross-platform checks and low-power
+budgets. The live prediction adapter is described below; no ENet migration is
+enabled. Keep main stable. The separate protocol-7 control opt-in below
 replaces immediate menu mutation without enabling physics prediction.
 
 ### Confirmed controls (Stage 4 session prototype)
@@ -423,9 +422,34 @@ returned both peers to the LAN-screen route. The opt-in aborts rather than using
 partial one-peer checksum correction. These are real route/log observations,
 not physical-menu, remote, audio/visual, cross-platform or low-power acceptance.
 
-Next: integrate live predicted input/revisions with bounded pacing and display
-retention during partial replay, verify real presentation, optimize control
-snapshot cost, and complete natural-win/repeated-match acceptance. No live
-prediction/rollback toggle or ENet migration is enabled.
+### Live prediction beta and LAN settings (Stage 4 live adapter)
+
+**LAN Deathmatch > Network settings** now exposes the safe lockstep default,
+confirmed-control lockstep, and beta prediction. Mode locks while connected;
+all peers must choose the same mode. Host input lead and prediction window are
+visible read-only to clients and locked during a match. The four localized
+layouts use tiny-font help, measured wrapping and centering. Settings are
+process-local; general game options are unchanged.
+
+Protocol 8 owns the real tick loop with a shared three-tick replay/forward pump
+budget, 1-12-tick prediction window, 128 MiB snapshot/tag budget, existing LAN
+heartbeats and bounded receipt/revision backpressure. Clients send only their
+assigned slot's actions. The host publishes canonical revisions and seals;
+committed hashes detect drift. Partial replay holds the completed framebuffer.
+Full-group barriers handle correction, controls and confirmed natural endings;
+the owner stops before score/load teardown. See [LAN beta](LAN_BETA.md) for
+wire identities, limits and evidence.
+
+Real Windows x64 two/four-process scripted firing runs reached stats after
+pause/resume, skip, level reload and preview/resume. A 20/60 ms per-way relay
+passed corrections and stale-record/wrong-generation injections; withheld Ready
+and bad protocol versions aborted to LAN. Camera shake was found consuming two
+gameplay RNG calls per rendered shaken viewport, causing divergent particles.
+It now uses a tick/player-derived presentation hash; music choice also uses
+independent local RNG. Simulation revision 3 rejects earlier experimental builds.
+
+Next: verify physical menus/controls and audible/GPU continuity, natural wins
+and repeated matches, remote/cross-platform acceptance, full-snapshot control
+cost and low-power budgets. These loopback/log checks do not close those gates.
 
 See [transport review](NETPLAY_TRANSPORT_REVIEW.md) and [LAN beta](LAN_BETA.md).

@@ -7,7 +7,8 @@ across up to three clients. `source/game/exchange_diagnostic.cpp` supplies
 a separate loopback-only reliable TCP driver for two to four real game processes.
 The diagnostic driver is isolated. The core exchange's control barrier is also
 used by the [opt-in live LAN control mode](LAN_BETA.md); default LAN remains
-protocol 6 delayed lockstep. No live prediction mode is enabled.
+protocol 6 delayed lockstep. The same exchange also drives branch-only live
+protocol-8 prediction, selectable through the LAN Network settings page.
 
 ## Receipt versus commitment
 
@@ -71,7 +72,7 @@ The transfer's state codec and preflight limits are described in
 
 A handshake/closing operation has a five-second total deadline, not refreshed
 by duplicate replies. Timeout or disconnect aborts; there is no silent fallback
-to another networking mode. Normal Running-phase liveness remains the future
+to another networking mode. Normal Running-phase liveness remains the
 live driver's heartbeat/transport responsibility. This protocol assumes reliable
 ordered delivery, not unreliable UDP with arbitrary lost control messages.
 
@@ -260,10 +261,10 @@ output, natural match progression, Linux/macOS behavior or CM4 cost.
 
 ## Next integration gates
 
-Integrate predicted input/revisions and the bounded pump with the live clock,
-input sampler and real sound/GPU delivery, retaining a completed display during
-partial replay. Exercise natural wins, repeated matches, physical menu controls,
+The live protocol-8 adapter now integrates input/revisions, a three-tick pump
+budget, clock pacing, heartbeats and completed-frame retention during replay.
+Verify real sound/GPU delivery. Exercise natural wins, repeated matches, physical menu controls,
 remote/cross-platform behavior and low-power costs. Optimize full-snapshot
 controls before treating their latency/bandwidth as accepted. Keep conservative
-lockstep available. The CLI control opt-in is not a rollback toggle or evidence
-that live prediction is ready; no menu toggle is exposed yet.
+lockstep available. The LAN-only beta toggle does not establish acceptance;
+see [LAN beta](LAN_BETA.md) for actual runtime evidence and limits.

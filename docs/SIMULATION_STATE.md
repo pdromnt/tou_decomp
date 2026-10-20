@@ -60,8 +60,8 @@ build fingerprint was advanced accordingly on `advanced-netcode` only.
 
 The experimental [reconciliation owner](INPUT_RECONCILIATION.md) pairs these
 world snapshots with local presentation checkpoints and uses them to correct
-actual delayed-input predictions in the developer diagnostic. Ordinary LAN
-still uses lockstep and does not create speculative snapshot history.
+actual delayed-input predictions in the developer diagnostic and optional live
+protocol 8. Default LAN still uses lockstep without speculative snapshot history.
 
 `SimulationState_Validate` shares restore's structural/context checks but performs
 no world writes and verifies an expected tick. The experimental

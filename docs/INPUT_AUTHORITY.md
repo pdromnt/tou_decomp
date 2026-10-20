@@ -1,11 +1,14 @@
 # Experimental input authority and confirmed resync
 
-Input prediction remains a local prototype on `advanced-netcode`.
+Input prediction is an opt-in live beta on `advanced-netcode`.
 `source/game/input_authority.cpp` defines bounded canonical records and
 their codecs; the reconciliation owner applies them only in `HostRevisions`
 mode. Default LAN remains protocol 6 TCP lockstep. The separate protocol 7
 control opt-in reuses confirmed-state envelopes, not live predicted revisions;
 see [peer exchange](NETCODE_EXCHANGE.md). Snapshot format stays at version 5.
+Protocol 8 uses receipts, canonical revisions and committed hashes for live
+prediction. Select it through **LAN Deathmatch > Network settings**; see
+[LAN beta](LAN_BETA.md) for bounds and remaining acceptance gates.
 
 ## Input ownership
 
@@ -34,8 +37,8 @@ The experimental canonical input record is exactly 22 bytes, little-endian:
 four u32 fields (generation, epoch, tick, revision), player count, seal byte,
 and four action bytes. Inactive action slots must be zero, seal must be 0/1,
 scope/revision must be nonzero, and action bits/player count are validated.
-Decoding failure leaves the destination record unchanged. These bytes are not
-yet assigned a message type in the live LAN protocol.
+Decoding failure leaves the destination record unchanged. Live protocol 8 wraps
+these records in typed exchange message 17; protocol 7 restricts that lane to controls.
 
 ## Confirmed resync
 
@@ -114,7 +117,6 @@ permanent test suite or CI job was added.
 
 The [bounded peer exchange](NETCODE_EXCHANGE.md) now supplies receipt/revision
 acks, committed hash progress and a coordinated resync handshake in an isolated two-to-four-process
-TCP driver. Only its control barrier is connected to opt-in live LAN sessions.
-Prediction input/clock/liveness integration, real audible/GPU delivery,
-natural-win/repeated-match acceptance, remote/cross-platform checks and low-power costs remain
-gated. No live prediction is enabled.
+TCP driver. Its prediction lane and bounded pump are now connected to opt-in
+live LAN sessions. Real audible/GPU delivery, natural-win/repeated-match,
+remote/cross-platform and low-power acceptance remain open; default LAN stays lockstep.

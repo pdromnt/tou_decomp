@@ -199,6 +199,14 @@ divergent client. Handshake compatibility covers simulation build identity,
 normal/GG level content, ships, and gameplay data. It is still delayed TCP
 lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
+On `advanced-netcode`, **LAN Deathmatch > Network settings** adds process-local
+mode/input-lead controls plus a beta prediction window. Default remains
+protocol-6 lockstep; protocol 7 adds confirmed controls, and protocol 8 uses
+live receipt/revision exchange with bounded reconciliation and completed-frame
+retention. Neither experimental choice is an accepted stable replacement yet.
+See `docs/LAN_BETA.md` for runtime evidence and open acceptance gates.
+Camera shake and music selection never consume authoritative gameplay RNG.
+
 The simulation compatibility ID in `source/game/netplay.cpp` uses an independent `sim`
 revision plus protocol/snapshot identities, not the app's release version.
 Advance the simulation revision when equal inputs can produce different

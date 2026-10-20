@@ -10,27 +10,72 @@ in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). The `advanced-netcode`
 branch now has experimental protocol 6 diagnostics and negotiated input delay;
 it cannot connect to stable v0.11 protocol 4 peers. TCP lockstep remains in use.
 The local-rewind prototype also advances snapshot format/build identity to
-`tou-sim2-net6-snapshot5`, rejecting older experimental branch builds. The
-live network game still has no prediction or rollback.
+`tou-sim3-net6-snapshot5`, rejecting older experimental branch builds. Revision 3
+separates camera shake and music selection from gameplay RNG. Default live LAN
+has no prediction or rollback; the optional branch-only mode below does.
 Simulation revision 2 resets transient flags per simulation tick in LAN,
 independent of local catch-up grouping. Local matches retain legacy batching.
 Inputs, checksums and pause/skip controls carry the level generation. Controls
 wait for their effective confirmed tick rather than interrupting catch-up.
-The input ledger tracks simulated/confirmed frontiers; live prediction remains
-zero. Initial synchronization also runs while the level preview is visible.
-The [local reconciliation prototype](INPUT_RECONCILIATION.md) keeps prediction
-diagnostic-only; the optional control-only anchor below does not replay physics.
+The input ledger tracks simulated/confirmed frontiers. Initial synchronization
+also runs while the level preview is visible. The
+[reconciliation owner](INPUT_RECONCILIATION.md) now also drives optional live
+prediction; the separate control-only anchor below does not replay physics.
 The separate [peer exchange diagnostic](NETCODE_EXCHANGE.md) exercises two to four
-processes on loopback. Only its confirmed-control barrier is integrated below,
-not its predicted input/revision lane.
+processes on loopback. Its predicted input/revision lane is also used by protocol 8.
+
+## Network settings (experimental branch only)
+
+Open **Team Deathmatch > LAN Deathmatch > Network settings**. This page is also
+available from the lobby, not general game options. All four languages are
+supported, using measured, centered tiny-font help.
+
+- **Mode:** Lockstep (safe, default), Lockstep + confirmed controls, or
+  Prediction (beta). Choose the same mode on every computer before connecting;
+  mode is locked while connected. Incompatible modes/builds are rejected.
+- **Input lead:** 1-12 ticks, host-selected before starting. More lead absorbs
+  jitter at the expense of control latency. Clients see the host's value.
+- **Prediction window:** 1-12 ticks (default 8), shown only for Prediction.
+  The host selects it before starting; larger windows cost more CPU/memory.
+
+These settings last for the current process, not across game restarts.
+Prediction uses protocol **8**, `tou-sim3-net8-snapshot5-prediction1`.
+The existing sockets, asset handshake, roster and heartbeats remain in use;
+this is not an ENet/UDP migration. Clients send their slot's action receipts;
+the host publishes canonical revisions/seals and compares committed hashes.
+Missing input is held, then corrected by bounded replay. Partial replay retains
+the last completed frame. A shared three-tick pump budget limits work per poll;
+snapshot history has a 128 MiB budget, and excessive world sizes fail closed.
+At the prediction cap the game waits rather than inventing more input.
+
+Pause/skip/end and detected drift use the all-peer full-snapshot barrier.
+Scoring/unload waits for confirmed release; the owner detaches before resource
+teardown. Predictive resync resets local journal/audio/tag ownership, unlike
+protocol 7's presentation-preserving control-only import. Audible/GPU continuity
+still needs human acceptance. A failed barrier/disconnect ends the whole session.
+
+Windows x64 two/four-process firing runs passed pause/resume, skip, generation-2
+reload/preview/resume and end to stats. A 20/60 ms per-way relay exercised actual
+corrections plus stale receipts/revisions and wrong-generation controls. Withheld
+Ready and an incompatible packet version returned both peers to LAN.
+An injected bad committed hash triggered full-group resync and both processes
+continued through the final stats route. Default protocol-6 and protocol-7
+control-route regressions passed. Real tiny-font atlas measurements verified
+the new settings copy fits its wrapping/centering bounds in all four languages;
+this is not a visual acceptance claim.
+These are runtime/log checks, not visual/menu, real internet, cross-platform,
+natural-win/repeated-match, physical-controller or low-power acceptance.
+Developer automation can select `--lan-prediction`; add `--lan-scripted-input`
+to generate firing/turning/thrust actions in isolated staging directories.
 
 ## Opt-in confirmed controls (experimental branch only)
 
-Launch **every participant** with `--lan-confirmed-controls` to use confirmed
-pause/resume/skip/end handoffs in the existing LAN menus or direct-IP CLI flow.
-This selects protocol **7**, build identity `tou-sim2-net7-snapshot5-controls1`.
+Select **Lockstep + confirmed controls** on the Network settings page on every
+participant (or use developer flag `--lan-confirmed-controls`). This enables
+confirmed pause/resume/skip/end handoffs in the LAN menus or direct-IP CLI flow.
+It selects protocol **7**, build identity `tou-sim3-net7-snapshot5-controls1`.
 It cannot mix with default protocol 6 or stable v0.11 protocol 4 peers; mismatches
-disconnect rather than silently switching mode. No menu toggle is exposed yet.
+disconnect rather than silently switching mode.
 
 Gameplay still uses delayed TCP lockstep with zero prediction. The host remains
 the only operator of ESC, next-level, end-match and preview-resume controls.
@@ -125,7 +170,7 @@ Opening the host's `Esc` match-control menu pauses the synchronized session so
 the host can resume, skip the level, or end the match. Clients cannot invoke
 those session controls.
 
-## What the beta currently proves
+## What the stable/default beta currently proves
 
 - Portable TCP connection and a versioned, bounds-checked protocol.
 - Direct-IP Windows/Linux/macOS interoperability.
@@ -149,7 +194,7 @@ those session controls.
 - The handshake's simulation compatibility revision is independent of the app
   version. Changing that identity rejects older identities; use the same build
   on every peer, including after the release-tagged ID was replaced.
-- Snapshot correction recovers detected state drift; it is not prediction,
+- Default-mode snapshot correction recovers detected state drift; it is not prediction,
   rollback, or reconnection and may cause a visible hitch.
 - Tick-zero snapshots are capped at 64 MiB. Very large authored/GG worlds can
   be rejected by this first beta instead of exhausting peer memory.

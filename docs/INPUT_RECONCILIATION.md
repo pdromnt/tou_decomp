@@ -2,16 +2,19 @@
 
 `source/game/simulation_reconciliation.cpp` connects the bounded input ledger
 to real world restore/resimulation and local presentation checkpoints. It is
-used for prediction only by developer late-input diagnostics on `advanced-netcode`.
+used by developer late-input diagnostics and opt-in live protocol-8 prediction
+on `advanced-netcode`.
 The opt-in live confirmed-control adapter borrows a current lockstep anchor,
-not physics ownership. Live LAN still has zero prediction. Normal local play
+not physics ownership. Default live LAN still has zero prediction. Normal local play
 and default protocol 6 are unchanged; opt-in controls use separate protocol 7.
 
 ## Ownership and bounds
 
 - One game-thread owner for one loaded level, starting at simulation tick zero.
-  Starting a prediction owner while LAN, replay playback/recording, or another
-  event journal is active is rejected. The caller stops it before level teardown.
+  The diagnostic entry rejects active LAN. The explicit live prediction entry
+  instead requires a synchronized protocol-8 gameplay session at tick zero.
+  Both reject replay playback/recording or another active event journal.
+  The caller stops the owner before level teardown.
   The explicit live control-only entry instead requires a confirmed current
   LAN anchor, cannot submit inputs/advance physics, owns no journal, preserves
   presentation on restore/stop and is detached before releasing scoring/load.
@@ -173,4 +176,6 @@ remote/cross-platform checks, and low-power
 memory/CPU budgets remain open. The rolling schedule is synthetic and still
 drains at each window's oracle horizon; it does not prove continuous internet
 play, real packet loss, transport behavior or a render loop during resimulation.
-Do not enable live prediction just because this local comparison passes.
+Local comparison alone does not establish live prediction acceptance. The
+branch's LAN-only beta option and independent live-route evidence are described
+in [LAN beta](LAN_BETA.md); remote, natural-win and presentation acceptance remain.
