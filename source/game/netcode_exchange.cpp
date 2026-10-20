@@ -245,7 +245,11 @@ bool NetcodeExchange::receive(const Message &message, SimulationReconciliation *
         if (tick == peer_confirmed_) return hash == peer_hash_ || fail();
         const RevisionSlot &slot = revisions_[tick % 64];
         if (slot.input.tick != tick || !slot.input.sealed || tick > world->confirmed_tick()) return fail();
-        if (hash != slot.hash) { phase_ = NeedsSync; deadline_start_ = now; return true; }
+        if (hash != slot.hash) {
+            LOG("[EXCHANGE] hash mismatch slot=%u gen=%u epoch=%u tick=%u expected=%llu got=%llu\n", unsigned(slot_), gen, epoch, tick,
+                static_cast<unsigned long long>(slot.hash), static_cast<unsigned long long>(hash));
+            phase_ = NeedsSync; deadline_start_ = now; return true;
+        }
         peer_confirmed_ = tick; peer_hash_ = hash; return true;
     }
     default: return fail();

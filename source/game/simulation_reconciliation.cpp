@@ -16,10 +16,21 @@ void SimulationReconciliation::stop()
 bool SimulationReconciliation::start(uint32_t generation, uint8_t players,
     uint32_t window, size_t budget, bool deliver, InputMode mode)
 {
+    return start_internal(generation, players, window, budget, deliver, mode, false);
+}
+bool SimulationReconciliation::start_live_prediction(uint32_t generation, uint8_t players,
+    uint32_t window, size_t budget, InputMode mode)
+{
+    if (!Netplay_PredictionCanStart()) return false;
+    return start_internal(generation, players, window, budget, true, mode, true);
+}
+bool SimulationReconciliation::start_internal(uint32_t generation, uint8_t players,
+    uint32_t window, size_t budget, bool deliver, InputMode mode, bool live)
+{
     stop();
     if (!window || window > InputTimeline::MaximumPrediction ||
         players != DAT_00489240 || SimulationState_Tick() != 0 ||
-        Netplay_IsEnabled() || Replay_IsActive() || PresentationEvents_Enabled() ||
+        (!live && Netplay_IsEnabled()) || Replay_IsActive() || PresentationEvents_Enabled() ||
         (mode != DirectInputs && mode != HostRevisions) || !inputs_.reset(generation, players, window)) return false;
     window_ = window; players_ = players; budget_ = budget;
     generation_ = generation;
@@ -160,7 +171,17 @@ bool SimulationReconciliation::world_matches_checkpoint() const
 {
     const Checkpoint *current = checkpoint(inputs_.simulated_tick());
     std::vector<uint8_t> state;
-    return current && SimulationState_Capture(&state) && state == current->state;
+    if (!current || !SimulationState_Capture(&state)) return false;
+    if (state != current->state) {
+        unsigned count = 0;
+        for (size_t i = 0; i < std::min(state.size(), current->state.size()) && count < 8; ++i)
+            if (state[i] != current->state[i]) {
+                LOG("[RECONCILE] external mutation tick=%u offset=%llu expected=%u actual=%u\n", inputs_.simulated_tick(),
+                    static_cast<unsigned long long>(i), unsigned(current->state[i]), unsigned(state[i])); ++count;
+            }
+        return false;
+    }
+    return true;
 }
 bool SimulationReconciliation::export_confirmed(uint32_t new_epoch, ConfirmedState *out) const
 {
@@ -223,7 +244,11 @@ bool SimulationReconciliation::apply_confirmed(const ConfirmedState &state)
          state.tick - std::max(replay_end_, inputs_.simulated_tick()) >= InputTimeline::Capacity) ||
         !AuthorityState_Valid(state) ||
         !SimulationState_Validate(state.state.data(), state.state.size(), state.tick) ||
-        !world_matches_checkpoint()) return false;
+        !world_matches_checkpoint()) {
+        LOG("[RECONCILE] resync rejected epoch=%u incoming=%u tick=%u base=%u committed=%u dirty=%u replay=%u aligned=%d\n",
+            epoch_, state.epoch, inputs_.simulated_tick(), state.tick, committed_tick(), inputs_.dirty_from(), replay_end_, int(aligned()));
+        return false;
+    }
     // Allocate/validate everything possible before touching the running world.
     Checkpoint candidate;
     candidate.tick = state.tick; candidate.state = state.state;

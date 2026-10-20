@@ -3,9 +3,11 @@
 #include "input_timeline.h"
 #include "presentation_events.h"
 
-// Experimental game-thread owner; no sockets, pacing, rendering, or level I/O.
+// Experimental game-thread owner; caller supplies elapsed time. No sockets,
+// rendering or level I/O.
 // Prediction mode owns full-copy world/local checkpoints and the event journal.
-// Live lockstep may borrow a control-only anchor; prediction remains isolated.
+// Live lockstep may borrow a control-only anchor; live prediction requires
+// explicit admission through the synchronized protocol-8 driver.
 class SimulationReconciliation {
 public:
     SimulationReconciliation() = default;
@@ -30,6 +32,7 @@ public:
     // Borrow an already-confirmed live lockstep anchor for controls only.
     // Never owns a journal, advances physics, or changes local presentation.
     bool start_live_control(uint32_t generation, uint8_t players, uint32_t epoch, size_t budget);
+    bool start_live_prediction(uint32_t generation, uint8_t players, uint32_t window, size_t budget, InputMode mode);
     void stop();
     InputTimeline::Result submit(uint32_t generation, uint32_t tick,
                                  uint8_t player, uint8_t actions, uint32_t epoch = 1);
@@ -61,6 +64,8 @@ public:
     bool replaying() const { return replay_end_ != 0; }
     uint32_t queued_inputs() const { return queued_; }
 private:
+    bool start_internal(uint32_t generation, uint8_t players, uint32_t window, size_t budget,
+                        bool deliver, InputMode mode, bool live);
     SimulationReconciliation(const SimulationReconciliation &) = delete;
     SimulationReconciliation &operator=(const SimulationReconciliation &) = delete;
     InputTimeline inputs_;

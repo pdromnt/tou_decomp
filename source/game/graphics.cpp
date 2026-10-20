@@ -5,6 +5,7 @@
 #include "tou.h"
 #include "platform.h"
 #include "shader_effects.h"
+#include "simulation_state.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -336,8 +337,13 @@ static void Render_Game_World(Framebuffer *framebuffer)
 
         /* Screen shake */
         if (player->timer_c4 != 0) {
-            vp_left += (rand() % 6) - 3;
-            vp_top  += (rand() % 6) - 3;
+            // Camera shake is local presentation: it must never consume the
+            // simulation RNG (render counts and viewed players differ on LAN).
+            uint32_t shake = SimulationState_Tick() * 747796405u +
+                static_cast<uint32_t>(pidx + 1) * 2891336453u;
+            shake ^= shake >> 16;
+            vp_left += static_cast<int>(shake % 6) - 3;
+            vp_top += static_cast<int>((shake >> 16) % 6) - 3;
         }
     } else {
         vp_left = (g_SpectatorCameraX >> FIXED_SHIFT) - vp_w / 2;

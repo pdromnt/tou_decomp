@@ -389,6 +389,7 @@ bool Gameplay_AdvanceSimulation(const uint8_t *actions, size_t count)
  */
 static void Gameplay_Tick(void)
 {
+    if (Netplay_IsPredicting()) return; // Network polling owns bounded simulation/replay work.
     unsigned int tick_interval;
     uint32_t now;
     int catch_up;
@@ -630,6 +631,7 @@ void Game_Update_Render(void)
      * to rendering so the stats overlay displays for one frame. */
     if ((g_SubState == GAMEPLAY_LEVEL_ADVANCE ||
         g_SubState == GAMEPLAY_MATCH_COMPLETE) && Gameplay_TransitionsAllowed()) {
+        Netplay_ReleaseTransition(); // Detach the owner before irreversible score changes/level I/O.
         if (g_SubState == GAMEPLAY_LEVEL_ADVANCE) {
             /* Level skip: clear victory flag */
             DAT_004892a4 = 0;
@@ -709,6 +711,7 @@ void Game_Update_Render(void)
     // Polling inside a catch-up tick can start a handoff after the entry check.
     if (!Netplay_RenderAllowed()) { Platform_Delay(1); return; }
     Render_Frame();
+    Netplay_FramePresented();
 
     /* NOTE: No additional frame rate limiter here.
      * The original FUN_00461710 has NO separate frame limiter —

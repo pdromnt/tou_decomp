@@ -29,6 +29,15 @@ bool Netplay_UsesConfirmedControls(void);
 bool Netplay_RequestControl(NetplayControl control);
 bool Netplay_RenderAllowed(void);
 bool Netplay_ControlAnchorReady(uint32_t tick);
+enum NetplayNetworkMode { NETPLAY_LOCKSTEP = 0, NETPLAY_CONFIRMED, NETPLAY_PREDICTED };
+NetplayNetworkMode Netplay_NetworkMode(void);
+bool Netplay_SetNetworkMode(NetplayNetworkMode mode);
+uint32_t Netplay_PredictionWindow(void);
+bool Netplay_SetPredictionWindow(uint32_t ticks);
+bool Netplay_IsPredicting(void);
+bool Netplay_PredictionCanStart(void);
+void Netplay_ReleaseTransition(void);
+void Netplay_FramePresented(void);
 // True through the confirmed input frontier and only after a control handoff.
 bool Netplay_CanFinalizeSimulationTick(uint32_t tick);
 const char *Netplay_Status(void);

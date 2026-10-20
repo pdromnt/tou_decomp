@@ -206,7 +206,10 @@ void FUN_0040e130(void)
         DAT_004877a4 == GAME_STATE_INTRO_RUN) {
         trackIdx = DAT_00485fd0;
     } else {
-        trackIdx = rand() % DAT_00485fcc;
+        // Track selection must not perturb the authoritative gameplay RNG.
+        static uint32_t music_random = 0x746f756du;
+        music_random = music_random * 1664525u + 1013904223u;
+        trackIdx = static_cast<int>((music_random >> 8) % DAT_00485fcc);
     }
 
     /* Build full path: "music\" + filename */

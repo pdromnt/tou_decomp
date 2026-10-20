@@ -41,7 +41,7 @@ const uint16_t kProtocolVersion = 6;
  * a gameplay or snapshot change can make equal commands produce different
  * state, even if the packet shapes remain compatible. Cosmetic releases do
  * not by themselves require a compatibility revision. */
-const char kSimulationBuildId[] = "tou-sim2-net6-snapshot5";
+const char kSimulationBuildId[] = "tou-sim3-net6-snapshot5";
 const uint16_t kDefaultPort = 27015;
 const uint32_t kMaximumPayload = 1024u * 1024u;
 const uint32_t kMaximumSnapshotPayload = 64u * 1024u * 1024u;
@@ -70,7 +70,8 @@ enum MessageType {
     MESSAGE_ROSTER = 14,
     MESSAGE_STATE_CORRECTION = 15,
     MESSAGE_INPUT_DELAY = 16,
-    MESSAGE_CONTROL_EXCHANGE = 17
+    MESSAGE_CONTROL_EXCHANGE = 17,
+    MESSAGE_PREDICTION_WINDOW = 18
 };
 
 enum RejectReason {
@@ -193,6 +194,8 @@ uint32_t g_last_diagnostic_log = 0;
 char g_status[160] = "LAN disabled";
 // Explicit protocol-7 opt-in: control barriers only, never live prediction.
 bool g_confirmed_controls = false;
+bool g_predictive = false;
+uint32_t g_host_prediction_window = 8, g_prediction_window = 8;
 bool g_handoff_active = false, g_handoff_waiting = false;
 uint32_t g_control_epoch = 1, g_handoff_started = 0, g_handoff_tick = 0;
 SimulationReconciliation g_control_world;
@@ -200,10 +203,19 @@ NetcodeHostExchange g_control_host;
 NetcodeExchange g_control_client;
 NetcodeExchange::Message g_control_offer;
 bool g_control_script = false;
+bool g_prediction_input_script = false;
 int g_control_script_stage = 0;
 uint32_t g_control_script_pause = 0;
+bool g_prediction_active = false, g_prediction_closing = false, g_prediction_terminal_ready = false;
+uint32_t g_prediction_clock = 0, g_prediction_sampled = 0, g_prediction_pending = 0, g_prediction_pending_started = 0;
+uint32_t g_prediction_last_present = 0;
+uint64_t g_prediction_events = 0, g_prediction_sounds = 0, g_prediction_prev_events = 0, g_prediction_prev_sounds = 0;
+InputAuthorityPublisher g_prediction_publisher;
+bool EnsurePrediction();
+void PollPrediction();
+void HandlePredictionMessage(Connection *connection, const NetcodeExchange::Message &message);
 
-uint16_t ProtocolVersion() { return g_confirmed_controls ? 7 : kProtocolVersion; }
+uint16_t ProtocolVersion() { return g_predictive ? 8 : g_confirmed_controls ? 7 : kProtocolVersion; }
 size_t EpochBytes() { return g_confirmed_controls ? 4u : 0u; }
 
 void ResetDiagnostics(void)
@@ -352,8 +364,12 @@ uint64_t GameplayAssetFingerprint(void)
 
 uint64_t SimulationBuildFingerprint(void)
 {
+    if (g_predictive) {
+        const char id[] = "tou-sim3-net8-snapshot5-prediction1";
+        return HashBytes(14695981039346656037ull, id, sizeof(id));
+    }
     if (g_confirmed_controls) {
-        const char id[] = "tou-sim2-net7-snapshot5-controls1";
+        const char id[] = "tou-sim3-net7-snapshot5-controls1";
         return HashBytes(14695981039346656037ull, id, sizeof(id));
     }
     return HashBytes(14695981039346656037ull, kSimulationBuildId,
@@ -606,7 +622,7 @@ void SeedInputDelay(void)
 bool IsMessageShapeValid(uint16_t type, size_t size)
 {
     if (type == MESSAGE_CONTROL_EXCHANGE)
-        return g_confirmed_controls && size >= 22 && size <= static_cast<size_t>(kMaximumSnapshotPayload) + 64u;
+        return g_confirmed_controls && size >= (g_predictive ? 16u : 22u) && size <= static_cast<size_t>(kMaximumSnapshotPayload) + 64u;
     if (type == MESSAGE_DISCONNECT)
         return size == 1;
     if (type == MESSAGE_PING || type == MESSAGE_PONG)
@@ -619,8 +635,9 @@ bool IsMessageShapeValid(uint16_t type, size_t size)
     }
     if (g_mode == MODE_CLIENT) {
         return (type == MESSAGE_WELCOME && size == 1) ||
-               (type == MESSAGE_START && size == 17 + GAME_CONFIG_SIZE) ||
+               (type == MESSAGE_START && size == 17 + GAME_CONFIG_SIZE + (g_predictive ? 1u : 0u)) ||
                (type == MESSAGE_INPUT_DELAY && size == 4) ||
+               (g_predictive && type == MESSAGE_PREDICTION_WINDOW && size == 4) ||
                (type == MESSAGE_COMMAND_BUNDLE && size >= 22 + EpochBytes() && size <= 25 + EpochBytes()) ||
                (!g_confirmed_controls && type == MESSAGE_GAMEPLAY_STATE && size == 12) ||
                (type == MESSAGE_ROSTER && size >= 1 && size <= 17 &&
@@ -816,10 +833,13 @@ void ResetHandoff()
     g_control_host.disconnect(); g_control_client.disconnect(); g_control_world.stop();
     g_control_offer = NetcodeExchange::Message();
     g_handoff_active = g_handoff_waiting = false;
+    g_prediction_active = g_prediction_closing = g_prediction_terminal_ready = false;
+    g_prediction_pending = 0;
 }
 
 void PollHandoff()
 {
+    if (g_predictive) { PollPrediction(); return; }
     if (!g_confirmed_controls || !g_match_active || g_abort_to_lobby) return;
     const uint32_t now = Platform_GetTicks();
     if ((g_handoff_active || g_handoff_waiting) && now - g_handoff_started >= 5000) {
@@ -888,6 +908,7 @@ void HandleMessage(Connection *connection, uint16_t type,
         }
         NetcodeExchange::Message message; message.type = static_cast<NetcodeExchange::Type>(Get16(payload));
         message.bytes.assign(payload + 2, payload + size);
+        if (g_predictive) { HandlePredictionMessage(connection, message); return; }
         const bool allowed = g_mode == MODE_HOST ?
             (message.type == NetcodeExchange::SyncReady || message.type == NetcodeExchange::SyncApplied) :
             (message.type == NetcodeExchange::SyncOffer || message.type == NetcodeExchange::SyncCommit ||
@@ -957,6 +978,10 @@ void HandleMessage(Connection *connection, uint16_t type,
         std::vector<uint8_t> delay;
         Put32(&delay, g_host_input_delay);
         QueueMessage(connection, MESSAGE_INPUT_DELAY, delay.data(), delay.size());
+        if (g_predictive) {
+            std::vector<uint8_t> window; Put32(&window, g_host_prediction_window);
+            QueueMessage(connection, MESSAGE_PREDICTION_WINDOW, window.data(), window.size());
+        }
         BroadcastRoster();
         SetStatus(Text_Get("lan.status.client_joined_format"),
                   static_cast<unsigned>(connection->slot + 1));
@@ -1010,8 +1035,17 @@ void HandleMessage(Connection *connection, uint16_t type,
         g_input_delay = delay;
         return;
     }
+    if (g_mode == MODE_CLIENT && type == MESSAGE_PREDICTION_WINDOW) {
+        const uint32_t window = Get32(payload);
+        if (g_match_active || !window || window > InputTimeline::MaximumPrediction) { g_abort_to_lobby = true; return; }
+        g_prediction_window = window; return;
+    }
     if (g_mode == MODE_CLIENT && type == MESSAGE_START &&
-        size == 17 + GAME_CONFIG_SIZE) {
+        size == 17 + GAME_CONFIG_SIZE + (g_predictive ? 1u : 0u)) {
+        if (g_predictive) {
+            g_prediction_window = payload[17 + GAME_CONFIG_SIZE];
+            if (!g_prediction_window || g_prediction_window > InputTimeline::MaximumPrediction) { g_abort_to_lobby = true; return; }
+        }
         const uint32_t delay = Get32(payload + 13 + GAME_CONFIG_SIZE);
         if (delay < 1 || delay > kMaximumInputDelay) {
             DisconnectLocalized(connection, "invalid match input delay", "lan.disconnect.invalid_data");
@@ -1055,6 +1089,7 @@ void HandleMessage(Connection *connection, uint16_t type,
         return;
     }
     if (g_mode == MODE_HOST && type == MESSAGE_COMMAND && connection->hello && g_initial_state_ready) {
+        if (g_predictive) { g_abort_to_lobby = true; return; }
         const uint32_t generation = Get32(payload);
         if (g_confirmed_controls && (g_handoff_active || Get32(payload + 4) != g_control_epoch)) return;
         const uint8_t *command = payload + EpochBytes();
@@ -1073,6 +1108,7 @@ void HandleMessage(Connection *connection, uint16_t type,
         return;
     }
     if (g_mode == MODE_CLIENT && type == MESSAGE_COMMAND_BUNDLE && g_initial_state_ready) {
+        if (g_predictive) { g_abort_to_lobby = true; return; }
         const uint32_t generation = Get32(payload);
         if (g_confirmed_controls && (g_handoff_active || Get32(payload + 4) != g_control_epoch)) return;
         const uint8_t *bundle = payload + EpochBytes();
@@ -1111,6 +1147,7 @@ void HandleMessage(Connection *connection, uint16_t type,
         return;
     }
     if (g_mode == MODE_HOST && type == MESSAGE_CHECKSUM) {
+        if (g_predictive) { g_abort_to_lobby = true; return; }
         if (Get32(payload) != g_level_generation) return;
         if (g_confirmed_controls && (g_handoff_active || Get32(payload + 4) != g_control_epoch)) return;
         const uint8_t *checksum = payload + EpochBytes();
@@ -1491,11 +1528,178 @@ uint8_t SampleLocalActions(void)
         g_KeyboardState, Player_Get(g_local_slot)->key_scan_codes) | Gamepad_PlayerActions(0));
 }
 
+bool PredictionTerminal()
+{
+    return g_SubState == GAMEPLAY_MATCH_COMPLETE || g_SubState == GAMEPLAY_LEVEL_ADVANCE;
+}
+
+bool ObservePredictionEpoch()
+{
+    if (g_control_world.epoch() == g_control_epoch) return true;
+    g_control_epoch = g_control_world.epoch();
+    const uint32_t base = g_control_world.simulated_tick();
+    g_prediction_sampled = base + g_input_delay;
+    g_prediction_prev_events = g_prediction_prev_sounds = 0;
+    g_prediction_terminal_ready = PredictionTerminal();
+    if (g_mode == MODE_HOST) {
+        if (!g_prediction_publisher.reset(g_level_generation, g_control_epoch, g_player_count, base)) return false;
+        for (uint32_t tick = base + 1; tick <= base + g_input_delay; ++tick)
+            for (uint8_t slot = 0; slot < g_player_count; ++slot)
+                if (g_control_world.submit(g_level_generation, tick, slot, 0, g_control_epoch) != InputTimeline::Accepted) return false;
+    }
+    LOG("[NET] prediction anchor role=%s generation=%u epoch=%u tick=%u state=%u\n",
+        g_mode == MODE_HOST ? "host" : "client", g_level_generation, g_control_epoch, base, unsigned(g_SubState));
+    g_TimerStart = g_FrameTimer = Platform_GetTicks(); g_TimerAux = 0; g_NeedsRedraw = 2;
+    return true;
+}
+
+bool EnsurePrediction()
+{
+    if (g_prediction_active) return true;
+    if (!g_control_world.start_live_prediction(g_level_generation, g_player_count, g_prediction_window,
+            128u * 1024u * 1024u,
+            g_mode == MODE_HOST ? SimulationReconciliation::DirectInputs : SimulationReconciliation::HostRevisions)) return false;
+    g_prediction_active = true; g_prediction_clock = Platform_GetTicks(); g_control_epoch = 1;
+    g_prediction_last_present = g_prediction_clock - 16;
+    g_prediction_terminal_ready = false; g_prediction_sampled = 0;
+    g_prediction_events = g_prediction_sounds = g_prediction_prev_events = g_prediction_prev_sounds = 0;
+    if (g_mode == MODE_HOST) {
+        if (!g_control_host.start(g_level_generation, 1, g_player_count) ||
+            !g_control_host.begin_sync(g_control_world, 2, g_prediction_clock)) return false;
+    } else if (!g_control_client.start(NetcodeExchange::Client, g_level_generation, 1, g_player_count, g_local_slot)) return false;
+    g_handoff_active = true;
+    LOG("[NET] live prediction started role=%s generation=%u window=%u budget=134217728 work=3\n",
+        g_mode == MODE_HOST ? "host" : "client", g_level_generation, g_prediction_window);
+    return true;
+}
+
+void HandlePredictionMessage(Connection *connection, const NetcodeExchange::Message &message)
+{
+    if (g_prediction_closing) return; // Old traffic may drain before the next level generation.
+    const bool allowed = g_mode == MODE_HOST ?
+        (message.type == NetcodeExchange::Receipt || message.type == NetcodeExchange::RevisionAck ||
+         message.type == NetcodeExchange::Progress || message.type == NetcodeExchange::SyncReady ||
+         message.type == NetcodeExchange::SyncApplied) :
+        (message.type == NetcodeExchange::Revision || message.type == NetcodeExchange::ReceiptAck ||
+         message.type == NetcodeExchange::SyncOffer || message.type == NetcodeExchange::SyncCommit ||
+         message.type == NetcodeExchange::SyncResume);
+    if (!allowed || !NetcodeExchange::valid_size(message.type, message.bytes.size())) { g_abort_to_lobby = true; return; }
+    if (!EnsurePrediction()) { g_abort_to_lobby = true; return; }
+    NetcodeExchange *peer = g_mode == MODE_HOST ? g_control_host.peer(connection->slot) : &g_control_client;
+    if (!peer || !peer->receive(message, &g_control_world, Platform_GetTicks()) || !ObservePredictionEpoch()) {
+        LOG("[NET] prediction rejected exchange=%u\n", unsigned(message.type)); g_abort_to_lobby = true; return;
+    }
+    g_handoff_active = g_mode == MODE_HOST ? !g_control_host.running() : g_control_client.phase() != NetcodeExchange::Running;
+}
+
+void PollPrediction()
+{
+    if (!g_predictive || !g_match_active || !g_initial_state_ready || !g_local_level_ready ||
+        g_prediction_closing || g_abort_to_lobby || g_GameState != GAME_STATE_GAMEPLAY) return;
+    if (!EnsurePrediction()) {
+        LOG("[NET] live prediction initialization/budget failed\n"); g_abort_to_lobby = true; return;
+    }
+    const uint32_t now = Platform_GetTicks(), elapsed = now - g_prediction_clock;
+    g_prediction_clock = now;
+    if (g_mode == MODE_HOST ? !g_control_host.poll(&g_control_world, now) : !g_control_client.poll(now)) {
+        LOG("[NET] prediction barrier failed\n"); g_abort_to_lobby = true; return;
+    }
+    if (!ObservePredictionEpoch()) { g_abort_to_lobby = true; return; }
+    const bool running = g_mode == MODE_HOST ? g_control_host.running() :
+        (g_control_client.phase() == NetcodeExchange::Running && g_control_epoch > 1);
+    g_handoff_active = !running;
+    const bool recovery = g_mode == MODE_HOST && g_control_host.needs_sync();
+    const bool quiescing = g_prediction_pending || recovery;
+    if (g_prediction_pending && now - g_prediction_pending_started >= 5000) {
+        LOG("[NET] prediction control quiescence timed out\n"); g_abort_to_lobby = true; return;
+    }
+    if (running || recovery) {
+        if (running && !g_control_world.replaying() && g_SubState == GAMEPLAY_ACTIVE) {
+            const uint32_t sample_to = g_control_world.simulated_tick() + (quiescing ? 0 : g_input_delay + 1);
+            const uint8_t sampled_action = SampleLocalActions();
+            for (uint32_t n = 0; n < 24 && g_prediction_sampled < sample_to; ++n) {
+                const uint32_t tick = g_prediction_sampled + 1;
+                const uint32_t phase = tick + g_local_slot * 37u;
+                const uint8_t action = !g_prediction_input_script ? sampled_action : static_cast<uint8_t>(
+                    GAME_ACTION_FIRE_PRIMARY | (phase % 100 < 70 ? GAME_ACTION_THRUST : 0) |
+                    (phase % 120 < 60 ? GAME_ACTION_TURN_LEFT : GAME_ACTION_TURN_RIGHT) |
+                    (phase % 80 < 40 ? GAME_ACTION_FIRE_SECONDARY : 0) | (phase % 60 == 0 ? GAME_ACTION_DETONATE : 0));
+                if (g_mode == MODE_HOST) {
+                    const InputTimeline::Result result = g_control_world.submit(g_level_generation, tick, 0, action, g_control_epoch);
+                    if (result != InputTimeline::Accepted && result != InputTimeline::Duplicate) { g_abort_to_lobby = true; return; }
+                } else if (!g_control_client.receipt(tick, action)) break; // Bounded backpressure; retry the unsent tick.
+                g_prediction_sampled = tick;
+            }
+        }
+        uint32_t target = quiescing ? g_control_world.simulated_tick() : UINT32_MAX;
+        if (g_mode == MODE_HOST && !quiescing) target = g_control_host.peer_confirmed() + 32;
+        const SimulationReconciliation::FrameWork work = g_control_world.pump(quiescing ? 0 : elapsed, 3, target);
+        if (work.result == SimulationReconciliation::Failed) { g_abort_to_lobby = true; return; }
+        if (work.forward_ticks) g_prediction_terminal_ready = false;
+        if (!g_control_world.replaying() && !g_control_world.dirty_from()) {
+            if (g_mode == MODE_HOST && running) {
+                for (uint32_t tick = g_control_host.peer_confirmed() + 1; tick <= g_control_world.simulated_tick(); ++tick) {
+                    uint8_t actions[4] = {}; bool sealed = false; AuthoritativeInput input;
+                    if (!g_control_world.canonical_input(tick, actions, &sealed)) { g_abort_to_lobby = true; return; }
+                    const InputAuthorityPublisher::Result result = g_prediction_publisher.publish(tick, actions, sealed, &input);
+                    if (result != InputAuthorityPublisher::Changed && result != InputAuthorityPublisher::Unchanged) { g_abort_to_lobby = true; return; }
+                    for (uint8_t slot = 1; slot < g_player_count; ++slot) {
+                        NetcodeExchange *peer = g_control_host.peer(slot);
+                        if (!peer || (tick > peer->peer_confirmed() && !peer->revision(input, g_control_world))) { g_abort_to_lobby = true; return; }
+                    }
+                }
+            }
+            if (!g_control_world.confirm()) { g_abort_to_lobby = true; return; }
+            const uint64_t events = PresentationEvents_CommittedCount(), sounds = PresentationEvents_CommittedKindCount(PRESENT_SOUND);
+            g_prediction_events += events - g_prediction_prev_events; g_prediction_sounds += sounds - g_prediction_prev_sounds;
+            g_prediction_prev_events = events; g_prediction_prev_sounds = sounds;
+            if (g_mode == MODE_CLIENT && running) {
+                if (!g_control_client.progress(g_control_world)) { g_abort_to_lobby = true; return; }
+            }
+            if (recovery) {
+                if (!g_control_host.begin_sync(g_control_world, g_control_epoch + 1, now)) { g_abort_to_lobby = true; return; }
+                g_handoff_active = true;
+            } else if (g_mode == MODE_HOST && running && g_control_world.can_finalize()) {
+                if (g_prediction_pending) {
+                    const uint32_t control = g_prediction_pending; g_prediction_pending = 0;
+                    if (PredictionTerminal()) {
+                        // A corrected natural ending takes priority over an in-flight pause request.
+                    } else if (!g_control_host.begin_control(g_control_world, g_control_epoch + 1,
+                                   static_cast<SimulationReconciliation::Control>(control), now)) {
+                        g_abort_to_lobby = true; return;
+                    } else g_handoff_active = true;
+                }
+                if (!g_handoff_active && PredictionTerminal() && !g_prediction_terminal_ready &&
+                    g_control_host.peer_confirmed() == g_control_world.simulated_tick()) {
+                    if (!g_control_host.begin_sync(g_control_world, g_control_epoch + 1, now)) { g_abort_to_lobby = true; return; }
+                    g_handoff_active = true;
+                }
+            }
+        }
+    }
+    const size_t count = g_mode == MODE_HOST ? g_clients.size() : 1;
+    for (size_t i = 0; i < count; ++i) {
+        Connection *connection = g_mode == MODE_HOST ? &g_clients[i] : &g_server;
+        NetcodeExchange *peer = g_mode == MODE_HOST ? g_control_host.peer(connection->slot) : &g_control_client;
+        if (!peer || !connection->connected) { g_abort_to_lobby = true; return; }
+        NetcodeExchange::Message message;
+        while (peer->take(&message)) {
+            std::vector<uint8_t> bytes; Put16(&bytes, static_cast<uint16_t>(message.type));
+            bytes.insert(bytes.end(), message.bytes.begin(), message.bytes.end());
+            QueueMessage(connection, MESSAGE_CONTROL_EXCHANGE, bytes.data(), bytes.size());
+        }
+        Flush(connection);
+    }
+}
+
 } // namespace
 
 bool Netplay_InitializeFromArguments(int argc, char **argv)
 {
-    g_confirmed_controls = HasArgument(argc, argv, "--lan-confirmed-controls");
+    g_predictive = HasArgument(argc, argv, "--lan-prediction");
+    g_prediction_input_script = HasArgument(argc, argv, "--lan-scripted-input");
+    if (g_prediction_input_script && !g_predictive) { SetStatus("--lan-scripted-input requires --lan-prediction"); return false; }
+    g_confirmed_controls = g_predictive || HasArgument(argc, argv, "--lan-confirmed-controls");
     g_control_script = HasArgument(argc, argv, "--lan-control-script");
     if (g_control_script && !g_confirmed_controls) {
         SetStatus("--lan-control-script requires --lan-confirmed-controls"); return false;
@@ -1641,7 +1845,9 @@ void Netplay_Poll(void)
                 g_mode == MODE_HOST ? "host" : "client", SimulationState_Tick(),
                 g_input_delay, g_wait_count, static_cast<unsigned long long>(g_wait_total),
                 g_wait_max, g_waiting ? now - g_wait_started : 0u,
-                g_arrival_age, g_poll_gap_max, g_inputs.simulated_tick(), g_inputs.confirmed_tick());
+                g_arrival_age, g_poll_gap_max,
+                g_prediction_active ? g_control_world.simulated_tick() : g_inputs.simulated_tick(),
+                g_prediction_active ? g_control_world.confirmed_tick() : g_inputs.confirmed_tick());
             g_last_diagnostic_log = now;
         }
     }
@@ -1672,7 +1878,8 @@ void Netplay_Poll(void)
             LOG("[NET] live control script PASS generations=%u level=%u\n", g_level_generation,
                 unsigned(static_cast<unsigned char>(DAT_0048693c)));
             g_control_script_stage = 8;
-        } else if (g_GameState == GAME_STATE_GAMEPLAY && Netplay_ControlAnchorReady(tick)) {
+        } else if (g_GameState == GAME_STATE_GAMEPLAY &&
+                   (g_predictive ? Netplay_LocalSessionControlsAllowed() : Netplay_ControlAnchorReady(tick))) {
             NetplayControl request = NETPLAY_PAUSE; bool send = false;
             if (!g_control_script_stage && g_SubState == GAMEPLAY_ACTIVE && tick >= 30) {
                 g_control_script_stage = 1; g_control_script_pause = now; send = true;
@@ -1956,6 +2163,10 @@ bool Netplay_HostStartMatch(void)
     Put64(&payload, TOU_RandCallCount());
     payload.insert(payload.end(), g_GameConfig.bytes, g_GameConfig.bytes + GAME_CONFIG_SIZE);
     Put32(&payload, g_input_delay);
+    if (g_predictive) {
+        g_prediction_window = g_host_prediction_window;
+        payload.push_back(static_cast<uint8_t>(g_prediction_window));
+    }
     for (size_t i = 0; i < ready.size(); ++i)
         QueueMessage(ready[i], MESSAGE_START, payload.data(), payload.size());
 
@@ -2021,6 +2232,7 @@ void Netplay_OnLevelLoaded(void)
 
 bool Netplay_PrepareSimulationTick(uint32_t tick)
 {
+    if (g_predictive && g_match_active) return false; // The owner is the sole live tick driver.
     if (!g_match_active)
         return true;
     Netplay_Poll();
@@ -2104,21 +2316,71 @@ uint8_t Netplay_PlayerActions(int player, uint8_t local_fallback)
 
 bool Netplay_LocalSessionControlsAllowed(void)
 {
+    if (g_predictive && g_match_active)
+        return g_mode == MODE_HOST && g_prediction_active && !g_prediction_closing &&
+            !g_handoff_active && !g_prediction_pending && !g_control_world.replaying() && !g_control_world.dirty_from();
     return !g_match_active || (g_mode != MODE_CLIENT &&
         Netplay_CanFinalizeSimulationTick(SimulationState_Tick()));
 }
 
 bool Netplay_UsesConfirmedControls(void) { return g_confirmed_controls && g_match_active; }
+NetplayNetworkMode Netplay_NetworkMode(void) {
+    return g_predictive ? NETPLAY_PREDICTED : g_confirmed_controls ? NETPLAY_CONFIRMED : NETPLAY_LOCKSTEP;
+}
+bool Netplay_SetNetworkMode(NetplayNetworkMode mode) {
+    if (g_mode != MODE_OFF || mode < NETPLAY_LOCKSTEP || mode > NETPLAY_PREDICTED) return false;
+    g_predictive = mode == NETPLAY_PREDICTED; g_confirmed_controls = mode != NETPLAY_LOCKSTEP; return true;
+}
+uint32_t Netplay_PredictionWindow(void) { return g_mode == MODE_CLIENT ? g_prediction_window : g_host_prediction_window; }
+bool Netplay_SetPredictionWindow(uint32_t ticks) {
+    if (g_match_active || g_mode == MODE_CLIENT || !ticks || ticks > InputTimeline::MaximumPrediction) return false;
+    g_host_prediction_window = ticks;
+    if (g_mode == MODE_HOST && g_predictive) {
+        std::vector<uint8_t> window; Put32(&window, ticks);
+        for (size_t i = 0; i < g_clients.size(); ++i) if (g_clients[i].hello)
+            QueueMessage(&g_clients[i], MESSAGE_PREDICTION_WINDOW, window.data(), window.size());
+    }
+    return true;
+}
 bool Netplay_ControlAnchorReady(uint32_t tick)
 {
-    return Netplay_UsesConfirmedControls() && g_GameState == GAME_STATE_GAMEPLAY && !g_abort_to_lobby &&
+    return !g_predictive && Netplay_UsesConfirmedControls() && g_GameState == GAME_STATE_GAMEPLAY && !g_abort_to_lobby &&
         g_local_level_ready && g_initial_state_ready && !g_handoff_active &&
         tick == SimulationState_Tick() && tick == g_inputs.simulated_tick() && g_inputs.can_finalize(tick);
 }
-bool Netplay_RenderAllowed(void) { return !g_handoff_active; }
+bool Netplay_IsPredicting(void) { return g_predictive && g_match_active; }
+bool Netplay_PredictionCanStart(void) {
+    return Netplay_IsPredicting() && !g_prediction_active && !g_prediction_closing && !g_abort_to_lobby &&
+        g_GameState == GAME_STATE_GAMEPLAY && g_local_level_ready && g_initial_state_ready && SimulationState_Tick() == 0;
+}
+bool Netplay_RenderAllowed(void) {
+    if (g_handoff_active) return false;
+    if (g_prediction_active && !g_prediction_closing)
+        return !g_control_world.replaying() && !g_control_world.dirty_from() &&
+            Platform_GetTicks() - g_prediction_last_present >= 16;
+    return true;
+}
+void Netplay_FramePresented(void) { if (g_prediction_active) g_prediction_last_present = Platform_GetTicks(); }
+void Netplay_ReleaseTransition(void) {
+    if (!g_predictive || !g_prediction_active) return;
+    LOG("[NET] prediction released for scoring generation=%u epoch=%u tick=%u corrections=%u replayed=%llu events=%llu sounds=%llu\n",
+        g_level_generation, g_control_epoch, SimulationState_Tick(), g_control_world.corrections(),
+        static_cast<unsigned long long>(g_control_world.replayed_ticks()),
+        static_cast<unsigned long long>(g_prediction_events), static_cast<unsigned long long>(g_prediction_sounds));
+    g_control_world.stop(); g_control_host.disconnect(); g_control_client.disconnect();
+    g_prediction_active = false; g_prediction_closing = true;
+}
 bool Netplay_RequestControl(NetplayControl control)
 {
     if (!Netplay_UsesConfirmedControls()) return false;
+    if (g_predictive) {
+        if (g_mode == MODE_HOST && g_prediction_active && !g_prediction_pending && control >= NETPLAY_PAUSE && control <= NETPLAY_END) {
+            g_prediction_pending = control; g_prediction_pending_started = Platform_GetTicks();
+            LOG("[NET] prediction quiesce control=%u tick=%u confirmed=%u\n", unsigned(control),
+                g_control_world.simulated_tick(), g_control_world.confirmed_tick());
+        }
+        return true;
+    }
     if (g_mode != MODE_HOST || g_handoff_active || g_handoff_waiting) return true;
     const uint32_t now = Platform_GetTicks();
     if (!Netplay_ControlAnchorReady(SimulationState_Tick()) || control < NETPLAY_PAUSE || control > NETPLAY_END ||
@@ -2138,6 +2400,12 @@ bool Netplay_RequestControl(NetplayControl control)
 
 bool Netplay_CanFinalizeSimulationTick(uint32_t tick)
 {
+    if (g_predictive && g_match_active) {
+        if (g_prediction_closing) return true;
+        return g_prediction_active && !g_handoff_active && !g_prediction_pending &&
+            tick == g_control_world.simulated_tick() && g_control_world.can_finalize() &&
+            (!PredictionTerminal() || g_prediction_terminal_ready);
+    }
     return !g_match_active || (g_initial_state_ready && !g_handoff_active && !g_handoff_waiting && g_inputs.can_finalize(tick));
 }
 
