@@ -2,6 +2,10 @@
 #define TOU_H
 
 #include <stdlib.h>
+// libstdc++'s algorithm header declares random_shuffle using std::rand.
+// Parse it before the gameplay rand/srand macros below, including when a
+// translation unit includes <algorithm> after this umbrella header.
+#include <algorithm>
 
 #include "fixed_point.h"
 #include "terrain_properties.h"
