@@ -38,7 +38,10 @@ supported, using measured, centered tiny-font help.
 - **Prediction window:** 1-12 ticks (default 8), shown only for Prediction.
   The host selects it before starting; larger windows cost more CPU/memory.
 
-These settings last for the current process, not across game restarts.
+Mode, input lead and prediction window save immediately to `settings.json` and
+survive restarts. Joining a host does not overwrite this computer's saved lead
+or window with the host's negotiated values. Older files without these keys
+retain safe defaults; factory reset restores Lockstep, lead 3 and window 8.
 Prediction uses protocol **8**, `tou-sim3-net8-snapshot5-prediction1`.
 The existing sockets, asset handshake, roster and heartbeats remain in use;
 this is not an ENet/UDP migration. Clients send their slot's action receipts;

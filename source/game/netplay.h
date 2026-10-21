@@ -34,6 +34,10 @@ NetplayNetworkMode Netplay_NetworkMode(void);
 bool Netplay_SetNetworkMode(NetplayNetworkMode mode);
 uint32_t Netplay_PredictionWindow(void);
 bool Netplay_SetPredictionWindow(uint32_t ticks);
+// Saved local host preferences, even while connected to a different host.
+uint32_t Netplay_PreferredInputDelay(void);
+uint32_t Netplay_PreferredPredictionWindow(void);
+void Netplay_ResetPreferences(void);
 bool Netplay_IsPredicting(void);
 bool Netplay_PredictionCanStart(void);
 void Netplay_ReleaseTransition(void);
@@ -43,7 +47,7 @@ bool Netplay_CanFinalizeSimulationTick(uint32_t tick);
 const char *Netplay_Status(void);
 int Netplay_ConnectedPlayerCount(void);
 void Netplay_FormatRoster(char *out, size_t out_size);
-// Session-only host setting. Fixed for the entire match, in simulation ticks.
+// Persistent host preference. Fixed for the entire match, in simulation ticks.
 bool Netplay_SetInputDelay(uint32_t ticks);
 uint32_t Netplay_InputDelay(void);
 void Netplay_FormatDiagnostics(char *out, size_t out_size);

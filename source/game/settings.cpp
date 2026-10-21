@@ -12,6 +12,7 @@
 #include "gamestate.h"
 #include "gfx.h"
 #include "platform.h"
+#include "netplay.h"
 
 using nlohmann::json;
 
@@ -217,7 +218,10 @@ json SettingsToJson(const UserSettings &settings)
     root["network"] = {
         {"recentHost", settings.network.recentHost},
         {"recentPort", settings.network.recentPort},
-        {"recentTeam", settings.network.recentTeam}
+        {"recentTeam", settings.network.recentTeam},
+        {"mode", settings.network.mode},
+        {"inputLead", settings.network.inputLead},
+        {"predictionWindow", settings.network.predictionWindow}
     };
     return root;
 }
@@ -384,6 +388,9 @@ void OverlayJson(UserSettings &settings, const json &root)
         ReadString(*section, "recentHost", settings.network.recentHost, 63);
         ReadInt(*section, "recentPort", settings.network.recentPort, 1, 65535);
         ReadInt(*section, "recentTeam", settings.network.recentTeam, 1, 2);
+        ReadInt(*section, "mode", settings.network.mode, NETPLAY_LOCKSTEP, NETPLAY_PREDICTED);
+        ReadInt(*section, "inputLead", settings.network.inputLead, 1, 12);
+        ReadInt(*section, "predictionWindow", settings.network.predictionWindow, 1, 12);
     }
 }
 
@@ -465,7 +472,10 @@ UserSettings Settings_CaptureCurrent(void)
     for (size_t i = 0; i < settings.controls.players.size(); ++i)
         for (size_t j = 0; j < settings.controls.players[i].size(); ++j)
             settings.controls.players[i][j] = g_GameConfig.values.player_keys[i][j];
-    settings.network = {g_RecentLanHost, g_RecentLanPort, g_RecentLanTeam};
+    // Persist this computer's preferences, never a joined host's negotiated values.
+    settings.network = {g_RecentLanHost, g_RecentLanPort, g_RecentLanTeam,
+        static_cast<int>(Netplay_NetworkMode()), static_cast<int>(Netplay_PreferredInputDelay()),
+        static_cast<int>(Netplay_PreferredPredictionWindow())};
     settings.gamepad = Gamepad_GetSettings();
     return settings;
 }
@@ -563,6 +573,9 @@ void Settings_Apply(const UserSettings &settings)
     g_RecentLanHost = settings.network.recentHost;
     g_RecentLanPort = settings.network.recentPort;
     g_RecentLanTeam = settings.network.recentTeam;
+    Netplay_SetNetworkMode(static_cast<NetplayNetworkMode>(settings.network.mode));
+    Netplay_SetInputDelay(static_cast<uint32_t>(settings.network.inputLead));
+    Netplay_SetPredictionWindow(static_cast<uint32_t>(settings.network.predictionWindow));
     Gamepad_ApplySettings(settings.gamepad);
 }
 
@@ -695,6 +708,7 @@ bool Settings_RememberLanEndpoint(const char *host, int port, int team)
 
 void Settings_ResetAuxiliaryDefaults(void)
 {
+    Netplay_ResetPreferences();
     Gamepad_ApplySettings(Gamepad_DefaultSettings());
     g_Language = "en";
     g_RecentLanHost = "127.0.0.1";

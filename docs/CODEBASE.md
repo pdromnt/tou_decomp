@@ -199,7 +199,7 @@ divergent client. Handshake compatibility covers simulation build identity,
 normal/GG level content, ships, and gameplay data. It is still delayed TCP
 lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
-On `advanced-netcode`, **LAN Deathmatch > Network settings** adds process-local
+On `advanced-netcode`, **LAN Deathmatch > Network settings** adds persistent
 mode/input-lead controls plus a beta prediction window. Default remains
 protocol-6 lockstep; protocol 7 adds confirmed controls, and protocol 8 uses
 live receipt/revision exchange with bounded reconciliation and completed-frame
@@ -325,6 +325,12 @@ operations into independent field assignments can change behavior.
 normal `UserSettings` model contains only user-facing choices, validates values,
 and maps them into recovered runtime state at the load/save boundary. Writes use
 a same-directory temporary file followed by replacement.
+
+The `network` section also saves `mode` (0 lockstep, 1 confirmed controls,
+2 beta prediction), `inputLead` and `predictionWindow` (both 1-12 ticks).
+LAN menu changes save immediately. Capture uses local host preferences rather
+than joined-host values; startup keeps these preferences unless explicitly
+overridden by developer CLI flags. Factory reset restores mode 0, lead 3, window 8.
 
 `Platform_UserFilePath` separates writable user data from asset lookup. macOS
 uses `SDL_GetUserFolder(SDL_FOLDER_HOME)` plus `ToU/`; assets remain inside the

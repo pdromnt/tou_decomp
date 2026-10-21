@@ -103,6 +103,9 @@ struct NetworkSettings {
     std::string recentHost;
     int recentPort;
     int recentTeam;
+    int mode;
+    int inputLead;
+    int predictionWindow;
 };
 
 struct UserSettings {

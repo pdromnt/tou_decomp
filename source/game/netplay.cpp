@@ -1696,10 +1696,13 @@ void PollPrediction()
 
 bool Netplay_InitializeFromArguments(int argc, char **argv)
 {
-    g_predictive = HasArgument(argc, argv, "--lan-prediction");
+    // Settings are loaded before CLI parsing. Only explicit flags override them.
+    if (HasArgument(argc, argv, "--lan-prediction"))
+        Netplay_SetNetworkMode(NETPLAY_PREDICTED);
+    else if (HasArgument(argc, argv, "--lan-confirmed-controls"))
+        Netplay_SetNetworkMode(NETPLAY_CONFIRMED);
     g_prediction_input_script = HasArgument(argc, argv, "--lan-scripted-input");
     if (g_prediction_input_script && !g_predictive) { SetStatus("--lan-scripted-input requires --lan-prediction"); return false; }
-    g_confirmed_controls = g_predictive || HasArgument(argc, argv, "--lan-confirmed-controls");
     g_control_script = HasArgument(argc, argv, "--lan-control-script");
     if (g_control_script && !g_confirmed_controls) {
         SetStatus("--lan-control-script requires --lan-confirmed-controls"); return false;
@@ -2332,6 +2335,14 @@ bool Netplay_SetNetworkMode(NetplayNetworkMode mode) {
     g_predictive = mode == NETPLAY_PREDICTED; g_confirmed_controls = mode != NETPLAY_LOCKSTEP; return true;
 }
 uint32_t Netplay_PredictionWindow(void) { return g_mode == MODE_CLIENT ? g_prediction_window : g_host_prediction_window; }
+uint32_t Netplay_PreferredInputDelay(void) { return g_host_input_delay; }
+uint32_t Netplay_PreferredPredictionWindow(void) { return g_host_prediction_window; }
+void Netplay_ResetPreferences(void) {
+    if (g_mode != MODE_OFF) Netplay_CancelSession();
+    Netplay_SetNetworkMode(NETPLAY_LOCKSTEP);
+    Netplay_SetInputDelay(kDefaultInputDelay);
+    Netplay_SetPredictionWindow(8);
+}
 bool Netplay_SetPredictionWindow(uint32_t ticks) {
     if (g_match_active || g_mode == MODE_CLIENT || !ticks || ticks > InputTimeline::MaximumPrediction) return false;
     g_host_prediction_window = ticks;

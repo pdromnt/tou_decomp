@@ -3526,7 +3526,7 @@ void FUN_0042a470(void)
         return;
 
     case 0xF3: /* Host chooses the fixed input lead for the next match. */
-        Netplay_SetInputDelay(Netplay_InputDelay() % 12 + 1);
+        if (Netplay_SetInputDelay(Netplay_InputDelay() % 12 + 1)) Save_Options_Config();
         DAT_004877a4 = 0xF2;
         Build_Lan_Settings_Page();
         return;
@@ -3535,11 +3535,11 @@ void FUN_0042a470(void)
         Build_Lan_Settings_Page();
         return;
     case 0xF1:
-        Netplay_SetNetworkMode(static_cast<NetplayNetworkMode>((Netplay_NetworkMode() + 1) % 3));
+        if (Netplay_SetNetworkMode(static_cast<NetplayNetworkMode>((Netplay_NetworkMode() + 1) % 3))) Save_Options_Config();
         DAT_004877a4 = 0xF2; Build_Lan_Settings_Page();
         return;
     case 0xF0:
-        Netplay_SetPredictionWindow(Netplay_PredictionWindow() % 12 + 1);
+        if (Netplay_SetPredictionWindow(Netplay_PredictionWindow() % 12 + 1)) Save_Options_Config();
         DAT_004877a4 = 0xF2; Build_Lan_Settings_Page();
         return;
 
@@ -6950,6 +6950,8 @@ void Init_Game_Config(void)
  * here too so the post-reset state matches a fresh boot exactly. */
 void Reset_Config_To_Defaults(void)
 {
+    // Disconnect/restore any borrowed local config before replacing it with defaults.
+    Netplay_CancelSession();
     /* A fresh process starts with zeroed storage before applying defaults.
      * Recreate that state exactly instead of overlaying defaults on top of
      * stale values that Set_Config_Defaults intentionally does not mention. */

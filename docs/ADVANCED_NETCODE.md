@@ -156,7 +156,7 @@ internet or cross-architecture acceptance.
 
 Stage 1 introduced protocol 5 with timestamp-echo RTT probes, smoothed RTT
 variation, local receive-age/queue/polling diagnostics and missing-input wait
-statistics. The host selects a session-only 1-12 tick lead in the lobby, default
+statistics. The host selects a saved 1-12 tick lead in Network settings, default
 3; it is announced to clients and frozen in the start payload. Translations
 cover all four shipped languages. Stable protocol 4 peers are incompatible.
 
@@ -429,7 +429,8 @@ confirmed-control lockstep, and beta prediction. Mode locks while connected;
 all peers must choose the same mode. Host input lead and prediction window are
 visible read-only to clients and locked during a match. The four localized
 layouts use tiny-font help, measured wrapping and centering. Settings are
-process-local; general game options are unchanged.
+saved immediately in `settings.json`; general game options are unchanged.
+Joined-host values never overwrite this computer's saved lead/window preferences.
 
 Protocol 8 owns the real tick loop with a shared three-tick replay/forward pump
 budget, 1-12-tick prediction window, 128 MiB snapshot/tag budget, existing LAN
