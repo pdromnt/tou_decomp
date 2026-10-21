@@ -226,7 +226,7 @@ bool SimulationReconciliation::export_controlled(uint32_t new_epoch, Control con
     case ResumeMatch: g_SubState = GAMEPLAY_ACTIVE; break;
     case EndMatch:
         *reinterpret_cast<unsigned char *>(&DAT_0048693c) = g_GameConfig.values.active_level_count;
-        // Fall through: exit and skip use the original level-advance path.
+        g_SubState = GAMEPLAY_LEVEL_ADVANCE; DAT_004892a5 = 0; break;
     case SkipLevel: g_SubState = GAMEPLAY_LEVEL_ADVANCE; DAT_004892a5 = 0; break;
     default: return false;
     }
