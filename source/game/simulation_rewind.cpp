@@ -1,13 +1,15 @@
 /* Bounded developer experiment, not a live rollback mode or a CI test suite. */
-#include "tou.h"
-#include "presentation_events.h"
-#include "simulation_reconciliation.h"
-#include "netcode_exchange.h"
+// Parse standard headers before tou.h redirects rand/srand to the gameplay RNG.
 #include <algorithm>
 #include <chrono>
 #include <stdio.h>
 #include <string.h>
 #include <vector>
+
+#include "tou.h"
+#include "presentation_events.h"
+#include "simulation_reconciliation.h"
+#include "netcode_exchange.h"
 
 namespace {
 typedef std::chrono::steady_clock Clock;
