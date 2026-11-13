@@ -5,9 +5,8 @@ pacing/authority prototypes, an isolated multi-process exchange and opt-in live
 confirmed controls and the LAN-only live prediction beta are implemented,
 with checks below;
 real presentation, natural-win/repeated-match, remote and cross-platform acceptance remain
-open. Work is on `advanced-netcode`, based on stable v0.11 (`0909331`). No live
-transport replacement is enabled yet. Live prediction is opt-in on this branch.
-Main keeps the existing TCP delayed-lockstep implementation until acceptance.
+open. This work started from v0.11 (`0909331`) and is included in v0.12.
+TCP delayed lockstep remains the default; live prediction is opt-in.
 
 ## Goal and boundaries
 

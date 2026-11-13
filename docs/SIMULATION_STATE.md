@@ -55,8 +55,7 @@ Real audio/GPU delivery and cross-architecture acceptance remain separate gates.
 The current experiment enables sound logic with a dry-run event sink and local
 presentation checkpoints, but performs no rendering or audible playback. See
 [presentation timeline](PRESENTATION_TIMELINE.md). Snapshot version 5 rejects
-earlier data, and the LAN simulation
-build fingerprint was advanced accordingly on `advanced-netcode` only.
+earlier data, and the LAN simulation build fingerprint was advanced accordingly.
 
 The experimental [reconciliation owner](INPUT_RECONCILIATION.md) pairs these
 world snapshots with local presentation checkpoints and uses them to correct

@@ -2,8 +2,7 @@
 
 `source/game/simulation_reconciliation.cpp` connects the bounded input ledger
 to real world restore/resimulation and local presentation checkpoints. It is
-used by developer late-input diagnostics and opt-in live protocol-8 prediction
-on `advanced-netcode`.
+used by developer late-input diagnostics and opt-in live protocol-8 prediction.
 The opt-in live confirmed-control adapter borrows a current lockstep anchor,
 not physics ownership. Default live LAN still has zero prediction. Normal local play
 and default protocol 6 are unchanged; opt-in controls use separate protocol 7.

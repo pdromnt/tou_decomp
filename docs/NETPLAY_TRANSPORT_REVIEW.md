@@ -3,9 +3,8 @@
 This is a source review of the local Uprising shipping implementation, not a
 claim of internet-latency testing or a plan to replace TOU's transport in v0.11.
 Uprising's local-only reconstruction lab was not inspected or modified.
-The TOU observations below describe stable v0.11. The experimental
-`advanced-netcode` branch implements the first diagnostics/input-delay slice;
-see its [current plan and evidence](ADVANCED_NETCODE.md).
+The TOU observations below describe stable v0.11. For the v0.12 diagnostics,
+input delay, and prediction work, see the [plan and evidence](ADVANCED_NETCODE.md).
 
 ## What Uprising does
 
@@ -51,4 +50,4 @@ It would require protocol/version handling, UDP firewall guidance, loss/jitter
 testing and full multiplayer acceptance, not just linking another library.
 
 For the current implementation and limitations, see [LAN beta](LAN_BETA.md).
-For the experimental branch roadmap, see [advanced netcode](ADVANCED_NETCODE.md).
+For the networking roadmap, see [advanced netcode](ADVANCED_NETCODE.md).

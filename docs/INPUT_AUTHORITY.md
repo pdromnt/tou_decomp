@@ -1,6 +1,6 @@
 # Experimental input authority and confirmed resync
 
-Input prediction is an opt-in live beta on `advanced-netcode`.
+Input prediction is an opt-in live beta in v0.12.
 `source/game/input_authority.cpp` defines bounded canonical records and
 their codecs; the reconciliation owner applies them only in `HostRevisions`
 mode. Default LAN remains protocol 6 TCP lockstep. The separate protocol 7

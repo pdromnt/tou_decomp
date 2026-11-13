@@ -7,10 +7,9 @@ here as a wall of checked boxes.
 
 New defects should be added only after a concrete reproduction.
 
-## Experimental Branch: Advanced Netcode
+## Advanced Netcode Beta
 
-- Follow the gated [advanced netcode plan](ADVANCED_NETCODE.md) on
-  `advanced-netcode`, separate from stable main. Verify real sound/GPU delivery
+- Follow the [advanced netcode plan](ADVANCED_NETCODE.md). Verify real sound/GPU delivery
   and weapon-specific producers. Accept the new LAN-only Network settings page
   and live prediction mode with real players. Verify natural wins/repeated matches and physical
   controls, optimize full-snapshot control cost, and profile low-power budgets.

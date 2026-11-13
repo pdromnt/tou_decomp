@@ -1,9 +1,8 @@
 # Experimental presentation timeline
 
-This is Stage 3 groundwork on `advanced-netcode`, not a live rollback feature.
-Ordinary local and TCP LAN play do not enable the event timeline. They retain
-their immediate sound/shader path. Only the developer rewind diagnostic
-currently enables it, with actual output disabled.
+Ordinary local play and default LAN lockstep retain their immediate
+sound/shader path. Opt-in live LAN prediction uses the event timeline.
+The developer rewind diagnostic uses it with actual output disabled.
 
 ## Ownership
 
@@ -80,5 +79,5 @@ Still required for live prediction acceptance:
 - Profile the integrated [bounded reconciliation pump](INPUT_RECONCILIATION.md)
   with live authority/resync and clock pacing on low-power hardware.
 
-The experimental branch now exposes live prediction under LAN Network settings.
+Live prediction is available under LAN Network settings.
 It is not an accepted replacement for default lockstep; no ENet migration is enabled.

@@ -32,7 +32,7 @@ state. See `SIMULATION_STATE.md` for the complete boundary.
 
 ## Local rewind feasibility experiment
 
-On `advanced-netcode`, run a bounded developer diagnostic without entering a
+Run a bounded developer diagnostic without entering a
 menu or joining a network session:
 
 ```powershell

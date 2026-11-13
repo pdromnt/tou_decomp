@@ -88,6 +88,10 @@ computer must use the same game build, gameplay assets, ships, levels, and GG
 themes. There is no AI, discovery, reconnect, relay, or public lobby in this
 beta. See [docs/LAN_BETA.md](docs/LAN_BETA.md) for the full flow and diagnostics.
 
+Use **Network settings** in the LAN menu or lobby to adjust input lead and
+choose a mode. Lockstep is the default; Prediction is an opt-in beta. Everyone
+must select the same mode. v0.12 cannot connect to v0.11 peers.
+
 ### Gamepads
 
 SDL3 gamepad support uses its platform drivers (including HIDAPI where

@@ -1,18 +1,17 @@
 # Direct-IP LAN Beta
 
-This is the first playable networking test, not the final multiplayer UI.
-It supports one local player per computer, one host plus up to three clients,
+LAN Deathmatch supports one local player per computer, one host plus up to three clients,
 two teams, and no computer players. Everyone must use the same game package and
 level catalog.
 
 The v0.11 source comparison with Uprising's ENet implementation is documented
-in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). The `advanced-netcode`
-branch now has experimental protocol 6 diagnostics and negotiated input delay;
-it cannot connect to stable v0.11 protocol 4 peers. TCP lockstep remains in use.
-The local-rewind prototype also advances snapshot format/build identity to
-`tou-sim3-net6-snapshot5`, rejecting older experimental branch builds. Revision 3
-separates camera shake and music selection from gameplay RNG. Default live LAN
-has no prediction or rollback; the optional branch-only mode below does.
+in [Transport review](NETPLAY_TRANSPORT_REVIEW.md). v0.12 uses protocol 6
+by default, with negotiated input delay. It cannot connect to v0.11 protocol 4
+peers. TCP remains in use in all modes.
+The current build identity is `tou-sim4-net6-snapshot5`, rejecting older
+builds after the deployable weapon behavior changes. Revision 3 separates
+camera shake and music selection from gameplay RNG. Default LAN has no
+prediction or rollback; the optional Prediction mode below does.
 Simulation revision 2 resets transient flags per simulation tick in LAN,
 independent of local catch-up grouping. Local matches retain legacy batching.
 Inputs, checksums and pause/skip controls carry the level generation. Controls
@@ -24,7 +23,7 @@ prediction; the separate control-only anchor below does not replay physics.
 The separate [peer exchange diagnostic](NETCODE_EXCHANGE.md) exercises two to four
 processes on loopback. Its predicted input/revision lane is also used by protocol 8.
 
-## Network settings (experimental branch only)
+## Network settings
 
 Open **Team Deathmatch > LAN Deathmatch > Network settings**. This page is also
 available from the lobby, not general game options. All four languages are
@@ -42,7 +41,7 @@ Mode, input lead and prediction window save immediately to `settings.json` and
 survive restarts. Joining a host does not overwrite this computer's saved lead
 or window with the host's negotiated values. Older files without these keys
 retain safe defaults; factory reset restores Lockstep, lead 3 and window 8.
-Prediction uses protocol **8**, `tou-sim3-net8-snapshot5-prediction1`.
+Prediction uses protocol **8**, `tou-sim4-net8-snapshot5-prediction1`.
 The existing sockets, asset handshake, roster and heartbeats remain in use;
 this is not an ENet/UDP migration. Clients send their slot's action receipts;
 the host publishes canonical revisions/seals and compares committed hashes.
@@ -71,12 +70,12 @@ natural-win/repeated-match, physical-controller or low-power acceptance.
 Developer automation can select `--lan-prediction`; add `--lan-scripted-input`
 to generate firing/turning/thrust actions in isolated staging directories.
 
-## Opt-in confirmed controls (experimental branch only)
+## Opt-in confirmed controls
 
 Select **Lockstep + confirmed controls** on the Network settings page on every
 participant (or use developer flag `--lan-confirmed-controls`). This enables
 confirmed pause/resume/skip/end handoffs in the LAN menus or direct-IP CLI flow.
-It selects protocol **7**, build identity `tou-sim3-net7-snapshot5-controls1`.
+It selects protocol **7**, build identity `tou-sim4-net7-snapshot5-controls1`.
 It cannot mix with default protocol 6 or stable v0.11 protocol 4 peers; mismatches
 disconnect rather than silently switching mode.
 
@@ -126,9 +125,8 @@ The host selects **Host LAN Match**, waits for the connected-player roster to
 fill, and then selects **Start LAN Match**. The host is Team 1 and listens on
 TCP port `27015`.
 
-On `advanced-netcode`, click the yellow **Input delay** line in the host lobby
-to cycle from 1 to 12 ticks (default 3). Clients see the host's choice; it is
-locked when the match starts and is not saved in settings. At the default
+Set **Input lead** under **Network settings** before starting. Clients see the
+host's choice in the lobby; it is locked when the match starts. At the default
 integer 16 ms tick interval, three ticks are approximately 48 ms of input lead.
 A larger lead may reduce missing-input stalls but adds control delay; it does
 not eliminate the host-to-client command-bundle trip. The lobby also displays
@@ -153,7 +151,7 @@ custom ports. The host launches the game from its extracted directory:
 
 Linux and macOS use `./TOU` in place of `TOU.exe`. The port and team arguments
 are optional; the defaults are port `27015` and Team 1.
-The experimental host also accepts `--lan-input-delay 7` (valid range 1-12).
+The host also accepts `--lan-input-delay 7` (valid range 1-12).
 No flags are needed to select delay or see RTT in the lobby.
 
 Each client launches:

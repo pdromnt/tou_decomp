@@ -7,7 +7,7 @@ across up to three clients. `source/game/exchange_diagnostic.cpp` supplies
 a separate loopback-only reliable TCP driver for two to four real game processes.
 The diagnostic driver is isolated. The core exchange's control barrier is also
 used by the [opt-in live LAN control mode](LAN_BETA.md); default LAN remains
-protocol 6 delayed lockstep. The same exchange also drives branch-only live
+protocol 6 delayed lockstep. The same exchange also drives optional live
 protocol-8 prediction, selectable through the LAN Network settings page.
 
 ## Receipt versus commitment

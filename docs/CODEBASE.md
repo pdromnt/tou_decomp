@@ -98,7 +98,7 @@ forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
 | `source/platform/input_sdl.cpp` | SDL keyboard/mouse adapter preserving legacy saved scan codes |
 | `source/platform/gamepad.cpp` | SDL3 gamepad discovery, connection slots, focus/neutral guards, menu navigation, and simulation action translation |
 | `source/game/input_actions.cpp` | Stable per-tick logical action encoding above physical scan codes |
-| `source/game/input_timeline.cpp` | Bounded input ledger, simulated/confirmed frontiers and late-input replay bookkeeping (experimental branch) |
+| `source/game/input_timeline.cpp` | Bounded input ledger, simulated/confirmed frontiers and late-input replay bookkeeping |
 | `source/game/input_authority.cpp` | Experimental provisional/sealed revision publisher and confirmed-resync record codecs; see `docs/INPUT_AUTHORITY.md` |
 | `source/game/netcode_exchange.cpp` | Bounded experimental per-peer acknowledgements, hash progress and all-peer confirmed-resync coordinator; see `docs/NETCODE_EXCHANGE.md` |
 | `source/game/exchange_diagnostic.cpp` | Isolated two-to-four-process loopback TCP driver with scripted inputs and no live LAN integration |
@@ -106,7 +106,7 @@ forwards to `source/` while preserving `cmake -S .`. See `docs/BUILDING.md`.
 | `source/game/gameloop.cpp` | Top-level game states, match lifecycle, frame orchestration |
 | `source/game/simulation_state.cpp` | Versioned authoritative snapshots, simulation ticks, and checksums |
 | `source/game/simulation_tick.h` | Unpaced tick entry and supplied-action boundary; legacy batch wrapper remains in gameloop.cpp |
-| `source/game/simulation_rewind.cpp` | Bounded local restore/resimulation feasibility and cost diagnostic (experimental branch) |
+| `source/game/simulation_rewind.cpp` | Bounded local restore/resimulation feasibility and cost diagnostic |
 | `source/game/presentation_events.cpp` | Experimental confirmed-event journal and local sound/particle metadata checkpoints; see `docs/PRESENTATION_TIMELINE.md` |
 | `source/game/replay.cpp` | Local command/snapshot recording and deterministic playback diagnostics |
 | `source/game/netplay.cpp` | Direct-IP LAN beta protocol and delayed command exchange |
@@ -199,7 +199,7 @@ divergent client. Handshake compatibility covers simulation build identity,
 normal/GG level content, ships, and gameplay data. It is still delayed TCP
 lockstep, not prediction, rollback, reconnect, or a trusted client model.
 
-On `advanced-netcode`, **LAN Deathmatch > Network settings** adds persistent
+**LAN Deathmatch > Network settings** offers persistent
 mode/input-lead controls plus a beta prediction window. Default remains
 protocol-6 lockstep; protocol 7 adds confirmed controls, and protocol 8 uses
 live receipt/revision exchange with bounded reconciliation and completed-frame
@@ -268,6 +268,24 @@ in `source/game/sim.cpp`. The parity pass restored address-based dispatch:
 
 Callback constants intentionally retain original virtual addresses. They are
 identity keys, not host function pointers.
+
+### Deployable weapon triggers
+
+Contact and damage are separate decisions. All three Mine powers
+(`0x443420`) can trigger on either team. Landmines must settle first; air
+mines protect only their owner for the first 50 ticks. Friendly Fire affects
+ship damage, not detonation. Exploding Mine fragments use the damaging
+`0x67` state and keep their owner guard for their entire lifetime.
+
+Bone Crusher (`0x4330c0`) detects enemy infantry, not ships. The Disruptor
+callback (`0x433c80`) handles movement and destruction; the player update
+(`0x44be20`) applies Pilot and Engine effects only to opponents. Komet
+(`0x43e070`) releases its payload on remote activation but does not release
+it when shot. Pipebomb (`0x43e890`) bounces and can detonate remotely or
+when trapped in a destructible tile; ship contact does not set it off.
+Megabomb ship impact (`0x43c1a3`) applies the direct hit and skips the
+terrain blast. Structure impacts returning status 4 and map exits use the
+same flash/sound path (`0x43cabb`); status 3 can still cause a terrain blast.
 
 ### Entity record layout
 
