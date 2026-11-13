@@ -1853,36 +1853,30 @@ static void FUN_0044bd50(int *ent)
     }
 }
 
-/* ===== AI_ScanNearbyThreats — original FUN_0044be20 (0044BE20) ===== */
-static void AI_ScanNearbyThreats(int *ent)
+/* ===== Disruptor area effects — original FUN_0044be20 (0044BE20) ===== */
+static void ApplyNearbyDisruptors(PlayerData &player)
 {
-    int bVar2 = 0, bVar3 = 0;
-    unsigned int i = 0;
-    int iVar4;
-
-    if (DAT_00487840 != 0) {
-        iVar4 = 0xc000;
-        do {
-            Entity *entity = &g_EntityPool[*(int *)(iVar4 + (intptr_t)DAT_0048781c)];
-            if ((Player_Get(entity->owner)->team !=
-                 (char)ent[0xb]) &&
-                (entity->type == 0x18))
-            {
-                if ((ent[0] - 0x1180000 < entity->position_x) &&
-                    (entity->position_x < ent[0] + 0x1180000)) {
-                    if ((ent[1] - 0x1180000 < entity->position_y) &&
-                        (entity->position_y < ent[1] + 0x1180000)) {
-                        if (((char)entity->subtype != '\0') || bVar2) {
-                            if (!bVar3) { ent[0x35] = 0x20; bVar3 = 1; }
-                        } else {
-                            ent[0x36] = 0x20; bVar2 = 1;
-                        }
-                    }
-                }
-            }
-            i++;
-            iVar4 += 4;
-        } while (i < (unsigned int)DAT_00487840);
+    if (DAT_00487840 == 0 || DAT_0048781c == NULL) return;
+    const int *tracked = static_cast<const int *>(DAT_0048781c) + 0x3000;
+    bool pilot = false, engine = false;
+    for (int i = 0; i < DAT_00487840; ++i) {
+        const int index = tracked[i];
+        if (index < 0 || index >= g_EntityCount) continue;
+        const Entity &stick = g_EntityPool[index];
+        if (stick.type != 0x18 || stick.owner >= DAT_00489240 ||
+            Player_Get(stick.owner)->team == player.team) continue;
+        constexpr int range = 0x1180000;
+        if (!(player.position_x - range < stick.position_x && stick.position_x < player.position_x + range &&
+              player.position_y - range < stick.position_y && stick.position_y < player.position_y + range)) continue;
+        // A second Pilot stick can fill the other slot in the original.
+        if (stick.subtype == 0 && !pilot) {
+            player.timer_d8 = 0x20;
+            pilot = true;
+        } else if (!engine) {
+            player.boost_timer = 0x20;
+            engine = true;
+        }
+        if (pilot && engine) break;
     }
 }
 /* ===== FUN_0044ca40 — Fire_Primary (0044CA40) ===== */
@@ -4071,7 +4065,7 @@ LAB_00401856:
         break;
     }
 
-    /* ===== CASE 0x19: Multi-directional beam ===== */
+    /* ===== CASE 0x19: Landmine / Airmine / Exploding Mine ===== */
     case 0x19:
     {
         char cVar3_19 = (char)player->weapon_mark;
@@ -4555,7 +4549,8 @@ LAB_00406a71:
                     piVar1 = (int *)&g_EntityPool[g_EntityCount - 1].palette_value;
                     *piVar1 += (unsigned int)player->team * 100;
                 }
-                else if (local_14 == 0xf || local_14 == 0x18) goto LAB_00406a71;
+                else if (local_14 == 0xf || local_14 == 0x18)
+                    g_EntityPool[g_EntityCount - 1].palette_value += static_cast<unsigned int>(player->team) * 100;
 
                 if (local_14 == 0x18)
                     g_EntityPool[g_EntityCount - 1].scratch_60 = 0x157c;
@@ -5689,9 +5684,9 @@ void FUN_0044b0b0(void)
                 DAT_00486fa8[i] += (int)(abs_vy + abs_vx) >> 0x11;
             }
 
-            /* Detect nearby threats */
-            if (ent[0x36] == 0 && ent[0x35] == 0) {
-                AI_ScanNearbyThreats((int *)ent);
+            /* Only scan for Disruptors when both effects have expired. */
+            if (player->timer_d8 == 0 && player->boost_timer == 0) {
+                ApplyNearbyDisruptors(*player);
             }
 
             /* Random heading jitter during lock-on (ent[0x34] > 0) */

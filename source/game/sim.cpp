@@ -1741,16 +1741,138 @@ void FUN_00454340(void)
         /* Don't increment i — re-check swapped-in entry */
     }
 }
+static void FinishMegabomb(const Entity &entity)
+{
+    // 0x43cabb: visibility is sampled at the previous position; the
+    // flash itself and the sound are placed at the final position.
+    const int cx = entity.previous_x >> 22;
+    const int cy = entity.previous_y >> 22;
+    if (g_ParticleCount < PARTICLE_CAPACITY && cx >= 0 && cy >= 0 &&
+        cx < DAT_004879f8 && cy < DAT_004879fc &&
+        (static_cast<const uint8_t *>(DAT_00487814)[cy * DAT_004879f8 + cx] & 8u) != 0) {
+        ParticleRecord &flash = g_ParticlePool[g_ParticleCount++];
+        flash.position_x = entity.position_x;
+        flash.position_y = entity.position_y;
+        if (DAT_00481f20 != NULL) {
+            const int height = static_cast<const uint8_t *>(DAT_00481f20)[5] & 0xfe;
+            flash.position_y += 0x140000 - height * 0x20000;
+        }
+        flash.velocity_x = flash.velocity_y = 0;
+        flash.sprite_index = flash.frame_number = flash.frame_timer = 0;
+        flash.flags_13 = 1;
+        flash.owner_or_flags_14 = 0xff;
+        flash.color_index = 1;
+    }
+    FUN_0040f9b0(0x65 + rand() % 7, entity.position_x, entity.position_y, 0x30, 1000);
+}
+
+static void ExplodeMegabomb(Entity &entity, int tx, int ty,
+                            int explevel, uint8_t stored_tile, char is_water)
+{
+    int mb_x = entity.position_x;
+    int mb_y = entity.position_y;
+    int mb_effect_x = entity.previous_x;
+    int mb_effect_y = entity.previous_y;
+    int mb_vx = entity.velocity_x;
+    int mb_vy = entity.velocity_y;
+    int *sc = (int *)DAT_00487ab0;
+    int *tt = (int *)DAT_00487abc;
+
+    {
+        FUN_00437cf0(mb_x, mb_y, 400, entity.owner, 500);
+        FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
+                     mb_x, mb_y, entity.previous_x, entity.previous_y, 0, 0, entity.owner);
+
+        /* Loop 1: Fire debris (entity_type 0, render_mode 4) */
+        {
+            int count1 = (int)((float)DAT_0048385c * 80.0f);
+            if (count1 < 1) count1 = 1;
+            if (count1 > 40) count1 = 40;
+            int angle_step = 0x0445C000 / count1;
+            for (int dp = 0; dp < count1 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dp++) {
+                unsigned int dir = rand() & 0x7FF;
+                int spd = rand() % 80;
+                Entity *ep = &g_EntityPool[g_EntityCount];
+                ep->position_x = mb_effect_x;
+                ep->position_y = mb_effect_y;
+                ep->velocity_x = (sc[dir] * spd >> 6) + (mb_vx >> 5);
+                ep->velocity_y = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
+                ep->previous_x = mb_effect_x;
+                ep->previous_y = mb_effect_y;
+                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                ep->type = 0;
+                ep->variant_24 = (short)(rand() % 6);
+                ep->state_20 = 0;
+                ep->auxiliary_26 = 0;
+                ep->owner = entity.owner;
+                ep->health_or_damage_28 = 0;
+                ep->gravity_or_motion_38 = tt[0x26];
+                ep->scratch_48 = 0;
+                ep->animation_frame = 0;
+                ep->subtype = 4;
+                ep->callback_address = tt[0];
+                ep->counter_3c = 0;
+                ep->timer_5c = 0;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 120;
+                {
+                    int ci = rand() % 10;
+                    g_EntityPool[g_EntityCount - 1].palette_value =
+                        *(unsigned short *)((intptr_t)DAT_00487aa8 + (246 + ci) * 2) + 30000;
+                }
+                g_EntityPool[g_EntityCount - 1].damage_44 = angle_step;
+            }
+        }
+
+        /* Loop 2: Mushroom fire (entity_type 0x64, render_mode 0) */
+        {
+            int count2 = (int)((float)DAT_0048385c * 150.0f);
+            if (count2 < 1) count2 = 1;
+            if (count2 > 80) count2 = 80;
+            for (int mp = 0; mp < count2 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; mp++) {
+                unsigned int dir = rand() & 0x7FF;
+                int spd = rand() % 80;
+                Entity *ep = &g_EntityPool[g_EntityCount];
+                ep->position_x = mb_effect_x;
+                ep->position_y = mb_effect_y;
+                ep->velocity_x = (sc[dir] * spd >> 6) + (mb_vx >> 5);
+                ep->velocity_y = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
+                ep->previous_x = mb_effect_x;
+                ep->previous_y = mb_effect_y;
+                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
+                ep->type = 0x64;
+                ep->variant_24 = (short)(rand() % 6);
+                ep->state_20 = 0;
+                ep->auxiliary_26 = 0xFF;
+                ep->owner = 0xFF;
+                ep->health_or_damage_28 = 0;
+                ep->gravity_or_motion_38 = tt[0x347A];
+                ep->damage_44 = tt[0x3489];
+                ep->scratch_48 = 0;
+                ep->palette_value = tt[0x3495];
+                ep->animation_frame = 0;
+                ep->subtype = 0;
+                ep->callback_address = tt[0x3458];
+                ep->counter_3c = 0;
+                ep->timer_5c = 0;
+                g_EntityCount++;
+                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 120;
+                {
+                    int ci = rand() % 10;
+                    g_EntityPool[g_EntityCount - 1].palette_value =
+                        *(unsigned short *)((intptr_t)DAT_00487aa8 + (246 + ci) * 2) + 30000;
+                }
+                g_EntityPool[g_EntityCount - 1].damage_44 = 0;
+            }
+        }
+    }
+
+    FinishMegabomb(entity);
+}
+
 /* ===== FUN_00434310 — Entity_Debris_Animation (00434310) ===== */
-/* Processes all entities in g_EntityPool (stride 0x80, count g_EntityCount).
- * Recovered callbacks dispatch by their original guest address at +0x34. Types
- * whose callbacks have not been lifted yet continue through the legacy inline
- * fallback below:
- *   - Type 0 (+0x21=0): projectile — position integration, boundary check, expire on wall hit
- *   - Type 2 (+0x21=2): trooper debris — position integration, gravity, lifetime countdown
- *   - Type 0x6C/0x6D (+0x21): visible debris fragments — same as above
- *   - Type 5 (+0x20=5): generic debris — position integration, lifetime countdown
- *   - Others: generic position integration + lifetime countdown */
+/* Recovered callbacks dispatch by guest address. The inline fallback handles
+ * types whose callbacks have not been lifted yet. */
 void FUN_00434310(void)
 {
     int shift = (unsigned char)DAT_00487a18 & 0x1F;
@@ -1794,6 +1916,9 @@ void FUN_00434310(void)
         int callback_handled = EntityCallbacks_Dispatch(callback_address, i) ? 1 : 0;
         if (callback_handled) {
             should_remove = DAT_00481e8f == 1;
+        } else if (ent_type == 0x1D && ent_state == 0xff) {
+            FinishMegabomb(*entity);
+            should_remove = 1;
         } else {
 
         /* Force type 0x13 turret bullets: zero gravity + zero acceleration every tick.
@@ -1856,20 +1981,17 @@ void FUN_00434310(void)
              * Without this, they would be skipped by the velocity-based detection.
              *   0x08 TOURNAILLER  — orbit mode starts stationary, needs wall collision
              *   0x17 NUCLEUS      — trail dots sit still, need entity-entity collision
-             *   0x18 PILOT DISRUP — deploys on ground, needs wall collision to deploy
-             *   0x19 LANDMINE     — modes 1/2 are stationary mines, need player collision
              *   0x1C MINISHIP     — dormant ships must keep scanning at zero velocity
              *   0x1F INSECTS      — direct position movement (no velocity), need collision
              *   0x24 ETNA         — deploys on ground, needs wall collision to deploy
              *   0x25 ROMAN CANDLE — deploys on ground, needs wall collision to deploy
              *   0x26 MORNING STAR — spinning fire, needs wall collision to explode
-             *   0x28 PIPEBOMB     — can reach zero velocity mid-bounce, needs collision
              *   0x29 TURRET (gun) — falls with gravity, needs wall collision to deploy
              *   0x2A TURRET (ice) — falls with gravity, needs wall collision to deploy
              *   0x2E SMOKING NALLE— sits still (vx=vy=0), needs wall/player collision */
-            if (ent_type == 0x02 || ent_type == 0x29 || ent_type == 0x2A || ent_type == 0x18 ||
-                ent_type == 0x1F || ent_type == 0x08 || ent_type == 0x28 ||
-                ent_type == 0x17 || ent_type == 0x19 || ent_type == 0x1C || ent_type == 0x24 ||
+            if (ent_type == 0x02 || ent_type == 0x1D || ent_type == 0x29 || ent_type == 0x2A ||
+                ent_type == 0x1F || ent_type == 0x08 ||
+                ent_type == 0x17 || ent_type == 0x1C || ent_type == 0x24 ||
                 ent_type == 0x25 || ent_type == 0x26 || ent_type == 0x2E) {
                 is_projectile = 1;
             }
@@ -2307,169 +2429,6 @@ void FUN_00434310(void)
                 break;
             }
 
-            case 0x19: { /* LANDMINE (Batch 8) — entity type 0x19.
-                * Ghidra callback: 0x443420. Verified at 0x443420-0x443950.
-                *
-                * Three modes based on weapon level (+0x40):
-                *   Mode 0: flying beam — decelerates (sqrt speed cap at 256),
-                *     self-integrates position. Skipped from shared integration.
-                *   Mode 1: stationary mine — guard countdown at +0x26, then bobbing
-                *     oscillation using sincos LUT. Proximity scan for enemy players
-                *     within 0x180000 (~6px). Sets +0x28=1 to trigger detonation.
-                *   Mode 2: stationary mine + ring burst — same as mode 1 but
-                *     detonation spawns ring of 128 type 0x67 bullets (0x2000/0x40 steps).
-                *
-                * Lifespan at +0x28 counts down each tick. At 0: detonation with
-                * flash particle + explosion sound. All modes die on detonation.
-                *
-                * Position integration skipped in shared code because mode 0 does
-                * its own with deceleration, and modes 1/2 are stationary. */
-                /* Lifespan countdown */
-                int lm_life = entity->health_or_damage_28;
-                if (lm_life > 0) {
-                    lm_life--;
-                    entity->health_or_damage_28 = lm_life;
-                    if (lm_life == 0) {
-                        /* DETONATE */
-                        unsigned char lm_sub = entity->subtype;
-                        int lm_x = entity->position_x;
-                        int lm_y = entity->position_y;
-                        unsigned char lm_own = entity->owner;
-                        if (lm_sub == 2) {
-                            /* Level 2: spawn ring of type 0x67 bullets */
-                            int *sc = (int *)DAT_00487ab0;
-                            int *tt = (int *)DAT_00487abc;
-                            for (int rdi = 0; rdi < 0x2000; rdi += 0x40) {
-                                if (g_EntityCount >= ENTITY_ACTIVE_CAPACITY) break;
-                                int h_idx = rdi >> 2; /* byte offset to entry index */
-                                Entity *ep = &g_EntityPool[g_EntityCount];
-                                int sv = sc[h_idx];
-                                int cv = sc[h_idx + 0x200];
-                                ep->position_x = lm_x + sv * 0x10;
-                                ep->position_y = lm_y + cv * 0x10;
-                                ep->velocity_x = sv;
-                                ep->velocity_y = cv;
-                                ep->previous_x = lm_x + sv * 0x10;
-                                ep->previous_y = lm_y + cv * 0x10;
-                                ep->motion_x_10 = 0; ep->motion_y_14 = 0;
-                                ep->type = 0x67;
-                                ep->variant_24 = (unsigned short)(rand() % 6);
-                                ep->state_20 = 2;
-                                ep->auxiliary_26 = 0x1E;
-                                ep->owner = lm_own;
-                                ep->health_or_damage_28 = 0;
-                                ep->gravity_or_motion_38 = tt[0xD838 / 4];
-                                ep->damage_44 = tt[0xD874 / 4];
-                                ep->scratch_48 = 0;
-                                ep->palette_value = tt[0xD8A4 / 4];
-                                ep->animation_frame = 0;
-                                ep->subtype = 2;
-                                ep->callback_address = tt[0xD7A8 / 4];
-                                ep->counter_3c = 0;
-                                ep->timer_5c = 4;
-                                g_EntityCount++;
-                                Entity *spawned = &g_EntityPool[g_EntityCount - 1];
-                                spawned->scratch_65 = 0x1E;
-                                spawned->scratch_64 = 0x12;
-                                if (DAT_00487aa8 != NULL)
-                                    spawned->palette_value =
-                                        (unsigned int)((unsigned short *)DAT_00487aa8)[0x1E] + 30000;
-                                spawned->damage_44 = 0x19000;
-                            }
-                        }
-                        /* Flash particle for all modes */
-                        if (g_ParticleCount < PARTICLE_CAPACITY) {
-                            ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
-                            fp->position_x = lm_x;
-                            fp->position_y = lm_y;
-                            fp->velocity_x = 0;
-                            fp->velocity_y = 0;
-                            fp->sprite_index = (unsigned char)(rand() % 3) + 0x11;
-                            fp->frame_number = 0;
-                            fp->frame_timer = 0;
-                            fp->flags_13 = 1;
-                            fp->owner_or_flags_14 = 0xFF;
-                            fp->color_index = 0;
-                            g_ParticleCount++;
-                        }
-                        FUN_0040f9b0(0x65 + (rand() % 7), lm_x, lm_y);
-                        should_remove = 1;
-                        break;
-                    }
-                }
-                /* Guard byte countdown */
-                {
-                    unsigned char lm_g = entity->auxiliary_26;
-                    if (lm_g > 0 && lm_g < 0xFF) {
-                        lm_g--;
-                        entity->auxiliary_26 = lm_g;
-                    }
-                }
-                unsigned char lm_sub = entity->subtype;
-                if (lm_sub == 0) {
-                    /* Mode 0: flying beams — velocity deceleration + position integration */
-                    int lm_grounded = entity->scratch_2c;
-                    if (lm_grounded == 0) {
-                        int lm_vx = entity->velocity_x;
-                        int lm_vy = entity->velocity_y;
-                        int svx = lm_vx >> 8;
-                        int svy = lm_vy >> 8;
-                        int spd_sq = svx * svx + svy * svy;
-                        /* Decelerate if speed² > 0x10000 (binary float at 0x4756E0 ≈ 256.0) */
-                        if (spd_sq > 0x10000) {
-                            double mag = sqrt((double)spd_sq);
-                            entity->velocity_x = (int)((double)svx * 256.0 / mag) << 8;
-                            entity->velocity_y = (int)((double)svy * 256.0 / mag) << 8;
-                        }
-                        /* Self position integration */
-                        entity->position_x += entity->velocity_x;
-                        entity->position_y += entity->velocity_y;
-                    }
-                } else {
-                    /* Mode 1/2: stationary mine */
-                    unsigned char lm_g2 = entity->auxiliary_26;
-                    if (lm_g2 > 0) {
-                        /* Guard active: save current position */
-                        entity->scratch_2c = entity->position_x;
-                        entity->scratch_30 = entity->position_y;
-                    } else {
-                        /* Guard expired: bobbing oscillation */
-                        int lm_phase = entity->counter_3c;
-                        lm_phase += 20;
-                        if (lm_phase >= 0x800)
-                            lm_phase -= 0x800;
-                        entity->counter_3c = lm_phase;
-                        int *sc = (int *)DAT_00487ab0;
-                        int saved_y = entity->scratch_30;
-                        entity->position_y = saved_y + sc[lm_phase] * 4;
-                        /* Proximity detonation: scan for enemy players nearby */
-                        {
-                            int lm_x = entity->position_x;
-                            int lm_y = entity->position_y;
-                            unsigned char lm_own = entity->owner;
-                            unsigned char lm_team = Player_Get(lm_own)->team;
-                            int det_range = 0x180000; /* ~6 pixels detection range */
-                            for (int p = 0; p < DAT_00489240; p++) {
-                                PlayerData *player = Player_Get(p);
-                                unsigned char p_team = player->team;
-                                if (p_team == lm_team) continue; /* skip allies */
-                                if (player->health <= 0) continue;
-                                int px = player->position_x;
-                                int py = player->position_y;
-                                int dx = lm_x - px; if (dx < 0) dx = -dx;
-                                int dy = lm_y - py; if (dy < 0) dy = -dy;
-                                if (dx < det_range && dy < det_range) {
-                                    /* Enemy in range — detonate next tick */
-                                    entity->health_or_damage_28 = 1;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                break;
-            }
-
             case 0x6B: {
                 /* Spiral flight — type 0x6B ONLY (ROMAN CANDLE sub-projectile).
                  * Types 0x13/0x14 are standard ballistic, do NOT spiral. */
@@ -2481,49 +2440,6 @@ void FUN_00434310(void)
                 int nvy = vy + vx / 29;
                 entity->velocity_x = nvx;
                 entity->velocity_y = nvy;
-                break;
-            }
-
-            case 0x18: { /* PILOT DISRUPTOR — deploys on ground, stays alive.
-                * Flies with gravity until wall hit (state 0xFA in wall collision).
-                * Once deployed, actively scans for nearby enemy players each tick:
-                *   player+0xD8 = 0x20 (aim jitter +/-13/tick)
-                *   player+0xD4 = 0x20 (halved move/turn speed)
-                * Dies when lifetime at +0x60 expires. */
-                unsigned char pd_state = entity->state_20;
-                if (pd_state == 0xFA) {
-                    int pd_life = entity->scratch_60;
-                    if (pd_life <= 0) {
-                        /* Lifetime expired: AoE burst + die */
-                        int pd_x = entity->position_x;
-                        int pd_y = entity->position_y;
-                        unsigned char pd_own = entity->owner;
-                        FUN_00437cf0(pd_x, pd_y, 0xC8, pd_own, -1);
-                        should_remove = 1;
-                    } else {
-                        entity->scratch_60 = pd_life - 1;
-                        /* Active disruption scan — set timers on nearby enemies.
-                         * Bypasses FUN_0044be20 (tracking list gets stale from swaps). */
-                        int pd_x = entity->position_x;
-                        int pd_y = entity->position_y;
-                        unsigned char pd_own = entity->owner;
-                        unsigned char my_team = Player_Get(pd_own)->team;
-                        for (int p = 0; p < DAT_00489240; p++) {
-                            PlayerData *player = Player_Get(p);
-                            if (player->health <= 0) continue;
-                            unsigned char p_team = player->team;
-                            if (p_team == my_team) continue;
-                            int px = player->position_x;
-                            int py = player->position_y;
-                            int dx = pd_x - px; if (dx < 0) dx = -dx;
-                            int dy = pd_y - py; if (dy < 0) dy = -dy;
-                            if (dx < 0x1180000 && dy < 0x1180000) {
-                                player->timer_d8 = 0x20;
-                                player->boost_timer = 0x20;
-                            }
-                        }
-                    }
-                }
                 break;
             }
 
@@ -3614,14 +3530,29 @@ void FUN_00434310(void)
 
         /* Position integration: pos += vel
          * Skipped for types that do their own integration in the behavior switch:
-         *   0x19 LANDMINE   — mode 0 self-integrates with deceleration; modes 1/2
-         *                     are stationary (bobbing uses direct position writes)
          *   0x1B KAMIKAZE   — self-integrates at top of its behavior case
          *   0x1C MINISHIP   — self-integrates after boundary revert+clamp logic
          *   0x2D LASER      — instant beam trace, no per-tick movement */
-        if (ent_type != 0x2d && ent_type != 0x1b && ent_type != 0x1C && ent_type != 0x19 && ent_type != 0x26) {
+        if (ent_type != 0x2d && ent_type != 0x1b && ent_type != 0x1C && ent_type != 0x26) {
             entity->position_x += entity->velocity_x;
             entity->position_y += entity->velocity_y;
+        }
+
+        if (!should_remove && ent_type == 0x1D) {
+            // 0x43c100-0x43c149: clamp the first out-of-bounds axis, then
+            // finish without running any contact or terrain damage checks.
+            const int max_x = static_cast<int>(DAT_004879f0) * FIXED_SCALE;
+            const int max_y = static_cast<int>(DAT_004879f4) * FIXED_SCALE;
+            if (entity->position_x < 0 || entity->position_x >= max_x) {
+                entity->position_x = entity->previous_x = entity->position_x < 0 ? 0 : max_x;
+                should_remove = true;
+            } else if (entity->position_y < 0 || entity->position_y >= max_y) {
+                entity->position_y = entity->previous_y = entity->position_y < 0 ? 0 : max_y;
+                should_remove = true;
+            } else if (EntityCallbacks_MegabombHitsShip(i)) {
+                should_remove = true;
+            }
+            if (should_remove) FinishMegabomb(*entity);
         }
 
         /* Entity-vs-tracked-entity collision (FUN_00437120 equivalent).
@@ -3633,15 +3564,12 @@ void FUN_00434310(void)
          *   0x17 NUCLEUS  — passive trail target; player shoots OWN nucleus dots
          *                   to detonate them. Allowing collision here would let
          *                   enemy bullets trigger the ring burst unintentionally.
-         *   0x19 LANDMINE — proximity detonation handled in behavior switch;
-         *                   entity-entity collision would bypass the team check
-         *                   and cause mines to detonate on allied tracked entities.
          *   0x65          — water splash particles, cosmetic only
          *   0x67          — trail/exhaust particles, cosmetic only
          *   is_debris     — debris particles, no collision
          *   state >= 0xFA — already dead/detonating */
-        if (ent_type != 0x67 && ent_type != 0x65 && !is_debris &&
-            ent_type != 0x17 && ent_type != 0x19 && ent_type != 0x26 &&
+        if (!(ent_type == 0x1D && should_remove) && ent_type != 0x67 && ent_type != 0x65 &&
+            !is_debris && ent_type != 0x17 && ent_type != 0x26 &&
             entity->state_20 < 0xFA) {
             int proj_x = entity->position_x;
             int proj_y = entity->position_y;
@@ -3685,7 +3613,10 @@ void FUN_00434310(void)
                 target->scratch_58 = proj_damage;
                 target->health_or_damage_28 = tou_binary::add_wrap_i32(
                     target->health_or_damage_28, proj_damage);
-                if (hp_threshold > 0 && target->health_or_damage_28 >= hp_threshold) {
+                // Komet's released projectiles can hit another Komet without
+                // setting it off (the same exception as in 0x437120).
+                const bool komet_payload = t_type == 0x27 && ent_type == 0x6a && entity->subtype == 2;
+                if (!komet_payload && hp_threshold > 0 && target->health_or_damage_28 >= hp_threshold) {
                     target->state_20 = 0xFA;
                 }
                 should_remove = 1;
@@ -3925,32 +3856,6 @@ void FUN_00434310(void)
             switch (ent_type) {
             /* TOURNAILLER (0x08): fuse/timer handled in behavior switch above */
 
-            case 0x0F: { /* BONE CRUSHER — anti-infantry mine.
-                * Embeds in ground on wall hit (vel=0). Kills enemy troopers on contact.
-                * Simple proximity check vs trooper array (g_TrooperPool, stride 0x40). */
-                if (g_TrooperCount > 0) {
-                    unsigned char own = entity->owner;
-                    int mx = entity->position_x;
-                    int my = entity->position_y;
-                    for (int v = 0; v < g_TrooperCount; v++) {
-                        TrooperRecord *trooper = &g_TrooperPool[v];
-                        unsigned char t_team = trooper->team;
-                        if (t_team == own || t_team == 0xFF) continue;
-                        int tx = trooper->position_x;
-                        int ty = trooper->position_y;
-                        int dx = mx - tx; if (dx < 0) dx = -dx;
-                        int dy = my - ty; if (dy < 0) dy = -dy;
-                        if (dx < 0x80000 && dy < 0x80000) {
-                            /* Kill the trooper */
-                            trooper->velocity_x = 0;
-                            should_remove = 1;
-                            break;
-                        }
-                    }
-                }
-                break;
-            }
-
             case 0x12: { /* Pipebomb — state-based detonation.
                 * State 0xC2: countdown with flying sparks.
                 * When countdown reaches 0: explode. */
@@ -3991,70 +3896,6 @@ void FUN_00434310(void)
             }
 
             /* NOTE: case 0x25 ROMAN CANDLE fuse/timer — handled in behavior switch now */
-
-            case 0x28: {
-                /* PIPEBOMB — bounces and settles. Detonates on lifespan expiry
-                 * (state 0xFA set by lifetime handler) or player collision.
-                 * Rotation: +0x30 = rotation speed, +0x3C = cumulative angle.
-                 * Renderer uses +0x3C with anim_data 0xCE for 16-dir sprite. */
-                /* Original callback 0x43E890 uses the stored angular velocity;
-                 * it does not derive a fresh minimum spin from linear speed. */
-                {
-                    int vx = entity->velocity_x;
-                    int angular = entity->scratch_30;
-                    int angle = entity->counter_3c;
-                    if (vx < 1) {
-                        angle += angular;
-                        if (angle >= 0x800) {
-                            angle -= 0x800;
-                            angular -= 2;
-                        }
-                    } else {
-                        angle -= angular;
-                        if (angle < 0) {
-                            angle += 0x800;
-                            angular -= 2;
-                        }
-                    }
-                    if (angular < 0) angular = 0;
-                    entity->scratch_30 = angular;
-                    entity->counter_3c = angle;
-                }
-                if (entity->state_20 == 0xFA) {
-                    int det_x = entity->position_x;
-                    int det_y = entity->position_y;
-                    unsigned char own = entity->owner;
-                    int dtx = det_x >> 0x12;
-                    int dty = det_y >> 0x12;
-                    /* Tile damage / crater */
-                    FUN_004357b0(dtx, dty, 6, 0, '\0',
-                                 0, 0, 0, 0, 0, '\0', own);
-                    /* Area knockback */
-                    FUN_00437cf0(det_x, det_y, 100, own, 100);
-                    /* Explosion sound */
-                    FUN_0040f9b0(0x65 + (rand() % 7), det_x, det_y);
-                    /* Spawn fire/flash particles */
-                    {
-                        int fc = (rand() & 1) + 3; /* 3-4 flash particles */
-                        for (int f = 0; f < fc && g_ParticleCount < PARTICLE_CAPACITY; f++) {
-                            ParticleRecord *pbase = &g_ParticlePool[g_ParticleCount];
-                            pbase->position_x = det_x;
-                            pbase->position_y = det_y;
-                            pbase->velocity_x = ((rand() & 0xFFFF) - 0x8000) * 4;
-                            pbase->velocity_y = ((rand() & 0xFFFF) - 0x8000) * 4;
-                            pbase->sprite_index = (rand() & 3) + 1;
-                            pbase->frame_number = 0;
-                            pbase->frame_timer = 2;
-                            pbase->flags_13 = 0xC8;
-                            pbase->owner_or_flags_14 = own;
-                            pbase->color_index = 0;
-                            g_ParticleCount++;
-                        }
-                    }
-                    should_remove = 1;
-                }
-                break;
-            }
 
             case 0x29:   /* BASIC TURRET */
             case 0x2A: { /* ICE TURRET */
@@ -4240,8 +4081,6 @@ void FUN_00434310(void)
              * wall collision section (on solid wall hit). No fuse/timer logic needed.
              * The deployer flies straight until wall collision. */
 
-            /* PILOT DISRUPTOR (0x18): handled entirely in behavior phase above */
-
             default:
                 break;
             }
@@ -4259,10 +4098,15 @@ void FUN_00434310(void)
                 /* Building collision (original callback at 0x438816).
                  * If tile[+10] == 1 (flyable), check for structure collision.
                  * FUN_004355d0 sets DAT_00481e8f to 3 or 4 on building hit. */
-                if (pass10 == 1) {
+                if (pass10 == 1 && (ent_type != 0x1D || entity->auxiliary_26 != 0xff)) {
                     DAT_00481e8f = 0;
                     FUN_004355d0(i);
-                    if (DAT_00481e8f != 0) {
+                    if (ent_type == 0x1D && DAT_00481e8f == 4) {
+                        FinishMegabomb(*entity);
+                        EntityCallbacks_RemoveAt(i);
+                        continue;
+                    }
+                    if (ent_type != 0x1D && DAT_00481e8f != 0) {
                         /* Play per-type sound on building hit.
                          * Silent types skip the sound entirely.
                          * Batch 8/9 types: 0x17 NUCLEUS, 0x19 LANDMINE, 0x1C MINISHIP,
@@ -4278,7 +4122,7 @@ void FUN_00434310(void)
                         case 0x22:                        /* turret/fireworks — silent */
                         case 0x24: case 0x25:             /* ETNA/ROMAN CANDLE — silent (deploy) */
                         case 0x2B: case 0x6A:             /* homing mine/shot — silent */
-                        case 0x28: case 0x29: case 0x2A:  /* grenades/turrets — silent */
+                        case 0x29: case 0x2A:             /* turrets — silent */
                         case 0x0C:                        /* DIGGER — silent */
                             break; /* silent */
                         case 0x01:
@@ -4293,7 +4137,7 @@ void FUN_00434310(void)
                             FUN_0040f9b0(0x11C, bx, by); break;
                         case 0x05: case 0x0B: case 0x0F: /* various heavy weapons */
                         case 0x17: case 0x19: case 0x1B: /* NUCLEUS, LANDMINE, KAMIKAZE */
-                        case 0x1C: case 0x1D: case 0x1E: /* MINISHIP, MEGABOMB, PHOTON */
+                        case 0x1C: case 0x1E:             /* MINISHIP, PHOTON */
                         case 0x27: case 0x2E:             /* KOMET, SMOKING NALLE */
                             FUN_0040f9b0(0x65 + (rand() % 7), bx, by); break;
                         default:
@@ -4306,7 +4150,8 @@ void FUN_00434310(void)
                 /* Destructible tile health damage (original callback at 0x438851).
                  * Tiles >= 0xF0 are destructible with health stored in the
                  * wall segment array at DAT_00489e80. */
-                if (tile >= 0xF0 && DAT_00489e80 != NULL) {
+                if (tile >= 0xF0 && DAT_00489e80 != NULL &&
+                    (ent_type != 0x1D || entity->auxiliary_26 != 0xff)) {
                     int proj_damage = entity->damage_44;
                     int *tile_hp = (int *)((unsigned int)tile * 0x20 - 0x1DF4 + (intptr_t)DAT_00489e80);
                     *tile_hp -= proj_damage;
@@ -4321,11 +4166,11 @@ void FUN_00434310(void)
                  * - pass2==0: solid wall hit (all weapon types)
                  * - type 0x22 turret bullets: any non-air, non-water tile (broad cratering)
                  * - type 0x14 plastic/organic waste: any non-air tile (paints goo/explosive)
-                 * - type 0x1D megabomb: building hit (DAT_00481e8f set by FUN_004355d0)
+                 * - type 0x1D megabomb: non-terminal structure hit (status 3)
                  * Shotgun (type 0x00) only collides with solid walls (pass2==0). */
                 unsigned char tile_is_water = *(unsigned char *)((unsigned int)tile * 0x20 + 4 + (intptr_t)DAT_00487928);
                 unsigned char wall_owner = entity->owner;
-                if (ent_type != 0x26 && ent_type != 0x2E && (pass2 == 0 || (ent_type == 0x22 && tile != 0 && tile_is_water == 0 && wall_owner < 0x50) || (ent_type == 0x14 && tile != 0) || (ent_type == 0x1D && DAT_00481e8f != 0))) {
+                if (ent_type != 0x26 && ent_type != 0x2E && (pass2 == 0 || (ent_type == 0x22 && tile != 0 && tile_is_water == 0 && wall_owner < 0x50) || (ent_type == 0x14 && tile != 0) || (ent_type == 0x1D && DAT_00481e8f == 3))) {
                     /* Compute explosion level from sub_type and entity state
                      * (original at 0x43897B-0x4389B5) */
                     unsigned char sub_type = entity->subtype;
@@ -4793,33 +4638,6 @@ void FUN_00434310(void)
                             FUN_0040f9b0(0x65 + (rand() % 7), prev_x, prev_y);
                             break;
 
-                        /* PILOT DISRUPTOR — deploy on wall hit. Stop + set state 0xFA.
-                         * Set lifetime at +0x60 so it stays alive for ~100 seconds. */
-                        case 0x18:
-                            entity->velocity_x = 0;
-                            entity->velocity_y = 0;
-                            entity->state_20 = 0xFA;
-                            entity->scratch_60 = 6000; /* ~100 sec at 60fps */
-                            did_bounce = 1; /* prevent removal */
-                            break;
-
-                        /* LANDMINE wall collision — original 0x4437f1-0x44380d.
-                         * Basic airmines land on the first solid tile: restore the
-                         * previous position, stop completely, and mark +0x2C=1.
-                         * The callback then leaves the mine armed until its timer
-                         * expires or an enemy touches it. */
-                        case 0x19: {
-                            if (entity->subtype == 0) {
-                                entity->position_x = entity->previous_x;
-                                entity->position_y = entity->previous_y;
-                                entity->velocity_x = 0;
-                                entity->velocity_y = 0;
-                                entity->scratch_2c = 1;
-                                did_bounce = 1;
-                            }
-                            break;
-                        }
-
                         /* Callback 0x443B10: tile damage + KB(150/255) + sound */
                         case 0x1B: { /* KAMIKAZE MEN — fire explosion on contact */
                             FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
@@ -4905,130 +4723,10 @@ void FUN_00434310(void)
                         }
 
                         /* Callback 0x43C0B0: tile damage + sound; KB for 0x1D only */
-                        case 0x1D: { /* MEGABOMB — KB + tile damage + fire debris + mushroom fire */
-                            int mb_x = entity->position_x;
-                            int mb_y = entity->position_y;
-                            int mb_effect_x = entity->previous_x;
-                            int mb_effect_y = entity->previous_y;
-                            int mb_vx = entity->velocity_x;
-                            int mb_vy = entity->velocity_y;
-                            int *sc = (int *)DAT_00487ab0;
-                            int *tt = (int *)DAT_00487abc;
-
-                            /* Area knockback */
-                            FUN_00437cf0(mb_x, mb_y, 400, owner, 500);
-
-                            /* Tile damage */
-                            FUN_004357b0(tx, ty, explevel, stored_tile, is_water,
-                                         mb_x, mb_y, entity->previous_x, entity->previous_y,
-                                         '\0', '\0', owner);
-
-                            /* Loop 1: Fire debris (entity_type 0, render_mode 4) */
-                            {
-                                int count1 = (int)((float)DAT_0048385c * 80.0f);
-                                if (count1 < 1) count1 = 1;
-                                if (count1 > 40) count1 = 40;
-                                int angle_step = 0x0445C000 / count1;
-                                for (int dp = 0; dp < count1 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; dp++) {
-                                    unsigned int dir = rand() & 0x7FF;
-                                    int spd = rand() % 80;
-                                    Entity *ep = &g_EntityPool[g_EntityCount];
-                                    ep->position_x = mb_effect_x;
-                                    ep->position_y = mb_effect_y;
-                                    ep->velocity_x = (sc[dir] * spd >> 6) + (mb_vx >> 5);
-                                    ep->velocity_y = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
-                                    ep->previous_x = mb_effect_x;
-                                    ep->previous_y = mb_effect_y;
-                                    ep->motion_x_10 = 0; ep->motion_y_14 = 0;
-                                    ep->type = 0;
-                                    ep->variant_24 = (short)(rand() % 6);
-                                    ep->state_20 = 0;
-                                    ep->auxiliary_26 = 0;
-                                    ep->owner = owner;
-                                    ep->health_or_damage_28 = 0;
-                                    ep->gravity_or_motion_38 = tt[0x26];
-                                    ep->scratch_48 = 0;
-                                    ep->animation_frame = 0;
-                                    ep->subtype = 4;
-                                    ep->callback_address = tt[0];
-                                    ep->counter_3c = 0;
-                                    ep->timer_5c = 0;
-                                    g_EntityCount++;
-                                    g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 120;
-                                    {
-                                        int ci = rand() % 10;
-                                        g_EntityPool[g_EntityCount - 1].palette_value =
-                                            *(unsigned short *)((intptr_t)DAT_00487aa8 + (246 + ci) * 2) + 30000;
-                                    }
-                                    g_EntityPool[g_EntityCount - 1].damage_44 = angle_step;
-                                }
-                            }
-
-                            /* Loop 2: Mushroom fire (entity_type 0x64, render_mode 0) */
-                            {
-                                int count2 = (int)((float)DAT_0048385c * 150.0f);
-                                if (count2 < 1) count2 = 1;
-                                if (count2 > 80) count2 = 80;
-                                for (int mp = 0; mp < count2 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; mp++) {
-                                    unsigned int dir = rand() & 0x7FF;
-                                    int spd = rand() % 80;
-                                    Entity *ep = &g_EntityPool[g_EntityCount];
-                                    ep->position_x = mb_effect_x;
-                                    ep->position_y = mb_effect_y;
-                                    ep->velocity_x = (sc[dir] * spd >> 6) + (mb_vx >> 5);
-                                    ep->velocity_y = (sc[0x200 + dir] * spd >> 6) + (mb_vy >> 5) - 0x3E800;
-                                    ep->previous_x = mb_effect_x;
-                                    ep->previous_y = mb_effect_y;
-                                    ep->motion_x_10 = 0; ep->motion_y_14 = 0;
-                                    ep->type = 0x64;
-                                    ep->variant_24 = (short)(rand() % 6);
-                                    ep->state_20 = 0;
-                                    ep->auxiliary_26 = 0xFF;
-                                    ep->owner = 0xFF;
-                                    ep->health_or_damage_28 = 0;
-                                    ep->gravity_or_motion_38 = tt[0x347A];
-                                    ep->damage_44 = tt[0x3489];
-                                    ep->scratch_48 = 0;
-                                    ep->palette_value = tt[0x3495];
-                                    ep->animation_frame = 0;
-                                    ep->subtype = 0;
-                                    ep->callback_address = tt[0x3458];
-                                    ep->counter_3c = 0;
-                                    ep->timer_5c = 0;
-                                    g_EntityCount++;
-                                    g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 120;
-                                    {
-                                        int ci = rand() % 10;
-                                        g_EntityPool[g_EntityCount - 1].palette_value =
-                                            *(unsigned short *)((intptr_t)DAT_00487aa8 + (246 + ci) * 2) + 30000;
-                                    }
-                                    g_EntityPool[g_EntityCount - 1].damage_44 = 0;
-                                }
-                            }
-
-                            /* Flash particle + sound */
-                            if (g_ParticleCount < PARTICLE_CAPACITY) {
-                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
-                                int flash_y = mb_y;
-                                if (DAT_00481f20 != NULL) {
-                                    int sprite_height = *(unsigned char *)((intptr_t)DAT_00481f20 + 5) & 0xFE;
-                                    flash_y += 0x140000 - sprite_height * 0x20000;
-                                }
-                                fp->position_x = mb_x;
-                                fp->position_y = flash_y;
-                                fp->velocity_x = 0;
-                                fp->velocity_y = 0;
-                                fp->sprite_index = 0;
-                                fp->frame_number = 0;
-                                fp->frame_timer = 0;
-                                fp->flags_13 = 1;
-                                fp->owner_or_flags_14 = 0xFF;
-                                fp->color_index = 1; /* group 1 = fire (MEGABOMB) */
-                                g_ParticleCount++;
-                            }
-                            FUN_0040f9b0(0x65 + (rand() % 7), mb_x, mb_y);
+                        case 0x1D:
+                            ExplodeMegabomb(*entity, tx, ty, explevel, stored_tile, is_water);
                             break;
-                        }
+
                         case 0x1E: /* PHOTON FLUX — pure anti-ship, NOTHING on wall hit.
                             * Silently vanishes. Only damages via entity hit (FUN_004348a0). */
                             break;
@@ -5232,99 +4930,6 @@ void FUN_00434310(void)
                             flash_count = (rand() & 1) + 4;
                             break;
 
-                        case 0x27: { /* KOMET BOMB terminal burst, 0x43E411-0x43E883. */
-                            int kvx = entity->velocity_x;
-                            int kvy = entity->velocity_y;
-                            int kspeed = (kvx < 0 ? -kvx : kvx) + (kvy < 0 ? -kvy : kvy);
-                            if (entity->scratch_2c == 0 && kspeed < 0xC0000) {
-                                entity->velocity_x = 0;
-                                entity->velocity_y = 0;
-                                entity->scratch_2c = 1;
-                                did_bounce = 1;
-                                break;
-                            }
-                            int base_dir = ((int)FUN_004257e0(0, 0, kvx, kvy) + 0x400) & 0x7FF;
-                            int count = 1 - (int)(DAT_00483854 * -30.0f);
-                            if (count < 1) count = 1;
-                            int split_damage = 0x9C4000 / count;
-                            int *sc = (int *)DAT_00487ab0;
-                            int *tt = (int *)DAT_00487abc;
-                            for (int n = 0; n < count && g_EntityCount < ENTITY_ACTIVE_CAPACITY; n++) {
-                                int dir = (base_dir + rand() % 120 - 60) & 0x7FF;
-                                int spd = rand() % 48 + 100;
-                                Entity *ep = &g_EntityPool[g_EntityCount];
-                                memset((void *)ep, 0, 0x80);
-                                ep->position_x = entity->position_x;
-                                ep->previous_x = entity->position_x;
-                                ep->position_y = entity->position_y;
-                                ep->previous_y = entity->position_y;
-                                ep->velocity_x = sc[dir] * spd >> 6;
-                                ep->velocity_y = sc[dir + 0x200] * spd >> 6;
-                                ep->type = 0x6A;
-                                ep->owner = owner;
-                                ep->subtype = 2;
-                                ep->gravity_or_motion_38 = tt[0xDE80 / 4];
-                                ep->damage_44 = tt[0xDEBC / 4];
-                                ep->palette_value = tt[0xDEEC / 4];
-                                ep->callback_address = tt[0xDDF0 / 4];
-                                ep->damage_44 = split_damage;
-                                g_EntityCount++;
-                                g_EntityPool[g_EntityCount - 1].health_or_damage_28 = rand() % 100 + 80;
-                            }
-                            if (g_ParticleCount < PARTICLE_CAPACITY) {
-                                ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];
-                                fp->position_x = entity->position_x;
-                                fp->position_y = entity->position_y;
-                                fp->velocity_x = 0; fp->velocity_y = 0;
-                                fp->sprite_index = (unsigned char)(13 + (rand() & 3));
-                                fp->frame_number = 0; fp->frame_timer = 0;
-                                fp->flags_13 = 0; fp->owner_or_flags_14 = 0xFF;
-                                fp->color_index = 1;
-                                g_ParticleCount++;
-                            }
-                            FUN_00437cf0(entity->position_x, entity->position_y, 100, owner, -1);
-                            FUN_0040f9b0(0x65 + rand() % 7, entity->position_x, entity->position_y);
-                            break;
-                        }
-
-                        /* Callback 0x43E890: PIPEBOMB bounce.
-                         * Hit axis: negate and /4 (strong dampening).
-                         * Cross axis: *0.8 (mild dampening).
-                         * Corner: both negate and /8.
-                         * Matches original at 0x43E9A0-0x43EA80. */
-                        case 0x28: {
-                            int hit_x = (prev_tx != tx);
-                            int hit_y = (prev_ty != ty);
-                            if (hit_x && hit_y) {
-                                /* Corner: both axes negate + /8 */
-                                entity->velocity_x = -(entity->velocity_x >> 3);
-                                entity->velocity_y = -(entity->velocity_y >> 3);
-                            } else if (hit_y) {
-                                /* Floor/ceiling: vel_y = -vel_y/4, vel_x *= 0.8 */
-                                int vy = entity->velocity_y;
-                                int vx = entity->velocity_x;
-                                entity->velocity_y = -(vy >> 2);
-                                entity->velocity_x = (int)((float)vx * 0.8f);
-                            } else if (hit_x) {
-                                /* Wall: vel_x = -vel_x/4, vel_y *= 0.8 */
-                                int vx = entity->velocity_x;
-                                int vy = entity->velocity_y;
-                                entity->velocity_x = -(vx >> 2);
-                                entity->velocity_y = (int)((float)vy * 0.8f);
-                            }
-                            if ((entity->velocity_x < 0 ? -entity->velocity_x : entity->velocity_x) +
-                                (entity->velocity_y < 0 ? -entity->velocity_y : entity->velocity_y) < 0x20000) {
-                                entity->velocity_x = 0;
-                                entity->velocity_y = 0;
-                            }
-                            entity->scratch_30 -= 2;
-                            if (entity->scratch_30 < 0) entity->scratch_30 = 0;
-                            entity->position_x = entity->previous_x;
-                            entity->position_y = entity->previous_y;
-                            did_bounce = 1;
-                            break;
-                        }
-
                         /* Callback 0x43E890: TURRETS deploy on landing (NO bounce) */
                         case 0x29:
                         case 0x2A:
@@ -5407,16 +5012,12 @@ void FUN_00434310(void)
              *   0x17 NUCLEUS  — passive trail target, does not damage players.
              *                   Players shoot the dots to trigger the ring burst.
              *   0x1C MINISHIP — autonomous ship, damages players via its spawned
-             *                   type 0x67 bullets, not by direct body contact.
-             *
-             * Special handling (NOT skipped, but guarded):
-             *   0x19 LANDMINE — enters this block but has an early team check
-             *                   below that skips self/allies. Only detonates on
-             *                   enemy player contact (Ghidra 0x443862). */
+             *                   projectiles, not by direct body contact.
+             *   0x1D MEGABOMB — contact handled before terrain. */
             if (!should_remove && DAT_00489240 > 0 &&
                 (ent_type != 0x1F || entity->counter_3c == 0) &&
                 ent_type != 0x1C && ent_type != 0x17 && ent_type != 0x26 &&
-                ent_type != 0x28 && ent_type != 0x2E) {
+                ent_type != 0x1D && ent_type != 0x2E) {
                 unsigned char raw_owner = entity->owner;
                 unsigned char byte_26 = entity->auxiliary_26;
                 unsigned char sub_type = entity->subtype;
@@ -5454,16 +5055,6 @@ void FUN_00434310(void)
                         player_id = (unsigned int)p;
                     }
                     if (byte_26 != 0 && guard_team == player_id) continue;
-
-                    /* LANDMINE player collision — early team check (Ghidra 0x443862).
-                     * Skip collision entirely for self and allied players. The mine
-                     * should only detonate on ENEMY contact. Without this guard, a
-                     * player's own landmine would blow them up on deployment. */
-                    if (ent_type == 0x19 && raw_owner < 0x50) {
-                        unsigned char mine_team = Player_Get(raw_owner)->team;
-                        unsigned char p_team = player->team;
-                        if (mine_team == p_team) continue;
-                    }
 
                     /* AABB collision using config-based dimensions + player ship size */
                     int ship_size = DAT_0048780c ? *(int *)((intptr_t)DAT_0048780c + p * 0x40 + 0x38) : 0;
@@ -5561,29 +5152,7 @@ void FUN_00434310(void)
                              * insects inert far longer than the original runtime. */
                             entity->counter_3c = rand() % 121 + 60;
                         }
-                        /* LANDMINE hit result — Ghidra 0x443862.
-                         * Second team check at hit resolution (redundant with pre-check
-                         * above, but kept for safety). On enemy contact: flash particle
-                         * (warm fire, sprite 17-19) + explosion sound + die. */
-                        else if (ent_type == 0x19 && raw_owner < 0x50) {
-                            unsigned char mine_team = Player_Get(raw_owner)->team;
-                            unsigned char player_team = player->team;
-                            if (mine_team == player_team) {
-                                /* skip ally damage — mine stays alive */
-                            } else {
-                                /* Route contact through the callback's common
-                                 * detonation path next tick. This is essential for
-                                 * mode 3's radial type-0x67 burst. */
-                                /* The shared lifetime pass runs later in this tick,
-                                 * so arm with 2: it becomes 1 there, then reaches the
-                                 * callback detonation path on the following tick. */
-                                entity->health_or_damage_28 = 2;
-                            }
-                        }
-                        /* PIPEBOMB: trigger detonation instead of silent removal */
-                        else if (ent_type == 0x28) {
-                            entity->state_20 = 0xFA;
-                        } else if (ent_type == 0x1B) {
+                        else if (ent_type == 0x1B) {
                             /* Original 0x44416A contact explosion. */
                             if (g_ParticleCount < PARTICLE_CAPACITY) {
                                 ParticleRecord *fp = &g_ParticlePool[g_ParticleCount];

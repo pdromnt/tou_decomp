@@ -14,6 +14,8 @@ const uint32_t kCallbackNucleus = 0x00432c80u;
 const uint32_t kCallbackNuclearBarrel = 0x00431650u;
 const uint32_t kCallbackMovingSucker = 0x00430dc0u;
 const uint32_t kCallbackBoneCrusher = 0x004330c0u;
+const uint32_t kCallbackDisruptor = 0x00433c80u;
+const uint32_t kCallbackMine = 0x00443420u;
 const uint32_t kCallbackShotgunRapidfire = 0x00438010u;
 const uint32_t kCallbackDumbfire = 0x00438d90u;
 const uint32_t kCallbackCollapser = 0x00439880u;
@@ -22,6 +24,7 @@ const uint32_t kCallbackMachineGun = 0x0043f990u;
 const uint32_t kCallbackSmokingNalle = 0x00432220u;
 const uint32_t kCallbackMorningStar = 0x0043dbd0u;
 const uint32_t kCallbackKometBomb = 0x0043e070u;
+const uint32_t kCallbackPipebomb = 0x0043e890u;
 const uint32_t kCallbackGammaBoom = 0x004457b0u;
 const uint32_t kCallbackWavyFireworks = 0x004442f0u;
 const uint32_t kCallbackRomanCandle = 0x00446130u;
@@ -134,6 +137,22 @@ void collision_players(int entity_index)
             may_damage = owner_team != p->team || DAT_0048373d != 0;
         }
         if (may_damage) p->health = tou_binary::sub_wrap_i32(p->health, damage);
+        if (type == 0x19u || type == 0x1du || type == 0x67u) {
+            // Original 0x4348a0 accounts for every overlapping ship. Type
+            // 0x67 stops at damage/attribution, before impact and knockback.
+            const int32_t score = damage / 0x2000;
+            DAT_00486be8[player] = tou_binary::add_wrap_i32(DAT_00486be8[player], score);
+            if (owner < 0x50u && Player_Get(owner)->team != p->team)
+                DAT_00486e68[owner] = tou_binary::add_wrap_i32(DAT_00486e68[owner], score);
+            if (may_damage) {
+                p->last_attacker = owner < 0x50u ? owner : owner < 100u ? owner + 0x14u :
+                    owner < 0x78u ? owner : owner < 0x8cu ? owner - 0x14u : 0xffu;
+            }
+            p->timer_4a2 = 0x6e;
+            if (p->stun_timer != 0)
+                p->stun_timer = static_cast<uint8_t>(std::max(0, p->stun_timer - (damage >> 15) - 1));
+            if (type == 0x67u) continue;
+        }
         p->timer_c4 = 5;
         p->flag_a3 = 1;
         if (DAT_00487abc != NULL) {
@@ -147,7 +166,7 @@ void collision_players(int entity_index)
             }
         }
         DAT_00481e8f = 4;
-        return;
+        if (type != 0x19u && type != 0x1du) return;
     }
 }
 
@@ -600,6 +619,83 @@ uint8_t *spawn_config_entity(uint8_t type, uint8_t subtype, int32_t x, int32_t y
     tou_binary::store_u8(spawned, 0x54, 0);
     tou_binary::store_u8(spawned, 0x5c, 0);
     return spawned;
+}
+
+void callback_mine_00443420(int entity_index)
+{
+    Entity &mine = g_EntityPool[entity_index];
+    bool detonate = mine.state_20 == 0xffu;
+    if (!detonate && mine.health_or_damage_28 > 0)
+        detonate = --mine.health_or_damage_28 == 0;
+    if (!detonate) {
+        if (mine.auxiliary_26 != 0 && mine.auxiliary_26 != 0xffu) --mine.auxiliary_26;
+        if (mine.subtype == 0) {
+            if (mine.scratch_2c == 0) {
+                const int vx = mine.velocity_x >> 8, vy = mine.velocity_y >> 8;
+                const double speed2 = static_cast<double>(vx) * vx + static_cast<double>(vy) * vy;
+                if (speed2 > 65536.0) {
+                    const double scale = 256.0 / sqrt(speed2);
+                    mine.velocity_x = static_cast<int32_t>(vx * scale) * 256;
+                    mine.velocity_y = static_cast<int32_t>(vy * scale) * 256;
+                }
+                mine.position_x = tou_binary::add_wrap_i32(mine.position_x, mine.velocity_x);
+                mine.position_y = tou_binary::add_wrap_i32(mine.position_y, mine.velocity_y);
+                if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+            }
+        } else if (mine.auxiliary_26 != 0) {
+            mine.scratch_2c = mine.position_x;
+            mine.scratch_30 = mine.position_y;
+        } else {
+            mine.counter_3c = (mine.counter_3c + 20) & 0x7ff;
+            mine.position_y = mine.scratch_30 + static_cast<int *>(DAT_00487ab0)[mine.counter_3c] * 4;
+        }
+
+        const int x = mine.position_x >> 18, y = mine.position_y >> 18;
+        if (x < 0 || y < 0 || x >= static_cast<int>(DAT_004879f0) ||
+            y >= static_cast<int>(DAT_004879f4)) {
+            // Clamp to the map edge before the burst, without indexing outside it.
+            if (x < 0) mine.position_x = mine.previous_x = 0;
+            else if (x >= static_cast<int>(DAT_004879f0))
+                mine.position_x = mine.previous_x = (DAT_004879f0 - 1) * FIXED_SCALE;
+            if (y < 0) mine.position_y = mine.previous_y = 0;
+            else if (y >= static_cast<int>(DAT_004879f4))
+                mine.position_y = mine.previous_y = (DAT_004879f4 - 1) * FIXED_SCALE;
+            detonate = true;
+        } else {
+            // 0x4439d2: landmines collide only after settling. Air mines can
+            // hit other ships during the launch guard; only the owner is exempt.
+            const bool armed = mine.subtype == 0 ? mine.scratch_2c == 1 : mine.auxiliary_26 != 0xffu;
+            detonate = armed && collision_checks(entity_index, true);
+            if (!detonate && tile_property(tile_at(x, y), 2) == 0u) {
+                if (mine.subtype == 0) {
+                    mine.position_x = mine.previous_x;
+                    mine.position_y = mine.previous_y;
+                    mine.velocity_x = mine.velocity_y = 0;
+                    mine.scratch_2c = 1;
+                } else detonate = true;
+            }
+        }
+    }
+    if (!detonate) return;
+
+    if (mine.subtype == 2) {
+        const int *sc = static_cast<int *>(DAT_00487ab0);
+        for (int angle = 0; angle < 0x800 && g_EntityCount < ENTITY_ACTIVE_CAPACITY; angle += 0x10) {
+            const int vx = sc[angle], vy = sc[angle + 0x200];
+            uint8_t *fragment = spawn_config_entity(0x67, 2, mine.position_x + vx * 16,
+                mine.position_y + vy * 16, vx, vy, mine.owner);
+            if (fragment == NULL) break;
+            tou_binary::store_u16(fragment, 0x24, static_cast<uint16_t>(game_rand() % 6));
+            tou_binary::store_u8(fragment, 0x20, 2);
+            tou_binary::store_u8(fragment, 0x26, 0x1e);
+            tou_binary::store_i32(fragment, 0x44, 0x19000);
+            finish_type67(fragment, mine.owner, 4, 0x1e, 0x12);
+        }
+    }
+    if (g_ParticleCount < PARTICLE_CAPACITY && coarse_effect_allowed(entity_at(entity_index)))
+        spawn_flash(mine.position_x, mine.position_y, static_cast<uint8_t>(game_rand() % 3 + 0x11), 1, 0xff, 1);
+    FUN_0040f9b0(game_rand() % 7 + 0x65, mine.position_x, mine.position_y);
+    DAT_00481e8f = 1;
 }
 
 void spawn_edge_particle(int32_t x, int32_t y, int32_t vx, int32_t vy,
@@ -1395,9 +1491,9 @@ void callback_moving_sucker_00430dc0(int entity_index)
     DAT_00481e8f = 1;
 }
 
-bool bone_crusher_scan_infantry(uint8_t *entity)
+void bone_crusher_scan_infantry(uint8_t *entity)
 {
-    if (DAT_00487aa4 == NULL || g_TrooperPool == NULL || DAT_00487810 == 0) return false;
+    if (DAT_00487aa4 == NULL || g_TrooperPool == NULL || DAT_00487810 == 0) return;
     const uint8_t owner = tou_binary::load_u8(entity, 0x22);
     const uint8_t owner_team = owner < static_cast<unsigned int>(DAT_00489240)
         ? Player_Get(owner)->team
@@ -1424,20 +1520,184 @@ bool bone_crusher_scan_infantry(uint8_t *entity)
             tou_binary::store_i32(entity, 0x30, game_rand() % 30 + 10);
             tou_binary::store_i32(entity, 0x2c, game_rand() % 30 + 10);
             trooper->health_28 = -1000000;
-            return true;
         }
     }
-    return false;
+}
+
+// Original 0x436ef0: move a settled deployable out of a destructible tile
+// into nearby open space, or request removal if there is no exit.
+bool dislodge_deployable(Entity &entity)
+{
+    const int x = entity.position_x >> 18, y = entity.position_y >> 18;
+    const uint8_t tile = tile_at(x, y);
+    if (tile < 0xf0u || DAT_00489e80 == NULL || g_PhysicsParams == NULL) return false;
+    const unsigned material = tou_binary::load_u8(DAT_00489e80, tile * 0x20u - 0x1de9u);
+    const int impulse = g_PhysicsParams[material * 4 + 1] >> 2;
+    for (int distance = 1; distance <= 4; ++distance) {
+        const int right = std::min(x + distance, static_cast<int>(DAT_004879f0) - 1);
+        const int left = std::max(x - distance, 0);
+        const int down = std::min(y + distance, static_cast<int>(DAT_004879f4) - 1);
+        const int up = std::max(y - distance, 0);
+        if (tile_property(tile_at(right, y), 1) == 1) {
+            entity.position_x += (right - x) * FIXED_SCALE;
+            entity.velocity_x = tou_binary::add_wrap_i32(entity.velocity_x, impulse);
+        } else if (tile_property(tile_at(left, y), 1) == 1) {
+            entity.position_x += (left - x) * FIXED_SCALE;
+            entity.velocity_x = tou_binary::sub_wrap_i32(entity.velocity_x, impulse);
+        } else if (tile_property(tile_at(x, down), 1) == 1) {
+            entity.position_y += (down - y) * FIXED_SCALE;
+            entity.velocity_y = tou_binary::add_wrap_i32(entity.velocity_y, impulse);
+        } else if (tile_property(tile_at(x, up), 1) == 1) {
+            entity.position_y += (up - y) * FIXED_SCALE;
+            entity.velocity_y = tou_binary::sub_wrap_i32(entity.velocity_y, impulse);
+        } else continue;
+        entity.previous_x = entity.position_x;
+        entity.previous_y = entity.position_y;
+        return false;
+    }
+    return true;
+}
+
+void callback_komet_bomb_0043e070(int entity_index)
+{
+    Entity &bomb = g_EntityPool[entity_index];
+    uint8_t *entity = entity_at(entity_index);
+    if (bomb.timer_5c != 0) --bomb.timer_5c;
+    const bool shot = bomb.state_20 == 0xfau;
+    bool release = bomb.state_20 == 0xfbu;
+    if (!shot) {
+        if (bomb.scratch_2c == 0) {
+            bomb.velocity_y = tou_binary::add_wrap_i32(bomb.velocity_y,
+                tou_binary::mul_wrap_i32(bomb.gravity_or_motion_38, DAT_00483828));
+            bomb.position_x = tou_binary::add_wrap_i32(bomb.position_x, bomb.velocity_x);
+            bomb.position_y = tou_binary::add_wrap_i32(bomb.position_y, bomb.velocity_y);
+            if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+        }
+        settle_bounded_projectile(entity);
+        if (tile_property(tile_at(bomb.position_x >> 18, bomb.position_y >> 18), 1) == 0u) {
+            bomb.position_x = bomb.previous_x;
+            bomb.position_y = bomb.previous_y;
+            bomb.scratch_2c = 1;
+            if (game_rand() % 5 == 0) release = true;
+        }
+        if (dislodge_deployable(bomb)) release = true;
+        if (!release) return;
+
+        const int heading = static_cast<int>(FUN_004257e0(0, 0, bomb.velocity_x, bomb.velocity_y));
+        const int count = 1 - static_cast<int>(tou_binary::x87_ftol(-30.0L * DAT_00483854));
+        const int *sc = static_cast<int *>(DAT_00487ab0);
+        for (int i = 0; i < count && g_EntityCount < ENTITY_ACTIVE_CAPACITY; ++i) {
+            const int angle = (heading + 0x3c4 + game_rand() % 120) & 0x7ff;
+            const int speed = game_rand() % 48 + 100;
+            uint8_t *fragment = spawn_config_entity(0x6a, 2, bomb.position_x, bomb.position_y,
+                sc[angle] * speed >> 6, sc[angle + 0x200] * speed >> 6, bomb.owner);
+            if (fragment == NULL) break;
+            tou_binary::store_i32(fragment, 0x44, 0x9c4000 / count);
+            tou_binary::store_i32(fragment, 0x28, game_rand() % 100 + 80);
+        }
+    }
+    if (bomb.owner < DAT_00489240 && Player_Get(bomb.owner)->counter_468 > 0)
+        --Player_Get(bomb.owner)->counter_468;
+    if (g_ParticleCount < PARTICLE_CAPACITY && coarse_effect_allowed(entity)) {
+        const uint8_t sprite = static_cast<uint8_t>(shot ? (game_rand() & 1) + 3 : (game_rand() & 3) + 13);
+        spawn_flash(bomb.position_x, bomb.position_y, sprite, shot ? 0 : 1, 0xff, 0);
+    }
+    if (!shot) {
+        FUN_00437cf0(bomb.position_x, bomb.position_y, 100, bomb.owner, -1);
+        FUN_0040f9b0(game_rand() % 7 + 0x65, bomb.position_x, bomb.position_y);
+    }
+    DAT_00481e8f = 1;
+}
+
+void callback_pipebomb_0043e890(int entity_index)
+{
+    Entity &bomb = g_EntityPool[entity_index];
+    const int angle = bomb.counter_3c + (bomb.velocity_x < 1 ? bomb.scratch_30 : -bomb.scratch_30);
+    bomb.counter_3c = angle & 0x7ff;
+    if (angle != bomb.counter_3c) bomb.scratch_30 = std::max(0, bomb.scratch_30 - 2);
+
+    bomb.velocity_y = tou_binary::add_wrap_i32(bomb.velocity_y,
+        tou_binary::mul_wrap_i32(bomb.gravity_or_motion_38, DAT_00483828));
+    bomb.position_x = tou_binary::add_wrap_i32(bomb.position_x, bomb.velocity_x);
+    bomb.position_y = tou_binary::add_wrap_i32(bomb.position_y, bomb.velocity_y);
+    const int x = bomb.position_x >> 18, y = bomb.position_y >> 18;
+    if (x >= 0 && y >= 0 && x < static_cast<int>(DAT_004879f0) &&
+        y < static_cast<int>(DAT_004879f4)) {
+        if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+        if (tile_property(tile_at(x, y), 1) == 0u) {
+            const int old_x = bomb.previous_x >> 18, old_y = bomb.previous_y >> 18;
+            if (tile_property(tile_at(x, old_y), 1) == 1u) {
+                bomb.position_y = bomb.previous_y;
+                bomb.velocity_y = tou_binary::sub_wrap_i32(0, bomb.velocity_y) >> 2;
+                bomb.velocity_x = static_cast<int>(tou_binary::x87_ftol(bomb.velocity_x * 0.8));
+            } else if (tile_property(tile_at(old_x, y), 1) == 1u) {
+                bomb.position_x = bomb.previous_x;
+                bomb.velocity_x = tou_binary::sub_wrap_i32(0, bomb.velocity_x) >> 2;
+                bomb.velocity_y = static_cast<int>(tou_binary::x87_ftol(bomb.velocity_y * 0.8));
+            } else {
+                bomb.position_x = bomb.previous_x;
+                bomb.position_y = bomb.previous_y;
+                bomb.velocity_x = tou_binary::sub_wrap_i32(0, bomb.velocity_x) >> 3;
+                bomb.velocity_y = tou_binary::sub_wrap_i32(0, bomb.velocity_y) >> 3;
+            }
+            bomb.scratch_30 = std::max(0, bomb.scratch_30 - 2);
+        }
+        if (!dislodge_deployable(bomb) && bomb.state_20 != 0xfau) return;
+
+        const int tx = bomb.position_x >> 18, ty = bomb.position_y >> 18;
+        if (map_point_valid(tx, ty)) {
+            const int *sc = static_cast<int *>(DAT_00487ab0);
+            const int count = 1 - static_cast<int>(tou_binary::x87_ftol(-55.0L * DAT_00483854));
+            const int bias = (tile_property(tile_at(tx, ty + 1), 1) == 0 ||
+                              tile_property(tile_at(tx, ty + 2), 1) == 0 ||
+                              tile_property(tile_at(tx, ty + 3), 1) == 0) ? 0x57800 : 0;
+            for (int i = 0; i < count && g_EntityCount < ENTITY_ACTIVE_CAPACITY; ++i) {
+                const int dir = game_rand() & 0x7ff;
+                const int speed = game_rand() % 50;
+                const uint8_t type = static_cast<uint8_t>(0x6c + (game_rand() & 1));
+                const uint8_t subtype = static_cast<uint8_t>(game_rand() % 6);
+                uint8_t *debris = spawn_config_entity(type, subtype, bomb.position_x, bomb.position_y,
+                    tou_binary::add_wrap_i32(sc[dir] * speed >> 6, bomb.velocity_x),
+                    tou_binary::add_wrap_i32((sc[dir + 0x200] * speed >> 6) - bias, bomb.velocity_y),
+                    bomb.owner);
+                if (debris == NULL) break;
+                tou_binary::store_i32(debris, 0x28, game_rand() % 50 + 60);
+                tou_binary::store_i32(debris, 0x44, 0xa8c000 / count);
+                tou_binary::store_u32(debris, 0x4c, tou_binary::load_u32(debris, 0x4c) + 300u);
+            }
+            if (tx > 0 && ty > 0)
+                FUN_004357b0(tx, ty, game_rand() % 3 + 10, 0, tile_at(tx, ty) == 0x0c,
+                             bomb.position_x, bomb.position_y, bomb.previous_x, bomb.previous_y, 0, 0, bomb.owner);
+        }
+    } else {
+        const int max_x = (static_cast<int>(DAT_004879f0) - 1) * FIXED_SCALE;
+        const int max_y = (static_cast<int>(DAT_004879f4) - 1) * FIXED_SCALE;
+        bomb.position_x = std::max(0, std::min(max_x, bomb.position_x));
+        bomb.position_y = std::max(0, std::min(max_y, bomb.position_y));
+    }
+    if (bomb.owner < DAT_00489240 && Player_Get(bomb.owner)->counter_474 > 0)
+        --Player_Get(bomb.owner)->counter_474;
+    if (coarse_effect_allowed(entity_at(entity_index))) {
+        for (int i = 0; i < 12 && g_ParticleCount < PARTICLE_CAPACITY; ++i) {
+            const uint8_t sprite = static_cast<uint8_t>(game_rand() % 3 + 0x11);
+            spawn_flash(bomb.position_x, bomb.position_y, sprite, 0xc6, 0xff, 0);
+            ParticleRecord &flash = g_ParticlePool[g_ParticleCount - 1];
+            flash.velocity_x = (200 - game_rand() % 400) * 0x200 + (bomb.velocity_x >> 1);
+            flash.velocity_y = (200 - game_rand() % 400) * 0x200 + (bomb.velocity_y >> 1);
+        }
+    }
+    FUN_0040f9b0(game_rand() % 7 + 0x65, bomb.position_x, bomb.position_y);
+    FUN_00437cf0(bomb.position_x, bomb.position_y, 100, bomb.owner, -1);
+    DAT_00481e8f = 1;
 }
 
 void callback_bone_crusher_004330c0(int entity_index)
 {
     uint8_t *entity = entity_at(entity_index);
-    int32_t fuse = tou_binary::load_i32(entity, 0x60);
-    if (static_cast<int8_t>(tou_binary::load_u8(entity, 0x20)) == -1 || fuse <= 0) {
-        fuse = 0;
-    } else {
-        tou_binary::store_i32(entity, 0x60, --fuse);
+    const int32_t fuse = tou_binary::load_i32(entity, 0x60);
+    bool exploding = tou_binary::load_u8(entity, 0x20) == 0xffu || fuse <= 0;
+    if (!exploding) {
+        tou_binary::store_i32(entity, 0x60, fuse - 1);
         tou_binary::store_i32(entity, 0x1c, tou_binary::load_i32(entity, 0x1c) +
             tou_binary::load_i32(entity, 0x38) * DAT_00483828);
         tou_binary::store_i32(entity, 0, tou_binary::load_i32(entity, 0) +
@@ -1450,7 +1710,8 @@ void callback_bone_crusher_004330c0(int entity_index)
         if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
     }
 
-    bool exploding = fuse <= 0 || tou_binary::load_u8(entity, 0x20) == 0xfau;
+    const bool shot = !exploding && tou_binary::load_u8(entity, 0x20) == 0xfau;
+    exploding = exploding || shot;
     if (!exploding) {
         uint8_t cadence = static_cast<uint8_t>(tou_binary::load_u8(entity, 0x64) + 1u);
         tou_binary::store_u8(entity, 0x64, cadence);
@@ -1486,11 +1747,12 @@ void callback_bone_crusher_004330c0(int entity_index)
             tou_binary::store_i32(entity, 0x1c, 0);
             tou_binary::store_i32(entity, 0x38, 0);
         }
-        if (projectile_collision_pass(entity_index, true)) exploding = true;
+        // This mine scans infantry, not ships or other projectiles.
+        if (dislodge_deployable(g_EntityPool[entity_index])) exploding = true;
         if (!exploding) return;
     }
 
-    if (tou_binary::load_u8(entity, 0x20) == 0xfau) {
+    if (shot) {
         const int count = 1 + static_cast<int>(tou_binary::x87_ftol(20.0L * DAT_00483854));
         spawn_radial_entity_debris(entity, 0, count, 0x2ee000, 35, 6, 0, false);
     }
@@ -1501,6 +1763,50 @@ void callback_bone_crusher_004330c0(int entity_index)
                  200, tou_binary::load_u8(entity, 0x22), 100);
     FUN_0040f9b0(game_rand() % 7 + 0x65,
                  tou_binary::load_i32(entity, 0), tou_binary::load_i32(entity, 8));
+    DAT_00481e8f = 1;
+}
+
+void callback_disruptor_00433c80(int entity_index)
+{
+    Entity &stick = g_EntityPool[entity_index];
+    uint8_t *entity = entity_at(entity_index);
+    if (stick.state_20 != 0xffu && stick.scratch_60 > 0) {
+        --stick.scratch_60;
+        stick.velocity_y = tou_binary::add_wrap_i32(stick.velocity_y,
+            tou_binary::mul_wrap_i32(stick.gravity_or_motion_38, DAT_00483828));
+        stick.position_x = tou_binary::add_wrap_i32(stick.position_x, stick.velocity_x);
+        stick.position_y = tou_binary::add_wrap_i32(stick.position_y, stick.velocity_y);
+        settle_bounded_projectile(entity);
+        if (stick.timer_5c != 0) --stick.timer_5c;
+        if (DAT_00489288 == 0) collision_prepass_00437b10(entity_index);
+        if (stick.state_20 != 0xfau) {
+            if (tile_property(tile_at(stick.position_x >> 18, stick.position_y >> 18), 1) == 0u) {
+                stick.position_x = stick.previous_x;
+                stick.position_y = stick.previous_y;
+                stick.velocity_x = stick.velocity_y = 0;
+            }
+            if (!dislodge_deployable(stick)) return;
+        } else {
+            const int count = 1 - static_cast<int>(tou_binary::x87_ftol(-20.0L * DAT_00483854));
+            const int *sc = static_cast<int *>(DAT_00487ab0);
+            for (int i = 0; i < count && g_EntityCount < ENTITY_ACTIVE_CAPACITY; ++i) {
+                const int angle = game_rand() & 0x7ff;
+                const int speed = game_rand() % 70;
+                uint8_t *fragment = spawn_config_entity(0, 3, stick.position_x, stick.position_y,
+                    (sc[angle] * speed >> 6) + stick.velocity_x,
+                    (sc[angle + 0x200] * speed >> 6) + stick.velocity_y, stick.owner);
+                if (fragment == NULL) break;
+                tou_binary::store_i32(fragment, 0x28, game_rand() % 30 + 20);
+                tou_binary::store_u32(fragment, 0x4c,
+                    static_cast<uint16_t *>(DAT_00487aa8)[0xf6 + game_rand() % 10] + 30000u);
+                tou_binary::store_i32(fragment, 0x44, 0x1f4000 / count);
+            }
+        }
+    }
+    if (g_ParticleCount < PARTICLE_CAPACITY && coarse_effect_allowed(entity)) {
+        spawn_flash(stick.position_x, stick.position_y, static_cast<uint8_t>(game_rand() % 3 + 0x11), 1, 0xff, 0);
+        FUN_00437cf0(stick.position_x, stick.position_y, 200, stick.owner, 100);
+    }
     DAT_00481e8f = 1;
 }
 
@@ -2452,9 +2758,46 @@ void callback_trail_00430480(int entity_index)
             static_cast<uint32_t>(static_cast<uint16_t *>(DAT_00487aa8)[palette_index]) + 30000u);
     }
     if (palette_index <= tou_binary::load_u8(entity, 0x64)) DAT_00481e8f = 1;
+    const uint8_t state = tou_binary::load_u8(entity, 0x20);
+    if (state == 0u) return;
+    const int tx = x >> 18, ty = y >> 18;
+    if (state == 0x0fu) {
+        if (tile_property(tile_at(tx, ty), 2) == 0u) DAT_00481e8f = 1;
+        return;
+    }
+    const uint8_t bits = static_cast<uint8_t *>(DAT_00487814)[(tx >> 4) + (ty >> 4) * DAT_004879f8];
+    const bool faded = DAT_00481e8f == 1u;
+    if ((bits & 1u) != 0u) collision_players(entity_index);
+    if (state > 1u) {
+        if ((bits & 2u) != 0u) collision_tracked(entity_index);
+        if ((bits & 4u) != 0u) collision_troopers(entity_index);
+        if (tile_property(tile_at(tx, ty), 10) == 1u) {
+            FUN_004355d0(static_cast<unsigned int>(entity_index));
+            if (DAT_00481e8f != 0u) {
+                DAT_00481e8f = 1;
+                return;
+            }
+        }
+    }
+    damage_special_tile(entity);
+    if (faded || tile_property(tile_at(tx, ty), 2) == 0u) DAT_00481e8f = 1;
 }
 
 } // namespace
+
+bool EntityCallbacks_MegabombHitsShip(int entity_index)
+{
+    Entity &bomb = g_EntityPool[entity_index];
+    if (bomb.auxiliary_26 == 0xffu) return false;
+    if (bomb.auxiliary_26 != 0 && bomb.auxiliary_26 < 0xfeu) --bomb.auxiliary_26;
+    const int x = bomb.position_x >> 18, y = bomb.position_y >> 18;
+    if (x < 0 || y < 0 || x >= static_cast<int>(DAT_004879f0) ||
+        y >= static_cast<int>(DAT_004879f4)) return false;
+    DAT_00481e8f = 0;
+    if (static_cast<uint8_t *>(DAT_00487814)[(x >> 4) + (y >> 4) * DAT_004879f8] & 1u)
+        collision_players(entity_index);
+    return DAT_00481e8f == 4;
+}
 
 void EntityCallbacks_Init(void)
 {
@@ -2471,12 +2814,12 @@ void EntityCallbacks_Init(void)
         {0x0b, 0x00431650u}, {0x0e, 0x00430dc0u}, {0x0f, 0x004330c0u},
         {0x11, 0x00441aa0u}, {0x12, 0x00438010u}, {0x13, 0x0043a4b0u},
         {0x14, 0x0043a4b0u}, {0x16, 0x00439b90u}, {0x17, 0x00432c80u},
-        {0x18, 0x00433c80u}, {0x19, 0x00443420u}, {0x1b, 0x00443b10u},
+        {0x18, kCallbackDisruptor}, {0x19, kCallbackMine}, {0x1b, 0x00443b10u},
         {0x1c, 0x00440e20u}, {0x1d, 0x0043c0b0u}, {0x1e, 0x0043c0b0u},
         {0x1f, 0x0043b370u}, {0x22, 0x004442f0u}, {0x23, 0x004457b0u},
         {0x24, 0x00447a70u}, {0x25, 0x00446130u}, {0x26, 0x0043dbd0u},
-        {0x27, kCallbackKometBomb}, {0x28, 0x0043e890u}, {0x29, 0x0043e890u},
-        {0x2a, 0x0043e890u}, {0x2b, 0x00439b90u}, {0x2c, 0x0043f990u},
+        {0x27, kCallbackKometBomb}, {0x28, kCallbackPipebomb}, {0x29, kCallbackPipebomb},
+        {0x2a, kCallbackPipebomb}, {0x2b, 0x00439b90u}, {0x2c, 0x0043f990u},
         {0x2d, 0x0043f990u}, {0x2e, kCallbackSmokingNalle}, {0x64, 0x004309f0u},
         {0x65, 0x00430480u}, {0x66, 0x004427e0u}, {0x67, 0x00430480u},
         {0x69, 0x00438010u}, {0x6a, 0x00439b90u}, {0x6b, 0x0043a4b0u},
@@ -2513,6 +2856,10 @@ bool EntityCallbacks_Dispatch(uint32_t callback_address, int entity_index)
         callback_address != kCallbackNuclearBarrel &&
         callback_address != kCallbackMovingSucker &&
         callback_address != kCallbackBoneCrusher &&
+        callback_address != kCallbackDisruptor &&
+        callback_address != kCallbackMine &&
+        callback_address != kCallbackKometBomb &&
+        callback_address != kCallbackPipebomb &&
         callback_address != kCallbackShotgunRapidfire &&
         callback_address != kCallbackDumbfire &&
         callback_address != kCallbackCollapser &&
@@ -2533,6 +2880,10 @@ bool EntityCallbacks_Dispatch(uint32_t callback_address, int entity_index)
     if ((callback_address == kCallbackNuclearBarrel && entity_type != 0x0bu) ||
         (callback_address == kCallbackMovingSucker && entity_type != 0x0eu) ||
         (callback_address == kCallbackBoneCrusher && entity_type != 0x0fu) ||
+        (callback_address == kCallbackDisruptor && entity_type != 0x18u) ||
+        (callback_address == kCallbackMine && entity_type != 0x19u) ||
+        (callback_address == kCallbackKometBomb && entity_type != 0x27u) ||
+        (callback_address == kCallbackPipebomb && entity_type != 0x28u) ||
         (callback_address == kCallbackShotgunRapidfire && entity_type != 0x00u && entity_type != 0x12u) ||
         (callback_address == kCallbackDumbfire && entity_type != 0x01u) ||
         (callback_address == kCallbackCollapser && entity_type != 0x05u) ||
@@ -2562,6 +2913,10 @@ bool EntityCallbacks_Dispatch(uint32_t callback_address, int entity_index)
     else if (callback_address == kCallbackNuclearBarrel) callback_nuclear_barrel_00431650(entity_index);
     else if (callback_address == kCallbackMovingSucker) callback_moving_sucker_00430dc0(entity_index);
     else if (callback_address == kCallbackBoneCrusher) callback_bone_crusher_004330c0(entity_index);
+    else if (callback_address == kCallbackDisruptor) callback_disruptor_00433c80(entity_index);
+    else if (callback_address == kCallbackMine) callback_mine_00443420(entity_index);
+    else if (callback_address == kCallbackKometBomb) callback_komet_bomb_0043e070(entity_index);
+    else if (callback_address == kCallbackPipebomb) callback_pipebomb_0043e890(entity_index);
     else if (callback_address == kCallbackShotgunRapidfire && entity_type == 0x12u) callback_airstrike_00438010(entity_index);
     else if (callback_address == kCallbackShotgunRapidfire) callback_shotgun_rapidfire_00438010(entity_index);
     else if (callback_address == kCallbackDumbfire) callback_dumbfire_00438d90(entity_index);

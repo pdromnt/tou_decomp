@@ -41,7 +41,7 @@ const uint16_t kProtocolVersion = 6;
  * a gameplay or snapshot change can make equal commands produce different
  * state, even if the packet shapes remain compatible. Cosmetic releases do
  * not by themselves require a compatibility revision. */
-const char kSimulationBuildId[] = "tou-sim3-net6-snapshot5";
+const char kSimulationBuildId[] = "tou-sim4-net6-snapshot5";
 const uint16_t kDefaultPort = 27015;
 const uint32_t kMaximumPayload = 1024u * 1024u;
 const uint32_t kMaximumSnapshotPayload = 64u * 1024u * 1024u;
@@ -365,11 +365,11 @@ uint64_t GameplayAssetFingerprint(void)
 uint64_t SimulationBuildFingerprint(void)
 {
     if (g_predictive) {
-        const char id[] = "tou-sim3-net8-snapshot5-prediction1";
+        const char id[] = "tou-sim4-net8-snapshot5-prediction1";
         return HashBytes(14695981039346656037ull, id, sizeof(id));
     }
     if (g_confirmed_controls) {
-        const char id[] = "tou-sim3-net7-snapshot5-controls1";
+        const char id[] = "tou-sim4-net7-snapshot5-controls1";
         return HashBytes(14695981039346656037ull, id, sizeof(id));
     }
     return HashBytes(14695981039346656037ull, kSimulationBuildId,
